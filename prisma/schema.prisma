@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ComplianceRule {
+  id               String   @id @default(cuid())
+  ruleKey          String   @unique
+  name             String
+  shortName        String
+  category         String
+  authority        String
+  description      String
+  howToComply      String
+  frequency        String
+  dueDate          String?
+  penalty          String?
+  registrationLink String?
+  priority         String   // critical | high | medium | low
+  isActive         Boolean  @default(true)
+  tags             String   // comma-separated
+  conditionJson    String   // JSON condition object (see lib/condition-engine.ts)
+  documentsJson    String   @default("[]")  // JSON array of required document strings
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
