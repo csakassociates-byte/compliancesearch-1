@@ -1,118 +1,138 @@
 import Link from "next/link";
 
+const NAV = [
+  { href:"/",        label:"Home" },
+  { href:"/check",   label:"Check Compliance" },
+  { href:"/about",   label:"About Us" },
+  { href:"/contact", label:"Contact", active:true },
+];
+
 export default function ContactPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex flex-col">
+    <main className="min-h-screen flex flex-col" style={{ background:"linear-gradient(135deg,#050d1a 0%,#0a1f3d 40%,#0d2a52 70%,#0f1f40 100%)" }}>
 
       {/* ── Navbar ── */}
-      <nav className="px-6 py-4 flex items-center justify-between border-b border-white/10">
-        <Link href="/" className="flex items-center gap-2.5">
-          <span className="text-2xl">⚖️</span>
-          <span className="text-white font-bold text-xl tracking-tight">ComplianceSearch</span>
-          <span className="text-blue-300 text-xs font-medium bg-blue-500/20 px-2 py-0.5 rounded-full">.in</span>
-        </Link>
-        <div className="hidden md:flex items-center gap-1">
-          <Link href="/"        className="text-blue-200 hover:text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-white/10 transition">Home</Link>
-          <Link href="/check"   className="text-blue-200 hover:text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-white/10 transition">Check Compliance</Link>
-          <Link href="/about"   className="text-blue-200 hover:text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-white/10 transition">About Us</Link>
-          <Link href="/contact" className="text-white text-sm font-semibold px-4 py-2 rounded-lg bg-white/10 transition">Contact</Link>
-          <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"
-            className="ml-3 text-xs bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 hover:bg-yellow-400/30 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1.5">
-            🌐 Gee Bharat
-          </a>
-        </div>
-        <div className="md:hidden">
-          <Link href="/" className="text-blue-300 text-xs">← Home</Link>
+      <nav className="sticky top-0 z-50 w-full border-b border-white/8" style={{ background:"rgba(5,13,26,0.88)", backdropFilter:"blur(16px)" }}>
+        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background:"linear-gradient(135deg,#f59e0b,#d97706)" }}>
+              <span className="text-lg">⚖️</span>
+            </div>
+            <span className="text-white font-bold text-base tracking-tight">ComplianceSearch</span>
+            <span className="text-amber-400 font-bold text-base">.in</span>
+          </Link>
+          <div className="hidden md:flex items-center gap-1">
+            {NAV.map(n => (
+              <Link key={n.href} href={n.href}
+                className={`text-sm font-medium px-4 py-2 rounded-lg transition-all ${n.active ? "text-white bg-white/10" : "text-slate-300 hover:text-white hover:bg-white/8"}`}>
+                {n.label}
+              </Link>
+            ))}
+            <div className="w-px h-5 bg-white/15 mx-2" />
+            <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl border transition"
+              style={{ background:"rgba(245,158,11,0.12)", borderColor:"rgba(245,158,11,0.3)", color:"#fbbf24" }}>
+              🌐 Gee Bharat
+            </a>
+          </div>
+          <Link href="/" className="md:hidden text-slate-400 text-xs hover:text-white">← Home</Link>
         </div>
       </nav>
 
-      {/* ── Page Content ── */}
-      <div className="flex-1 max-w-3xl mx-auto px-4 py-14 w-full">
+      <div className="flex-1 max-w-3xl mx-auto px-4 py-16 w-full">
 
-        {/* Title */}
+        {/* ── Page Header ── */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 bg-blue-500/20 border border-blue-400/30 text-blue-200 text-sm font-medium px-4 py-2 rounded-full mb-5">
-            <span>📞</span><span>Get in Touch</span>
+          <div className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full mb-5 border"
+            style={{ background:"rgba(59,130,246,0.1)", borderColor:"rgba(59,130,246,0.25)", color:"#93c5fd" }}>
+            <span>📞</span> Get in Touch
           </div>
-          <h1 className="text-4xl font-bold text-white mb-3">Contact Us</h1>
-          <p className="text-blue-200 text-lg">
-            Questions, feedback, or compliance queries? We're here to help.
-          </p>
+          <h1 className="text-4xl font-extrabold text-white mb-3 tracking-tight">Contact Us</h1>
+          <p className="text-slate-400 text-lg">Questions, feedback, or compliance queries — we're here to help.</p>
         </div>
 
-        {/* Contact cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+        {/* ── Cards ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
           {/* Gee Bharat */}
-          <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/10 border border-yellow-400/30 rounded-2xl p-6">
+          <div className="rounded-2xl p-6 border relative overflow-hidden"
+            style={{ background:"linear-gradient(135deg,rgba(245,158,11,0.1),rgba(249,115,22,0.06))", borderColor:"rgba(245,158,11,0.25)" }}>
+            <div className="absolute top-0 right-0 w-32 h-32 opacity-10 pointer-events-none rounded-full"
+              style={{ background:"radial-gradient(circle,#f59e0b,transparent)", transform:"translate(30%,-30%)" }} />
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-3xl">🌐</span>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl border" style={{ background:"rgba(245,158,11,0.15)", borderColor:"rgba(245,158,11,0.3)" }}>🌐</div>
               <div>
-                <p className="text-yellow-300 text-xs font-semibold uppercase tracking-wider">Platform</p>
-                <p className="text-white font-bold text-lg">Gee Bharat</p>
+                <p className="text-amber-400 text-[10px] font-bold uppercase tracking-widest">Platform</p>
+                <p className="text-white font-bold text-lg leading-tight">Gee Bharat</p>
               </div>
             </div>
-            <p className="text-blue-200 text-sm mb-4 leading-relaxed">
-              ComplianceSearch.in is powered by Gee Bharat — your complete office management platform.
+            <p className="text-slate-400 text-sm mb-5 leading-relaxed">
+              ComplianceSearch.in is powered by Gee Bharat — your complete office management platform for attendance, tasks, and compliance.
             </p>
             <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold text-sm px-5 py-2.5 rounded-xl transition">
+              className="inline-flex items-center gap-2 font-bold text-sm px-5 py-2.5 rounded-xl transition hover:scale-105"
+              style={{ background:"linear-gradient(135deg,#f59e0b,#f97316)", color:"#0a0a0a" }}>
               🌐 Visit geebharat.com
             </a>
           </div>
 
-          {/* General contact */}
-          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6">
+          {/* Email */}
+          <div className="rounded-2xl p-6 border"
+            style={{ background:"rgba(255,255,255,0.04)", borderColor:"rgba(255,255,255,0.08)" }}>
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-3xl">✉️</span>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl border" style={{ background:"rgba(59,130,246,0.15)", borderColor:"rgba(59,130,246,0.3)" }}>✉️</div>
               <div>
-                <p className="text-blue-300 text-xs font-semibold uppercase tracking-wider">Email</p>
-                <p className="text-white font-bold text-lg">Write to Us</p>
+                <p className="text-blue-400 text-[10px] font-bold uppercase tracking-widest">Email</p>
+                <p className="text-white font-bold text-lg leading-tight">Write to Us</p>
               </div>
             </div>
-            <p className="text-blue-200 text-sm mb-4 leading-relaxed">
-              For compliance questions, feedback, or to report an incorrect rule — send us a message.
+            <p className="text-slate-400 text-sm mb-5 leading-relaxed">
+              For compliance queries, feedback, or to report an incorrect rule — send us a message anytime.
             </p>
             <a href="mailto:support@geebharat.com"
-              className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition">
+              className="inline-flex items-center gap-2 font-bold text-sm px-5 py-2.5 rounded-xl transition hover:scale-105 border"
+              style={{ background:"rgba(59,130,246,0.15)", borderColor:"rgba(59,130,246,0.3)", color:"#93c5fd" }}>
               ✉️ support@geebharat.com
             </a>
           </div>
         </div>
 
-        {/* CA Guidance note */}
-        <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-6 mb-8">
+        {/* ── CA Guidance ── */}
+        <div className="rounded-2xl p-6 mb-6 border"
+          style={{ background:"rgba(255,255,255,0.04)", borderColor:"rgba(255,255,255,0.08)" }}>
           <h3 className="text-white font-bold text-lg mb-3 flex items-center gap-2">
-            <span>🏛️</span> Need Professional CA / CS Guidance?
+            <span className="text-xl">🏛️</span> Need Professional CA / CS Guidance?
           </h3>
-          <p className="text-blue-200 text-sm leading-relaxed mb-4">
+          <p className="text-slate-400 text-sm leading-relaxed mb-5">
             ComplianceSearch.in provides automated applicability analysis — but every business is unique.
             For filings, registrations, and complex compliance matters, always consult a qualified
-            <strong className="text-white"> Chartered Accountant (CA)</strong> or
-            <strong className="text-white"> Company Secretary (CS)</strong>.
+            <strong className="text-slate-300"> Chartered Accountant (CA)</strong> or
+            <strong className="text-slate-300"> Company Secretary (CS)</strong>.
           </p>
           <Link href="/check"
-            className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition">
+            className="inline-flex items-center gap-2 font-bold text-sm px-5 py-2.5 rounded-xl border transition hover:scale-105"
+            style={{ background:"rgba(16,185,129,0.1)", borderColor:"rgba(16,185,129,0.25)", color:"#34d399" }}>
             ✅ Start Compliance Check →
           </Link>
         </div>
 
-        {/* FAQ quick links */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-          <h3 className="text-white font-bold mb-4 flex items-center gap-2"><span>❓</span> Quick Links</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* ── Quick Links ── */}
+        <div className="rounded-2xl p-6 border"
+          style={{ background:"rgba(255,255,255,0.03)", borderColor:"rgba(255,255,255,0.06)" }}>
+          <h3 className="text-white font-bold mb-4 flex items-center gap-2"><span>🔗</span> Quick Links</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
-              { href:"/check",         label:"Start Compliance Check",        icon:"✅" },
-              { href:"/about",         label:"About ComplianceSearch.in",     icon:"ℹ️" },
-              { href:"/check/advanced",label:"Advanced Compliance Analysis",  icon:"🔍" },
-              { href:"https://geebharat.com", label:"Gee Bharat Platform", icon:"🌐", ext:true },
-            ].map((l) => (
+              { href:"/check",          label:"Start Compliance Check",       icon:"✅" },
+              { href:"/about",          label:"About ComplianceSearch.in",    icon:"ℹ️" },
+              { href:"/check/advanced", label:"Advanced Compliance Analysis", icon:"🔍" },
+              { href:"https://geebharat.com", label:"Gee Bharat Platform",   icon:"🌐", ext:true },
+            ].map(l => (
               l.ext
                 ? <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-blue-200 hover:text-white text-sm py-2 px-3 rounded-lg hover:bg-white/10 transition">
-                    <span>{l.icon}</span> {l.label} <span className="text-blue-400 text-xs ml-auto">↗</span>
+                    className="flex items-center gap-2 text-slate-400 hover:text-white text-sm py-2.5 px-3 rounded-xl hover:bg-white/6 transition border border-transparent hover:border-white/8">
+                    <span>{l.icon}</span> {l.label} <span className="ml-auto text-slate-600 text-xs">↗</span>
                   </a>
                 : <Link key={l.href} href={l.href}
-                    className="flex items-center gap-2 text-blue-200 hover:text-white text-sm py-2 px-3 rounded-lg hover:bg-white/10 transition">
+                    className="flex items-center gap-2 text-slate-400 hover:text-white text-sm py-2.5 px-3 rounded-xl hover:bg-white/6 transition border border-transparent hover:border-white/8">
                     <span>{l.icon}</span> {l.label}
                   </Link>
             ))}
@@ -122,18 +142,17 @@ export default function ContactPage() {
       </div>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-white/10 px-6 py-6">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 text-blue-400 text-xs">
-            <Link href="/"        className="hover:text-white transition">Home</Link>
-            <Link href="/about"   className="hover:text-white transition">About</Link>
-            <Link href="/contact" className="hover:text-white transition">Contact</Link>
-            <Link href="/check"   className="hover:text-white transition">Check</Link>
+      <footer className="border-t border-white/6 px-5 py-5" style={{ background:"rgba(0,0,0,0.3)" }}>
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            {[["Home","/"],["About","/about"],["Contact","/contact"],["Check","/check"]].map(([l,h]) => (
+              <Link key={h} href={h} className="text-slate-500 hover:text-slate-300 text-xs transition">{l}</Link>
+            ))}
           </div>
           <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold px-4 py-2 rounded-full transition">
-            <span>🌐</span>
-            Powered by <span className="text-yellow-300 font-bold ml-1">Gee Bharat</span>
+            className="flex items-center gap-2 border rounded-full px-4 py-2 text-xs font-semibold transition hover:scale-105"
+            style={{ background:"rgba(245,158,11,0.1)", borderColor:"rgba(245,158,11,0.25)", color:"#fbbf24" }}>
+            🌐 Powered by <span className="font-bold ml-0.5">Gee Bharat</span>
           </a>
         </div>
       </footer>
