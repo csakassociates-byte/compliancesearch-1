@@ -1,4 +1,22 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "About Us — India's Statutory Compliance Checker",
+  description:
+    "ComplianceSearch.in is a free statutory compliance applicability checker for Indian businesses. Know your GST, MCA, Labour, FEMA, CSR, and digital compliance obligations in 2 minutes. Powered by Gee Bharat.",
+  keywords: [
+    "about compliance checker india", "statutory compliance tool india",
+    "business compliance applicability checker", "compliance requirements india",
+    "gee bharat compliance", "77 compliance rules india",
+  ],
+  openGraph: {
+    title: "About ComplianceSearch.in — India's Statutory Compliance Checker",
+    description: "Free compliance checker covering 77+ rules — GST, Labour Laws, FEMA, CSR, DPDP Act and more for Indian businesses.",
+    url: "https://compliancesearch.in/about",
+  },
+  alternates: { canonical: "https://compliancesearch.in/about" },
+};
 
 const NAV = [
   { href: "/",        label: "Home" },

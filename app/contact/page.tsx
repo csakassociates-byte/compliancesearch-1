@@ -1,4 +1,21 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Contact Us — ComplianceSearch.in",
+  description:
+    "Get in touch with ComplianceSearch.in for compliance queries, feedback, or support. Powered by Gee Bharat — India's office management platform. Email: csakassociates@gmail.com",
+  keywords: [
+    "contact compliance checker india", "compliance support india",
+    "business compliance help india", "csakassociates", "gee bharat contact",
+  ],
+  openGraph: {
+    title: "Contact ComplianceSearch.in — Business Compliance Help India",
+    description: "Reach out for compliance queries, feedback, or support. Powered by Gee Bharat.",
+    url: "https://compliancesearch.in/contact",
+  },
+  alternates: { canonical: "https://compliancesearch.in/contact" },
+};
 
 const NAV = [
   { href: "/",        label: "Home" },
