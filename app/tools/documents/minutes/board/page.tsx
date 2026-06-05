@@ -927,11 +927,15 @@ export default function BoardMinutesPage() {
 
           {/* Warn if any director has empty name */}
           {f.directors.some(d => !d.name.trim()) && (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 mb-1">
-              <span className="text-amber-500 shrink-0">⚠️</span>
-              <p className="text-xs text-amber-700">
-                <strong>Director names missing</strong> — please enter each director&apos;s full name below (required for minutes document).
-              </p>
+            <div className="flex items-start gap-2 bg-amber-50 border-2 border-amber-400 rounded-xl px-4 py-3 mb-2">
+              <span className="text-amber-500 text-lg shrink-0">⚠️</span>
+              <div>
+                <p className="text-sm font-bold text-amber-800">Director names missing</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Names DB mein store nahi hain. Har director ka naam niche type karein — DIN dekh ke pehchano kaun hai.
+                  Ya pehle <strong>MDS Excel upload</strong> karein (upar) — names auto-fill ho jaenge.
+                </p>
+              </div>
             </div>
           )}
 
@@ -947,10 +951,10 @@ export default function BoardMinutesPage() {
                 </button>
 
                 <input
-                  className={`${INP} flex-1 ${!d.name.trim() ? "border-red-300 bg-red-50 focus:ring-red-200" : ""}`}
+                  className={`${INP} flex-1 ${!d.name.trim() ? "border-red-400 bg-red-50 focus:ring-red-200 placeholder:text-red-400" : "border-green-300"}`}
                   value={d.name}
                   onChange={e => setDirField(i, "name", e.target.value)}
-                  placeholder="Enter director full name *"
+                  placeholder={d.din ? `Enter name (DIN: ${d.din})` : "Enter director full name *"}
                 />
                 <input className={`${INP} w-36`} value={d.designation}
                   onChange={e => setDirField(i, "designation", e.target.value)} placeholder="Designation" />
