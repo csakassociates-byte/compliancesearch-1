@@ -34,6 +34,13 @@ const TOOLS = [
     label: "Share Certificate",
     desc: "Form SH-1 share certificate generator",
     color: "text-amber-600 bg-amber-50",
+  },
+  {
+    href: "/tools/documents/minutes",
+    icon: "📋",
+    label: "Meeting Minutes",
+    desc: "Board, AGM, EGM minutes generator",
+    color: "text-blue-700 bg-blue-50",
     badge: "New",
   },
   {
