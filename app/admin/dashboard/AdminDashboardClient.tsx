@@ -201,6 +201,12 @@ export default function AdminDashboardClient({ rules: initialRules }: { rules: R
                 <AlertCircle className="w-4 h-4" /> Save failed
               </span>
             )}
+            <a href="/admin/blog" className="text-sm font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 transition">
+              📝 Blog
+            </a>
+            <a href="/admin/calendar" className="text-sm font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 transition">
+              📅 Calendar
+            </a>
             <a href="/" className="text-gray-400 hover:text-pink-500 text-sm transition font-medium">
               ← Back to App
             </a>

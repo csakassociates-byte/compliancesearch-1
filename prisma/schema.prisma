@@ -19,11 +19,163 @@ model ComplianceRule {
   dueDate          String?
   penalty          String?
   registrationLink String?
-  priority         String   // critical | high | medium | low
+  priority         String
   isActive         Boolean  @default(true)
-  tags             String   // comma-separated
-  conditionJson    String   // JSON condition object (see lib/condition-engine.ts)
-  documentsJson    String   @default("[]")  // JSON array of required document strings
+  tags             String
+  conditionJson    String
+  documentsJson    String   @default("[]")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model CalendarEvent {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?
+  category     String
+  authority    String
+  recurrence   String    @default("monthly")
+  dueDay       Int?
+  dueMonth     Int?
+  specificDate DateTime?
+  penalty      String?
+  link         String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model BlogPost {
+  id            String        @id @default(cuid())
+  title         String
+  slug          String        @unique
+  content       String
+  excerpt       String
+  category      String        @default("general")
+  tags          String        @default("")
+  authorName    String
+  authorEmail   String
+  authorPhone   String
+  status        String        @default("pending")
+  rejectionNote String?
+  adminNotes    String?
+  views         Int           @default(0)
+  publishedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  comments      BlogComment[]
+  likes         BlogLike[]
+}
+
+model BlogComment {
+  id         String        @id @default(cuid())
+  postId     String
+  post       BlogPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentId   String?
+  parent     BlogComment?  @relation("Replies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies    BlogComment[] @relation("Replies")
+  authorName String
+  content    String
+  createdAt  DateTime      @default(now())
+}
+
+model BlogLike {
+  id        String   @id @default(cuid())
+  postId    String
+  post      BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  visitorId String
+  createdAt DateTime @default(now())
+
+  @@unique([postId, visitorId])
+}
+
+model IFSCBranch {
+  id       String @id @default(cuid())
+  ifsc     String @unique
+  bank     String
+  bankCode String
+  branch   String
+  address  String?
+  city     String?
+  district String?
+  state    String?
+
+  @@index([bank])
+  @@index([bankCode])
+  @@index([city])
+  @@index([state])
+}
+
+model CompanyProfile {
+  id          String            @id @default(cuid())
+  cin         String            @unique
+  companyName String
+  regAddress  String?
+  entityType  String?
+  email       String?
+  rocName     String?
+  status      String?
+  isListed    Boolean           @default(false)
+  sourceFile          String?
+  mobile              String?
+  gstNumber           String?
+  incorporationDate   String?
+  paidUpCapital       String?
+  authorisedCapital   String?
+  registrationNumber  String?
+  dateOfLastAGM       String?
+  dateOfBalanceSheet  String?
+  categoryOfCompany   String?
+  subcategory         String?
+  classOfCompany      String?
+  jurisdiction        String?
+  smallCompany        Boolean @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  directors   CompanyDirector[]
+  charges     CompanyCharge[]
+}
+
+model CompanyDirector {
+  id          String         @id @default(cuid())
+  companyId   String
+  company     CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  din         String?
+  name        String
+  designation String?
+  category    String?
+  appointedAt String?
+  ceasedAt    String?
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model CompanyCharge {
+  id             String         @id @default(cuid())
+  companyId      String
+  company        CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  chargeId       String?
+  holderName     String
+  dateOfCreation String?
+  amount         String?
+  address        String?
+  isSatisfied    Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Notice {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String
+  content     String
+  authority   String   @default("MCA")
+  noticeType  String   @default("notification")
+  refNumber   String?
+  actName     String?
+  issuedDate  DateTime @default(now())
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

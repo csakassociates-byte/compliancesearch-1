@@ -23,6 +23,7 @@ type DBRule = {
   tags: string;
   conditionJson: string;
   documentsJson: string;
+  updatedAt: string;
 };
 
 const CATEGORY_ORDER = [
@@ -242,6 +243,15 @@ function ComplianceCard({ rule, idx }: { rule: DBRule; idx: number }) {
                 🔗 Official Portal / Registration Link ↗
               </a>
             )}
+          </div>
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+            <span className="text-xs text-gray-400">
+              🕒 Updated: {new Date(rule.updatedAt).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}
+            </span>
+            <a href={`/compliance/${rule.ruleKey}`} target="_blank" rel="noopener noreferrer"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+              Full Details →
+            </a>
           </div>
         </div>
       )}
