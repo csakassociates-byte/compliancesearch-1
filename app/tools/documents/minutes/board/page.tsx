@@ -906,40 +906,72 @@ export default function BoardMinutesPage() {
           <button type="button" onClick={addManualDir}
             className="text-xs font-bold text-blue-600 hover:text-blue-800">+ Add Director</button>
         </div>
+
+        {/* Column headers */}
+        {f.directors.length > 0 && (
+          <div className="flex items-center gap-3 px-3 mb-1">
+            <div className="w-6 shrink-0" />
+            <p className="flex-1 text-xs font-semibold text-slate-400 uppercase tracking-wide">Director Name *</p>
+            <p className="w-36 text-xs font-semibold text-slate-400 uppercase tracking-wide hidden sm:block">Designation</p>
+            <p className="w-28 text-xs font-semibold text-slate-400 uppercase tracking-wide hidden sm:block">DIN</p>
+            <div className="w-5 shrink-0" />
+          </div>
+        )}
+
         <div className="space-y-2">
           {f.directors.length === 0 && (
             <p className="text-sm text-slate-400 text-center py-4 border-2 border-dashed border-slate-200 rounded-xl">
               No directors — upload Excel or add manually above
             </p>
           )}
+
+          {/* Warn if any director has empty name */}
+          {f.directors.some(d => !d.name.trim()) && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 mb-1">
+              <span className="text-amber-500 shrink-0">⚠️</span>
+              <p className="text-xs text-amber-700">
+                <strong>Director names missing</strong> — please enter each director&apos;s full name below (required for minutes document).
+              </p>
+            </div>
+          )}
+
           {f.directors.map((d, i) => (
-            <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border-2 ${d.isPresent ? "border-green-200 bg-green-50" : "border-slate-200 bg-slate-50"}`}>
-              {/* Present toggle */}
-              <button type="button" onClick={() => setDirField(i, "isPresent", !d.isPresent)}
-                className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                  d.isPresent ? "bg-green-500 border-green-500 text-white" : "border-slate-300 hover:border-green-400"}`}>
-                {d.isPresent && <span className="text-xs font-bold">✓</span>}
-              </button>
+            <div key={i} className={`rounded-xl border-2 transition-all ${d.isPresent ? "border-green-200 bg-green-50" : "border-slate-200 bg-slate-50"}`}>
+              {/* Main row */}
+              <div className="flex items-center gap-3 p-3">
+                {/* Present toggle */}
+                <button type="button" onClick={() => setDirField(i, "isPresent", !d.isPresent)}
+                  className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                    d.isPresent ? "bg-green-500 border-green-500 text-white" : "border-slate-300 hover:border-green-400"}`}>
+                  {d.isPresent && <span className="text-xs font-bold">✓</span>}
+                </button>
 
-              <input className={`${INP} flex-1`} value={d.name}
-                onChange={e => setDirField(i, "name", e.target.value)} placeholder="Director name" />
-              <input className={`${INP} w-36`} value={d.designation}
-                onChange={e => setDirField(i, "designation", e.target.value)} placeholder="Designation" />
-              <input className={`${INP} w-28 font-mono`} value={d.din}
-                onChange={e => setDirField(i, "din", e.target.value)} placeholder="DIN" maxLength={8} />
+                <input
+                  className={`${INP} flex-1 ${!d.name.trim() ? "border-red-300 bg-red-50 focus:ring-red-200" : ""}`}
+                  value={d.name}
+                  onChange={e => setDirField(i, "name", e.target.value)}
+                  placeholder="Enter director full name *"
+                />
+                <input className={`${INP} w-36`} value={d.designation}
+                  onChange={e => setDirField(i, "designation", e.target.value)} placeholder="Designation" />
+                <input className={`${INP} w-28 font-mono text-xs`} value={d.din}
+                  onChange={e => setDirField(i, "din", e.target.value)} placeholder="DIN" maxLength={8} />
 
-              {/* Absent — leave of absence */}
+                <button type="button" onClick={() => removeDir(i)}
+                  className="text-slate-300 hover:text-red-500 transition shrink-0">✕</button>
+              </div>
+
+              {/* Absent — leave of absence row */}
               {!d.isPresent && (
-                <label className="flex items-center gap-1 text-xs text-slate-500 shrink-0 cursor-pointer">
-                  <input type="checkbox" checked={d.leaveGranted}
-                    onChange={e => setDirField(i, "leaveGranted", e.target.checked)}
-                    className="rounded" />
-                  Leave granted
-                </label>
+                <div className="px-4 pb-2 flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                    <input type="checkbox" checked={d.leaveGranted}
+                      onChange={e => setDirField(i, "leaveGranted", e.target.checked)}
+                      className="rounded" />
+                    <span>Leave of absence granted by the Board</span>
+                  </label>
+                </div>
               )}
-
-              <button type="button" onClick={() => removeDir(i)}
-                className="text-slate-300 hover:text-red-500 transition shrink-0">✕</button>
             </div>
           ))}
         </div>
