@@ -341,7 +341,7 @@ function generateAgmHTML(f: F): string {
   <title>AGM Minutes — ${f.companyName}</title>
   <style>
     @page { size:A4; margin:20mm 18mm; }
-    body { font-family:'Times New Roman',Times,serif; font-size:12px; color:#1a1a1a; margin:0; padding:0; }
+    body { font-family:'Times New Roman',Times,serif; font-size:12px; color:#1a1a1a; margin:0; padding:0; text-align:justify; }
     @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
     table { border-collapse:collapse; width:100%; }
   </style>
