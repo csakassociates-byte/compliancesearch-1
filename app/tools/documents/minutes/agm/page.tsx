@@ -72,6 +72,12 @@ interface F {
   // Step 4 — Agenda
   agendaItems: AgendaItemData[];
 
+  // ── Meeting Decisions (controls which agenda items appear) ──
+  dividendDecision: "declare" | "no_board_recommendation" | "declared_nil";
+  dirRotationApplicable: "yes" | "no" | "not_applicable"; // yes=retiring dir, no=none retiring, not_applicable=pvt/OPC no rotation
+  auditorStatus: "fresh_appt" | "reappt_new_term" | "ongoing_term";   // ongoing = no resolution needed
+  hasAdditionalDirector: boolean;  // Additional director to confirm at this AGM
+
   // Print
   printOnLetterhead: boolean;
   printMobile: string;
@@ -219,6 +225,10 @@ const INITIAL_F: F = {
   members: [BLANK_MEMBER()],
   invitees: [],
   agendaItems: DEFAULT_ITEM_IDS.map(defaultAgendaItem),
+  dividendDecision: "declare",
+  dirRotationApplicable: "yes",
+  auditorStatus: "fresh_appt",
+  hasAdditionalDirector: false,
   printOnLetterhead: true, printMobile: "", printEmail: "",
 };
 
@@ -715,6 +725,91 @@ export default function AgmMinutesPage() {
     }));
   }, [f.noticeDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Sync agenda items when meeting decisions change ──
+  useEffect(() => {
+    setF(prev => {
+      let items = [...prev.agendaItems];
+
+      // ── 1. DIVIDEND ──────────────────────────────────────────────
+      const DIVIDEND_ALL = ["agm_dividend", "agm_no_dividend", "agm_dividend_nil_declared"];
+      items = items.filter(a => !DIVIDEND_ALL.includes(a.templateId)); // remove all dividend variants
+      const closingIdx = items.findIndex(a => a.templateId === "agm_vote_of_thanks");
+      const divTemplateId =
+        prev.dividendDecision === "declare" ? "agm_dividend" :
+        prev.dividendDecision === "no_board_recommendation" ? "agm_no_dividend" :
+        "agm_dividend_nil_declared";
+      const divItem = defaultAgendaItem(divTemplateId);
+      // Preserve FY if available
+      if (prev.financialYear && isValidFY(prev.financialYear)) {
+        divItem.fields.fy = prev.financialYear;
+      }
+      const insertAt = closingIdx >= 0 ? closingIdx : items.length;
+      items.splice(Math.max(0, insertAt - (items.filter(a =>
+        ["agm_dir_no_rotation","agm_dir_reappt","agm_auditor_appt","agm_auditor_ongoing_note","agm_dir_additional_confirm"].includes(a.templateId)
+      ).length)), 0, divItem);
+
+      // ── 2. DIRECTOR ROTATION ────────────────────────────────────
+      const DIR_ROT_ALL = ["agm_dir_reappt", "agm_dir_no_rotation"];
+      items = items.filter(a => !DIR_ROT_ALL.includes(a.templateId));
+      if (prev.dirRotationApplicable === "yes") {
+        const rotItem = defaultAgendaItem("agm_dir_reappt");
+        // auto-fill from directors list if available
+        const rotDir = prev.companyDirectors.find(d =>
+          !/md|managing|wtd|whole.?time|independent/i.test(d.designation)
+        ) || prev.companyDirectors[0];
+        if (rotDir) {
+          rotItem.fields.dirName = rotDir.name;
+          rotItem.fields.dirDin = rotDir.din;
+          rotItem.fields.dirDesig = rotDir.designation;
+        }
+        const audIdx = items.findIndex(a => ["agm_auditor_appt","agm_auditor_ongoing_note"].includes(a.templateId));
+        const closeIdx2 = items.findIndex(a => a.templateId === "agm_vote_of_thanks");
+        const rotInsert = audIdx >= 0 ? audIdx : closeIdx2 >= 0 ? closeIdx2 : items.length;
+        items.splice(rotInsert, 0, rotItem);
+      } else {
+        // "no" or "not_applicable" → insert note item
+        const rotNote = defaultAgendaItem("agm_dir_no_rotation");
+        const audIdx2 = items.findIndex(a => ["agm_auditor_appt","agm_auditor_ongoing_note"].includes(a.templateId));
+        const closeIdx3 = items.findIndex(a => a.templateId === "agm_vote_of_thanks");
+        const noteInsert = audIdx2 >= 0 ? audIdx2 : closeIdx3 >= 0 ? closeIdx3 : items.length;
+        items.splice(noteInsert, 0, rotNote);
+      }
+
+      // ── 3. AUDITOR ───────────────────────────────────────────────
+      const AUD_ALL = ["agm_auditor_appt", "agm_auditor_ongoing_note"];
+      items = items.filter(a => !AUD_ALL.includes(a.templateId));
+      if (prev.auditorStatus !== "ongoing_term") {
+        const audItem = defaultAgendaItem("agm_auditor_appt");
+        if (prev.financialYear && isValidFY(prev.financialYear)) {
+          // suggest toFY = 5 years ahead
+          const fyYear = parseInt(prev.financialYear.split("-")[0]) + 5;
+          const toFY2Digit = String(fyYear + 1).slice(-2);
+          audItem.fields.toFY = `${fyYear}-${toFY2Digit}`;
+        }
+        const closeIdx4 = items.findIndex(a => a.templateId === "agm_vote_of_thanks");
+        items.splice(closeIdx4 >= 0 ? closeIdx4 : items.length, 0, audItem);
+      } else {
+        // ongoing — insert a "no action needed" note
+        const audNote = defaultAgendaItem("agm_auditor_ongoing_note");
+        const closeIdx5 = items.findIndex(a => a.templateId === "agm_vote_of_thanks");
+        items.splice(closeIdx5 >= 0 ? closeIdx5 : items.length, 0, audNote);
+      }
+
+      // ── 4. ADDITIONAL DIRECTOR ──────────────────────────────────
+      items = items.filter(a => a.templateId !== "agm_dir_additional_confirm");
+      if (prev.hasAdditionalDirector) {
+        const addDirItem = defaultAgendaItem("agm_dir_additional_confirm");
+        // Insert before auditor item
+        const audPos = items.findIndex(a => ["agm_auditor_appt","agm_auditor_ongoing_note"].includes(a.templateId));
+        const closeIdx6 = items.findIndex(a => a.templateId === "agm_vote_of_thanks");
+        items.splice(audPos >= 0 ? audPos : closeIdx6 >= 0 ? closeIdx6 : items.length, 0, addDirItem);
+      }
+
+      return { ...prev, agendaItems: items };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.dividendDecision, f.dirRotationApplicable, f.auditorStatus, f.hasAdditionalDirector]);
+
   // Already-added template IDs set — for ✓ indicator
   const addedIds = new Set(f.agendaItems.map(a => a.templateId));
 
@@ -1127,6 +1222,120 @@ _________________    _____________    _______________    ___________` : "";
                 <input className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
                   value={f.chairmanDesig} onChange={e => upd({ chairmanDesig: e.target.value })}
                   placeholder="e.g. Managing Director / Chairman" />
+              </div>
+            </div>
+
+            {/* ── Meeting Decisions ── */}
+            <div className="border-t border-slate-100 pt-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-700 mb-1">📋 Meeting Decisions</h3>
+                <p className="text-xs text-slate-400 mb-3">These control which agenda items are auto-inserted. You can always edit/remove items in the Agenda step.</p>
+              </div>
+
+              {/* Dividend */}
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl mt-0.5">💸</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-700">Final Dividend Declaration</p>
+                    <p className="text-xs text-slate-400 mb-2">Under Sec. 123 — Board must recommend; Members declare (cannot exceed Board's recommendation)</p>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={f.dividendDecision}
+                      onChange={e => upd({ dividendDecision: e.target.value as F["dividendDecision"] })}>
+                      <option value="declare">✅ Board recommended — Members will declare dividend</option>
+                      <option value="no_board_recommendation">🚫 Board did NOT recommend any dividend (no proposal)</option>
+                      <option value="declared_nil">❌ Board recommended — but AGM will NOT declare (override/decline)</option>
+                    </select>
+                    {f.dividendDecision === "no_board_recommendation" && (
+                      <p className="text-xs text-blue-600 mt-1.5 bg-blue-50 px-2 py-1 rounded">
+                        ℹ️ A note item will be added: "No dividend recommended by Board for FY..."
+                      </p>
+                    )}
+                    {f.dividendDecision === "declared_nil" && (
+                      <p className="text-xs text-amber-700 mt-1.5 bg-amber-50 px-2 py-1 rounded">
+                        ⚠️ A resolution will be added declining the Board's recommended dividend (Members' right under Sec. 123(1))
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Director Rotation */}
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl mt-0.5">🔄</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-700">Re-appointment of Director by Rotation</p>
+                    <p className="text-xs text-slate-400 mb-2">Under Sec. 152(6) — 1/3rd of rotational directors retire each AGM. Independent / MD / WTD are exempt.</p>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={f.dirRotationApplicable}
+                      onChange={e => upd({ dirRotationApplicable: e.target.value as F["dirRotationApplicable"] })}>
+                      <option value="yes">✅ Yes — a Director is retiring by rotation and will be re-appointed</option>
+                      <option value="no">ℹ️ No Director retiring by rotation at this AGM (note to be added)</option>
+                      <option value="not_applicable">🚫 Not applicable — all directors are not liable to retire by rotation</option>
+                    </select>
+                    {(f.dirRotationApplicable === "no" || f.dirRotationApplicable === "not_applicable") && (
+                      <p className="text-xs text-blue-600 mt-1.5 bg-blue-50 px-2 py-1 rounded">
+                        ℹ️ A note item will be added in minutes recording that no director retires by rotation at this AGM
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Auditor Status */}
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl mt-0.5">🔍</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-700">Statutory Auditor Status</p>
+                    <p className="text-xs text-slate-400 mb-2">Under Sec. 139 — Appointed for 5 years (1st to 6th AGM). Annual ratification removed by 2017 Amendment. Action needed only at appointment/re-appointment AGM.</p>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={f.auditorStatus}
+                      onChange={e => upd({ auditorStatus: e.target.value as F["auditorStatus"] })}>
+                      <option value="fresh_appt">📌 Fresh Appointment — new auditor being appointed for first time / new term</option>
+                      <option value="reappt_new_term">🔁 Re-appointment for new 5-year term (previous term expiring)</option>
+                      <option value="ongoing_term">✅ Term ongoing — NO action required at this AGM (2nd–5th year of term)</option>
+                    </select>
+                    {f.auditorStatus === "ongoing_term" && (
+                      <p className="text-xs text-green-700 mt-1.5 bg-green-50 px-2 py-1 rounded">
+                        ✅ No auditor resolution needed. A note will be added confirming ongoing appointment.
+                      </p>
+                    )}
+                    {f.auditorStatus === "reappt_new_term" && (
+                      <p className="text-xs text-amber-700 mt-1.5 bg-amber-50 px-2 py-1 rounded">
+                        ⚠️ Existing term expiring — a fresh appointment resolution for new 5-year term will be added.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Director */}
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl mt-0.5">👤</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-700">Additional Director to Confirm?</p>
+                    <p className="text-xs text-slate-400 mb-2">Under Sec. 160/161 — Board-appointed Additional Director ceases at next AGM unless confirmed by Members via Ordinary Resolution</p>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 accent-purple-600"
+                        checked={f.hasAdditionalDirector}
+                        onChange={e => upd({ hasAdditionalDirector: e.target.checked })} />
+                      <span className="text-sm text-slate-700">
+                        Yes — an Additional Director (appointed by Board under Sec. 161) needs to be confirmed at this AGM
+                      </span>
+                    </label>
+                    {f.hasAdditionalDirector && (
+                      <p className="text-xs text-blue-600 mt-1.5 bg-blue-50 px-2 py-1 rounded">
+                        ℹ️ An agenda item for "Appointment / Confirmation of Additional Director as Regular Director" will be added (Ordinary Resolution under Sec. 152/160/161)
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
