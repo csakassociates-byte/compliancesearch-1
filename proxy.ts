@@ -6,6 +6,8 @@ export default async function proxy(request: NextRequest) {
 
   // Protect admin dashboard and admin API routes
   const isAdminRoute = pathname.startsWith("/admin/dashboard") || pathname.startsWith("/api/admin");
+  // Protect user dashboard
+  const isUserDashboard = pathname.startsWith("/dashboard");
 
   if (isAdminRoute) {
     const token = await getToken({
@@ -20,9 +22,22 @@ export default async function proxy(request: NextRequest) {
     }
   }
 
+  if (isUserDashboard) {
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+
+    if (!token) {
+      const loginUrl = new URL("/auth/login", request.url);
+      loginUrl.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/dashboard/:path*", "/api/admin/:path*"],
+  matcher: ["/admin/dashboard/:path*", "/api/admin/:path*", "/dashboard/:path*"],
 };
