@@ -133,9 +133,9 @@ const ORDINARY_BUSINESS: AgmAgendaTemplate[] = [
       { key: "recordDate", label: "Record Date / Book Closure Date", placeholder: "e.g. 15 September 2025" },
     ],
     discussion: `The Chairman informed the Members that the Board of Directors had recommended a Final Dividend at the rate of {dividendRate} for the Financial Year {fy}. The Chairman stated that the dividend, if approved, would be paid to the Members whose names appear in the Register of Members / list of Beneficial Owners as on {recordDate}.`,
-    resolution: `RESOLVED THAT a Final Dividend at the rate of {dividendRate} for the Financial Year {fy} be and is hereby declared out of the profits of the Company for the said year.\n\nRESOLVED FURTHER THAT the said Dividend shall be paid on or before {paymentDate} to those Members whose names appear in the Register of Members / list of Beneficial Owners as on {recordDate}.`,
+    resolution: `RESOLVED THAT pursuant to Section 123 and other applicable provisions of the Companies Act, 2013, a Final Dividend at the rate of {dividendRate} for the Financial Year {fy} be and is hereby declared out of the profits of the Company for the said year, after providing for depreciation in accordance with Section 123(2) of the Act.\n\nRESOLVED FURTHER THAT the said Dividend shall be paid on or before {paymentDate} (being within 30 days of this declaration) to those Members whose names appear in the Register of Members / list of Beneficial Owners as on the Record Date / Book Closure Date of {recordDate}.\n\nRESOLVED FURTHER THAT the Company shall, within 5 (five) days of this declaration, open/operate a separate bank account titled "Dividend Account" and transfer therein the total amount of dividend so declared, in compliance with Section 123(4) of the Companies Act, 2013.`,
     resolutionType: "ordinary",
-    resolutionLaw: "Sec. 123 — Companies Act, 2013",
+    resolutionLaw: "Sec. 123 — Companies Act, 2013 | Dividend payable within 30 days; separate a/c within 5 days",
   },
   {
     id: "agm_dir_reappt",
@@ -155,21 +155,20 @@ const ORDINARY_BUSINESS: AgmAgendaTemplate[] = [
   },
   {
     id: "agm_auditor_appt",
-    title: "Item 4 — Appointment / Ratification of Statutory Auditor",
+    title: "Item 4 — Appointment of Statutory Auditor",
     icon: "🔍",
     category: "ordinary_biz", categoryLabel: "Ordinary Business (Statutory)", categoryIcon: "📋",
     isOrdinaryBusiness: true,
     fields: [
       { key: "auditorName", label: "Auditor / Firm Name", placeholder: "e.g. M/s ABC & Associates" },
       { key: "auditorRegNo", label: "ICAI Firm Reg. No.", placeholder: "e.g. 123456W" },
-      { key: "fromFY", label: "From FY", placeholder: "e.g. 2025-26" },
-      { key: "toFY", label: "To FY / Till conclusion of AGM", placeholder: "e.g. 2029-30" },
+      { key: "toFY", label: "Till conclusion of AGM for FY", placeholder: "e.g. 2029-30" },
       { key: "remuneration", label: "Remuneration", placeholder: "e.g. as mutually agreed" },
     ],
-    discussion: `The Chairman informed the Members about the proposal for appointment/re-appointment of {auditorName} (ICAI Firm Reg. No. {auditorRegNo}), Chartered Accountants, as the Statutory Auditors of the Company for a term from FY {fromFY} to FY {toFY} as recommended by the Audit Committee and the Board of Directors. It was noted that the firm has given its consent and confirmed its eligibility under Section 141 of the Act. The Resolution was put to vote.`,
-    resolution: `RESOLVED THAT pursuant to the provisions of Section 139, 142 and other applicable provisions of the Companies Act, 2013, read with the Companies (Audit and Auditors) Rules, 2014, {auditorName} (ICAI Firm Reg. No. {auditorRegNo}), Chartered Accountants, be and are hereby appointed as the Statutory Auditors of the Company for a period from the conclusion of this Annual General Meeting till the conclusion of the Annual General Meeting for the Financial Year {toFY}, to examine and audit the accounts of the Company at a remuneration of {remuneration} plus applicable taxes and out-of-pocket expenses as may be agreed upon between the Auditors and the Board of Directors.${AUTH}`,
+    discussion: `The Chairman informed the Members about the proposal for appointment of {auditorName} (ICAI Firm Reg. No. {auditorRegNo}), Chartered Accountants, as the Statutory Auditors of the Company from the conclusion of this Annual General Meeting till the conclusion of the Annual General Meeting for the Financial Year {toFY}. The Chairman noted that the requirement of annual ratification has been dispensed with by the Companies (Amendment) Act, 2017. It was confirmed that the firm has given its written consent and has certified its eligibility under Section 141 of the Companies Act, 2013. The Resolution was put to vote.`,
+    resolution: `RESOLVED THAT pursuant to the provisions of Section 139, 141, 142 and other applicable provisions of the Companies Act, 2013, read with the Companies (Audit and Auditors) Rules, 2014 (including any statutory modification or re-enactment thereof), {auditorName} (ICAI Firm Reg. No. {auditorRegNo}), Chartered Accountants, be and are hereby appointed as the Statutory Auditors of the Company to hold office from the conclusion of this Annual General Meeting till the conclusion of the Annual General Meeting of the Company to be held for the Financial Year {toFY}, at a remuneration of {remuneration} plus applicable taxes and out-of-pocket expenses as may be mutually agreed upon between the Board of Directors and the Auditors.${AUTH}`,
     resolutionType: "ordinary",
-    resolutionLaw: "Sec. 139 — Companies Act, 2013",
+    resolutionLaw: "Sec. 139/141/142 — Companies Act, 2013 (Ratification removed by Amendment Act 2017)",
   },
 ];
 
@@ -189,9 +188,9 @@ const SPECIAL_DIRECTORS: AgmAgendaTemplate[] = [
       { key: "effectiveDate", label: "Effective Date", placeholder: "e.g. 01 October 2025", type: "date" },
     ],
     discussion: approving(`the appointment of {dirName} (DIN: {dirDin}) as an Independent Director of the Company for a term of {termYears} consecutive years from {effectiveDate}, as recommended by the Nomination and Remuneration Committee and the Board of Directors. The brief profile of the Director was provided in the Notice. It was noted that {dirName} has submitted a declaration confirming independence under Section 149(6) of the Act`),
-    resolution: `RESOLVED THAT pursuant to Sections 149, 150, 152 and Schedule IV and other applicable provisions of the Companies Act, 2013 and the Companies (Appointment and Qualification of Directors) Rules, 2014 (including any statutory modification or re-enactment thereof), {dirName} (DIN: {dirDin}), who has submitted a declaration that he/she meets the criteria of independence as provided in Section 149(6) of the Act, be and is hereby appointed as an Independent Director of the Company, to hold office for a term of {termYears} consecutive years commencing from {effectiveDate}, not liable to retire by rotation.${AUTH}`,
+    resolution: `RESOLVED THAT pursuant to Sections 149, 152 and Schedule IV and other applicable provisions of the Companies Act, 2013, read with the Companies (Appointment and Qualification of Directors) Rules, 2014 (including any statutory modification or re-enactment thereof for the time being in force), {dirName} (DIN: {dirDin}), who has submitted a declaration that he/she meets the criteria of independence as provided in Section 149(6) of the Act, and in respect of whom the Company has received a notice in writing under Section 160(1) of the Act proposing his/her candidature for the office of Director, be and is hereby appointed as an Independent Director of the Company, not liable to retire by rotation, to hold office for a term of {termYears} consecutive years commencing from {effectiveDate}.${AUTH}`,
     resolutionType: "ordinary",
-    resolutionLaw: "Sec. 149/150/152 — Companies Act, 2013",
+    resolutionLaw: "Sec. 149/152/Schedule IV — Ordinary Resolution for 1st term (Sec. 150 not cited in resolution)",
   },
   {
     id: "agm_reappt_independent_second_term",
@@ -223,9 +222,9 @@ const SPECIAL_DIRECTORS: AgmAgendaTemplate[] = [
       { key: "effectiveDate", label: "Effective Date", placeholder: "e.g. 01 October 2025", type: "date" },
     ],
     discussion: approving(`the appointment/re-appointment of {personName} (DIN: {din}) as {designation} of the Company for a period of {term} with effect from {effectiveDate} at a remuneration of {remuneration}, as recommended by the NRC and approved by the Board`),
-    resolution: `RESOLVED THAT pursuant to Sections 196, 197, 198 and Schedule V and other applicable provisions of the Companies Act, 2013, read with the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014, {personName} (DIN: {din}) be and is hereby appointed/re-appointed as {designation} of the Company for a period of {term} with effect from {effectiveDate} at a remuneration of {remuneration} per month plus perquisites and allowances as per the terms of the Agreement to be executed between the Company and {personName}.${AUTH}`,
+    resolution: `RESOLVED THAT pursuant to Sections 196, 197, 198 and other applicable provisions of the Companies Act, 2013, read with the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 (Schedule V shall apply only in case of no profits or inadequate profits), {personName} (DIN: {din}) be and is hereby appointed/re-appointed as {designation} of the Company for a period of {term} with effect from {effectiveDate} at a remuneration of {remuneration} per month, plus such perquisites, allowances and benefits as set out in the Agreement to be executed between the Company and {personName}, subject to the overall ceiling on managerial remuneration under Section 197 of the Act.\n\nRESOLVED FURTHER THAT the Board be authorised to finalise and execute the Agreement with {personName} on such terms and conditions as it deems fit.${AUTH}`,
     resolutionType: "ordinary",
-    resolutionLaw: "Sec. 196/197/Schedule V — Companies Act, 2013",
+    resolutionLaw: "Sec. 196/197/198 — Ordinary Resolution (Schedule V applies ONLY if no profit / inadequate profit)",
   },
   {
     id: "agm_director_remuneration",
@@ -237,10 +236,10 @@ const SPECIAL_DIRECTORS: AgmAgendaTemplate[] = [
       { key: "fy", label: "Applicable from FY", placeholder: "e.g. 2025-26" },
       { key: "validForYears", label: "Valid for (years)", placeholder: "e.g. 5 years" },
     ],
-    discussion: approving(`payment of commission to the Non-Executive Directors at the rate of {commissionPct} per annum with effect from FY {fy} for a period of {validForYears} as approved by the Board`),
-    resolution: `RESOLVED THAT pursuant to Sections 197, 198 and other applicable provisions of the Companies Act, 2013, the Members hereby approve payment of commission to the Non-Executive Directors of the Company at a rate not exceeding {commissionPct} of the net profits of the Company, computed in the manner laid down in Section 198 of the Act, with effect from Financial Year {fy} for a period of {validForYears}.${AUTH}`,
-    resolutionType: "ordinary",
-    resolutionLaw: "Sec. 197/198 — Companies Act, 2013",
+    discussion: approving(`payment of commission to the Non-Executive Directors at the rate of {commissionPct} per annum with effect from FY {fy} for a period of {validForYears} as approved by the Board. It was noted that as the proposed commission exceeds the limits specified under Section 197(1) of the Companies Act, 2013, approval of Members by way of Special Resolution is required`),
+    resolution: `RESOLVED THAT pursuant to Sections 197, 198 and other applicable provisions of the Companies Act, 2013, and as a Special Resolution, the Members hereby approve payment of commission to the Non-Executive Directors of the Company at a rate not exceeding {commissionPct} of the net profits of the Company per annum, computed in the manner laid down in Section 198 of the Act, with effect from Financial Year {fy} for a period of {validForYears}.\n\nRESOLVED FURTHER THAT such commission shall be in addition to sitting fees payable under Section 197(5) of the Act and shall be within the overall limit of 11% of net profits under Section 197(1).${AUTH}`,
+    resolutionType: "special",
+    resolutionLaw: "Sec. 197(1) Proviso — Special Resolution required if commission exceeds 1%/3% of net profits",
   },
 ];
 
@@ -381,10 +380,10 @@ const SPECIAL_RPT: AgmAgendaTemplate[] = [
       { key: "transactionNature", label: "Nature of Transaction", placeholder: "e.g. sale of goods / services" },
       { key: "transactionValue", label: "Transaction Value", placeholder: "e.g. ₹50,00,00,000 per annum" },
     ],
-    discussion: approving(`the material Related Party Transaction with {relatedParty} ({relationship}) for {transactionNature} amounting to {transactionValue} per annum. The Audit Committee and Board have already approved the same. The related party / interested members did not vote on this resolution`),
-    resolution: `RESOLVED THAT pursuant to Section 188 and other applicable provisions of the Companies Act, 2013, and Regulation 23 of SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015 (wherever applicable), the Members hereby accord approval for entering into material Related Party Transaction(s) with {relatedParty} ({relationship}) for {transactionNature} for a value not exceeding {transactionValue} per annum, on arm's length basis and in the ordinary course of business.${AUTH}`,
+    discussion: approving(`the material Related Party Transaction(s) with {relatedParty} ({relationship}) for {transactionNature} amounting to {transactionValue} per annum. The Audit Committee has reviewed and recommended, and the Board has approved the same. It was noted that the said transaction(s) are not in the ordinary course of business and/or not on arm's length basis, and therefore prior approval of Members under Section 188 of the Companies Act, 2013 is required. The related party and interested Members abstained from voting on this Resolution`),
+    resolution: `RESOLVED THAT pursuant to Section 188 and other applicable provisions of the Companies Act, 2013, read with the Companies (Meetings of Board and its Powers) Rules, 2014, and Regulation 23 of SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015 (wherever applicable), and subject to such other approvals as may be required, the consent of the Members be and is hereby accorded for entering into the following Related Party Transaction(s) with {relatedParty} ({relationship}):\n\nNature of Transaction: {transactionNature}\nMaximum Value: {transactionValue} per annum\n\nRESOLVED FURTHER THAT the Board of Directors / Audit Committee be authorised to finalise the terms and conditions and execute all documents in relation to the above transactions.${AUTH}`,
     resolutionType: "ordinary",
-    resolutionLaw: "Sec. 188 — Companies Act, 2013",
+    resolutionLaw: "Sec. 188 — Approval required only when NOT arm's length / NOT ordinary course of business",
   },
 ];
 
@@ -430,9 +429,9 @@ const SPECIAL_MOA_AOA: AgmAgendaTemplate[] = [
       { key: "proposedName", label: "Proposed New Name", placeholder: "e.g. XYZ Innovations Private Limited" },
     ],
     discussion: approving(`the change of name of the Company from '{existingName}' to '{proposedName}', subject to approval of the Registrar of Companies and Central Government, wherever applicable`),
-    resolution: `RESOLVED THAT pursuant to Sections 13, 16 and other applicable provisions of the Companies Act, 2013, the name of the Company be changed from '{existingName}' to '{proposedName}', subject to the approval of the Registrar of Companies, and that the Memorandum and Articles of Association of the Company be altered accordingly.${AUTH}`,
+    resolution: `RESOLVED THAT pursuant to Section 13 and other applicable provisions of the Companies Act, 2013, read with the Companies (Incorporation) Rules, 2014, and subject to the approval of the Registrar of Companies and such other authorities as may be necessary, the name of the Company be changed from '{existingName}' to '{proposedName}'.\n\nRESOLVED FURTHER THAT upon approval of the new name by the Registrar of Companies, the name '{existingName}' wherever it appears in the Memorandum of Association and Articles of Association of the Company be substituted by '{proposedName}'.\n\nRESOLVED FURTHER THAT the Company Secretary be authorised to file Form INC-24 with the Registrar of Companies and to do all acts necessary to give effect to this Resolution.${AUTH}`,
     resolutionType: "special",
-    resolutionLaw: "Sec. 13/16 — Special Resolution + RoC approval required",
+    resolutionLaw: "Sec. 13 — Special Resolution + RoC approval via Form INC-24 (Sec. 16 not applicable here)",
   },
   {
     id: "agm_shift_reg_office",
@@ -445,9 +444,9 @@ const SPECIAL_MOA_AOA: AgmAgendaTemplate[] = [
       { key: "newAddress", label: "New Registered Address", placeholder: "e.g. 201, Tech Park, Bengaluru - 560001" },
     ],
     discussion: approving(`the shifting of Registered Office of the Company from the State of {fromState} to the State of {toState} at {newAddress}`),
-    resolution: `RESOLVED THAT pursuant to Sections 13(4), 12 and other applicable provisions of the Companies Act, 2013, the Registered Office of the Company be shifted from the State of {fromState} to the State of {toState} and be located at {newAddress}, subject to the approval of the Regional Director / Central Government.${AUTH}`,
+    resolution: `RESOLVED THAT pursuant to Section 13(4) and other applicable provisions of the Companies Act, 2013, read with the Companies (Incorporation) Rules, 2014, the Registered Office of the Company be shifted from the State of {fromState} to the State of {toState} and be situated at {newAddress}, subject to the confirmation of the Regional Director having jurisdiction.\n\nRESOLVED FURTHER THAT the Board of Directors and the Company Secretary be authorised to file the application before the Regional Director in Form INC-23 and to take all steps necessary for giving effect to this Resolution, including filing of Form INC-28 upon receipt of the Regional Director's order.${AUTH}`,
     resolutionType: "special",
-    resolutionLaw: "Sec. 13(4) — Special Resolution + Regional Director approval",
+    resolutionLaw: "Sec. 13(4) — Special Resolution + Regional Director confirmation via Form INC-23 (NOT Central Govt.)",
   },
 ];
 
@@ -494,10 +493,10 @@ const SPECIAL_LOANS: AgmAgendaTemplate[] = [
       { key: "loanAmount", label: "Loan / Investment Amount", placeholder: "e.g. ₹10,00,00,000" },
       { key: "purpose", label: "Purpose", placeholder: "e.g. working capital / acquisition" },
     ],
-    discussion: approving(`inter-corporate loan/investment of {loanAmount} to/in {beneficiaryName} for the purpose of {purpose}, exceeding the limits specified under Section 186`),
-    resolution: `RESOLVED THAT pursuant to Section 186 and other applicable provisions of the Companies Act, 2013, and subject to such approvals as may be necessary, the Members hereby accord their consent for the Company to grant loans / provide guarantees / make investments in {beneficiaryName} up to an aggregate amount not exceeding {loanAmount} for the purpose of {purpose}.${AUTH}`,
+    discussion: approving(`inter-corporate loan/investment/guarantee of {loanAmount} to/in {beneficiaryName} for the purpose of {purpose}. It was noted that the proposed amount exceeds the limits prescribed under Section 186(2) of the Companies Act, 2013 i.e. 60% of paid-up share capital, free reserves and securities premium account OR 100% of free reserves and securities premium account, whichever is more, and therefore prior approval of Members by Special Resolution is required`),
+    resolution: `RESOLVED THAT pursuant to Section 186 and other applicable provisions of the Companies Act, 2013, read with the Companies (Meetings of Board and its Powers) Rules, 2014, and subject to such approvals as may be necessary, the consent of the Members be and is hereby accorded for the Company to:\n(i) grant loan(s) / give guarantee(s) / provide security / make investment(s) in {beneficiaryName}\nup to an aggregate amount not exceeding {loanAmount}\nfor the purpose of {purpose}\n\nIt is hereby confirmed that no investment has been or shall be made by the Company in contravention of Section 186(3) of the Act and the Company has not defaulted in repayment of any deposits or interest thereon.${AUTH}`,
     resolutionType: "special",
-    resolutionLaw: "Sec. 186 — Special Resolution if exceeds prescribed limits",
+    resolutionLaw: "Sec. 186(3) — Special Resolution when exceeds 60% of paid-up capital + free reserves + securities premium",
   },
 ];
 
@@ -516,9 +515,9 @@ const SPECIAL_MERGER: AgmAgendaTemplate[] = [
       { key: "swapRatio", label: "Swap Ratio / Consideration", placeholder: "e.g. 1:1 share swap / Cash consideration of ₹X" },
     ],
     discussion: approving(`the Scheme of {proposalType} of the Company with {otherCompany} with a swap ratio / consideration of {swapRatio}, as approved by the Board. It was noted that the Scheme is subject to approval of NCLT and other regulatory authorities`),
-    resolution: `RESOLVED THAT pursuant to Sections 230, 232 and other applicable provisions of the Companies Act, 2013, the Scheme of {proposalType} of the Company with {otherCompany} with a swap ratio/consideration of {swapRatio}, as circulated to the Members along with the Notice, be and is hereby approved.\n\nRESOLVED FURTHER THAT the Directors and Company Secretary be authorised to file the petition before the National Company Law Tribunal (NCLT) and take all necessary steps.${AUTH}`,
+    resolution: `RESOLVED THAT pursuant to Sections 230, 232 and other applicable provisions of the Companies Act, 2013, read with the Companies (Compromises, Arrangements and Amalgamations) Rules, 2016, the Scheme of {proposalType} of the Company with {otherCompany} with a swap ratio/consideration of {swapRatio}, as circulated to the Members along with the Notice and the Explanatory Statement, be and is hereby approved.\n\nRESOLVED FURTHER THAT the Board of Directors and the Company Secretary be authorised to file the application before the National Company Law Tribunal (NCLT) and to take all steps necessary including filing of INC-28 upon receipt of NCLT Order, and to do all acts, deeds and things as may be required to give effect to this Resolution.${AUTH}`,
     resolutionType: "special",
-    resolutionLaw: "Sec. 230/232 — Special Resolution + NCLT approval required",
+    resolutionLaw: "Sec. 230/232 — Special Resolution + NCLT application (not petition) required",
   },
 ];
 

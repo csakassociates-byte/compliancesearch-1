@@ -370,8 +370,8 @@ function buildSs2Checklist(f: F): Array<{ label: string; status: "ok" | "warn" |
     { label: "Meeting date entered", status: hasDate ? "ok" : "warn" },
     { label: "AGM held within 6 months from close of FY (Sec. 96)", status: "manual" },
     { label: "Minutes to be entered in Minute Book within 30 days (Sec. 118)", status: "manual" },
-    { label: "MGT-7 (Annual Return) to be filed within 60 days of AGM", status: "manual" },
-    { label: "AOC-4 (Financial Statements) to be filed within 30/60 days of AGM", status: "manual" },
+    { label: "MGT-7 / MGT-7A (Annual Return) to be filed within 60 days of AGM — MGT-7A for small companies (Amendment Act 2020)", status: "manual" },
+    { label: "AOC-4 / AOC-4 XBRL (Financial Statements) to be filed within 30 days of AGM (Listed/XBRL companies: 60 days)", status: "manual" },
   ];
 }
 
