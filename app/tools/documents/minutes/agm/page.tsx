@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { injectPreviewWatermark } from "@/lib/preview-protection";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
@@ -823,11 +824,31 @@ function AgendaCard({
 /* ══════════════════════════════════════════════════════════════════
    MAIN PAGE COMPONENT
 ══════════════════════════════════════════════════════════════════ */
+/* ── Restore helper — isolated so useSearchParams can be Suspense-wrapped ── */
+function RestoreDocWatcher({ onRestore }: { onRestore: (data: F) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('restore') === '1') {
+      const saved = sessionStorage.getItem('csi_restore_doc');
+      if (saved) {
+        try {
+          const data = JSON.parse(saved) as F;
+          onRestore(data);
+          sessionStorage.removeItem('csi_restore_doc');
+        } catch {}
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 export default function AgmMinutesPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [f, setF] = useState<F>(INITIAL_F);
   const [draftSaved, setDraftSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [showAddAgenda, setShowAddAgenda] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [showSs2, setShowSs2] = useState(false);
@@ -850,6 +871,27 @@ export default function AgmMinutesPage() {
     }, 800);
     return () => clearTimeout(timer);
   }, [f]);
+
+  async function saveDocument() {
+    if (!session) { router.push('/auth/login'); return; }
+    setSaveStatus('saving');
+    try {
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'agm_minutes',
+          title: `AGM Minutes — ${f.companyName || 'Company'} — FY ${f.financialYear || ''}`,
+          companyName: f.companyName || null,
+          financialYear: f.financialYear || null,
+          meetingDate: f.meetingDate || null,
+          formDataJson: JSON.stringify(f),
+        }),
+      });
+      if (res.ok) { setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 3000); }
+      else setSaveStatus('error');
+    } catch { setSaveStatus('error'); }
+  }
 
   const upd = useCallback((patch: Partial<F>) => setF(prev => ({ ...prev, ...patch })), []);
 
@@ -1193,6 +1235,9 @@ _________________    _____________    _______________    ___________` : "";
 
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col">
+      <Suspense fallback={null}>
+        <RestoreDocWatcher onRestore={setF} />
+      </Suspense>
       <Navbar />
 
       {/* Top Bar */}
@@ -2156,6 +2201,26 @@ _________________    _____________    _______________    ___________` : "";
                 </button>
               </div>
             </div>
+
+            {/* Save to My Documents */}
+            {session && (
+              <div className="mt-3 text-center">
+                <button
+                  onClick={saveDocument}
+                  disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-60"
+                  style={saveStatus === 'saved'
+                    ? { background: '#dcfce7', color: '#166534', borderColor: '#86efac' }
+                    : { background: '#f0f9ff', color: '#0369a1', borderColor: '#bae6fd' }
+                  }
+                >
+                  {saveStatus === 'saving' ? '💾 Saving...' :
+                   saveStatus === 'saved'  ? '✓ Saved to My Documents' :
+                   saveStatus === 'error'  ? '❌ Save failed — retry' :
+                   '💾 Save to My Documents'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

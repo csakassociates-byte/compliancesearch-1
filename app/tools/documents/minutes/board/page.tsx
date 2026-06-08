@@ -1,6 +1,7 @@
 "use client";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { injectPreviewWatermark } from "@/lib/preview-protection";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
@@ -763,11 +764,30 @@ function AgendaCard({
   );
 }
 
+/* ── Restore helper — isolated so useSearchParams can be Suspense-wrapped ── */
+function RestoreDocWatcher({ onRestore }: { onRestore: (data: F) => void }) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('restore') === '1') {
+      const saved = sessionStorage.getItem('csi_restore_doc');
+      if (saved) {
+        try {
+          const data = JSON.parse(saved) as F;
+          onRestore(data);
+          sessionStorage.removeItem('csi_restore_doc');
+        } catch {}
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 /* ══════════════════════════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════════════════════════ */
 export default function BoardMinutesPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   // ── LocalStorage draft save/resume ─────────────────────────────
   // Future: restrict to logged-in / paid users only
   const [f, setF] = useState<F>(() => {
@@ -784,6 +804,7 @@ export default function BoardMinutesPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [draftSaved, setDraftSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // Auto-save draft on every change
   useEffect(() => {
@@ -794,6 +815,27 @@ export default function BoardMinutesPage() {
       return () => clearTimeout(t);
     } catch {}
   }, [f]);
+
+  async function saveDocument() {
+    if (!session) { router.push('/auth/login'); return; }
+    setSaveStatus('saving');
+    try {
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'board_minutes',
+          title: `Board Meeting Minutes — ${f.companyName || 'Company'} — ${f.meetingDate || ''}`,
+          companyName: f.companyName || null,
+          financialYear: f.financialYear || null,
+          meetingDate: f.meetingDate || null,
+          formDataJson: JSON.stringify(f),
+        }),
+      });
+      if (res.ok) { setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 3000); }
+      else setSaveStatus('error');
+    } catch { setSaveStatus('error'); }
+  }
 
   function clearDraft() {
     if (!confirm("Naya form shuru karein? Abhi ka draft delete ho jayega.")) return;
@@ -1732,6 +1774,26 @@ export default function BoardMinutesPage() {
           </button>
         </div>
       </div>
+
+      {/* Save to My Documents */}
+      {session && (
+        <div className="mt-3 text-center">
+          <button
+            onClick={saveDocument}
+            disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-60"
+            style={saveStatus === 'saved'
+              ? { background: '#dcfce7', color: '#166534', borderColor: '#86efac' }
+              : { background: '#f0f9ff', color: '#0369a1', borderColor: '#bae6fd' }
+            }
+          >
+            {saveStatus === 'saving' ? '💾 Saving...' :
+             saveStatus === 'saved'  ? '✓ Saved to My Documents' :
+             saveStatus === 'error'  ? '❌ Save failed — retry' :
+             '💾 Save to My Documents'}
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -1742,6 +1804,9 @@ export default function BoardMinutesPage() {
   ══════════════════════════════════════════════════════════════════ */
   return (
     <main className="min-h-screen bg-white flex flex-col">
+      <Suspense fallback={null}>
+        <RestoreDocWatcher onRestore={setF} />
+      </Suspense>
       <Navbar />
 
       {/* Hero */}

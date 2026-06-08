@@ -2,15 +2,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import DashboardClient from "./DashboardClient";
+import DocumentsClient from "./DocumentsClient";
 
-export default async function DashboardPage() {
+export default async function DocumentsPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/auth/login?callbackUrl=/dashboard");
+  if (!session) redirect("/auth/login?callbackUrl=/dashboard/documents");
   return (
     <>
       <Navbar />
-      <DashboardClient userName={session.user?.name || session.user?.email || "User"} />
+      <DocumentsClient />
     </>
   );
 }

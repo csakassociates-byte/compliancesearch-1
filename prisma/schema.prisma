@@ -187,16 +187,18 @@ model Notice {
 // ─── Auth Models (csi_ prefix) ───────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
+  id            String     @id @default(cuid())
   name          String?
-  email         String    @unique
+  email         String     @unique
   emailVerified DateTime?
   passwordHash  String?
-  plan          String    @default("free")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  plan          String     @default("free")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
   sessions      Session[]
   otps          OTP[]
+  companies     Company[]
+  documents     Document[]
 
   @@map("csi_users")
 }
@@ -224,4 +226,41 @@ model OTP {
 
   @@index([email, purpose])
   @@map("csi_otps")
+}
+
+model Company {
+  id                String     @id @default(cuid())
+  userId            String
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cin               String?
+  companyName       String
+  regAddress        String?
+  entityType        String?
+  incorporationDate String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  documents         Document[]
+
+  @@index([userId])
+  @@map("csi_companies")
+}
+
+model Document {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId     String?
+  company       Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  type          String
+  title         String
+  companyName   String?
+  financialYear String?
+  meetingDate   String?
+  formDataJson  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([companyId])
+  @@map("csi_documents")
 }
