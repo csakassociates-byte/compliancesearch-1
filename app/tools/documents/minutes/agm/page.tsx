@@ -80,6 +80,9 @@ interface F {
   auditorStatus: "fresh_appt" | "reappt_new_term" | "ongoing_term";   // ongoing = no resolution needed
   additionalDirectors: Array<{ name: string; din: string; designation: string; boardApptDate: string }>;
 
+  // CTC signatories (who will sign each CTC)
+  ctcSignatories: Array<{ name: string; designation: string; din: string }>;
+
   // Print
   printOnLetterhead: boolean;
   printMobile: string;
@@ -259,6 +262,7 @@ const INITIAL_F: F = {
   dirRotationApplicable: "yes",
   auditorStatus: "fresh_appt",
   additionalDirectors: [],
+  ctcSignatories: [{ name: "", designation: "Director", din: "" }, { name: "", designation: "Director", din: "" }],
   printOnLetterhead: true, printMobile: "", printEmail: "",
 };
 
@@ -458,6 +462,150 @@ function generateAgmHTML(f: F): string {
 }
 
 const tdStyle = "padding:7px 12px;font-size:11px;color:#374151;border:1px solid #e2e8f0;";
+
+/* ══════════════════════════════════════════════════════════════════
+   GENERATE CTC HTML — one page per resolution
+══════════════════════════════════════════════════════════════════ */
+function generateCtcHTML(f: F): string {
+  const resolutionItems = f.agendaItems.filter(
+    item => item.resolutionType !== "none" && item.resolution.trim()
+  );
+  if (resolutionItems.length === 0) return "";
+
+  const total = resolutionItems.length;
+  const activeSigs = f.ctcSignatories.filter(s => s.name.trim());
+
+  // Signature block — responsive columns based on count
+  function sigBlock(): string {
+    const sigs = activeSigs.length > 0
+      ? activeSigs
+      : [{ name: f.chairmanName || "___________", designation: f.chairmanDesig || "Director", din: "" }];
+    const colWidth = sigs.length <= 2 ? "45%" : sigs.length === 3 ? "30%" : "22%";
+    return sigs.map(s => `
+      <div style="text-align:center;width:${colWidth};min-width:120px;">
+        <div style="border-top:1.5px solid #1e3a5f;padding-top:8px;">
+          <p style="font-size:11px;font-weight:700;color:#1e293b;margin:0 0 2px 0;">${s.name || "___________"}</p>
+          <p style="font-size:10.5px;color:#475569;margin:0 0 2px 0;">${s.designation || "Director"}</p>
+          ${s.din ? `<p style="font-size:10px;color:#94a3b8;margin:0 0 2px 0;">DIN: ${s.din}</p>` : ""}
+          <p style="font-size:10px;color:#94a3b8;margin:4px 0 0 0;">Date: _______________</p>
+        </div>
+      </div>`).join("");
+  }
+
+  const letterheadTop = `
+    <div style="text-align:center;border-bottom:2px solid #1e3a5f;padding-bottom:12px;margin-bottom:16px;">
+      <h2 style="margin:0;font-size:18px;font-weight:900;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;">${f.companyName || "[COMPANY NAME]"}</h2>
+      <p style="margin:3px 0 0;font-size:10.5px;color:#475569;">CIN: ${f.cin || "—"}</p>
+      <p style="margin:2px 0 0;font-size:10.5px;color:#475569;">Regd. Office: ${f.regAddress || "—"}</p>
+      ${f.printEmail ? `<p style="margin:2px 0 0;font-size:10.5px;color:#475569;">${f.printEmail}${f.printMobile ? " | " + f.printMobile : ""}</p>` : ""}
+    </div>`;
+
+  const meetingLine = `${f.agmSerial ? f.agmSerial + " " : ""}Annual General Meeting held on ${f.meetingDate ? new Date(f.meetingDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "—"} at ${f.meetingTime || "—"} at ${f.venue || "—"}`;
+
+  const ctcPages = resolutionItems.map((item, i) => {
+    const ctcNum = i + 1;
+    const resFilled = fillAgmTemplate(item.resolution, item.fields);
+    const titleFilled = fillAgmTemplate(item.title, item.fields);
+    const isSpecial = item.resolutionType === "special";
+    const isDefeated = item.votingResult === "defeated";
+
+    const voteLabel =
+      item.votingMode === "show_of_hands" ? "Show of Hands" :
+      item.votingMode === "poll" ? "By Poll" :
+      item.votingMode === "e_voting" ? "E-Voting" : "—";
+    const voteResult =
+      item.votingResult === "passed_unanimously" ? "PASSED UNANIMOUSLY" :
+      item.votingResult === "passed_majority" ? "PASSED WITH REQUISITE MAJORITY" :
+      item.votingResult === "defeated" ? "NOT PASSED (DEFEATED)" : "—";
+
+    return `
+    <div style="page-break-before:always;padding:0;">
+      ${letterheadTop}
+
+      <!-- CTC Header -->
+      <div style="text-align:center;margin-bottom:14px;">
+        <p style="font-size:9.5px;color:#94a3b8;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin:0 0 4px 0;">
+          CTC ${ctcNum} of ${total}
+        </p>
+        <h3 style="font-size:14px;font-weight:900;color:#1e3a5f;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px 0;border:2px solid #1e3a5f;display:inline-block;padding:4px 20px;">
+          CERTIFIED TRUE COPY
+        </h3>
+        <p style="font-size:10.5px;color:#475569;margin:6px 0 0 0;font-style:italic;">
+          Extract of Minutes of the ${meetingLine}
+        </p>
+      </div>
+
+      <!-- Resolution Label -->
+      <div style="background:${isSpecial ? "#fffbeb" : "#f0fdf4"};border:1.5px solid ${isSpecial ? "#f59e0b" : "#16a34a"};border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+        <p style="font-size:10.5px;font-weight:700;color:${isSpecial ? "#92400e" : "#15803d"};text-transform:uppercase;margin:0 0 3px 0;letter-spacing:0.5px;">
+          ${isSpecial ? "⚡ SPECIAL RESOLUTION" : "✅ ORDINARY RESOLUTION"} &nbsp;—&nbsp; ITEM ${f.agendaItems.findIndex(a => a.id === item.id) + 1}
+        </p>
+        <p style="font-size:12px;font-weight:800;color:#1e293b;margin:0;">${titleFilled}</p>
+      </div>
+
+      <!-- Resolution Text -->
+      <div style="border-left:4px solid ${isSpecial ? "#f59e0b" : "#1e3a5f"};padding:12px 16px;margin-bottom:14px;background:#fafafa;">
+        <p style="font-size:11.5px;line-height:1.8;color:#1a1a1a;margin:0;white-space:pre-wrap;text-align:justify;">${resFilled}</p>
+      </div>
+
+      <!-- Voting Result -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:11px;">
+        <tr>
+          <td style="padding:6px 12px;background:#f8fafc;font-weight:700;color:#374151;border:1px solid #e2e8f0;width:35%;">Voting Mode</td>
+          <td style="padding:6px 12px;color:#374151;border:1px solid #e2e8f0;">${voteLabel}</td>
+          <td style="padding:6px 12px;background:#f8fafc;font-weight:700;color:#374151;border:1px solid #e2e8f0;width:20%;">Result</td>
+          <td style="padding:6px 12px;font-weight:700;color:${isDefeated ? "#dc2626" : "#16a34a"};border:1px solid #e2e8f0;">${voteResult}</td>
+        </tr>
+      </table>
+
+      <!-- Certification Statement -->
+      <div style="border-top:1.5px dashed #cbd5e1;padding-top:14px;margin-bottom:20px;">
+        <p style="font-size:11px;line-height:1.8;color:#1e293b;margin:0;text-align:justify;">
+          Certified to be a <strong>True Copy</strong> of the ${isSpecial ? "Special" : "Ordinary"} Resolution passed at the
+          <strong>${f.agmSerial ? f.agmSerial + " " : ""}Annual General Meeting</strong> of
+          <strong>${f.companyName || "[COMPANY NAME]"}</strong> (CIN: ${f.cin || "—"}) held on
+          <strong>${f.meetingDate ? new Date(f.meetingDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "—"}</strong>.
+        </p>
+        <p style="font-size:11px;color:#1e293b;margin:8px 0 0 0;">
+          <strong>For ${f.companyName || "[COMPANY NAME]"}</strong>
+        </p>
+      </div>
+
+      <!-- Signature Block -->
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:20px;margin-top:24px;">
+        ${sigBlock()}
+      </div>
+
+      <p style="font-size:9px;color:#94a3b8;text-align:center;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:8px;">
+        Generated by ComplianceSearch.in &nbsp;|&nbsp; Verify against original minute book before use.
+      </p>
+    </div>`;
+  }).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>CTCs — ${f.companyName} ${f.agmSerial} AGM</title>
+  <style>
+    @page { size:A4; margin:18mm 16mm; }
+    body { font-family:'Times New Roman',Times,serif; font-size:12px; color:#1a1a1a; margin:0; padding:0; }
+    @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+  </style>
+  </head><body>${ctcPages}</body></html>`;
+}
+
+/* ── Combined: Minutes + all CTCs in one print job ── */
+function generateMinutesAndCtcHTML(f: F): string {
+  const minutesHtml = generateAgmHTML(f);
+  const resolutionItems = f.agendaItems.filter(
+    item => item.resolutionType !== "none" && item.resolution.trim()
+  );
+  if (resolutionItems.length === 0) return minutesHtml;
+
+  // Inject CTCs after minutes body (before </body>)
+  const ctcBody = generateCtcHTML(f);
+  // Extract just the CTC pages content (between <body> and </body>)
+  const ctcContent = ctcBody.replace(/^[\s\S]*<body>/, "").replace(/<\/body>[\s\S]*$/, "");
+  return minutesHtml.replace("</div></body></html>", `</div>${ctcContent}</body></html>`);
+}
 
 /* ══════════════════════════════════════════════════════════════════
    SS-2 COMPLIANCE CHECKLIST
@@ -924,6 +1072,10 @@ export default function AgmMinutesPage() {
       ...(currentMembersAreBlank && directorMembers.length > 0 ? { members: directorMembers } : {}),
       ...(smartPrevAgmDate ? { prevAgmDate: smartPrevAgmDate } : {}),
       ...(autoAddlDirs.length > 0 ? { additionalDirectors: autoAddlDirs } : {}),
+      // Auto-fill CTC signatories from top 2 directors (MD/WTD first)
+      ctcSignatories: companyDirectors.slice(0, 4).map(d => ({
+        name: d.name, designation: d.designation, din: d.din,
+      })),
     };
     if (chairman) {
       patch.chairmanName = chairman.name;
@@ -999,14 +1151,20 @@ _________________    _____________    _______________    ___________` : "";
   }
 
   /* ── Print ── */
-  function handlePrint() {
-    const html = generateAgmHTML(f);
+  function openPrint(html: string) {
     const win = window.open("", "_blank");
     if (!win) { alert("Please allow popups to print."); return; }
     win.document.write(html);
     win.document.close();
     win.onload = () => win.print();
   }
+  function handlePrint()        { openPrint(generateAgmHTML(f)); }
+  function handlePrintCtc()     { openPrint(generateCtcHTML(f)); }
+  function handlePrintAll()     { openPrint(generateMinutesAndCtcHTML(f)); }
+
+  const ctcCount = f.agendaItems.filter(
+    item => item.resolutionType !== "none" && item.resolution.trim()
+  ).length;
 
   /* ── SS-2 Checklist ── */
   const ss2Checklist = buildSs2Checklist(f);
@@ -1904,15 +2062,89 @@ _________________    _____________    _______________    ___________` : "";
               </div>
             )}
 
-            {/* Print Button */}
-            <div className="bg-gradient-to-r from-purple-600 to-violet-600 rounded-2xl p-5 text-white text-center shadow-lg">
-              <h3 className="font-extrabold text-lg mb-1">Ready to Print / Save as PDF</h3>
-              <p className="text-purple-200 text-sm mb-4">A4 print-ready minutes will open in a new window. Use browser Print → Save as PDF.</p>
+            {/* CTC Signatories */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-bold text-slate-800">✍️ CTC Signatories</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Who will sign the Certified True Copies — auto-filled from directors. Edit as needed.
+                  </p>
+                </div>
+                <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2.5 py-1 rounded-full border border-purple-200">
+                  {ctcCount} CTC{ctcCount !== 1 ? "s" : ""} will be generated
+                </span>
+              </div>
+              <div className="space-y-2">
+                {f.ctcSignatories.map((s, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                    <input
+                      className="col-span-4 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      placeholder="Director / CS name"
+                      value={s.name}
+                      onChange={e => {
+                        const updated = [...f.ctcSignatories];
+                        updated[i] = { ...updated[i], name: e.target.value };
+                        upd({ ctcSignatories: updated });
+                      }} />
+                    <input
+                      className="col-span-4 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      placeholder="Designation"
+                      value={s.designation}
+                      onChange={e => {
+                        const updated = [...f.ctcSignatories];
+                        updated[i] = { ...updated[i], designation: e.target.value };
+                        upd({ ctcSignatories: updated });
+                      }} />
+                    <input
+                      className="col-span-3 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      placeholder="DIN (optional)"
+                      value={s.din}
+                      onChange={e => {
+                        const updated = [...f.ctcSignatories];
+                        updated[i] = { ...updated[i], din: e.target.value };
+                        upd({ ctcSignatories: updated });
+                      }} />
+                    <button
+                      onClick={() => upd({ ctcSignatories: f.ctcSignatories.filter((_, j) => j !== i) })}
+                      className="col-span-1 text-red-400 hover:text-red-600 font-bold text-lg text-center">×</button>
+                  </div>
+                ))}
+              </div>
               <button
-                onClick={handlePrint}
-                className="bg-white text-purple-700 font-extrabold px-8 py-3 rounded-xl hover:bg-purple-50 transition-all shadow hover:scale-105 text-sm">
-                🖨️ Generate &amp; Print AGM Minutes
+                onClick={() => upd({ ctcSignatories: [...f.ctcSignatories, { name: "", designation: "Director", din: "" }] })}
+                className="mt-3 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg">
+                + Add Signatory
               </button>
+            </div>
+
+            {/* Print Buttons */}
+            <div className="bg-gradient-to-r from-purple-600 to-violet-600 rounded-2xl p-5 text-white shadow-lg">
+              <h3 className="font-extrabold text-lg mb-1 text-center">Ready to Print / Save as PDF</h3>
+              <p className="text-purple-200 text-sm mb-5 text-center">
+                A4 print-ready document opens in new window. Use browser <b>Print → Save as PDF</b>.
+              </p>
+              {/* Primary — Print All */}
+              <button
+                onClick={handlePrintAll}
+                className="w-full bg-white text-purple-700 font-extrabold px-6 py-3.5 rounded-xl hover:bg-purple-50 transition-all shadow hover:scale-[1.02] text-sm mb-3 flex items-center justify-center gap-2">
+                🖨️ Print All — Minutes + {ctcCount} CTC{ctcCount !== 1 ? "s" : ""}
+                <span className="text-xs bg-purple-100 text-purple-600 font-bold px-2 py-0.5 rounded-full">{ctcCount} CTC{ctcCount !== 1 ? "s" : ""}</span>
+              </button>
+              {/* Secondary options */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handlePrint}
+                  className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition-all border border-white/30">
+                  📄 Minutes Only
+                </button>
+                <button
+                  onClick={handlePrintCtc}
+                  disabled={ctcCount === 0}
+                  className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
+                  📋 CTCs Only ({ctcCount})
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1939,9 +2171,9 @@ _________________    _____________    _______________    ___________` : "";
 
           {step === steps.length - 1 && (
             <button
-              onClick={handlePrint}
+              onClick={handlePrintAll}
               className="px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 shadow-md hover:scale-105 transition-all">
-              🖨️ Print Minutes
+              🖨️ Print All (Minutes + {ctcCount} CTCs)
             </button>
           )}
         </div>
