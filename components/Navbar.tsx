@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import SearchModal from "./SearchModal";
+import { useSession, signOut } from "next-auth/react";
 
 /* ─── Tools Dropdown Data ─────────────────────────────────────── */
 const TOOLS = [
@@ -102,6 +103,7 @@ export default function Navbar() {
   const [searchOpen,  setSearchOpen]  = useState(false);
   const pathname  = usePathname();
   const toolsRef  = useRef<HTMLDivElement>(null);
+  const { data: session } = useSession();
 
   /* Ctrl+K → search */
   useEffect(() => {
@@ -211,6 +213,27 @@ export default function Navbar() {
               <span className="hidden xl:inline text-xs">Search</span>
               <kbd className="hidden xl:flex items-center text-[10px] px-1.5 py-0.5 rounded border border-slate-200 font-mono text-slate-300">⌘K</kbd>
             </button>
+
+            {/* Auth */}
+            {session ? (
+              <div className="relative group">
+                <button className="flex items-center gap-2 text-sm font-semibold px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
+                  <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                    {session.user?.name?.[0]?.toUpperCase() || "U"}
+                  </div>
+                  <span className="max-w-[100px] truncate text-slate-700">{session.user?.name || session.user?.email}</span>
+                </button>
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl border border-slate-200 shadow-xl p-1 hidden group-hover:block z-50">
+                  <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">📊 Dashboard</Link>
+                  <button onClick={() => signOut({ callbackUrl: "/" })} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">🚪 Sign Out</button>
+                </div>
+              </div>
+            ) : (
+              <Link href="/auth/login"
+                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl border transition-all hover:scale-105 bg-blue-600 text-white border-blue-600 hover:bg-blue-700">
+                Sign In
+              </Link>
+            )}
 
             {/* Gee Bharat */}
             <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"

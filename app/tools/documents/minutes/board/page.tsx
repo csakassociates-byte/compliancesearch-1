@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -765,6 +766,8 @@ function AgendaCard({
    MAIN PAGE
 ══════════════════════════════════════════════════════════════════ */
 export default function BoardMinutesPage() {
+  const { data: session } = useSession();
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   // ── LocalStorage draft save/resume ─────────────────────────────
   // Future: restrict to logged-in / paid users only
   const [f, setF] = useState<F>(() => {
@@ -1058,6 +1061,7 @@ export default function BoardMinutesPage() {
 
   /* ── Print helpers ── */
   function openPrintWindow(html: string) {
+    if (!session) { setShowLoginPrompt(true); return; }
     const win = window.open("", "_blank", "width=900,height=700");
     if (!win) { alert("Pop-up blocked! Please allow pop-ups."); return; }
     win.document.write(html);
@@ -1863,6 +1867,20 @@ export default function BoardMinutesPage() {
           © {new Date().getFullYear()} ComplianceSearch.in
         </div>
       </footer>
+      {showLoginPrompt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
+            <div className="text-4xl mb-3">🔒</div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Login Required</h2>
+            <p className="text-sm text-slate-500 mb-6">Please sign in to download or print documents.</p>
+            <div className="flex flex-col gap-2">
+              <a href="/auth/login" className="w-full py-3 rounded-xl font-bold text-white text-sm bg-blue-600 hover:bg-blue-700 text-center">Sign In</a>
+              <a href="/auth/signup" className="w-full py-3 rounded-xl font-bold text-slate-700 text-sm border border-slate-200 hover:bg-slate-50 text-center">Create Free Account</a>
+              <button onClick={() => setShowLoginPrompt(false)} className="text-sm text-slate-400 hover:text-slate-600 mt-1">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

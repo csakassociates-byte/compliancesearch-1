@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 
 const BASE_URL = "https://compliancesearch.in";
 
@@ -220,7 +221,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }),
           }}
         />
-        {children}
+        <SessionProviderWrapper>{children}</SessionProviderWrapper>
       </body>
     </html>
   );
