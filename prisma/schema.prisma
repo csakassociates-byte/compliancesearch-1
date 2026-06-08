@@ -1,3 +1,5 @@
+// ComplianceSearch.in — Prisma Schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -5,6 +7,8 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ─── Existing Models ──────────────────────────────────────────────────────────
 
 model ComplianceRule {
   id               String   @id @default(cuid())
@@ -90,8 +94,8 @@ model BlogLike {
 }
 
 model IFSCBranch {
-  id       String @id @default(cuid())
-  ifsc     String @unique
+  id       String  @id @default(cuid())
+  ifsc     String  @unique
   bank     String
   bankCode String
   branch   String
@@ -107,15 +111,15 @@ model IFSCBranch {
 }
 
 model CompanyProfile {
-  id          String            @id @default(cuid())
-  cin         String            @unique
-  companyName String
-  regAddress  String?
-  entityType  String?
-  email       String?
-  rocName     String?
-  status      String?
-  isListed    Boolean           @default(false)
+  id                  String            @id @default(cuid())
+  cin                 String            @unique
+  companyName         String
+  regAddress          String?
+  entityType          String?
+  email               String?
+  rocName             String?
+  status              String?
+  isListed            Boolean           @default(false)
   sourceFile          String?
   mobile              String?
   gstNumber           String?
@@ -129,11 +133,11 @@ model CompanyProfile {
   subcategory         String?
   classOfCompany      String?
   jurisdiction        String?
-  smallCompany        Boolean @default(false)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  directors   CompanyDirector[]
-  charges     CompanyCharge[]
+  smallCompany        Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  directors           CompanyDirector[]
+  charges             CompanyCharge[]
 }
 
 model CompanyDirector {
@@ -178,4 +182,46 @@ model Notice {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ─── Auth Models (csi_ prefix) ───────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  plan          String    @default("free")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  otps          OTP[]
+
+  @@map("csi_users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("csi_sessions")
+}
+
+model OTP {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  purpose   String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, purpose])
+  @@map("csi_otps")
 }
