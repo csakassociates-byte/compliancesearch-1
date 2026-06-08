@@ -79,9 +79,21 @@ export async function parseCompanyExcel(
   const directors: DirectorData[] = [];
 
   for (const row of dirRows) {
-    const name      = row["Name"]              || "";
-    const desig     = row["Designation"]       || "";
-    const din       = row["DIN/PAN"]           || "";
+    const name      = row["Name"]
+                   || row["Name of Director"]
+                   || row["Director Name"]
+                   || row["Name of Directors"]
+                   || row["Full Name"]
+                   || "";
+    const desig     = row["Designation"]
+                   || row["Designation in the Company"]
+                   || row["Director Designation"]
+                   || "";
+    const din       = row["DIN/PAN"]
+                   || row["DIN"]
+                   || row["Director Identification Number"]
+                   || row["DIN / PAN"]
+                   || "";
     const isSig     = (row["Signatory"] || "").toLowerCase() === "yes";
     const cessation = row["Cessation Date"]    || "";
     const appointed = row["Date of Appointment"] || "";

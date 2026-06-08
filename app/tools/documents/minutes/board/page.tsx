@@ -1,10 +1,12 @@
 "use client";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
 import CompanySearch from "@/components/CompanySearch";
 import type { CompanyData } from "@/lib/types/company";
+import { ALL_AGENDA_TEMPLATES, CATEGORY_ORDER as AGENDA_CATEGORY_ORDER, CATEGORY_META as AGENDA_CATEGORY_META, fillTemplate } from "@/lib/agenda-templates";
+import type { AgendaTemplate } from "@/lib/agenda-templates";
 
 /* ══════════════════════════════════════════════════════════════════
    TYPES
@@ -61,13 +63,44 @@ interface F {
   printEmail: string;
 }
 
+// Routine items pre-selected by default (in meeting order)
+const DEFAULT_ROUTINE_IDS = [
+  "elect_chairman",
+  "ascertain_quorum",
+  "leave_of_absence",
+  "note_attendance",
+  "prev_minutes",
+  "action_taken_report",
+  "disclosure_interest",
+];
+
+function makeDefaultAgendaItems(): AgendaItemData[] {
+  return DEFAULT_ROUTINE_IDS
+    .map(id => {
+      const template = ALL_AGENDA_TEMPLATES.find(t => t.id === id);
+      if (!template) return null;
+      const fields: Record<string, string> = {};
+      template.fields.forEach(f => { fields[f.key] = ""; });
+      return {
+        id: `${id}-default`,
+        templateId: id,
+        title: template.title,
+        discussion: template.discussion,
+        resolution: template.resolution,
+        resolutionType: template.resolutionType,
+        fields,
+      } as AgendaItemData;
+    })
+    .filter(Boolean) as AgendaItemData[];
+}
+
 const DEFAULT: F = {
   companyName: "", cin: "", regAddress: "", entityType: "pvt_ltd",
   meetingSerial: "", financialYear: "", meetingDate: "", meetingTime: "",
   closingTime: "", venue: "", chairmanName: "", chairmanDin: "", chairmanDesig: "Director",
   prevMeetingDate: "",
   directors: [], invitees: [],
-  agendaItems: [],
+  agendaItems: makeDefaultAgendaItems(),
   printOnLetterhead: true, printMobile: "", printEmail: "",
 };
 
@@ -77,159 +110,10 @@ const ENTITY_LABELS: Record<string, string> = {
   section8: "Section 8 Company", nidhi: "Nidhi Company", other: "Company",
 };
 
-/* ══════════════════════════════════════════════════════════════════
-   AGENDA TEMPLATES
-══════════════════════════════════════════════════════════════════ */
-type AgendaTemplate = {
-  id: string;
-  title: string;
-  icon: string;
-  category: "mandatory" | "corporate" | "financial" | "hr";
-  fields: { key: string; label: string; placeholder: string; type?: string }[];
-  discussion: string;
-  resolution: string;
-  resolutionType: "ordinary" | "special" | "none";
-};
-
-const AGENDA_TEMPLATES: AgendaTemplate[] = [
-  {
-    id: "prev_minutes",
-    title: "Noting of Previous Meeting Minutes",
-    icon: "📄",
-    category: "mandatory",
-    fields: [
-      { key: "prevMeetingNo", label: "Previous Meeting No.", placeholder: "e.g. 4/2024-25" },
-      { key: "prevMeetingDate", label: "Date of Previous Meeting", placeholder: "e.g. 15 March 2025", type: "date" },
-    ],
-    discussion: `The Chairman informed the Board that the Minutes of the {prevMeetingNo} Meeting of the Board of Directors held on {prevMeetingDate} were circulated to all the Directors. The same were taken on record.`,
-    resolution: "",
-    resolutionType: "none",
-  },
-  {
-    id: "bank_account",
-    title: "Opening of Bank Account",
-    icon: "🏦",
-    category: "financial",
-    fields: [
-      { key: "bankName", label: "Bank Name", placeholder: "e.g. State Bank of India" },
-      { key: "branchName", label: "Branch Name", placeholder: "e.g. Andheri East Branch" },
-      { key: "accountType", label: "Account Type", placeholder: "e.g. Current Account" },
-      { key: "signatoryNames", label: "Authorised Signatory(ies)", placeholder: "e.g. Mr. Rahul Sharma, Managing Director" },
-      { key: "operationMode", label: "Mode of Operation", placeholder: "e.g. Severally / Jointly" },
-    ],
-    discussion: `The Chairman informed the Board about the requirement of opening a bank account with {bankName}, {branchName} for the business operations of the Company. After deliberation, the Board unanimously agreed to open the said account.`,
-    resolution: `RESOLVED THAT pursuant to Section 179(3)(d) of the Companies Act, 2013 read with Rule 8 of the Companies (Meetings of Board and its Powers) Rules, 2014, consent of the Board of Directors be and is hereby accorded to open a {accountType} in the name of the Company with {bankName}, {branchName}.\n\nRESOLVED FURTHER THAT {signatoryNames} be and is/are hereby authorised to operate the said Bank Account {operationMode} on behalf of the Company.\n\nRESOLVED FURTHER THAT any one of the Directors of the Company be and is hereby authorised to do all such acts, deeds and things as may be necessary for giving effect to the above Resolution.`,
-    resolutionType: "ordinary",
-  },
-  {
-    id: "appt_director",
-    title: "Appointment of Additional Director",
-    icon: "👤",
-    category: "corporate",
-    fields: [
-      { key: "dirName", label: "Director Name", placeholder: "e.g. Mr. Rajesh Kumar Sharma" },
-      { key: "dirDin", label: "DIN", placeholder: "e.g. 01234567" },
-      { key: "dirDesig", label: "Designation", placeholder: "e.g. Additional Director" },
-      { key: "effectiveDate", label: "Effective Date", placeholder: "e.g. 05 June 2025", type: "date" },
-    ],
-    discussion: `The Chairman informed the Board about the proposal to appoint {dirName} (DIN: {dirDin}) as {dirDesig} on the Board of the Company with effect from {effectiveDate}. The Board after considering the experience and expertise of the proposed appointee, unanimously agreed to the appointment.`,
-    resolution: `RESOLVED THAT pursuant to Section 161(1) of the Companies Act, 2013, {dirName} (DIN: {dirDin}), be and is hereby appointed as an Additional Director (in the capacity of {dirDesig}) of the Company with effect from {effectiveDate}, to hold office up to the date of the next Annual General Meeting or the last date on which the Annual General Meeting should have been held, whichever is earlier.\n\nRESOLVED FURTHER THAT the Company Secretary / any Director of the Company be and is hereby authorised to file necessary forms with the Registrar of Companies and to do all such acts, deeds and things as may be required in this regard.`,
-    resolutionType: "ordinary",
-  },
-  {
-    id: "resign_director",
-    title: "Noting of Director's Resignation",
-    icon: "🚪",
-    category: "corporate",
-    fields: [
-      { key: "dirName", label: "Director Name", placeholder: "e.g. Mr. Suresh Mehta" },
-      { key: "dirDin", label: "DIN", placeholder: "e.g. 07654321" },
-      { key: "resignDate", label: "Date of Resignation", placeholder: "e.g. 01 June 2025", type: "date" },
-    ],
-    discussion: `The Chairman placed before the Board the resignation letter dated {resignDate} received from {dirName} (DIN: {dirDin}), Director of the Company, tendering his/her resignation from the directorship of the Company with effect from {resignDate}. The Board took note of the same.`,
-    resolution: `RESOLVED THAT the resignation of {dirName} (DIN: {dirDin}) from the office of Director of the Company with effect from {resignDate}, be and is hereby noted and accepted.\n\nRESOLVED FURTHER THAT the Company Secretary / any Director of the Company be and is hereby authorised to file necessary forms with the Registrar of Companies and to do all such acts as may be necessary in this regard.`,
-    resolutionType: "ordinary",
-  },
-  {
-    id: "auditor_appt",
-    title: "Appointment / Reappointment of Auditor",
-    icon: "🔍",
-    category: "financial",
-    fields: [
-      { key: "auditorName", label: "Auditor Firm Name", placeholder: "e.g. M/s ABC & Associates" },
-      { key: "auditorRegNo", label: "ICAI Firm Reg. No.", placeholder: "e.g. 123456W" },
-      { key: "fromFY", label: "From Financial Year", placeholder: "e.g. 2025-26" },
-      { key: "toFY", label: "To Financial Year", placeholder: "e.g. 2029-30" },
-      { key: "remuneration", label: "Remuneration", placeholder: "e.g. as mutually agreed" },
-    ],
-    discussion: `The Chairman informed the Board about the appointment/reappointment of Statutory Auditors of the Company. The Board considered the proposal to appoint {auditorName} (ICAI Firm Reg. No. {auditorRegNo}) as the Statutory Auditors of the Company for a term of 5 consecutive years from FY {fromFY} to FY {toFY}, subject to ratification by shareholders at each AGM.`,
-    resolution: `RESOLVED THAT pursuant to Sections 139, 141 and other applicable provisions of the Companies Act, 2013 read with the Companies (Audit and Auditors) Rules, 2014, {auditorName}, Chartered Accountants (ICAI Firm Registration No. {auditorRegNo}), be and are hereby appointed as the Statutory Auditors of the Company, to hold office from the conclusion of this meeting until the conclusion of the Annual General Meeting to be held for FY {toFY}, at a remuneration of {remuneration}, plus applicable taxes and reimbursement of actual out-of-pocket expenses.\n\nRESOLVED FURTHER THAT any Director / Company Secretary of the Company be and is hereby authorised to file Form ADT-1 with the Registrar of Companies.`,
-    resolutionType: "ordinary",
-  },
-  {
-    id: "annual_accounts",
-    title: "Adoption of Annual Accounts",
-    icon: "📊",
-    category: "financial",
-    fields: [
-      { key: "fy", label: "Financial Year", placeholder: "e.g. 2024-25" },
-      { key: "balanceSheetDate", label: "Balance Sheet Date", placeholder: "e.g. 31 March 2025" },
-    ],
-    discussion: `The Chairman placed before the Board the Annual Financial Statements of the Company for the Financial Year ended {balanceSheetDate}, comprising of Balance Sheet, Statement of Profit and Loss, Cash Flow Statement, Statement of Changes in Equity and Notes to Accounts, along with the Auditors' Report and Board's Report thereon. The Board after detailed deliberation, unanimously adopted the same.`,
-    resolution: `RESOLVED THAT the Audited Financial Statements of the Company for the Financial Year {fy} ended {balanceSheetDate}, as prepared and presented before the Board, together with the Auditors' Report and Board's Report thereon, be and are hereby approved and adopted.\n\nRESOLVED FURTHER THAT the Directors be and are hereby authorised to sign the Financial Statements on behalf of the Board.\n\nRESOLVED FURTHER THAT the Company Secretary / any Director be authorised to file the same with the Registrar of Companies.`,
-    resolutionType: "ordinary",
-  },
-  {
-    id: "loan_sanction",
-    title: "Sanction of Loan / Borrowing",
-    icon: "💰",
-    category: "financial",
-    fields: [
-      { key: "loanAmount", label: "Loan Amount", placeholder: "e.g. ₹50,00,000" },
-      { key: "lenderName", label: "Lender / Bank Name", placeholder: "e.g. HDFC Bank Ltd." },
-      { key: "purpose", label: "Purpose of Loan", placeholder: "e.g. working capital requirements" },
-      { key: "interestRate", label: "Rate of Interest", placeholder: "e.g. 12% p.a." },
-      { key: "tenure", label: "Tenure", placeholder: "e.g. 3 years" },
-    ],
-    discussion: `The Chairman placed before the Board a proposal to avail a loan / credit facility from {lenderName} amounting to {loanAmount} for the purpose of {purpose}. The Board after deliberation unanimously approved the same.`,
-    resolution: `RESOLVED THAT pursuant to Section 179(3)(d) and other applicable provisions of the Companies Act, 2013, consent of the Board be and is hereby accorded to borrow a sum of {loanAmount} from {lenderName} at an interest rate of {interestRate} for a period of {tenure} for the purpose of {purpose}.\n\nRESOLVED FURTHER THAT the Managing Director / any Director of the Company be and is hereby authorised to execute the necessary loan documents, agreements, and to do all such acts as may be necessary to give effect to this resolution.`,
-    resolutionType: "ordinary",
-  },
-  {
-    id: "dividend",
-    title: "Declaration / Recommendation of Dividend",
-    icon: "💸",
-    category: "financial",
-    fields: [
-      { key: "dividendType", label: "Type", placeholder: "e.g. Interim / Final" },
-      { key: "dividendRate", label: "Rate", placeholder: "e.g. 10% (₹1 per share)" },
-      { key: "recordDate", label: "Record Date", placeholder: "e.g. 15 June 2025", type: "date" },
-      { key: "paymentDate", label: "Payment Date", placeholder: "e.g. 30 June 2025", type: "date" },
-      { key: "fy", label: "Financial Year", placeholder: "e.g. 2024-25" },
-    ],
-    discussion: `The Chairman informed the Board about the proposal to declare/recommend {dividendType} Dividend for the Financial Year {fy}. The Board considered the financial position of the Company and unanimously agreed to declare/recommend the dividend.`,
-    resolution: `RESOLVED THAT {dividendType} Dividend at the rate of {dividendRate} for the Financial Year {fy} be and is hereby declared/recommended on the Equity Shares of the Company to those shareholders whose names appear in the Register of Members as on the record date i.e. {recordDate}.\n\nRESOLVED FURTHER THAT the dividend be paid to the eligible shareholders on or before {paymentDate}.\n\nRESOLVED FURTHER THAT any Director / Company Secretary be authorised to do all acts necessary for payment of dividend.`,
-    resolutionType: "ordinary",
-  },
-  {
-    id: "aob",
-    title: "Any Other Business (AOB)",
-    icon: "📌",
-    category: "mandatory",
-    fields: [],
-    discussion: `There being no other business to transact, the Chairman thanked all present for their participation and with the permission of the Board, declared the meeting concluded.`,
-    resolution: "",
-    resolutionType: "none",
-  },
-];
 
 /* ══════════════════════════════════════════════════════════════════
    HELPERS
 ══════════════════════════════════════════════════════════════════ */
-function fillTemplate(template: string, fields: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (_, key) => fields[key] || `[${key.toUpperCase()}]`);
-}
-
 function fmtDate(d: string): string {
   if (!d) return "__________";
   try {
@@ -243,9 +127,96 @@ function ordinal(n: number): string {
 }
 
 function quorumRequired(totalDirs: number, entityType: string): number {
+  if (entityType === "opc") return 1;
   if (entityType === "public_ltd") return Math.max(3, Math.ceil(totalDirs / 3));
   return Math.max(2, Math.ceil(totalDirs / 3));
 }
+
+// ── DIN / PAN Validation ────────────────────────────────────────
+function isDinValid(din: string): boolean {
+  const d = din.trim();
+  if (!d) return true; // empty is ok (warn separately)
+  return /^\d{8}$/.test(d) || /^[A-Z]{5}\d{4}[A-Z]$/.test(d); // DIN=8 digits, PAN=AAAAA9999A
+}
+
+// ── Draft localStorage key ──────────────────────────────────────
+// Future: gate this behind login/paid subscription
+const DRAFT_KEY = "csi_bm_draft_v2";
+
+// ── Resolution Law Reference Map ────────────────────────────────
+// Law-mandated resolution type for each agenda template.
+// "ordinary" = Ordinary Board Resolution | "special" = Special Resolution
+const RESOLUTION_LAW: Record<string, { type: "ordinary" | "special"; ref: string }> = {
+  // ── Financial & Banking ──
+  bank_account:             { type: "ordinary", ref: "Sec. 179(3)(d) CA 2013" },
+  change_signatory:         { type: "ordinary", ref: "Sec. 179(3)(d) CA 2013" },
+  banking_limits:           { type: "ordinary", ref: "Sec. 179(3)(d) CA 2013" },
+  loan_sanction:            { type: "ordinary", ref: "Sec. 179(3)(d) CA 2013" },
+  loan_documents:           { type: "ordinary", ref: "Ordinary Board Resolution" },
+  charge_creation:          { type: "ordinary", ref: "Sec. 77/79/82 CA 2013" },
+  corporate_guarantee:      { type: "ordinary", ref: "Sec. 185/186 CA 2013" },
+  fund_investment:          { type: "ordinary", ref: "Sec. 186 CA 2013" },
+  annual_budget:            { type: "ordinary", ref: "Ordinary Board Resolution" },
+  annual_accounts:          { type: "ordinary", ref: "Sec. 134 CA 2013" },
+  boards_report:            { type: "ordinary", ref: "Sec. 134 CA 2013" },
+  rpt_approval:             { type: "ordinary", ref: "Sec. 188 CA 2013" },
+  dividend:                 { type: "ordinary", ref: "Sec. 123 CA 2013" },
+  // ── Auditor ──
+  first_statutory_auditor:  { type: "ordinary", ref: "Sec. 139(6) CA 2013" },
+  auditor_appt:             { type: "ordinary", ref: "Sec. 139 CA 2013" },
+  auditor_resignation:      { type: "ordinary", ref: "Ordinary Board Resolution" },
+  casual_vacancy_auditor:   { type: "ordinary", ref: "Sec. 139(8) CA 2013" },
+  internal_auditor:         { type: "ordinary", ref: "Sec. 138 CA 2013" },
+  secretarial_auditor:      { type: "ordinary", ref: "Sec. 204 CA 2013" },
+  cost_auditor:             { type: "ordinary", ref: "Sec. 148 CA 2013" },
+  auditor_remuneration:     { type: "ordinary", ref: "Ordinary Board Resolution" },
+  // ── Directors & KMP ──
+  appt_addl_director:       { type: "ordinary", ref: "Sec. 161(1) CA 2013" },
+  appt_independent_director:{ type: "ordinary", ref: "Sec. 149/150 CA 2013 (2nd term: Special)" },
+  appt_nominee_director:    { type: "ordinary", ref: "Sec. 161(3) CA 2013" },
+  resign_director:          { type: "ordinary", ref: "Ordinary Board Resolution" },
+  regularise_director:      { type: "ordinary", ref: "Sec. 152 CA 2013 (Shareholder level)" },
+  appt_md_wrd:              { type: "ordinary", ref: "Sec. 196/197 CA 2013" },
+  sitting_fees:             { type: "ordinary", ref: "Sec. 197 CA 2013" },
+  // ── Share Capital ──
+  share_allotment:          { type: "ordinary", ref: "Sec. 42/62 CA 2013" },
+  share_certificate_issue:  { type: "ordinary", ref: "Sec. 56(4) CA 2013" },
+  share_transfer:           { type: "ordinary", ref: "Sec. 56 CA 2013" },
+  increase_auth_capital:    { type: "ordinary", ref: "Sec. 61 CA 2013 (Shareholder resolution)" },
+  rights_issue:             { type: "ordinary", ref: "Sec. 62(1)(a) CA 2013" },
+  preferential_allotment:   { type: "ordinary", ref: "Sec. 62(1)(c) — Board: Ordinary | Shareholders: Special Resolution at EGM" },
+  // ── General Meeting ──
+  fix_agm:                  { type: "ordinary", ref: "Sec. 96/101 CA 2013" },
+  approve_agm_notice:       { type: "ordinary", ref: "Sec. 101 CA 2013" },
+  fix_egm:                  { type: "ordinary", ref: "Sec. 100 CA 2013" },
+  // ── Committees ──
+  constitute_audit_committee:{ type: "ordinary", ref: "Sec. 177 CA 2013" },
+  constitute_nrc:            { type: "ordinary", ref: "Sec. 178 CA 2013" },
+  constitute_csr_committee:  { type: "ordinary", ref: "Sec. 135 CA 2013" },
+  // ── Office & Branch ──
+  change_reg_office:        { type: "ordinary", ref: "Sec. 12 CA 2013" },
+  open_branch:              { type: "ordinary", ref: "Ordinary Board Resolution" },
+  office_lease:             { type: "ordinary", ref: "Ordinary Board Resolution" },
+  // ── Legal & Compliance ──
+  authorise_roc_filings:    { type: "ordinary", ref: "Ordinary Board Resolution" },
+  reply_to_notice:          { type: "ordinary", ref: "Ordinary Board Resolution" },
+  legal_proceedings:        { type: "ordinary", ref: "Ordinary Board Resolution" },
+  trademark:                { type: "ordinary", ref: "Ordinary Board Resolution" },
+  // ── CSR ──
+  csr_policy:               { type: "ordinary", ref: "Sec. 135 CA 2013" },
+  csr_budget:               { type: "ordinary", ref: "Sec. 135 CA 2013" },
+  csr_expenditure:          { type: "ordinary", ref: "Sec. 135 CA 2013" },
+  csr_report:               { type: "ordinary", ref: "Sec. 135 CA 2013" },
+  // ── Secretarial ──
+  annual_return:            { type: "ordinary", ref: "Sec. 92 CA 2013" },
+  annual_filings_roc:       { type: "ordinary", ref: "Ordinary Board Resolution" },
+  // ── Strategic ──
+  business_expansion:       { type: "ordinary", ref: "Ordinary Board Resolution" },
+  joint_venture:            { type: "ordinary", ref: "Sec. 186 CA 2013" },
+  property_purchase_sale:   { type: "ordinary", ref: "Ordinary Board Resolution" },
+  merger_amalgamation:      { type: "ordinary", ref: "Sec. 230/232 — Board: Ordinary | Shareholders: Special Resolution at EGM" },
+  key_contracts:            { type: "ordinary", ref: "Ordinary Board Resolution" },
+};
 
 /* ══════════════════════════════════════════════════════════════════
    PRINT HTML GENERATOR
@@ -254,6 +225,14 @@ function generateMinutesHTML(f: F): string {
   const presentDirs = f.directors.filter(d => d.isPresent);
   const absentDirs  = f.directors.filter(d => !d.isPresent);
   const entity = ENTITY_LABELS[f.entityType] || "Company";
+
+  // Chairman name personalisation in discussion text
+  const chairmanRef = f.chairmanName
+    ? `The Chairman, ${f.chairmanName},`
+    : "The Chairman";
+  function personalize(text: string): string {
+    return text.replace(/\bThe Chairman\b/g, chairmanRef);
+  }
 
   let resolutionCounter = 0;
   const agendaHTML = f.agendaItems.map((item, idx) => {
@@ -267,7 +246,7 @@ function generateMinutesHTML(f: F): string {
         <p style="font-weight:bold;font-size:10pt;text-transform:uppercase;margin-bottom:4px;">
           ITEM NO. ${String(idx + 1).padStart(2, "0")} — ${item.title}
         </p>
-        <p style="font-size:9.5pt;text-align:justify;line-height:1.6;margin-bottom:8px;">${item.discussion}</p>
+        <p style="font-size:9.5pt;text-align:justify;line-height:1.6;margin-bottom:8px;">${personalize(item.discussion)}</p>
         ${hasResolution ? `
           <p style="font-weight:bold;font-size:9.5pt;margin-bottom:3px;">
             Resolution No. ${resNo}/${f.meetingSerial || "BM"}/${fy}${item.resolutionType === "special" ? " [Special Resolution]" : ""}:
@@ -488,14 +467,19 @@ const STEPS = ["Company", "Meeting", "Attendance", "Agenda", "Preview"];
 function AgendaCard({
   item, index, total,
   onMove, onRemove, onChange,
+  contextWarning, resolutionNumber, meetingSerial, financialYear,
 }: {
   item: AgendaItemData; index: number; total: number;
   onMove: (dir: "up" | "down") => void;
   onRemove: () => void;
   onChange: (updated: AgendaItemData) => void;
+  contextWarning?: string;
+  resolutionNumber?: number;
+  meetingSerial?: string;
+  financialYear?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const template = AGENDA_TEMPLATES.find(t => t.id === item.templateId);
+  const template = ALL_AGENDA_TEMPLATES.find(t => t.id === item.templateId);
 
   function updateField(key: string, val: string) {
     const newFields = { ...item.fields, [key]: val };
@@ -508,10 +492,23 @@ function AgendaCard({
     onChange(newItem);
   }
 
-  const isMandatory = item.templateId === "prev_minutes" || item.templateId === "aob";
+  const isMandatory = [
+    "elect_chairman", "ascertain_quorum", "leave_of_absence", "note_attendance",
+    "prev_minutes", "action_taken_report", "disclosure_interest",
+    "any_other_business", "vote_of_thanks",
+  ].includes(item.templateId);
+
+  const hasRes = item.resolutionType !== "none" && !!item.resolution;
 
   return (
-    <div className={`border-2 rounded-2xl overflow-hidden transition-all ${expanded ? "border-blue-300 shadow-md" : "border-slate-200"}`}>
+    <div className={`border-2 rounded-2xl overflow-hidden transition-all ${expanded ? "border-blue-300 shadow-md" : contextWarning ? "border-amber-300" : "border-slate-200"}`}>
+      {/* Conditional warning banner */}
+      {contextWarning && (
+        <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-50 border-b border-amber-200">
+          <span className="text-xs">⚠️</span>
+          <p className="text-xs text-amber-700 font-medium">{contextWarning}</p>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-white">
         <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
@@ -519,8 +516,17 @@ function AgendaCard({
         </span>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-800 text-sm truncate">{item.title}</p>
-          {item.resolutionType !== "none" && item.resolution && (
-            <p className="text-xs text-blue-500 font-medium">Resolution included</p>
+          {hasRes && (
+            <p className="text-xs font-medium flex items-center gap-1.5">
+              <span className={`px-1.5 py-0.5 rounded text-white text-xs font-bold ${item.resolutionType === "special" ? "bg-red-500" : "bg-blue-500"}`}>
+                {resolutionNumber ? `Res ${resolutionNumber}` : "Res"}
+                {meetingSerial ? `/${meetingSerial}` : ""}
+                {financialYear ? `/${financialYear}` : ""}
+              </span>
+              <span className={item.resolutionType === "special" ? "text-red-500" : "text-blue-500"}>
+                {item.resolutionType === "special" ? "Special Resolution" : "Ordinary Resolution"}
+              </span>
+            </p>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -570,15 +576,56 @@ function AgendaCard({
           {/* Resolution text */}
           {item.resolutionType !== "none" && (
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <Lbl c={<span>Resolution Text <span className="text-xs font-normal text-slate-400">(editable)</span></span>} />
-                <select className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white"
-                  value={item.resolutionType}
-                  onChange={e => onChange({ ...item, resolutionType: e.target.value as "ordinary" | "special" })}>
-                  <option value="ordinary">Ordinary Resolution</option>
-                  <option value="special">Special Resolution</option>
-                </select>
+              {/* Resolution type selector with law reference */}
+              <div className="mb-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <Lbl c={<span>Resolution Text <span className="text-xs font-normal text-slate-400">(editable)</span></span>} />
+                  <div className="flex items-center gap-2">
+                    <select className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white"
+                      value={item.resolutionType}
+                      onChange={e => onChange({ ...item, resolutionType: e.target.value as "ordinary" | "special" })}>
+                      <option value="ordinary">Ordinary Resolution</option>
+                      <option value="special">Special Resolution</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Law reference badge */}
+                {RESOLUTION_LAW[item.templateId] && (() => {
+                  const law = RESOLUTION_LAW[item.templateId];
+                  const isChanged = item.resolutionType !== law.type;
+                  return (
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
+                      isChanged
+                        ? "bg-orange-50 border border-orange-200"
+                        : law.type === "special"
+                        ? "bg-red-50 border border-red-200"
+                        : "bg-blue-50 border border-blue-100"
+                    }`}>
+                      <span>⚖️</span>
+                      <span className={`font-semibold ${
+                        isChanged ? "text-orange-700" :
+                        law.type === "special" ? "text-red-700" : "text-blue-700"
+                      }`}>
+                        Law: {law.type === "special" ? "Special Resolution" : "Ordinary Resolution"}
+                      </span>
+                      <span className={`${isChanged ? "text-orange-500" : "text-slate-400"}`}>
+                        — {law.ref}
+                      </span>
+                      {isChanged && (
+                        <button
+                          type="button"
+                          onClick={() => onChange({ ...item, resolutionType: law.type })}
+                          className="ml-auto text-orange-600 hover:text-orange-800 font-bold underline shrink-0"
+                        >
+                          ↺ Reset to {law.type === "special" ? "Special" : "Ordinary"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
+
               <textarea className={`${INP} resize-none font-mono text-xs`} rows={6} value={item.resolution}
                 onChange={e => onChange({ ...item, resolution: e.target.value })} />
             </div>
@@ -593,9 +640,39 @@ function AgendaCard({
    MAIN PAGE
 ══════════════════════════════════════════════════════════════════ */
 export default function BoardMinutesPage() {
-  const [f, setF] = useState<F>({ ...DEFAULT });
+  // ── LocalStorage draft save/resume ─────────────────────────────
+  // Future: restrict to logged-in / paid users only
+  const [f, setF] = useState<F>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(DRAFT_KEY);
+        if (saved) return JSON.parse(saved) as F;
+      } catch {}
+    }
+    return { ...DEFAULT, agendaItems: makeDefaultAgendaItems() };
+  });
+
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [draftSaved, setDraftSaved] = useState(false);
+
+  // Auto-save draft on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(f));
+      setDraftSaved(true);
+      const t = setTimeout(() => setDraftSaved(false), 1500);
+      return () => clearTimeout(t);
+    } catch {}
+  }, [f]);
+
+  function clearDraft() {
+    if (!confirm("Naya form shuru karein? Abhi ka draft delete ho jayega.")) return;
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    setF({ ...DEFAULT, agendaItems: makeDefaultAgendaItems() });
+    setStep(1);
+  }
 
   const set = useCallback(<K extends keyof F>(k: K, v: F[K]) =>
     setF(p => ({ ...p, [k]: v })), []);
@@ -606,6 +683,10 @@ export default function BoardMinutesPage() {
       .filter(d => d.isActive)
       .map(d => ({ name: d.name, designation: d.designation || "Director", din: d.din || "", isPresent: true, leaveGranted: false }));
 
+    // Auto-select chairman: prefer MD → WTD → first director
+    const mdPriority = ["managing director", "whole-time director", "executive director", "chairman"];
+    const autoChairman = dirs.find(d => mdPriority.some(p => d.designation.toLowerCase().includes(p))) || dirs[0];
+
     setF(p => ({
       ...p,
       ...(data.companyName && { companyName: data.companyName }),
@@ -613,6 +694,12 @@ export default function BoardMinutesPage() {
       ...(data.regAddress  && { regAddress:  data.regAddress }),
       ...(data.entityType  && { entityType:  data.entityType }),
       directors: dirs.length > 0 ? dirs : p.directors,
+      // Auto-fill chairman only if not already set
+      ...(autoChairman && !p.chairmanName && {
+        chairmanName:  autoChairman.name,
+        chairmanDin:   autoChairman.din,
+        chairmanDesig: autoChairman.designation,
+      }),
     }));
   }
 
@@ -646,7 +733,7 @@ export default function BoardMinutesPage() {
 
   /* ── Agenda helpers ── */
   function addAgendaItem(templateId: string) {
-    const template = AGENDA_TEMPLATES.find(t => t.id === templateId);
+    const template = ALL_AGENDA_TEMPLATES.find(t => t.id === templateId);
     if (!template) return;
     const fields: Record<string, string> = {};
     template.fields.forEach(f => { fields[f.key] = ""; });
@@ -660,8 +747,8 @@ export default function BoardMinutesPage() {
       fields,
     };
     // AOB always last — insert before it if it exists
-    const aobIdx = f.agendaItems.findIndex(a => a.templateId === "aob");
-    if (aobIdx >= 0 && templateId !== "aob") {
+    const aobIdx = f.agendaItems.findIndex(a => a.templateId === "any_other_business" || a.templateId === "vote_of_thanks");
+    if (aobIdx >= 0 && templateId !== "any_other_business" && templateId !== "vote_of_thanks") {
       const next = [...f.agendaItems];
       next.splice(aobIdx, 0, newItem);
       set("agendaItems", next);
@@ -694,17 +781,147 @@ export default function BoardMinutesPage() {
   const totalDirs    = f.directors.length;
   const qRequired    = quorumRequired(totalDirs, f.entityType);
   const quorumMet    = presentCount >= qRequired;
+  const indepDirCount = f.directors.filter(d =>
+    d.isPresent && d.designation.toLowerCase().includes("independent")
+  ).length;
 
-  /* ── Resolution count ── */
+  /* ── Conditional Agenda Logic ── */
+  const isFirstMeeting = useMemo(() => {
+    const s = f.meetingSerial.trim();
+    if (!s) return false;
+    return (parseInt(s.split("/")[0]) || 0) === 1;
+  }, [f.meetingSerial]);
+
+  const allDirectorsPresent = totalDirs > 0 && f.directors.every(d => d.isPresent);
+
+  function getAgendaWarning(templateId: string): string | undefined {
+    if (templateId === "leave_of_absence" && allDirectorsPresent && totalDirs > 0)
+      return "Sabhi directors present hain — ye item is meeting mein needed nahi";
+    if (templateId === "action_taken_report" && isFirstMeeting)
+      return "Pehli meeting hai — koi previous decisions nahi hain; ye item skip kar sakte hain";
+    if (templateId === "prev_minutes" && isFirstMeeting)
+      return "Pehli meeting hai — koi previous minutes nahi hain; ye item skip kar sakte hain";
+    return undefined;
+  }
+
+  /* ── Resolution numbering per agenda item ── */
   const resolutionCount = useMemo(() =>
     f.agendaItems.filter(a => a.resolution && a.resolutionType !== "none").length,
   [f.agendaItems]);
+
+  const resolutionMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    let cnt = 0;
+    f.agendaItems.forEach(a => {
+      if (a.resolution && a.resolutionType !== "none") map[a.id] = ++cnt;
+    });
+    return map;
+  }, [f.agendaItems]);
+
+  /* ── Filing Reminders from agenda ── */
+  const filingReminders = useMemo(() => {
+    const ids = new Set(f.agendaItems.map(a => a.templateId));
+    const r: { icon: string; form: string; desc: string; days: string }[] = [];
+    if (ids.has("first_statutory_auditor") || ids.has("auditor_appt"))
+      r.push({ icon: "🔍", form: "ADT-1", desc: "Statutory Auditor appointment", days: "30 days" });
+    if (ids.has("appt_addl_director") || ids.has("appt_independent_director") || ids.has("appt_nominee_director") || ids.has("appt_md_wrd"))
+      r.push({ icon: "👤", form: "DIR-12", desc: "Director/KMP appointment/change", days: "30 days" });
+    if (ids.has("resign_director"))
+      r.push({ icon: "🚪", form: "DIR-12", desc: "Director resignation", days: "30 days" });
+    if (ids.has("charge_creation"))
+      r.push({ icon: "⚖️", form: "CHG-1", desc: "Charge creation/modification", days: "30 days" });
+    if (ids.has("annual_accounts"))
+      r.push({ icon: "📊", form: "AOC-4", desc: "Financial Statements filing", days: "30 days after AGM" });
+    if (ids.has("annual_return"))
+      r.push({ icon: "📗", form: "MGT-7", desc: "Annual Return filing", days: "60 days after AGM" });
+    if (ids.has("share_allotment"))
+      r.push({ icon: "📜", form: "PAS-3", desc: "Share allotment return", days: "15 days" });
+    if (ids.has("change_reg_office"))
+      r.push({ icon: "🏢", form: "INC-22", desc: "Registered office change", days: "30 days" });
+    return r;
+  }, [f.agendaItems]);
+
+  /* ── SS-1 Compliance Checklist ── */
+  const ss1Checklist = useMemo(() => {
+    type Status = "ok" | "fail" | "warn" | "manual";
+    const items: { label: string; status: Status; hint: string }[] = [];
+
+    // 1. Notice 7 days
+    items.push({
+      label: "Board Meeting Notice ≥ 7 days in advance (SS-1 § 3.1)",
+      status: "manual",
+      hint: "Confirm karo ki sabhi directors ko 7 din pehle notice mila tha",
+    });
+
+    // 2. Quorum
+    items.push({
+      label: "Quorum at commencement of meeting (Companies Act § 174)",
+      status: quorumMet ? "ok" : "fail",
+      hint: quorumMet
+        ? `${presentCount}/${totalDirs} directors present — quorum satisfied`
+        : `${presentCount} present, ${qRequired} required — quorum NOT met`,
+    });
+
+    // 3. Agenda circulated
+    items.push({
+      label: "Agenda circulated with Notice (SS-1 § 3.1)",
+      status: f.agendaItems.length > 0 ? "ok" : "warn",
+      hint: f.agendaItems.length > 0 ? `${f.agendaItems.length} agenda items added` : "Step 4 mein agenda items add karo",
+    });
+
+    // 4. Minutes signing deadline (30 days)
+    const meetD = f.meetingDate ? new Date(f.meetingDate) : null;
+    const deadline = meetD ? new Date(meetD.getTime() + 30 * 86400000) : null;
+    const today = new Date();
+    const daysLeft = deadline ? Math.ceil((deadline.getTime() - today.getTime()) / 86400000) : null;
+    items.push({
+      label: "Minutes to be signed within 30 days of meeting (SS-1 § 7.1)",
+      status: !deadline ? "manual" : daysLeft! < 0 ? "fail" : daysLeft! <= 5 ? "warn" : "ok",
+      hint: !deadline
+        ? "Meeting date select karo (Step 2)"
+        : daysLeft! < 0
+        ? `Deadline nikal gayi! (${Math.abs(daysLeft!)} days overdue)`
+        : `Sign by: ${deadline.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} — ${daysLeft} days remaining`,
+    });
+
+    // 5. Chairman details
+    items.push({
+      label: "Chairman name & DIN recorded (SS-1 § 2.1)",
+      status: f.chairmanName && f.chairmanDin ? "ok" : "warn",
+      hint: !f.chairmanName ? "Step 2 mein Chairman ka naam fill karo" : !f.chairmanDin ? "Chairman ka DIN add karo" : `${f.chairmanName} (DIN: ${f.chairmanDin})`,
+    });
+
+    // 6. All DINs
+    const missDin = f.directors.filter(d => d.isPresent && !d.din.trim()).length;
+    items.push({
+      label: "All present Directors' DINs recorded",
+      status: f.directors.length === 0 ? "manual" : missDin > 0 ? "warn" : "ok",
+      hint: missDin > 0 ? `${missDin} director(s) ka DIN missing — Step 3 mein fill karo` : "Sab DINs filled hain ✓",
+    });
+
+    // 7. DIN validity
+    const invalidDin = f.directors.filter(d => d.din && !isDinValid(d.din)).length;
+    items.push({
+      label: "All DINs are 8-digit valid numbers",
+      status: invalidDin > 0 ? "fail" : f.directors.length === 0 ? "manual" : "ok",
+      hint: invalidDin > 0 ? `${invalidDin} director(s) ka DIN invalid format mein hai` : "Sab DINs valid format mein hain",
+    });
+
+    // 8. Venue
+    items.push({
+      label: "Venue / Place of Meeting recorded (SS-1 § 1.2)",
+      status: f.venue ? "ok" : "warn",
+      hint: f.venue ? f.venue.slice(0, 60) : "Step 2 mein venue fill karo",
+    });
+
+    return items;
+  }, [quorumMet, presentCount, totalDirs, qRequired, f.agendaItems, f.meetingDate, f.chairmanName, f.chairmanDin, f.directors, f.venue]);
 
   /* ── canNext ── */
   function canNext(): boolean {
     if (step === 1) return !!f.companyName && !!f.cin;
     if (step === 2) return !!f.meetingDate && !!f.meetingSerial && !!f.venue;
-    if (step === 3) return presentCount >= 1;
+    if (step === 3) return presentCount >= 1 && quorumMet; // quorum required to proceed
     if (step === 4) return f.agendaItems.length > 0;
     return true;
   }
@@ -884,18 +1101,26 @@ export default function BoardMinutesPage() {
       <SHead n={3} title="Attendance" sub="Mark directors present or absent — quorum auto-checked" />
 
       {/* Quorum indicator */}
-      <div className={`rounded-xl px-4 py-3 flex items-center gap-3 border ${
+      <div className={`rounded-xl px-4 py-3 flex items-start gap-3 border ${
         quorumMet ? "bg-green-50 border-green-300" : "bg-red-50 border-red-300"
       }`}>
-        <span className="text-2xl">{quorumMet ? "✅" : "❌"}</span>
-        <div>
+        <span className="text-2xl shrink-0">{quorumMet ? "✅" : "❌"}</span>
+        <div className="flex-1">
           <p className={`font-bold text-sm ${quorumMet ? "text-green-800" : "text-red-700"}`}>
             Quorum: {presentCount}/{totalDirs} directors present
-            {quorumMet ? " — Quorum Met" : ` — ${qRequired} required, not met`}
+            {quorumMet ? " — Quorum Met ✓" : ` — ${qRequired} required (NOT MET)`}
           </p>
-          <p className="text-xs text-slate-500">
-            {f.entityType === "public_ltd" ? "Public Ltd: max(3, 1/3 of total)" : "Pvt Ltd/OPC: max(2, 1/3 of total)"}
+          <p className="text-xs text-slate-500 mt-0.5">
+            {f.entityType === "opc" ? "OPC: 1 member sufficient" :
+             f.entityType === "public_ltd" ? "Public Ltd: max(3, 1/3 of total)" :
+             "Pvt Ltd: max(2, 1/3 of total)"}
+            {indepDirCount > 0 && <span className="ml-2 text-blue-500 font-medium">· {indepDirCount} Independent Director(s) present</span>}
           </p>
+          {!quorumMet && totalDirs > 0 && (
+            <p className="text-xs text-red-600 font-semibold mt-1">
+              ⛔ Quorum nahi hai — aage proceed nahi kar sakte. {qRequired - presentCount} aur director(s) ko present mark karo.
+            </p>
+          )}
         </div>
       </div>
 
@@ -930,10 +1155,11 @@ export default function BoardMinutesPage() {
             <div className="flex items-start gap-2 bg-amber-50 border-2 border-amber-400 rounded-xl px-4 py-3 mb-2">
               <span className="text-amber-500 text-lg shrink-0">⚠️</span>
               <div>
-                <p className="text-sm font-bold text-amber-800">Director names missing</p>
+                <p className="text-sm font-bold text-amber-800">
+                  {f.directors.filter(d => !d.name.trim()).length} director{f.directors.filter(d => !d.name.trim()).length > 1 ? "s" : ""} ka naam fill karna hai
+                </p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Names DB mein store nahi hain. Har director ka naam niche type karein — DIN dekh ke pehchano kaun hai.
-                  Ya pehle <strong>MDS Excel upload</strong> karein (upar) — names auto-fill ho jaenge.
+                  Red border wale boxes mein director ka poora naam type karein. DIN dekh ke identify karein kaun sa director hai.
                 </p>
               </div>
             </div>
@@ -951,15 +1177,31 @@ export default function BoardMinutesPage() {
                 </button>
 
                 <input
-                  className={`${INP} flex-1 ${!d.name.trim() ? "border-red-400 bg-red-50 focus:ring-red-200 placeholder:text-red-400" : "border-green-300"}`}
+                  className={`flex-1 min-w-0 border rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 bg-white ${
+                    !d.name.trim()
+                      ? "border-red-400 bg-red-50 focus:ring-red-200 placeholder:text-red-400"
+                      : "border-green-300 focus:ring-blue-300"
+                  }`}
                   value={d.name}
                   onChange={e => setDirField(i, "name", e.target.value)}
-                  placeholder={d.din ? `Enter name (DIN: ${d.din})` : "Enter director full name *"}
+                  placeholder={d.din ? `Director name (DIN: ${d.din})` : "Director full name *"}
                 />
                 <input className={`${INP} w-36`} value={d.designation}
                   onChange={e => setDirField(i, "designation", e.target.value)} placeholder="Designation" />
-                <input className={`${INP} w-28 font-mono text-xs`} value={d.din}
-                  onChange={e => setDirField(i, "din", e.target.value)} placeholder="DIN" maxLength={8} />
+                <input
+                  className={`${INP} w-28 font-mono text-xs ${
+                    d.din && !isDinValid(d.din) ? "border-red-400 bg-red-50" :
+                    f.directors.some((o, j) => j !== i && o.din.trim() && o.din.trim() === d.din.trim()) ? "border-orange-400 bg-orange-50" : ""
+                  }`}
+                  value={d.din}
+                  onChange={e => setDirField(i, "din", e.target.value)}
+                  placeholder="DIN/PAN"
+                  maxLength={10}
+                  title={
+                    d.din && !isDinValid(d.din) ? "Invalid DIN (must be 8 digits)" :
+                    f.directors.some((o, j) => j !== i && o.din.trim() === d.din.trim()) ? "Duplicate DIN!" : ""
+                  }
+                />
 
                 <button type="button" onClick={() => removeDir(i)}
                   className="text-slate-300 hover:text-red-500 transition shrink-0">✕</button>
@@ -1012,18 +1254,6 @@ export default function BoardMinutesPage() {
   /* ════════════════════════════════════════════
      STEP 4 — AGENDA BUILDER
   ════════════════════════════════════════════ */
-  const templatesByCategory: Record<string, AgendaTemplate[]> = {
-    mandatory: AGENDA_TEMPLATES.filter(t => t.category === "mandatory"),
-    corporate: AGENDA_TEMPLATES.filter(t => t.category === "corporate"),
-    financial: AGENDA_TEMPLATES.filter(t => t.category === "financial"),
-  };
-
-  const catLabels: Record<string, string> = {
-    mandatory: "📌 Mandatory",
-    corporate: "🏢 Corporate",
-    financial: "💰 Financial",
-  };
-
   const addedIds = new Set(f.agendaItems.map(a => a.templateId));
 
   const s4 = (
@@ -1043,38 +1273,71 @@ export default function BoardMinutesPage() {
       {/* Template picker */}
       {showTemplates && (
         <div className="border-2 border-blue-200 rounded-2xl bg-blue-50/40 p-4 space-y-3">
-          <p className="text-sm font-bold text-blue-800 mb-2">Select Agenda Item Template:</p>
-          {Object.entries(templatesByCategory).map(([cat, templates]) => (
-            <div key={cat}>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">{catLabels[cat]}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {templates.map(t => {
-                  const alreadyAdded = addedIds.has(t.id);
-                  return (
-                    <button key={t.id} type="button"
-                      onClick={() => !alreadyAdded && addAgendaItem(t.id)}
-                      disabled={alreadyAdded}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left text-sm font-medium transition-all ${
-                        alreadyAdded
-                          ? "border-green-200 bg-green-50 text-green-700 cursor-default"
-                          : "border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-700"
-                      }`}>
-                      <span className="text-xl">{t.icon}</span>
-                      <span className="flex-1 leading-tight">{t.title}</span>
-                      {alreadyAdded
-                        ? <span className="text-xs text-green-600 font-bold">✓ Added</span>
-                        : <span className="text-xs text-blue-500 font-bold">+ Add</span>
-                      }
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          <button type="button" onClick={() => setShowTemplates(false)}
-            className="text-xs text-slate-400 hover:text-slate-600 font-medium mt-1">
-            ✕ Close
-          </button>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-blue-800">Select Agenda Item Template</p>
+            <button type="button" onClick={() => { setShowTemplates(false); setTemplateSearch(""); }}
+              className="text-slate-400 hover:text-slate-600 text-xs font-medium">✕ Close</button>
+          </div>
+
+          {/* Search */}
+          <input
+            type="text"
+            value={templateSearch}
+            onChange={e => setTemplateSearch(e.target.value)}
+            placeholder="🔍 Search agenda items... (e.g. bank, director, audit)"
+            className="w-full border border-blue-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            autoFocus
+          />
+
+          {/* Categories with templates */}
+          <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+            {AGENDA_CATEGORY_ORDER.map(cat => {
+              const meta = AGENDA_CATEGORY_META[cat];
+              const templates = ALL_AGENDA_TEMPLATES.filter(t =>
+                t.category === cat &&
+                (templateSearch === "" || t.title.toLowerCase().includes(templateSearch.toLowerCase()))
+              );
+              if (templates.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                    <span>{meta.icon}</span> {meta.label}
+                    <span className="ml-1 text-slate-300 font-normal normal-case">({templates.length})</span>
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {templates.map(t => {
+                      const alreadyAdded = addedIds.has(t.id);
+                      return (
+                        <button key={t.id} type="button"
+                          onClick={() => !alreadyAdded && addAgendaItem(t.id)}
+                          disabled={alreadyAdded}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left transition-all ${
+                            alreadyAdded
+                              ? "border-green-200 bg-green-50 text-green-700 cursor-default"
+                              : "border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-700"
+                          }`}>
+                          <span className="text-base shrink-0">{t.icon}</span>
+                          <span className="flex-1 text-xs leading-tight">{t.title}</span>
+                          {alreadyAdded
+                            ? <span className="text-xs text-green-600 font-bold shrink-0">✓</span>
+                            : <span className="text-xs text-blue-500 font-bold shrink-0">+</span>
+                          }
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {templateSearch && ALL_AGENDA_TEMPLATES.filter(t =>
+              t.title.toLowerCase().includes(templateSearch.toLowerCase())
+            ).length === 0 && (
+              <p className="text-sm text-slate-400 text-center py-4">
+                No matching templates found for &quot;{templateSearch}&quot;
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -1082,7 +1345,7 @@ export default function BoardMinutesPage() {
       {f.agendaItems.length === 0 ? (
         <div className="text-center py-10 border-2 border-dashed border-slate-200 rounded-2xl">
           <p className="text-slate-400 font-medium mb-2">No agenda items yet</p>
-          <p className="text-sm text-slate-400">Click "+ Add Agenda Item" above to start</p>
+          <p className="text-sm text-slate-400">Click &quot;+ Add Agenda Item&quot; above to start</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -1091,8 +1354,63 @@ export default function BoardMinutesPage() {
               onMove={dir => moveAgenda(i, dir)}
               onRemove={() => removeAgenda(i)}
               onChange={updated => updateAgendaItem(i, updated)}
+              contextWarning={getAgendaWarning(item.templateId)}
+              resolutionNumber={resolutionMap[item.id]}
+              meetingSerial={f.meetingSerial}
+              financialYear={f.financialYear}
             />
           ))}
+        </div>
+      )}
+
+      {/* Resolution Preview */}
+      {resolutionCount > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
+            📋 Resolutions Summary ({resolutionCount} total)
+          </p>
+          <div className="space-y-1.5">
+            {(() => {
+              let cnt = 0;
+              return f.agendaItems
+                .filter(a => a.resolutionType !== "none" && a.resolution)
+                .map(a => {
+                  cnt++;
+                  return (
+                    <div key={a.id} className="flex items-center gap-2 text-xs">
+                      <span className={`shrink-0 px-2 py-0.5 rounded font-bold text-white ${
+                        a.resolutionType === "special" ? "bg-red-500" : "bg-blue-600"
+                      }`}>
+                        {cnt}/{f.meetingSerial || "BM"}/{f.financialYear || "FY"}
+                      </span>
+                      <span className="text-slate-700 flex-1 truncate">{a.title}</span>
+                      {a.resolutionType === "special" && (
+                        <span className="text-red-500 font-semibold shrink-0">Special</span>
+                      )}
+                    </div>
+                  );
+                });
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Filing Reminders */}
+      {filingReminders.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <p className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-2">
+            ⏰ ROC Filing Reminders — In agenda items se trigger hue
+          </p>
+          <div className="space-y-1.5">
+            {filingReminders.map((r, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-amber-800">
+                <span>{r.icon}</span>
+                <span className="font-bold bg-amber-200 px-1.5 py-0.5 rounded">{r.form}</span>
+                <span className="flex-1">{r.desc}</span>
+                <span className="text-amber-600 shrink-0">within {r.days}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1103,7 +1421,33 @@ export default function BoardMinutesPage() {
   ════════════════════════════════════════════ */
   const s5 = (
     <div className="space-y-4">
-      <SHead n={5} title="Preview & Print" sub="Review and generate your board meeting minutes" />
+      <SHead n={5} title="Preview & Print" sub="SS-1 checklist verify karo, phir print karo" />
+
+      {/* SS-1 Compliance Checklist */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2">
+        <p className="font-bold text-slate-700 text-sm uppercase tracking-wide flex items-center gap-2 mb-3">
+          <span>📋</span> Secretarial Standard-1 (SS-1) Checklist
+        </p>
+        {ss1Checklist.map((item, i) => (
+          <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-xl text-xs border ${
+            item.status === "ok"     ? "bg-green-50  border-green-200"  :
+            item.status === "fail"   ? "bg-red-50    border-red-200"    :
+            item.status === "warn"   ? "bg-amber-50  border-amber-200"  :
+            "bg-slate-50 border-slate-200"
+          }`}>
+            <span className="text-base shrink-0 leading-none mt-0.5">
+              {item.status === "ok" ? "✅" : item.status === "fail" ? "❌" : item.status === "warn" ? "⚠️" : "🔲"}
+            </span>
+            <div>
+              <p className={`font-semibold ${
+                item.status === "ok" ? "text-green-800" : item.status === "fail" ? "text-red-800" :
+                item.status === "warn" ? "text-amber-800" : "text-slate-700"
+              }`}>{item.label}</p>
+              <p className="text-slate-500 mt-0.5">{item.hint}</p>
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* Letterhead toggle */}
       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
@@ -1230,6 +1574,19 @@ export default function BoardMinutesPage() {
       {/* Form */}
       <div className="max-w-3xl mx-auto w-full px-4 py-8 flex-1">
 
+        {/* Draft status bar */}
+        <div className="flex items-center justify-between mb-4 text-xs">
+          <div className="flex items-center gap-2 text-slate-400">
+            <span className={`inline-flex items-center gap-1 transition-opacity duration-500 ${draftSaved ? "opacity-100" : "opacity-0"}`}>
+              <span className="text-green-500">✓</span> Draft saved
+            </span>
+          </div>
+          <button type="button" onClick={clearDraft}
+            className="text-slate-400 hover:text-red-500 transition font-medium">
+            🗑 New Meeting
+          </button>
+        </div>
+
         {/* Progress */}
         <div className="mb-7">
           <div className="flex items-center justify-between mb-2">
@@ -1267,12 +1624,17 @@ export default function BoardMinutesPage() {
             ← Back
           </button>
           {step < 5 ? (
-            <button onClick={() => setStep(s => Math.min(s + 1, 5) as typeof step)}
-              disabled={!canNext()}
-              className="px-8 py-3 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ background: "linear-gradient(135deg,#1d4ed8,#7c3aed)" }}>
-              Continue →
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              {step === 3 && !quorumMet && totalDirs > 0 && (
+                <p className="text-xs text-red-500 font-medium">Quorum nahi hai — aage nahi ja sakte</p>
+              )}
+              <button onClick={() => setStep(s => Math.min(s + 1, 5) as typeof step)}
+                disabled={!canNext()}
+                className="px-8 py-3 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: "linear-gradient(135deg,#1d4ed8,#7c3aed)" }}>
+                Continue →
+              </button>
+            </div>
           ) : (
             <button onClick={openPrint}
               className="flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white text-sm transition hover:scale-105 shadow-lg"
