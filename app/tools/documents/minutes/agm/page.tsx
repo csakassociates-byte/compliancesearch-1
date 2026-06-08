@@ -78,7 +78,7 @@ interface F {
   dividendDecision: "declare" | "no_board_recommendation" | "declared_nil";
   dirRotationApplicable: "yes" | "no" | "not_applicable"; // yes=retiring dir, no=none retiring, not_applicable=pvt/OPC no rotation
   auditorStatus: "fresh_appt" | "reappt_new_term" | "ongoing_term";   // ongoing = no resolution needed
-  hasAdditionalDirector: boolean;  // Additional director to confirm at this AGM
+  additionalDirectors: Array<{ name: string; din: string; designation: string; boardApptDate: string }>;
 
   // Print
   printOnLetterhead: boolean;
@@ -180,6 +180,34 @@ function suggestAgmSerial(incorporationDate: string, financialYear: string): str
   } catch { return null; }
 }
 
+// ── Parse MCA date format "DD/MM/YYYY" → ISO "YYYY-MM-DD" ──
+function parseMcaDate(d: string): string {
+  if (!d) return "";
+  const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return d; // already ISO or unknown
+}
+
+// ── Check if ISO date is within a financial year "YYYY-YY" ──
+function isWithinFY(isoDate: string, fy: string): boolean {
+  if (!isoDate || !isValidFY(fy)) return false;
+  const fyStart = parseInt(fy.split("-")[0]);
+  const start = new Date(`${fyStart}-04-01`);
+  const end = new Date(`${fyStart + 1}-03-31`);
+  const d = new Date(isoDate);
+  return d >= start && d <= end;
+}
+
+// ── Check if ISO date is within last N months from today ──
+function isWithinMonths(isoDate: string, months: number): boolean {
+  if (!isoDate) return false;
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return false;
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  return d >= cutoff;
+}
+
 // ── Calculate clear days between notice and meeting ──
 function calcClearDays(noticeDate: string, meetingDate: string): number {
   if (!noticeDate || !meetingDate) return 999;
@@ -230,7 +258,7 @@ const INITIAL_F: F = {
   dividendDecision: "declare",
   dirRotationApplicable: "yes",
   auditorStatus: "fresh_appt",
-  hasAdditionalDirector: false,
+  additionalDirectors: [],
   printOnLetterhead: true, printMobile: "", printEmail: "",
 };
 
@@ -797,20 +825,30 @@ export default function AgmMinutesPage() {
         items.splice(closeIdx5 >= 0 ? closeIdx5 : items.length, 0, audNote);
       }
 
-      // ── 4. ADDITIONAL DIRECTOR ──────────────────────────────────
+      // ── 4. ADDITIONAL DIRECTORS (one agenda item per person) ────
       items = items.filter(a => a.templateId !== "agm_dir_additional_confirm");
-      if (prev.hasAdditionalDirector) {
-        const addDirItem = defaultAgendaItem("agm_dir_additional_confirm");
-        // Insert before auditor item
+      if (prev.additionalDirectors.length > 0) {
         const audPos = items.findIndex(a => ["agm_auditor_appt","agm_auditor_ongoing_note"].includes(a.templateId));
         const closeIdx6 = items.findIndex(a => a.templateId === "agm_vote_of_thanks");
-        items.splice(audPos >= 0 ? audPos : closeIdx6 >= 0 ? closeIdx6 : items.length, 0, addDirItem);
+        let insertAt = audPos >= 0 ? audPos : closeIdx6 >= 0 ? closeIdx6 : items.length;
+        // Insert one item per additional director (in order)
+        for (const addlDir of prev.additionalDirectors) {
+          const addDirItem = defaultAgendaItem("agm_dir_additional_confirm");
+          addDirItem.fields.dirName = addlDir.name;
+          addDirItem.fields.dirDin = addlDir.din;
+          addDirItem.fields.dirDesig = addlDir.designation;
+          addDirItem.fields.boardApptDate = addlDir.boardApptDate;
+          // Personalize title so each is distinguishable
+          addDirItem.title = `Appointment of ${addlDir.name || "Additional Director"} as Director`;
+          items.splice(insertAt, 0, addDirItem);
+          insertAt++;
+        }
       }
 
       return { ...prev, agendaItems: items };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f.dividendDecision, f.dirRotationApplicable, f.auditorStatus, f.hasAdditionalDirector]);
+  }, [f.dividendDecision, f.dirRotationApplicable, f.auditorStatus, f.additionalDirectors]);
 
   // Already-added template IDs set — for ✓ indicator
   const addedIds = new Set(f.agendaItems.map(a => a.templateId));
@@ -832,19 +870,47 @@ export default function AgmMinutesPage() {
       activeDirs[0];
 
     // Auto-populate members from directors (directors are usually shareholders)
-    // Only replace if members list is still the default blank entry
     const currentMembersAreBlank =
       f.members.length === 1 && !f.members[0].name && !f.members[0].folioNo;
     const directorMembers: Member[] = companyDirectors.map(d => ({
       id: crypto.randomUUID(),
+      name: d.name, folioNo: "", sharesHeld: "",
+      isPresent: false, proxy: "", isProxyPresent: false,
+      isDirectorMember: true, designation: d.designation,
+    }));
+
+    // ── Smart Previous AGM Date ──────────────────────────────────
+    // MCA dateOfLastAGM is "DD/MM/YYYY". Auto-fill only if it looks like
+    // last year's AGM (within 18 months). If older/stale → skip, let user fill.
+    let smartPrevAgmDate: string | undefined;
+    if (data.dateOfLastAGM && !f.prevAgmDate) {
+      const isoLastAgm = parseMcaDate(data.dateOfLastAGM);
+      if (isWithinMonths(isoLastAgm, 18)) {
+        // Recent enough — this is likely last year's AGM
+        smartPrevAgmDate = isoLastAgm;
+      }
+      // If older than 18 months → stale data, don't auto-fill
+    }
+
+    // ── Auto-detect Additional Directors ────────────────────────
+    // Directors with designation containing "Additional Director"
+    // and whose appointment date falls within current FY (or last 18 months if FY unknown)
+    const detectedAddlDirs = activeDirs.filter(d => {
+      const desig = (d.designation || "").toLowerCase();
+      if (!desig.includes("additional")) return false;
+      const apptIso = parseMcaDate(d.appointedAt || "");
+      if (isValidFY(f.financialYear)) {
+        // FY known — check if appointed within this FY
+        return isWithinFY(apptIso, f.financialYear);
+      }
+      // FY unknown — check if appointed within last 18 months
+      return isWithinMonths(apptIso, 18);
+    });
+    const autoAddlDirs = detectedAddlDirs.map(d => ({
       name: d.name,
-      folioNo: "",
-      sharesHeld: "",
-      isPresent: false,
-      proxy: "",
-      isProxyPresent: false,
-      isDirectorMember: true,
-      designation: d.designation,
+      din: d.din || "",
+      designation: "Director",
+      boardApptDate: parseMcaDate(d.appointedAt || ""),
     }));
 
     const patch: Partial<F> = {
@@ -855,10 +921,9 @@ export default function AgmMinutesPage() {
       incorporationDate: data.incorporationDate || f.incorporationDate,
       companyDirectors,
       printEmail: data.email || f.printEmail,
-      // Auto-fill members from directors only if members are still blank
-      ...(currentMembersAreBlank && directorMembers.length > 0
-        ? { members: directorMembers }
-        : {}),
+      ...(currentMembersAreBlank && directorMembers.length > 0 ? { members: directorMembers } : {}),
+      ...(smartPrevAgmDate ? { prevAgmDate: smartPrevAgmDate } : {}),
+      ...(autoAddlDirs.length > 0 ? { additionalDirectors: autoAddlDirs } : {}),
     };
     if (chairman) {
       patch.chairmanName = chairman.name;
@@ -1192,6 +1257,16 @@ _________________    _____________    _______________    ___________` : "";
                 {f.prevAgmDate && f.meetingDate && f.prevAgmDate >= f.meetingDate && (
                   <p className="text-red-500 text-xs mt-1">❌ Previous AGM date must be before current AGM date.</p>
                 )}
+                {f.prevAgmDate && !isWithinMonths(f.prevAgmDate, 18) && (
+                  <p className="text-amber-600 text-xs mt-1">
+                    ⚠️ This date is over 18 months old — please verify it is correct (MCA data may be outdated).
+                  </p>
+                )}
+                {!f.prevAgmDate && (
+                  <p className="text-slate-400 text-xs mt-1">
+                    Auto-filled if last AGM data found in DB (within 18 months). Fill manually otherwise.
+                  </p>
+                )}
               </div>
 
               {/* Venue — auto-filled from address, editable */}
@@ -1336,25 +1411,100 @@ _________________    _____________    _______________    ___________` : "";
                 </div>
               </div>
 
-              {/* Additional Director */}
+              {/* Additional Directors */}
               <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
                 <div className="flex items-start gap-3">
                   <span className="text-xl mt-0.5">👤</span>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-700">Additional Director to Confirm?</p>
-                    <p className="text-xs text-slate-400 mb-2">Under Sec. 160/161 — Board-appointed Additional Director ceases at next AGM unless confirmed by Members via Ordinary Resolution</p>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 accent-purple-600"
-                        checked={f.hasAdditionalDirector}
-                        onChange={e => upd({ hasAdditionalDirector: e.target.checked })} />
-                      <span className="text-sm text-slate-700">
-                        Yes — an Additional Director (appointed by Board under Sec. 161) needs to be confirmed at this AGM
-                      </span>
-                    </label>
-                    {f.hasAdditionalDirector && (
-                      <p className="text-xs text-blue-600 mt-1.5 bg-blue-50 px-2 py-1 rounded">
-                        ℹ️ An agenda item for "Appointment / Confirmation of Additional Director as Regular Director" will be added (Ordinary Resolution under Sec. 152/160/161)
-                      </p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-semibold text-slate-700">Additional Directors to Confirm</p>
+                      {f.additionalDirectors.length > 0 && (
+                        <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full border border-purple-200">
+                          {f.additionalDirectors.length} auto-detected
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mb-3">
+                      Under Sec. 160/161 — Board-appointed Additional Director ceases at next AGM. One agenda item (Ordinary Resolution) per person.
+                    </p>
+
+                    {/* Detected / added directors list */}
+                    {f.additionalDirectors.length > 0 ? (
+                      <div className="space-y-2 mb-3">
+                        {f.additionalDirectors.map((d, i) => (
+                          <div key={i} className="flex items-center gap-2 bg-white border border-purple-200 rounded-lg px-3 py-2">
+                            <span className="text-purple-600 font-bold text-xs">👤</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-slate-800 truncate">{d.name || "—"}</p>
+                              <p className="text-[10px] text-slate-400">
+                                DIN: {d.din || "—"} &nbsp;·&nbsp; Board appt: {d.boardApptDate ? fmtDate(d.boardApptDate) : "—"}
+                              </p>
+                            </div>
+                            {/* Edit boardApptDate inline */}
+                            <input type="date"
+                              className="border border-slate-200 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
+                              value={d.boardApptDate}
+                              title="Board appointment date"
+                              onChange={e => {
+                                const updated = [...f.additionalDirectors];
+                                updated[i] = { ...updated[i], boardApptDate: e.target.value };
+                                upd({ additionalDirectors: updated });
+                              }} />
+                            <button
+                              onClick={() => upd({ additionalDirectors: f.additionalDirectors.filter((_, j) => j !== i) })}
+                              className="text-red-400 hover:text-red-600 font-bold text-base px-1 flex-shrink-0" title="Remove">×</button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic mb-3">No additional directors detected. Add manually if needed.</p>
+                    )}
+
+                    {/* Add manually */}
+                    <button
+                      type="button"
+                      onClick={() => upd({
+                        additionalDirectors: [
+                          ...f.additionalDirectors,
+                          { name: "", din: "", designation: "Director", boardApptDate: "" },
+                        ],
+                      })}
+                      className="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg">
+                      + Add Additional Director
+                    </button>
+
+                    {/* Inline name/DIN edit for any blank entries */}
+                    {f.additionalDirectors.some(d => !d.name) && (
+                      <div className="mt-2 space-y-2">
+                        {f.additionalDirectors.map((d, i) => !d.name && (
+                          <div key={i} className="grid grid-cols-3 gap-2">
+                            <input className="border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400 col-span-1"
+                              placeholder="Director name"
+                              value={d.name}
+                              onChange={e => {
+                                const updated = [...f.additionalDirectors];
+                                updated[i] = { ...updated[i], name: e.target.value };
+                                upd({ additionalDirectors: updated });
+                              }} />
+                            <input className="border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
+                              placeholder="DIN"
+                              value={d.din}
+                              onChange={e => {
+                                const updated = [...f.additionalDirectors];
+                                updated[i] = { ...updated[i], din: e.target.value };
+                                upd({ additionalDirectors: updated });
+                              }} />
+                            <input className="border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
+                              placeholder="Designation (after confirm)"
+                              value={d.designation}
+                              onChange={e => {
+                                const updated = [...f.additionalDirectors];
+                                updated[i] = { ...updated[i], designation: e.target.value };
+                                upd({ additionalDirectors: updated });
+                              }} />
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
