@@ -1,7 +1,15 @@
 import { Resend } from "resend";
-export const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Lazy initialization — avoids crash at build time when env var not available
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY environment variable is not set.");
+  return new Resend(apiKey);
+}
 
 export async function sendOtpEmail(email: string, otp: string, purpose: "signup" | "forgot_password") {
+  const resend = getResendClient();
+
   const subject = purpose === "signup"
     ? "Verify your email — ComplianceSearch.in"
     : "Reset your password — ComplianceSearch.in";
@@ -12,7 +20,7 @@ export async function sendOtpEmail(email: string, otp: string, purpose: "signup"
     : "Use the OTP below to reset your password:";
 
   await resend.emails.send({
-    from: "ComplianceSearch.in <noreply@compliancesearch.in>",
+    from: "ComplianceSearch.in <onboarding@resend.dev>",
     to: email,
     subject,
     html: `
