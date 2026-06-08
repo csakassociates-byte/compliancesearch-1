@@ -50,6 +50,8 @@ interface F {
   cin: string;
   regAddress: string;
   entityType: string;
+  incorporationDate: string;
+  companyDirectors: Array<{ name: string; designation: string; din: string }>;
 
   // Step 2 — Meeting
   agmSerial: string;         // "1st", "2nd", etc.
@@ -61,6 +63,7 @@ interface F {
   chairmanName: string;
   chairmanDesig: string;
   prevAgmDate: string;
+  noticeDate: string;
 
   // Step 3 — Members
   members: Member[];
@@ -116,6 +119,75 @@ function quorumMet(members: Member[], entityType: string): boolean {
   return personally >= quorumRequired(entityType);
 }
 
+// ── FY validation: must be "YYYY-YY" format and consecutive years ──
+function isValidFY(fy: string): boolean {
+  const m = fy.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return false;
+  const y1 = parseInt(m[1]);
+  const y2 = parseInt(m[2]);
+  return y2 === (y1 + 1) % 100;
+}
+
+// ── FY end date: "2024-25" → "2025-03-31" ──
+function fyEndDate(fy: string): string {
+  const m = fy.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return "";
+  const endYear = parseInt(m[1]) + 1;
+  return `${endYear}-03-31`;
+}
+
+// ── Min AGM date: day after FY end ──
+function minAgmDate(fy: string): string {
+  const end = fyEndDate(fy);
+  if (!end) return "";
+  const d = new Date(end);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
+}
+
+// ── Max AGM date: 6 months from FY end (Sec. 96) ──
+function maxAgmDate(fy: string): string {
+  const m = fy.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return "";
+  const endYear = parseInt(m[1]) + 1;
+  return `${endYear}-09-30`;
+}
+
+// ── Suggest AGM serial from incorporation date + FY ──
+function suggestAgmSerial(incorporationDate: string, financialYear: string): string | null {
+  if (!incorporationDate || !financialYear) return null;
+  const fyMatch = financialYear.match(/^(\d{4})-(\d{2})$/);
+  if (!fyMatch) return null;
+  const fyEndYear = parseInt(fyMatch[1]) + 1;
+  try {
+    const inc = new Date(incorporationDate);
+    if (isNaN(inc.getTime())) return null;
+    const incMonth = inc.getMonth() + 1;
+    const incYear = inc.getFullYear();
+    // First FY ends: if inc Jan-Mar → same year March; else next year March
+    const firstFYEndYear = incMonth <= 3 ? incYear : incYear + 1;
+    const serial = fyEndYear - firstFYEndYear + 1;
+    if (serial < 1 || serial > 10) return null;
+    return ["", "1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th"][serial];
+  } catch { return null; }
+}
+
+// ── Calculate clear days between notice and meeting ──
+function calcClearDays(noticeDate: string, meetingDate: string): number {
+  if (!noticeDate || !meetingDate) return 999;
+  const nd = new Date(noticeDate);
+  const md = new Date(meetingDate);
+  return Math.floor((md.getTime() - nd.getTime()) / 86400000) - 1;
+}
+
+// ── Format date for display ──
+function fmtDate(d: string): string {
+  if (!d) return "";
+  try {
+    return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" });
+  } catch { return d; }
+}
+
 /* ══════════════════════════════════════════════════════════════════
    INITIAL STATE
 ══════════════════════════════════════════════════════════════════ */
@@ -140,9 +212,10 @@ function defaultAgendaItem(templateId: string): AgendaItemData {
 
 const INITIAL_F: F = {
   companyName: "", cin: "", regAddress: "", entityType: "Private Limited Company",
+  incorporationDate: "", companyDirectors: [],
   agmSerial: "1st", financialYear: "", meetingDate: "", meetingTime: "11:00",
   closingTime: "", venue: "", chairmanName: "", chairmanDesig: "Chairman",
-  prevAgmDate: "",
+  prevAgmDate: "", noticeDate: "",
   members: [BLANK_MEMBER()],
   invitees: [],
   agendaItems: DEFAULT_ITEM_IDS.map(defaultAgendaItem),
@@ -610,33 +683,135 @@ export default function AgmMinutesPage() {
     upd({ agendaItems: [...f.agendaItems, defaultAgendaItem(templateId)] });
   };
 
+  // Auto-sync fy + balanceSheetDate in agenda items when FY changes
+  useEffect(() => {
+    if (!isValidFY(f.financialYear)) return;
+    const fyEndStr = fyEndDate(f.financialYear);
+    const balSheetDateStr = fyEndStr ? new Date(fyEndStr).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }) : "";
+    setF(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map(item => {
+        const newFields = { ...item.fields };
+        let changed = false;
+        if ("fy" in newFields && !newFields.fy) { newFields.fy = prev.financialYear; changed = true; }
+        if ("balanceSheetDate" in newFields && !newFields.balanceSheetDate && balSheetDateStr) {
+          newFields.balanceSheetDate = fyEndStr; changed = true;
+        }
+        return changed ? { ...item, fields: newFields } : item;
+      }),
+    }));
+  }, [f.financialYear]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!f.noticeDate) return;
+    setF(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map(item => {
+        if (item.templateId === "agm_notice_read" && !item.fields.noticeDate) {
+          return { ...item, fields: { ...item.fields, noticeDate: f.noticeDate } };
+        }
+        return item;
+      }),
+    }));
+  }, [f.noticeDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Already-added template IDs set — for ✓ indicator
   const addedIds = new Set(f.agendaItems.map(a => a.templateId));
 
   /* ── Company auto-fill ── */
   function applyCompany(data: CompanyData) {
+    const activeDirs = (data.directors || []).filter(d => d.isActive);
+    const companyDirectors = activeDirs.map(d => ({
+      name: d.name,
+      designation: d.designation || "Director",
+      din: d.din || "",
+    }));
+
+    // Auto-pick chairman: MD > WTD > Executive Director > first director
+    const chairman =
+      activeDirs.find(d => /\bmd\b|managing director/i.test(d.designation || "")) ||
+      activeDirs.find(d => /wtd|whole.?time/i.test(d.designation || "")) ||
+      activeDirs.find(d => /executive/i.test(d.designation || "")) ||
+      activeDirs[0];
+
     const patch: Partial<F> = {
       companyName: data.companyName || f.companyName,
       cin: data.cin || f.cin,
       regAddress: data.regAddress || f.regAddress,
       entityType: data.entityType || f.entityType,
+      incorporationDate: data.incorporationDate || f.incorporationDate,
+      companyDirectors,
+      printEmail: data.email || f.printEmail,
     };
-    // Auto-fill chairman from directors if available
-    if (data.directors && data.directors.length > 0) {
-      const md = data.directors.find(d =>
-        /md|managing director/i.test(d.designation || "")
-      ) || data.directors[0];
-      if (md) {
-        patch.chairmanName = md.name || f.chairmanName;
-      }
+    if (chairman) {
+      patch.chairmanName = chairman.name;
+      patch.chairmanDesig = chairman.designation || "Director";
+    }
+    // Auto-fill venue from registered address if blank
+    if (!f.venue && data.regAddress) {
+      patch.venue = `Registered Office of the Company at ${data.regAddress}`;
+    }
+    // Auto-fill financial year from dateOfLastAGM if available
+    if (data.dateOfLastAGM && !f.financialYear) {
+      try {
+        const parts = data.dateOfLastAGM.split("/");
+        if (parts.length === 3) {
+          const agmYear = parseInt(parts[2]);
+          const agmMonth = parseInt(parts[1]);
+          const fyStartYear = agmMonth >= 4 ? agmYear : agmYear - 1;
+          const nextFYStart = fyStartYear + 1;
+          const nextFYEnd = String(nextFYStart + 1).slice(-2);
+          patch.financialYear = `${nextFYStart}-${nextFYEnd}`;
+        }
+      } catch { /* ignore */ }
     }
     upd(patch);
   }
 
+  // ── Computed validations ──
+  const fyValid = !f.financialYear || isValidFY(f.financialYear);
+  const fyEndStr = isValidFY(f.financialYear) ? fyEndDate(f.financialYear) : "";
+  const minDate = isValidFY(f.financialYear) ? minAgmDate(f.financialYear) : "";
+  const maxDate = isValidFY(f.financialYear) ? maxAgmDate(f.financialYear) : "";
+  const meetingDateWarn = f.meetingDate && minDate && f.meetingDate < minDate
+    ? `⚠️ AGM date ${fmtDate(f.meetingDate)} is before FY end (${fmtDate(fyEndStr)}). For FY ${f.financialYear}, AGM must be held AFTER ${fmtDate(fyEndStr)}.`
+    : f.meetingDate && maxDate && f.meetingDate > maxDate
+    ? `⚠️ AGM date ${fmtDate(f.meetingDate)} is after 30 Sep ${maxDate.split("-")[0]}. Under Sec. 96, AGM must be held within 6 months from FY end i.e. by ${fmtDate(maxDate)}.`
+    : "";
+  const closingTimeWarn = f.closingTime && f.meetingTime && f.closingTime <= f.meetingTime
+    ? "⚠️ Closing time must be after start time." : "";
+  const suggestedSerial = suggestAgmSerial(f.incorporationDate, f.financialYear);
+  const clearDays = calcClearDays(f.noticeDate, f.meetingDate);
+  const noticeWarn = f.noticeDate && f.meetingDate && clearDays < 21
+    ? `⚠️ Only ${clearDays} clear days between notice (${fmtDate(f.noticeDate)}) and AGM (${fmtDate(f.meetingDate)}). SS-2 / Sec. 101 requires minimum 21 clear days. You may proceed with shorter notice only if consent of ≥95% members is obtained.`
+    : "";
+  const shorterNoticeConsent = noticeWarn ? `SHORTER NOTICE CONSENT LETTER
+
+Date: ${fmtDate(f.noticeDate)}
+
+To,
+The Board of Directors / Company Secretary
+${f.companyName || "[COMPANY NAME]"}
+${f.cin ? "CIN: " + f.cin : ""}
+
+Sub: Consent for Shorter Notice for ${f.agmSerial} Annual General Meeting
+
+We, the undersigned Members of ${f.companyName || "[COMPANY NAME]"}, holding in aggregate more than 95% (ninety-five percent) of the total paid-up share capital of the Company, hereby give our consent and agree to the holding of the ${f.agmSerial} Annual General Meeting of the Company on ${fmtDate(f.meetingDate)} at ${f.meetingTime || "[TIME]"} at ${f.venue || "[VENUE]"}, on a shorter notice of ${clearDays} clear days, in accordance with the proviso to Section 101(1) of the Companies Act, 2013 read with Secretarial Standard-2 (SS-2).
+
+We confirm that we have received the Notice of the Meeting and are fully aware of the business to be transacted thereat.
+
+Yours faithfully,
+
+[Signatures of Members holding ≥95% paid-up share capital]
+
+Member Name          Folio No.        Shares Held        Signature
+_________________    _____________    _______________    ___________
+_________________    _____________    _______________    ___________` : "";
+
   /* ── Validation ── */
   function canNext(): boolean {
     if (step === 0) return !!f.companyName && !!f.cin;
-    if (step === 1) return !!f.meetingDate && !!f.venue && !!f.financialYear && !!f.chairmanName;
+    if (step === 1) return !!f.meetingDate && !!f.venue && !!f.financialYear && isValidFY(f.financialYear) && !!f.chairmanName && f.chairmanName !== "__manual__" && !closingTimeWarn && !meetingDateWarn;
     if (step === 2) return quorumMet(f.members, f.entityType);
     return true;
   }
@@ -789,51 +964,164 @@ export default function AgmMinutesPage() {
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
             <h2 className="font-bold text-slate-800 text-base">AGM Details</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+              {/* AGM Serial with suggestion */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">AGM Serial *</label>
+                {suggestedSerial && suggestedSerial !== f.agmSerial && (
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                      💡 Suggested: <b>{suggestedSerial}</b> AGM based on incorporation date
+                    </span>
+                    <button type="button" onClick={() => upd({ agmSerial: suggestedSerial })}
+                      className="text-xs text-blue-700 underline font-semibold">Apply</button>
+                  </div>
+                )}
                 <select className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
                   value={f.agmSerial} onChange={e => upd({ agmSerial: e.target.value })}>
                   {ORDINAL.slice(1).map(o => <option key={o} value={o}>{o} AGM</option>)}
                 </select>
               </div>
+
+              {/* Financial Year with format validation */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Financial Year *</label>
-                <input className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  value={f.financialYear} onChange={e => upd({ financialYear: e.target.value })}
-                  placeholder="e.g. 2024-25" />
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Financial Year *
+                  <span className="text-slate-400 font-normal ml-1">(format: 2024-25)</span>
+                </label>
+                <input
+                  className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${
+                    f.financialYear && !fyValid ? "border-red-400 bg-red-50" : "border-slate-300"
+                  }`}
+                  value={f.financialYear}
+                  onChange={e => upd({ financialYear: e.target.value.trim() })}
+                  placeholder="e.g. 2024-25"
+                />
+                {f.financialYear && !fyValid && (
+                  <p className="text-red-500 text-xs mt-1">❌ Invalid format. Use YYYY-YY (e.g. 2024-25). Short format like &quot;24-25&quot; not accepted.</p>
+                )}
+                {fyValid && f.financialYear && (
+                  <p className="text-green-600 text-xs mt-1">✓ FY ends 31 March {parseInt(f.financialYear.split("-")[0]) + 1}. AGM window: 01 Apr – 30 Sep {parseInt(f.financialYear.split("-")[0]) + 1}</p>
+                )}
               </div>
+
+              {/* Meeting Date with validation */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Meeting Date *</label>
-                <input type="date" className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  value={f.meetingDate} onChange={e => upd({ meetingDate: e.target.value })} />
+                <input type="date"
+                  className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${meetingDateWarn ? "border-amber-400 bg-amber-50" : "border-slate-300"}`}
+                  value={f.meetingDate}
+                  min={minDate || undefined}
+                  max={maxDate || undefined}
+                  onChange={e => upd({ meetingDate: e.target.value })} />
+                {meetingDateWarn && <p className="text-amber-700 text-xs mt-1">{meetingDateWarn}</p>}
+                {!meetingDateWarn && fyValid && f.financialYear && !f.meetingDate && (
+                  <p className="text-slate-400 text-xs mt-1">Suggested range: 01 Apr – 30 Sep {parseInt(f.financialYear.split("-")[0]) + 1}</p>
+                )}
               </div>
+
+              {/* Notice Date with 21-day check */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Notice Date <span className="text-slate-400 font-normal">(date notice was sent)</span>
+                </label>
+                <input type="date"
+                  className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${noticeWarn ? "border-amber-400 bg-amber-50" : "border-slate-300"}`}
+                  value={f.noticeDate}
+                  onChange={e => upd({ noticeDate: e.target.value })} />
+                {f.noticeDate && f.meetingDate && !noticeWarn && (
+                  <p className="text-green-600 text-xs mt-1">✓ {clearDays} clear days — 21-day notice requirement satisfied</p>
+                )}
+                {noticeWarn && (
+                  <div className="mt-1 space-y-1">
+                    <p className="text-amber-700 text-xs">{noticeWarn}</p>
+                    <button type="button"
+                      onClick={() => {
+                        const w = window.open("", "_blank");
+                        if (w) { w.document.write(`<pre style="font-family:serif;padding:20px;font-size:13px;">${shorterNoticeConsent}</pre>`); w.document.close(); w.print(); }
+                      }}
+                      className="text-xs bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-1 rounded-lg hover:bg-amber-200 font-semibold">
+                      📄 Generate Shorter Notice Consent Letter
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Start Time */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Meeting Start Time</label>
                 <input type="time" className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
                   value={f.meetingTime} onChange={e => upd({ meetingTime: e.target.value })} />
               </div>
+
+              {/* Closing Time with validation */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Closing Time</label>
-                <input type="time" className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                <input type="time"
+                  className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${closingTimeWarn ? "border-red-400 bg-red-50" : "border-slate-300"}`}
                   value={f.closingTime} onChange={e => upd({ closingTime: e.target.value })} />
+                {closingTimeWarn && <p className="text-red-500 text-xs mt-1">{closingTimeWarn}</p>}
               </div>
+
+              {/* Previous AGM Date */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Previous AGM Date</label>
-                <input type="date" className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  value={f.prevAgmDate} onChange={e => upd({ prevAgmDate: e.target.value })} />
+                <input type="date"
+                  className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${
+                    f.prevAgmDate && f.meetingDate && f.prevAgmDate >= f.meetingDate ? "border-red-400 bg-red-50" : "border-slate-300"
+                  }`}
+                  value={f.prevAgmDate}
+                  max={f.meetingDate || undefined}
+                  onChange={e => upd({ prevAgmDate: e.target.value })} />
+                {f.prevAgmDate && f.meetingDate && f.prevAgmDate >= f.meetingDate && (
+                  <p className="text-red-500 text-xs mt-1">❌ Previous AGM date must be before current AGM date.</p>
+                )}
               </div>
+
+              {/* Venue — auto-filled from address, editable */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Venue / Mode of Meeting *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-600">Venue / Mode of Meeting *</label>
+                  {f.regAddress && f.venue !== `Registered Office of the Company at ${f.regAddress}` && (
+                    <button type="button"
+                      onClick={() => upd({ venue: `Registered Office of the Company at ${f.regAddress}` })}
+                      className="text-xs text-purple-600 underline">Auto-fill from Reg. Office</button>
+                  )}
+                </div>
                 <input className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
                   value={f.venue} onChange={e => upd({ venue: e.target.value })}
-                  placeholder="e.g. Registered Office / Video Conferencing" />
+                  placeholder="e.g. Registered Office of the Company at..." />
               </div>
+
+              {/* Chairman — dropdown if directors available, else manual input */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Chairman Name *</label>
-                <input className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  value={f.chairmanName} onChange={e => upd({ chairmanName: e.target.value })}
-                  placeholder="e.g. Mr. Rajesh Kumar Sharma" />
+                {f.companyDirectors.length > 0 ? (
+                  <select
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    value={f.chairmanName}
+                    onChange={e => {
+                      const selected = f.companyDirectors.find(d => d.name === e.target.value);
+                      upd({ chairmanName: e.target.value, chairmanDesig: selected?.designation || f.chairmanDesig });
+                    }}>
+                    <option value="">— Select Chairman —</option>
+                    {f.companyDirectors.map((d, i) => (
+                      <option key={i} value={d.name}>{d.name} ({d.designation})</option>
+                    ))}
+                    <option value="__manual__">Other (type manually)</option>
+                  </select>
+                ) : (
+                  <input className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    value={f.chairmanName} onChange={e => upd({ chairmanName: e.target.value })}
+                    placeholder="e.g. Mr. Rajesh Kumar Sharma" />
+                )}
+                {f.chairmanName === "__manual__" && (
+                  <input className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                    placeholder="Enter chairman name manually"
+                    onChange={e => upd({ chairmanName: e.target.value })} />
+                )}
               </div>
+
+              {/* Chairman Designation */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Chairman Designation</label>
                 <input className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
@@ -940,7 +1228,7 @@ export default function AgmMinutesPage() {
                         <td className="px-3 py-2 text-center">
                           <input type="checkbox" className="w-4 h-4 accent-blue-600"
                             checked={m.isProxyPresent}
-                            disabled={!m.proxy}
+                            disabled={!m.proxy.trim()}
                             onChange={e => updMember(m.id, { isProxyPresent: e.target.checked })} />
                         </td>
                         <td className="px-3 py-2">
