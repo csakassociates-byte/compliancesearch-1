@@ -24,6 +24,8 @@ interface Member {
   isPresent: boolean;           // physically present
   proxy: string;                // proxy holder name (if applicable)
   isProxyPresent: boolean;      // proxy attending on behalf
+  isDirectorMember?: boolean;   // true = auto-populated from directors list
+  designation?: string;         // director's designation (shown as badge)
 }
 
 interface Invitee {
@@ -829,6 +831,22 @@ export default function AgmMinutesPage() {
       activeDirs.find(d => /executive/i.test(d.designation || "")) ||
       activeDirs[0];
 
+    // Auto-populate members from directors (directors are usually shareholders)
+    // Only replace if members list is still the default blank entry
+    const currentMembersAreBlank =
+      f.members.length === 1 && !f.members[0].name && !f.members[0].folioNo;
+    const directorMembers: Member[] = companyDirectors.map(d => ({
+      id: crypto.randomUUID(),
+      name: d.name,
+      folioNo: "",
+      sharesHeld: "",
+      isPresent: false,
+      proxy: "",
+      isProxyPresent: false,
+      isDirectorMember: true,
+      designation: d.designation,
+    }));
+
     const patch: Partial<F> = {
       companyName: data.companyName || f.companyName,
       cin: data.cin || f.cin,
@@ -837,6 +855,10 @@ export default function AgmMinutesPage() {
       incorporationDate: data.incorporationDate || f.incorporationDate,
       companyDirectors,
       printEmail: data.email || f.printEmail,
+      // Auto-fill members from directors only if members are still blank
+      ...(currentMembersAreBlank && directorMembers.length > 0
+        ? { members: directorMembers }
+        : {}),
     };
     if (chairman) {
       patch.chairmanName = chairman.name;
@@ -1387,11 +1409,39 @@ _________________    _____________    _______________    ___________` : "";
             {/* Members Table */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                <h2 className="font-bold text-slate-800">Members / Shareholders Attendance</h2>
-                <button onClick={addMember}
-                  className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg">
-                  + Add Member
-                </button>
+                <div>
+                  <h2 className="font-bold text-slate-800">Members / Shareholders Attendance</h2>
+                  {f.members.some(m => m.isDirectorMember) && (
+                    <p className="text-xs text-purple-600 mt-0.5">
+                      👥 Directors auto-filled as members — just add Folio No. &amp; Shares Held
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {f.companyDirectors.length > 0 && (
+                    <button
+                      onClick={() => {
+                        // Add any director not already in the list
+                        const existingNames = new Set(f.members.map(m => m.name.toLowerCase()));
+                        const missing = f.companyDirectors.filter(d => !existingNames.has(d.name.toLowerCase()));
+                        if (missing.length === 0) return;
+                        const newMembers: Member[] = missing.map(d => ({
+                          id: crypto.randomUUID(),
+                          name: d.name, folioNo: "", sharesHeld: "",
+                          isPresent: false, proxy: "", isProxyPresent: false,
+                          isDirectorMember: true, designation: d.designation,
+                        }));
+                        upd({ members: [...f.members, ...newMembers] });
+                      }}
+                      className="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg">
+                      + Add Directors
+                    </button>
+                  )}
+                  <button onClick={addMember}
+                    className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-lg">
+                    + Add Member
+                  </button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1407,12 +1457,22 @@ _________________    _____________    _______________    ___________` : "";
                     </tr>
                   </thead>
                   <tbody>
-                    {f.members.map((m, idx) => (
+                    {f.members.map((m) => (
                       <tr key={m.id} className={`border-t border-slate-100 ${m.isPresent || m.isProxyPresent ? "bg-green-50" : ""}`}>
                         <td className="px-4 py-2">
-                          <input className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
-                            placeholder="Member name" value={m.name}
-                            onChange={e => updMember(m.id, { name: e.target.value })} />
+                          {m.isDirectorMember ? (
+                            // Director-member: name is read-only, show badge
+                            <div>
+                              <p className="text-xs font-semibold text-slate-800">{m.name}</p>
+                              <span className="inline-block mt-0.5 text-[10px] font-bold text-purple-700 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded-full">
+                                🏢 {m.designation || "Director"}
+                              </span>
+                            </div>
+                          ) : (
+                            <input className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
+                              placeholder="Member name" value={m.name}
+                              onChange={e => updMember(m.id, { name: e.target.value })} />
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <input className="w-24 border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
@@ -1443,7 +1503,7 @@ _________________    _____________    _______________    ___________` : "";
                         <td className="px-3 py-2">
                           {f.members.length > 1 && (
                             <button onClick={() => removeMember(m.id)}
-                              className="text-red-400 hover:text-red-600 font-bold text-lg px-1">×</button>
+                              className="text-red-400 hover:text-red-600 font-bold text-lg px-1" title="Remove">×</button>
                           )}
                         </td>
                       </tr>
@@ -1451,8 +1511,10 @@ _________________    _____________    _______________    ___________` : "";
                   </tbody>
                 </table>
               </div>
-              <div className="px-5 py-3 bg-slate-50 text-xs text-slate-500 border-t border-slate-100">
-                💡 Proxies can attend and vote, but do <b>not</b> count for quorum (SS-2)
+              <div className="px-5 py-3 bg-slate-50 text-xs text-slate-500 border-t border-slate-100 flex flex-wrap gap-3">
+                <span>💡 Proxies can attend and vote, but do <b>not</b> count for quorum (SS-2)</span>
+                <span className="text-slate-300">|</span>
+                <span>🏢 <b>Purple badge</b> = auto-filled from company directors</span>
               </div>
             </div>
 
