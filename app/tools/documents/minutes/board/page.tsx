@@ -553,7 +553,8 @@ function generateBoardAllHTML(f: F): string {
   if (resolutionItems.length === 0) return minutesHtml;
   const ctcBody = generateBoardCtcHTML(f);
   const ctcContent = ctcBody.replace(/^[\s\S]*<body>/, "").replace(/<\/body>[\s\S]*$/, "");
-  return minutesHtml.replace("</body></html>", `${ctcContent}</body></html>`);
+  // Use regex to handle any whitespace/newlines between </body> and </html>
+  return minutesHtml.replace(/<\/body>\s*<\/html>/i, `${ctcContent}</body></html>`);
 }
 
 /* ══════════════════════════════════════════════════════════════════

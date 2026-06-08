@@ -604,7 +604,7 @@ function generateMinutesAndCtcHTML(f: F): string {
   const ctcBody = generateCtcHTML(f);
   // Extract just the CTC pages content (between <body> and </body>)
   const ctcContent = ctcBody.replace(/^[\s\S]*<body>/, "").replace(/<\/body>[\s\S]*$/, "");
-  return minutesHtml.replace("</div></body></html>", `</div>${ctcContent}</body></html>`);
+  return minutesHtml.replace(/<\/body>\s*<\/html>/i, `${ctcContent}</body></html>`);
 }
 
 /* ══════════════════════════════════════════════════════════════════
