@@ -565,7 +565,7 @@ export default function AgmMinutesPage() {
   const [f, setF] = useState<F>(INITIAL_F);
   const [draftSaved, setDraftSaved] = useState(false);
   const [showAddAgenda, setShowAddAgenda] = useState(false);
-  const [addAgendaCategory, setAddAgendaCategory] = useState("ordinary_biz");
+  const [templateSearch, setTemplateSearch] = useState("");
   const [showSs2, setShowSs2] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
 
@@ -608,8 +608,10 @@ export default function AgmMinutesPage() {
     upd({ agendaItems: f.agendaItems.filter(a => a.id !== id) });
   const addAgendaItem = (templateId: string) => {
     upd({ agendaItems: [...f.agendaItems, defaultAgendaItem(templateId)] });
-    setShowAddAgenda(false);
   };
+
+  // Already-added template IDs set — for ✓ indicator
+  const addedIds = new Set(f.agendaItems.map(a => a.templateId));
 
   /* ── Company auto-fill ── */
   function applyCompany(data: CompanyData) {
@@ -991,55 +993,90 @@ export default function AgmMinutesPage() {
         {/* ═══════════ STEP 3 — AGENDA ═══════════ */}
         {step === 3 && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h2 className="font-bold text-slate-800">Agenda Items</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {f.agendaItems.length} items — {f.agendaItems.filter(a => a.resolutionType !== "none").length} resolutions
-                </p>
-              </div>
-              <button
-                onClick={() => setShowAddAgenda(a => !a)}
-                className="text-sm font-bold text-purple-700 bg-purple-50 border-2 border-purple-200 hover:bg-purple-100 px-4 py-2 rounded-xl">
+
+            {/* Header bar */}
+            <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+              <p className="text-sm text-slate-600 font-medium">
+                {f.agendaItems.length} items · {f.agendaItems.filter(a => a.resolutionType !== "none").length} resolution{f.agendaItems.filter(a => a.resolutionType !== "none").length !== 1 ? "s" : ""}
+              </p>
+              <button type="button"
+                onClick={() => { setShowAddAgenda(!showAddAgenda); setTemplateSearch(""); }}
+                className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition">
                 + Add Agenda Item
               </button>
             </div>
 
-            {/* Add Agenda Picker */}
+            {/* Template picker — Board Meeting style */}
             {showAddAgenda && (
-              <div className="bg-white rounded-2xl border-2 border-purple-200 p-4 shadow-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-slate-800">Select Agenda Template</h3>
-                  <button onClick={() => setShowAddAgenda(false)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">×</button>
+              <div className="border-2 border-purple-200 rounded-2xl bg-purple-50/40 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-purple-800">Select Agenda Item Template</p>
+                  <button type="button"
+                    onClick={() => { setShowAddAgenda(false); setTemplateSearch(""); }}
+                    className="text-slate-400 hover:text-slate-600 text-xs font-medium">
+                    ✕ Close
+                  </button>
                 </div>
-                {/* Category Tabs */}
-                <div className="flex flex-wrap gap-1.5 mb-4">
+
+                {/* Search box */}
+                <input
+                  type="text"
+                  value={templateSearch}
+                  onChange={e => setTemplateSearch(e.target.value)}
+                  placeholder="🔍 Search agenda items... (e.g. dividend, director, auditor)"
+                  className="w-full border border-purple-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
+                  autoFocus
+                />
+
+                {/* Categories with items */}
+                <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
                   {AGM_CATEGORY_ORDER.map(cat => {
                     const meta = AGM_CATEGORY_META[cat];
+                    const templates = ALL_AGM_TEMPLATES.filter(t =>
+                      t.category === cat &&
+                      (templateSearch === "" || t.title.toLowerCase().includes(templateSearch.toLowerCase()))
+                    );
+                    if (templates.length === 0) return null;
                     return (
-                      <button key={cat}
-                        onClick={() => setAddAgendaCategory(cat)}
-                        className={`text-xs px-3 py-1.5 rounded-full font-semibold border transition-all ${addAgendaCategory === cat ? "bg-purple-600 text-white border-purple-600" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-purple-50"}`}>
-                        {meta.icon} {meta.label}
-                      </button>
+                      <div key={cat}>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                          <span>{meta.icon}</span> {meta.label}
+                          <span className="ml-1 text-slate-300 font-normal normal-case">({templates.length})</span>
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {templates.map(t => {
+                            const alreadyAdded = addedIds.has(t.id);
+                            return (
+                              <button key={t.id} type="button"
+                                onClick={() => !alreadyAdded && addAgendaItem(t.id)}
+                                disabled={alreadyAdded}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left transition-all ${
+                                  alreadyAdded
+                                    ? "border-green-200 bg-green-50 text-green-700 cursor-default"
+                                    : "border-slate-200 bg-white hover:border-purple-400 hover:bg-purple-50 text-slate-700"
+                                }`}>
+                                <span className="text-base shrink-0">{t.icon}</span>
+                                <span className="flex-1 text-xs leading-tight">{t.title}</span>
+                                {alreadyAdded
+                                  ? <span className="text-xs text-green-600 font-bold shrink-0">✓</span>
+                                  : <span className="text-xs text-purple-500 font-bold shrink-0">+</span>
+                                }
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
-                </div>
-                {/* Templates in selected category */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                  {ALL_AGM_TEMPLATES.filter(t => t.category === addAgendaCategory).map(tpl => (
-                    <button key={tpl.id}
-                      onClick={() => addAgendaItem(tpl.id)}
-                      className="text-left border border-slate-200 rounded-xl px-3 py-2.5 hover:border-purple-400 hover:bg-purple-50 transition-all group">
-                      <span className="text-base mr-1.5">{tpl.icon}</span>
-                      <span className="text-sm font-medium text-slate-700 group-hover:text-purple-800">{tpl.title}</span>
-                      {tpl.resolutionType !== "none" && (
-                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${tpl.resolutionType === "special" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
-                          {tpl.resolutionType}
-                        </span>
-                      )}
-                    </button>
-                  ))}
+
+                  {/* No results */}
+                  {templateSearch !== "" && ALL_AGM_TEMPLATES.filter(t =>
+                    t.title.toLowerCase().includes(templateSearch.toLowerCase())
+                  ).length === 0 && (
+                    <p className="text-sm text-slate-400 text-center py-4">
+                      No matching templates found for &quot;{templateSearch}&quot;
+                    </p>
+                  )}
                 </div>
               </div>
             )}
