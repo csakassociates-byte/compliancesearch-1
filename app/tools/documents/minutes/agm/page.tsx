@@ -616,8 +616,8 @@ export default function AgmMinutesPage() {
     const patch: Partial<F> = {
       companyName: data.companyName || f.companyName,
       cin: data.cin || f.cin,
-      regAddress: data.registeredAddress || f.regAddress,
-      entityType: data.companyType || f.entityType,
+      regAddress: data.regAddress || f.regAddress,
+      entityType: data.entityType || f.entityType,
     };
     // Auto-fill chairman from directors if available
     if (data.directors && data.directors.length > 0) {
@@ -728,8 +728,12 @@ export default function AgmMinutesPage() {
             <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
               <h2 className="font-bold text-slate-800 text-base mb-4">Company Details</h2>
               <div className="flex gap-3 mb-4 flex-wrap">
-                <CompanySearch onSelect={applyCompany} />
-                <CompanyExcelUpload onData={applyCompany} />
+                <CompanySearch
+                  value={f.companyName}
+                  onChange={val => upd({ companyName: val })}
+                  onSelect={applyCompany}
+                />
+                <CompanyExcelUpload onFill={applyCompany} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
