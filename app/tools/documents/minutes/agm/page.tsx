@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { injectPreviewWatermark } from "@/lib/preview-protection";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -824,7 +825,6 @@ function AgendaCard({
 ══════════════════════════════════════════════════════════════════ */
 export default function AgmMinutesPage() {
   const { data: session } = useSession();
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [step, setStep] = useState(0);
   const [f, setF] = useState<F>(INITIAL_F);
   const [draftSaved, setDraftSaved] = useState(false);
@@ -1155,12 +1155,18 @@ _________________    _____________    _______________    ___________` : "";
 
   /* ── Print ── */
   function openPrint(html: string) {
-    if (!session) { setShowLoginPrompt(true); return; }
     const win = window.open("", "_blank");
-    if (!win) { alert("Please allow popups to print."); return; }
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => win.print();
+    if (!win) { alert("Please allow popups to open."); return; }
+    if (!session) {
+      // Non-logged user: show watermarked preview
+      win.document.write(injectPreviewWatermark(html));
+      win.document.close();
+    } else {
+      // Logged-in user: direct print
+      win.document.write(html);
+      win.document.close();
+      win.onload = () => win.print();
+    }
   }
   function handlePrint()        { openPrint(generateAgmHTML(f)); }
   function handlePrintCtc()     { openPrint(generateCtcHTML(f)); }
@@ -2191,20 +2197,6 @@ _________________    _____________    _______________    ___________` : "";
           {" · "}SS-2 / Companies Act 2013
         </div>
       </footer>
-      {showLoginPrompt && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
-            <div className="text-4xl mb-3">🔒</div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2">Login Required</h2>
-            <p className="text-sm text-slate-500 mb-6">Please sign in to download or print documents.</p>
-            <div className="flex flex-col gap-2">
-              <a href="/auth/login" className="w-full py-3 rounded-xl font-bold text-white text-sm bg-blue-600 hover:bg-blue-700 text-center">Sign In</a>
-              <a href="/auth/signup" className="w-full py-3 rounded-xl font-bold text-slate-700 text-sm border border-slate-200 hover:bg-slate-50 text-center">Create Free Account</a>
-              <button onClick={() => setShowLoginPrompt(false)} className="text-sm text-slate-400 hover:text-slate-600 mt-1">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
