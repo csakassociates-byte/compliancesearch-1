@@ -749,6 +749,7 @@ export default function AgmMinutesPage() {
                     onChange={val => upd({ companyName: val })}
                     onSelect={applyCompany}
                     placeholder="e.g. ABC Technologies Private Limited"
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                     accent="blue"
                   />
                 </div>
