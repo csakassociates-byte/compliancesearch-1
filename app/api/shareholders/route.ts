@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
 
   const shareholders = await prisma.$queryRawUnsafe<unknown[]>(
     `SELECT s.*, p.name as "personName", p.din, p.mobile, p.email,
-            p."panNo", p."aadhaarNo", p."isDirector", p."designation"
+            p."panNo", p."aadhaarNo", p."isDirector", p."designation",
+            s."nominalValue", s."paidUpValue", s."issuePlace", s."signingDirectorsJson"
      FROM csi_shareholders s
      LEFT JOIN csi_persons p ON p.id = s."personId"
      WHERE s."userId" = $1 AND s."companyId" = $2
@@ -42,6 +43,15 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
+  // Ensure new cert-metadata columns exist (idempotent migration)
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE csi_shareholders
+      ADD COLUMN IF NOT EXISTS "nominalValue"        TEXT,
+      ADD COLUMN IF NOT EXISTS "paidUpValue"         TEXT,
+      ADD COLUMN IF NOT EXISTS "issuePlace"          TEXT,
+      ADD COLUMN IF NOT EXISTS "signingDirectorsJson" TEXT
+  `).catch(() => { /* ignore if already exists */ });
+
   const body = await req.json() as {
     personId?: string;
     personName?: string;
@@ -58,6 +68,11 @@ export async function POST(req: NextRequest) {
     nomineeName?: string;
     nomineeRelation?: string;
     nomineeAddress?: string;
+    // Certificate metadata
+    nominalValue?: string;
+    paidUpValue?: string;
+    issuePlace?: string;
+    signingDirectorsJson?: string;
   };
 
   if (!body.companyId) return NextResponse.json({ error: "companyId required" }, { status: 400 });
@@ -96,18 +111,22 @@ export async function POST(req: NextRequest) {
   if (existing.length > 0) {
     await prisma.$executeRawUnsafe(
       `UPDATE csi_shareholders SET
-        "folioNumber" = COALESCE($3, "folioNumber"),
-        "certificateNumber" = COALESCE($4, "certificateNumber"),
-        "distinctiveFrom" = COALESCE($5, "distinctiveFrom"),
-        "distinctiveTo" = COALESCE($6, "distinctiveTo"),
-        "numberOfShares" = COALESCE($7, "numberOfShares"),
-        "shareType" = COALESCE($8, "shareType"),
-        "dateOfAcquisition" = COALESCE($9, "dateOfAcquisition"),
-        "dateOfTransfer" = COALESCE($10, "dateOfTransfer"),
-        "transferFrom" = COALESCE($11, "transferFrom"),
-        "nomineeName" = COALESCE($12, "nomineeName"),
-        "nomineeRelation" = COALESCE($13, "nomineeRelation"),
-        "nomineeAddress" = COALESCE($14, "nomineeAddress"),
+        "folioNumber"           = COALESCE($3,  "folioNumber"),
+        "certificateNumber"     = COALESCE($4,  "certificateNumber"),
+        "distinctiveFrom"       = COALESCE($5,  "distinctiveFrom"),
+        "distinctiveTo"         = COALESCE($6,  "distinctiveTo"),
+        "numberOfShares"        = COALESCE($7,  "numberOfShares"),
+        "shareType"             = COALESCE($8,  "shareType"),
+        "dateOfAcquisition"     = COALESCE($9,  "dateOfAcquisition"),
+        "dateOfTransfer"        = COALESCE($10, "dateOfTransfer"),
+        "transferFrom"          = COALESCE($11, "transferFrom"),
+        "nomineeName"           = COALESCE($12, "nomineeName"),
+        "nomineeRelation"       = COALESCE($13, "nomineeRelation"),
+        "nomineeAddress"        = COALESCE($14, "nomineeAddress"),
+        "nominalValue"          = COALESCE($15, "nominalValue"),
+        "paidUpValue"           = COALESCE($16, "paidUpValue"),
+        "issuePlace"            = COALESCE($17, "issuePlace"),
+        "signingDirectorsJson"  = COALESCE($18, "signingDirectorsJson"),
         "updatedAt" = NOW()
        WHERE id = $1 AND "userId" = $2`,
       existing[0].id, userId,
@@ -116,7 +135,9 @@ export async function POST(req: NextRequest) {
       body.numberOfShares ?? null, body.shareType || null,
       body.dateOfAcquisition || null, body.dateOfTransfer || null,
       body.transferFrom || null, body.nomineeName || null,
-      body.nomineeRelation || null, body.nomineeAddress || null
+      body.nomineeRelation || null, body.nomineeAddress || null,
+      body.nominalValue || null, body.paidUpValue || null,
+      body.issuePlace || null, body.signingDirectorsJson || null
     );
     return NextResponse.json({ id: existing[0].id });
   }
@@ -127,15 +148,18 @@ export async function POST(req: NextRequest) {
       id, "personId", "userId", "companyId",
       "folioNumber", "certificateNumber", "distinctiveFrom", "distinctiveTo",
       "numberOfShares", "shareType", "dateOfAcquisition", "dateOfTransfer",
-      "transferFrom", "nomineeName", "nomineeRelation", "nomineeAddress"
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      "transferFrom", "nomineeName", "nomineeRelation", "nomineeAddress",
+      "nominalValue", "paidUpValue", "issuePlace", "signingDirectorsJson"
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
     id, personId, userId, body.companyId,
     body.folioNumber || null, body.certificateNumber || null,
     body.distinctiveFrom ?? null, body.distinctiveTo ?? null,
     body.numberOfShares ?? null, body.shareType || 'Equity',
     body.dateOfAcquisition || null, body.dateOfTransfer || null,
     body.transferFrom || null, body.nomineeName || null,
-    body.nomineeRelation || null, body.nomineeAddress || null
+    body.nomineeRelation || null, body.nomineeAddress || null,
+    body.nominalValue || null, body.paidUpValue || null,
+    body.issuePlace || null, body.signingDirectorsJson || null
   );
 
   // Mark person as shareholder

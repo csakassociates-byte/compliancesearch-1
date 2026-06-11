@@ -3,6 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PersonKYC, ShareholderRecord } from "@/lib/types/person";
+import {
+  generateShareCertificateHTML,
+  computeCertRanges,
+  type CertSigner,
+} from "@/lib/share-certificate-html";
 
 interface Company {
   id: string; companyName: string; cin: string | null;
@@ -482,58 +487,52 @@ function numToWords(n: number): string {
   return cvtHundreds(n);
 }
 
-/* ── Print: Single Share Certificate ─────────────────── */
+/* ── Print: Single Share Certificate (exact same format as generator) ── */
 function printShareCertificate(sh: ShareholderRow & { personName?: string }, company: Company) {
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Share Certificate</title>
-  <style>
-    @page{size:A4;margin:15mm 12mm}
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:"Times New Roman",serif;color:#000;background:#fff}
-    .page{width:100%;padding:0}
-    .outer{border:2.5px solid #000;padding:5px}
-    .inner{border:1px solid #555;padding:8mm 10mm;min-height:250mm}
-    .center{text-align:center}.bold{font-weight:bold}.upper{text-transform:uppercase}
-    table{width:100%;border-collapse:collapse}
-    td,th{border:1px solid #444;padding:5px 8px;font-size:10pt;vertical-align:top}
-    th{background:#f5f5f5;font-weight:bold;white-space:nowrap}
-    .sig-line{border-bottom:1px solid #666;min-height:40px;margin-bottom:4px}
-    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-  </style></head><body>
-  <div class="page"><div class="outer"><div class="inner">
-    <div class="center" style="border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px">
-      <p class="bold" style="font-size:9pt;letter-spacing:2px">FORM NO. SH-1</p>
-      <p class="bold upper" style="font-size:16pt;letter-spacing:3px;margin:4px 0">SHARE CERTIFICATE</p>
-      <p style="font-size:8pt;font-style:italic;color:#333">[Pursuant to sub-section (3) of section 46 of the Companies Act, 2013 and Rule 5(2) of the Companies (Share Capital and Debentures) Rules 2014]</p>
-    </div>
-    <div class="center" style="margin-bottom:10px">
-      <p class="bold upper" style="font-size:14pt;letter-spacing:1px">${company.companyName}</p>
-      <p style="font-size:9pt"><strong>CIN:</strong> ${company.cin || '_______________'}</p>
-      <p style="font-size:9pt">(Incorporated under the Companies Act, 2013)</p>
-      <p style="font-size:9pt"><strong>Registered Office:</strong> ${company.regAddress || '_______________'}</p>
-    </div>
-    <div style="border:1px solid #666;padding:6px 10px;margin:10px 0;font-size:9pt;text-align:justify">
-      <strong>"THIS IS TO CERTIFY</strong> that the person(s) named in this certificate is/are the Registered Holder(s) of the within mentioned share(s) bearing the distinctive number(s) herein specified in the above named Company subject to the Memorandum and Article of Association of the Company and the amount endorsed herein has been paid up on each such shares."
-    </div>
-    <div class="center bold upper" style="margin:8px 0;font-size:10pt;letter-spacing:1px">
-      ${sh.shareType || 'EQUITY'} SHARES
-    </div>
-    <table style="margin-bottom:12px">
-      <tr><th>Registered Folio No.</th><td>${sh.folioNumber || '—'}</td><th>Certificate No.</th><td>${sh.certificateNumber || '—'}</td></tr>
-      <tr><th>Name(s) of the Holder(s)</th><td class="bold upper" colspan="3" style="font-size:11pt">${sh.personName || '—'}${sh.din ? ` <span style="font-size:8pt;font-weight:normal">(DIN: ${sh.din})</span>` : ''}</td></tr>
-      <tr><th>Number of Share(s) held</th><td class="bold upper" colspan="3">${sh.numberOfShares ? numToWords(sh.numberOfShares) + ' *** ' + sh.numberOfShares.toLocaleString('en-IN') + ' ***' : '—'}</td></tr>
-      <tr><th>Distinctive No(s)</th><td colspan="3">${sh.distinctiveFrom && sh.distinctiveTo ? String(sh.distinctiveFrom).padStart(5,'0') + ' – ' + sh.distinctiveTo : '—'}</td></tr>
-      ${sh.dateOfAcquisition ? `<tr><th>Date of Allotment</th><td colspan="3">${sh.dateOfAcquisition}</td></tr>` : ''}
-    </table>
-    ${sh.nomineeName ? `<div style="font-size:9pt;margin-bottom:10px">Nominee: <strong>${sh.nomineeName}</strong>${sh.nomineeRelation ? ' (' + sh.nomineeRelation + ')' : ''}</div>` : ''}
-    <div style="display:flex;gap:60px;margin:20px 0 10px">
-      <div style="flex:1"><div class="sig-line"></div><p style="font-size:9pt">Director / Authorised Signatory</p></div>
-      <div style="flex:1"><div class="sig-line"></div><p style="font-size:9pt">Director / Authorised Signatory</p></div>
-    </div>
-    <p style="font-size:8pt;font-style:italic"><strong>Note:</strong> No transfer of Shares comprised in the Certificate can be registered unless accompanied by this Certificate.</p>
-  </div></div></div>
-  <script>window.onload=function(){window.print();}</script>
-  </body></html>`;
-  const w = window.open('','_blank','width=900,height=700');
+  // Parse saved signing directors from JSON (saved when certificate was generated)
+  let signers: CertSigner[] = [];
+  if (sh.signingDirectorsJson) {
+    try { signers = JSON.parse(sh.signingDirectorsJson) as CertSigner[]; } catch { /* ignore */ }
+  }
+
+  // Build company params — use saved cert metadata if available
+  const certCompany = {
+    companyName:  company.companyName,
+    cin:          company.cin || '',
+    regAddress:   company.regAddress || '',
+    shareClass:   sh.shareType || 'Equity',
+    nominalValue: sh.nominalValue || '10',
+    paidUpValue:  sh.paidUpValue  || '10',
+    issueDate:    sh.dateOfAcquisition || '',
+    issuePlace:   sh.issuePlace   || '',
+  };
+
+  // Build shareholder entry
+  const certShareholder = {
+    name:   sh.personName || '',
+    din:    sh.din || sh.panNo || '',
+    shares: sh.numberOfShares || 0,
+  };
+
+  // Build range from saved distinctive numbers (already computed at generation time)
+  const certNo   = sh.certificateNumber || '01';
+  const certIdx  = parseInt(certNo) - 1;
+  // Build the ranges array — one entry for this single shareholder
+  const range = {
+    folioNo:  sh.folioNumber  || certNo,
+    certNo:   certNo,
+    certWord: ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten',
+               'Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen','Twenty',
+               'Twenty-One','Twenty-Two','Twenty-Three','Twenty-Four','Twenty-Five'][parseInt(certNo)] || certNo,
+    from:     sh.distinctiveFrom || 1,
+    to:       sh.distinctiveTo   || (sh.numberOfShares || 0),
+    fromPad:  String(sh.distinctiveFrom || 1).padStart(5, '0'),
+    toPad:    String(sh.distinctiveTo   || sh.numberOfShares || 0),
+  };
+  void certIdx;
+
+  const html = generateShareCertificateHTML(certCompany, [certShareholder], [range], signers);
+  const w = window.open('', '_blank', 'width=900,height=700');
   if (!w) { alert('Pop-up blocked! Please allow pop-ups.'); return; }
   w.document.write(html); w.document.close();
 }
@@ -1004,6 +1003,11 @@ interface ShareholderRow extends ShareholderRecord {
   holdingPercent?: string;
   companyId?: string;
   userId?: string;
+  // Certificate metadata (saved when generating)
+  nominalValue?: string;
+  paidUpValue?: string;
+  issuePlace?: string;
+  signingDirectorsJson?: string;
 }
 
 function ShareholdersTab({ companyId, company }: { companyId: string; company: Company }) {
