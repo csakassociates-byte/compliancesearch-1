@@ -2,6 +2,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
+interface Client {
+  id: string; companyName: string; cin: string | null;
+  entityType: string | null; docCount: number;
+}
+
 interface Doc {
   id: string; type: string; title: string;
   companyName: string | null; financialYear: string | null;
@@ -11,11 +16,13 @@ interface Doc {
 export default function DashboardClient({ userName }: { userName: string }) {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clients, setClients] = useState<Client[]>([]);
 
   useEffect(() => {
     fetch('/api/documents')
       .then(r => r.json())
       .then(d => { setDocs(d.documents || []); setLoading(false); });
+    fetch('/api/clients').then(r => r.json()).then(d => setClients(d.companies || []));
   }, []);
 
   const tools = [
@@ -60,6 +67,36 @@ export default function DashboardClient({ userName }: { userName: string }) {
               </Link>
             ))}
           </div>
+        </section>
+
+        {/* My Clients */}
+        <section className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">My Clients</h2>
+            <Link href="/dashboard/clients" className="text-xs text-blue-600 hover:underline font-semibold">
+              {clients.length > 0 ? `View all (${clients.length}) →` : '+ Add Client'}
+            </Link>
+          </div>
+          {clients.length === 0 ? (
+            <Link href="/dashboard/clients" className="block bg-white border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-blue-300 hover:bg-blue-50 transition-all group">
+              <div className="text-2xl mb-1">🏢</div>
+              <p className="text-sm font-semibold text-slate-500 group-hover:text-blue-600">Add your first client company</p>
+            </Link>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {clients.slice(0, 4).map(c => (
+                <Link key={c.id} href={`/dashboard/clients/${c.id}`}
+                  className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md hover:border-blue-300 transition-all group">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-black text-sm mb-3">
+                    {c.companyName[0]}
+                  </div>
+                  <div className="font-bold text-slate-800 text-xs leading-tight truncate group-hover:text-blue-700">{c.companyName}</div>
+                  {c.cin && <div className="text-xs text-slate-400 mt-0.5 truncate">{c.cin}</div>}
+                  <div className="text-xs text-slate-400 mt-2">{c.docCount} document{c.docCount !== 1 ? 's' : ''}</div>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Recent Documents */}

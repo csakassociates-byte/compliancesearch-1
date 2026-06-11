@@ -47,5 +47,19 @@ export async function POST(req: NextRequest) {
     body.meetingDate ?? null, body.formDataJson, now
   );
 
+  // Auto-link to company if companyName matches existing company
+  if (body.companyName) {
+    const matchingCompany = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("companyName") = LOWER($2) LIMIT 1`,
+      userId, body.companyName
+    );
+    if (matchingCompany.length) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE csi_documents SET "companyId" = $1 WHERE id = $2`,
+        matchingCompany[0].id, id
+      );
+    }
+  }
+
   return NextResponse.json({ success: true, id });
 }
