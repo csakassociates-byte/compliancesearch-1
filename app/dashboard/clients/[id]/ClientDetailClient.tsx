@@ -465,14 +465,358 @@ function kycComplete(p: PersonKYC): boolean {
   return !!(p.panNo && p.aadhaarNo && p.mobile && p.dateOfBirth);
 }
 
+/* ── Number to words (Indian) ─────────────────────────── */
+const ONES_W = ["","ONE","TWO","THREE","FOUR","FIVE","SIX","SEVEN","EIGHT","NINE",
+  "TEN","ELEVEN","TWELVE","THIRTEEN","FOURTEEN","FIFTEEN","SIXTEEN","SEVENTEEN","EIGHTEEN","NINETEEN"];
+const TENS_W = ["","","TWENTY","THIRTY","FORTY","FIFTY","SIXTY","SEVENTY","EIGHTY","NINETY"];
+function cvtHundreds(n: number): string {
+  if (n < 20) return ONES_W[n];
+  if (n < 100) return TENS_W[Math.floor(n/10)] + (n%10 ? " "+ONES_W[n%10] : "");
+  return ONES_W[Math.floor(n/100)] + " HUNDRED" + (n%100 ? " "+cvtHundreds(n%100) : "");
+}
+function numToWords(n: number): string {
+  if (!n || n === 0) return "ZERO";
+  if (n >= 10000000) return cvtHundreds(Math.floor(n/10000000)) + " CRORE" + (n%10000000 ? " "+numToWords(n%10000000) : "");
+  if (n >= 100000)   return cvtHundreds(Math.floor(n/100000))   + " LAKH"  + (n%100000   ? " "+numToWords(n%100000)   : "");
+  if (n >= 1000)     return cvtHundreds(Math.floor(n/1000))     + " THOUSAND" + (n%1000  ? " "+cvtHundreds(n%1000)   : "");
+  return cvtHundreds(n);
+}
+
+/* ── Print: Single Share Certificate ─────────────────── */
+function printShareCertificate(sh: ShareholderRow & { personName?: string }, company: Company) {
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Share Certificate</title>
+  <style>
+    @page{size:A4;margin:15mm 12mm}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:"Times New Roman",serif;color:#000;background:#fff}
+    .page{width:100%;padding:0}
+    .outer{border:2.5px solid #000;padding:5px}
+    .inner{border:1px solid #555;padding:8mm 10mm;min-height:250mm}
+    .center{text-align:center}.bold{font-weight:bold}.upper{text-transform:uppercase}
+    table{width:100%;border-collapse:collapse}
+    td,th{border:1px solid #444;padding:5px 8px;font-size:10pt;vertical-align:top}
+    th{background:#f5f5f5;font-weight:bold;white-space:nowrap}
+    .sig-line{border-bottom:1px solid #666;min-height:40px;margin-bottom:4px}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  </style></head><body>
+  <div class="page"><div class="outer"><div class="inner">
+    <div class="center" style="border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px">
+      <p class="bold" style="font-size:9pt;letter-spacing:2px">FORM NO. SH-1</p>
+      <p class="bold upper" style="font-size:16pt;letter-spacing:3px;margin:4px 0">SHARE CERTIFICATE</p>
+      <p style="font-size:8pt;font-style:italic;color:#333">[Pursuant to sub-section (3) of section 46 of the Companies Act, 2013 and Rule 5(2) of the Companies (Share Capital and Debentures) Rules 2014]</p>
+    </div>
+    <div class="center" style="margin-bottom:10px">
+      <p class="bold upper" style="font-size:14pt;letter-spacing:1px">${company.companyName}</p>
+      <p style="font-size:9pt"><strong>CIN:</strong> ${company.cin || '_______________'}</p>
+      <p style="font-size:9pt">(Incorporated under the Companies Act, 2013)</p>
+      <p style="font-size:9pt"><strong>Registered Office:</strong> ${company.regAddress || '_______________'}</p>
+    </div>
+    <div style="border:1px solid #666;padding:6px 10px;margin:10px 0;font-size:9pt;text-align:justify">
+      <strong>"THIS IS TO CERTIFY</strong> that the person(s) named in this certificate is/are the Registered Holder(s) of the within mentioned share(s) bearing the distinctive number(s) herein specified in the above named Company subject to the Memorandum and Article of Association of the Company and the amount endorsed herein has been paid up on each such shares."
+    </div>
+    <div class="center bold upper" style="margin:8px 0;font-size:10pt;letter-spacing:1px">
+      ${sh.shareType || 'EQUITY'} SHARES
+    </div>
+    <table style="margin-bottom:12px">
+      <tr><th>Registered Folio No.</th><td>${sh.folioNumber || '—'}</td><th>Certificate No.</th><td>${sh.certificateNumber || '—'}</td></tr>
+      <tr><th>Name(s) of the Holder(s)</th><td class="bold upper" colspan="3" style="font-size:11pt">${sh.personName || '—'}${sh.din ? ` <span style="font-size:8pt;font-weight:normal">(DIN: ${sh.din})</span>` : ''}</td></tr>
+      <tr><th>Number of Share(s) held</th><td class="bold upper" colspan="3">${sh.numberOfShares ? numToWords(sh.numberOfShares) + ' *** ' + sh.numberOfShares.toLocaleString('en-IN') + ' ***' : '—'}</td></tr>
+      <tr><th>Distinctive No(s)</th><td colspan="3">${sh.distinctiveFrom && sh.distinctiveTo ? String(sh.distinctiveFrom).padStart(5,'0') + ' – ' + sh.distinctiveTo : '—'}</td></tr>
+      ${sh.dateOfAcquisition ? `<tr><th>Date of Allotment</th><td colspan="3">${sh.dateOfAcquisition}</td></tr>` : ''}
+    </table>
+    ${sh.nomineeName ? `<div style="font-size:9pt;margin-bottom:10px">Nominee: <strong>${sh.nomineeName}</strong>${sh.nomineeRelation ? ' (' + sh.nomineeRelation + ')' : ''}</div>` : ''}
+    <div style="display:flex;gap:60px;margin:20px 0 10px">
+      <div style="flex:1"><div class="sig-line"></div><p style="font-size:9pt">Director / Authorised Signatory</p></div>
+      <div style="flex:1"><div class="sig-line"></div><p style="font-size:9pt">Director / Authorised Signatory</p></div>
+    </div>
+    <p style="font-size:8pt;font-style:italic"><strong>Note:</strong> No transfer of Shares comprised in the Certificate can be registered unless accompanied by this Certificate.</p>
+  </div></div></div>
+  <script>window.onload=function(){window.print();}</script>
+  </body></html>`;
+  const w = window.open('','_blank','width=900,height=700');
+  if (!w) { alert('Pop-up blocked! Please allow pop-ups.'); return; }
+  w.document.write(html); w.document.close();
+}
+
+/* ── Print: All Shareholders list ─────────────────────── */
+function printAllShareholders(shareholders: (ShareholderRow & { personName?: string })[], company: Company, totalShares: number) {
+  const rows = shareholders.map((sh, i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td class="bold">${sh.personName || '—'}</td>
+      <td style="font-family:monospace">${sh.din || sh.panNo || '—'}</td>
+      <td>${sh.folioNumber || '—'}</td>
+      <td>${sh.certificateNumber || '—'}</td>
+      <td class="right bold">${sh.numberOfShares ? sh.numberOfShares.toLocaleString('en-IN') : '—'}</td>
+      <td>${sh.holdingPercent || '0'}%</td>
+      <td style="font-family:monospace">${sh.distinctiveFrom && sh.distinctiveTo ? sh.distinctiveFrom+' – '+sh.distinctiveTo : '—'}</td>
+      <td>${sh.dateOfAcquisition || '—'}</td>
+      <td>${sh.mobile || '—'}</td>
+      <td>${sh.email || '—'}</td>
+      <td>${sh.nomineeName ? sh.nomineeName + (sh.nomineeRelation ? ' ('+sh.nomineeRelation+')' : '') : '—'}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Shareholders Register</title>
+  <style>
+    @page{size:A4 landscape;margin:10mm}
+    body{font-family:Arial,sans-serif;font-size:8pt;color:#000}
+    h1{font-size:13pt;text-align:center;margin-bottom:2px}
+    h2{font-size:9pt;text-align:center;color:#555;margin-bottom:8px}
+    p.meta{font-size:8pt;text-align:center;margin-bottom:10px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#1e3a8a;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}
+    td{border:1px solid #ccc;padding:4px;vertical-align:top}
+    tr:nth-child(even) td{background:#f8f9ff}
+    .right{text-align:right}
+    .bold{font-weight:bold}
+    .total-row td{background:#dbeafe;font-weight:bold;border-top:2px solid #1e3a8a}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  </style></head><body>
+  <h1>${company.companyName}</h1>
+  <h2>CIN: ${company.cin || '—'} | Reg. Office: ${company.regAddress || '—'}</h2>
+  <p class="meta">Register of Members — Total Issued Share Capital: <strong>${totalShares.toLocaleString('en-IN')} Shares</strong> | Printed: ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</p>
+  <table>
+    <thead><tr>
+      <th>#</th><th>Name</th><th>DIN/PAN</th><th>Folio No.</th><th>Cert No.</th>
+      <th>Shares</th><th>Holding%</th><th>Distinctive Nos.</th><th>Date</th>
+      <th>Mobile</th><th>Email</th><th>Nominee</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr class="total-row"><td colspan="5" class="right">TOTAL:</td><td>${totalShares.toLocaleString('en-IN')}</td><td>100%</td><td colspan="5"></td></tr></tfoot>
+  </table>
+  <script>window.onload=function(){window.print();}</script>
+  </body></html>`;
+  const w = window.open('','_blank','width=1200,height=700');
+  if (!w) { alert('Pop-up blocked!'); return; }
+  w.document.write(html); w.document.close();
+}
+
+/* ── Print: All Directors list ────────────────────────── */
+function printAllDirectors(directors: PersonKYC[], company: Company) {
+  const rows = directors.map((d, i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td class="bold">${d.name}</td>
+      <td style="font-family:monospace">${d.din || '—'}</td>
+      <td>${d.designation || '—'}</td>
+      <td>${d.directorCategory || d.category || '—'}</td>
+      <td>${d.dateOfJoining || d.appointedAt || '—'}</td>
+      <td style="font-family:monospace">${d.panNo || '—'}</td>
+      <td style="font-family:monospace">${d.aadhaarNo || '—'}</td>
+      <td>${d.mobile || '—'}</td>
+      <td>${d.email || '—'}</td>
+      <td style="font-size:7pt">${d.presentAddress || d.permanentAddress || '—'}</td>
+      <td>${d.isActive === false ? 'Ceased' : 'Active'}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Directors Register</title>
+  <style>
+    @page{size:A4 landscape;margin:10mm}
+    body{font-family:Arial,sans-serif;font-size:8pt;color:#000}
+    h1{font-size:13pt;text-align:center;margin-bottom:2px}
+    h2{font-size:9pt;text-align:center;color:#555;margin-bottom:8px}
+    p.meta{font-size:8pt;text-align:center;margin-bottom:10px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#1e3a8a;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}
+    td{border:1px solid #ccc;padding:4px;vertical-align:top}
+    tr:nth-child(even) td{background:#f0f4ff}
+    .bold{font-weight:bold}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  </style></head><body>
+  <h1>${company.companyName}</h1>
+  <h2>CIN: ${company.cin || '—'} | Reg. Office: ${company.regAddress || '—'}</h2>
+  <p class="meta">Register of Directors — Printed: ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</p>
+  <table>
+    <thead><tr>
+      <th>#</th><th>Name</th><th>DIN</th><th>Designation</th><th>Category</th>
+      <th>Date of Joining</th><th>PAN</th><th>Aadhaar</th><th>Mobile</th><th>Email</th><th>Address</th><th>Status</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <script>window.onload=function(){window.print();}</script>
+  </body></html>`;
+  const w = window.open('','_blank','width=1200,height=700');
+  if (!w) { alert('Pop-up blocked!'); return; }
+  w.document.write(html); w.document.close();
+}
+
+/* ── Shareholder View Modal ───────────────────────────── */
+function ShareholderViewModal({
+  sh, company, onClose, onPrint,
+}: { sh: ShareholderRow & { personName?: string }; company: Company; onClose: () => void; onPrint: () => void }) {
+  const row = (label: string, val?: string | number | null, mono = false) =>
+    val != null && val !== '' ? (
+      <div key={label} className="flex gap-3 py-1.5 border-b border-slate-50">
+        <span className="text-xs text-slate-400 w-36 shrink-0 pt-0.5">{label}</span>
+        <span className={`text-xs font-semibold text-slate-800 ${mono ? 'font-mono' : ''}`}>{String(val)}</span>
+      </div>
+    ) : null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4 py-8 overflow-y-auto"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="px-6 py-4 flex items-center justify-between rounded-t-2xl"
+          style={{background:'linear-gradient(135deg,#0f172a,#1e40af)'}}>
+          <div>
+            <h3 className="font-bold text-white text-sm">{sh.personName || '—'}</h3>
+            <p className="text-xs text-white/60 mt-0.5">Shareholder Details</p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">×</button>
+        </div>
+        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Certificate data */}
+          <div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📜 Share Certificate</p>
+            <div className="bg-blue-50 rounded-xl px-4 py-3 space-y-1">
+              {row('Folio Number', sh.folioNumber)}
+              {row('Certificate No.', sh.certificateNumber)}
+              {row('Share Type', sh.shareType)}
+              {row('Number of Shares', sh.numberOfShares ? sh.numberOfShares.toLocaleString('en-IN') : null)}
+              {row('Distinctive Nos.', sh.distinctiveFrom && sh.distinctiveTo ? `${sh.distinctiveFrom} – ${sh.distinctiveTo}` : null, true)}
+              {row('Date of Acquisition', sh.dateOfAcquisition)}
+              {row('Holding %', sh.holdingPercent ? sh.holdingPercent + '%' : null)}
+            </div>
+          </div>
+          {/* Personal KYC */}
+          <div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">👤 Personal Details</p>
+            <div className="space-y-0">
+              {row('DIN', sh.din, true)}
+              {row('PAN', sh.panNo, true)}
+              {row('Aadhaar', sh.aadhaarNo, true)}
+              {row('Mobile', sh.mobile)}
+              {row('Email', sh.email)}
+            </div>
+          </div>
+          {/* Nominee */}
+          {(sh.nomineeName || sh.nomineeRelation) && (
+            <div>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">🔒 Nominee</p>
+              <div className="space-y-0">
+                {row('Nominee Name', sh.nomineeName)}
+                {row('Relation', sh.nomineeRelation)}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="px-5 pb-5 flex gap-3">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+            Close
+          </button>
+          <button onClick={onPrint}
+            className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
+            style={{background:'linear-gradient(135deg,#d97706,#b45309)'}}>
+            🖨️ Print Certificate
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Director View Modal ──────────────────────────────── */
+function DirectorViewModal({
+  person, onClose,
+}: { person: PersonKYC; onClose: () => void }) {
+  const row = (label: string, val?: string | boolean | null, mono = false) =>
+    val != null && val !== '' && val !== false ? (
+      <div key={label} className="flex gap-3 py-1.5 border-b border-slate-50">
+        <span className="text-xs text-slate-400 w-36 shrink-0 pt-0.5">{label}</span>
+        <span className={`text-xs font-semibold text-slate-800 ${mono ? 'font-mono' : ''}`}>{String(val)}</span>
+      </div>
+    ) : null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4 py-8 overflow-y-auto"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="px-6 py-4 flex items-center justify-between rounded-t-2xl"
+          style={{background:'linear-gradient(135deg,#0f172a,#1e40af)'}}>
+          <div>
+            <h3 className="font-bold text-white text-sm">{person.name}</h3>
+            <p className="text-xs text-white/60 mt-0.5">{person.designation || 'Director'} · {person.isActive === false ? 'Ceased' : 'Active'}</p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">×</button>
+        </div>
+        <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+          <div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">🏢 Company Role</p>
+            <div className="bg-blue-50 rounded-xl px-4 py-3 space-y-0">
+              {row('DIN', person.din, true)}
+              {row('Designation', person.designation)}
+              {row('Category', person.directorCategory || person.category)}
+              {row('Date of Joining', person.dateOfJoining || person.appointedAt)}
+              {row('KYC Status', person.panNo && person.mobile ? '✅ Complete' : '⚠️ Pending')}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">👤 Personal Details</p>
+            <div className="space-y-0">
+              {row('Father Name', person.fatherName)}
+              {row('Date of Birth', person.dateOfBirth)}
+              {row('Nationality', person.nationality)}
+              {row('Occupation', person.occupation)}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📞 Contact</p>
+            <div className="space-y-0">
+              {row('Mobile', person.mobile)}
+              {row('Email', person.email)}
+              {row('Present Address', person.presentAddress)}
+              {row('Permanent Address', person.permanentAddress)}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">🪪 Identity</p>
+            <div className="space-y-0">
+              {row('PAN', person.panNo, true)}
+              {row('Aadhaar', person.aadhaarNo, true)}
+            </div>
+          </div>
+          {(person.bankName || person.accountNo) && (
+            <div>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">🏦 Bank</p>
+              <div className="space-y-0">
+                {row('Bank Name', person.bankName)}
+                {row('Account No.', person.accountNo, true)}
+                {row('IFSC', person.ifscCode, true)}
+              </div>
+            </div>
+          )}
+          {(person.nomineeName) && (
+            <div>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">🔒 Nominee</p>
+              <div className="space-y-0">
+                {row('Nominee Name', person.nomineeName)}
+                {row('Relation', person.nomineeRelation)}
+                {row('Address', person.nomineeAddress)}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="px-5 pb-5">
+          <button onClick={onClose}
+            className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Directors Tab ───────────────────────────────────── */
-function DirectorsTab({ companyId }: { companyId: string }) {
+function DirectorsTab({ companyId, company }: { companyId: string; company: Company }) {
   const [persons, setPersons] = useState<PersonKYC[]>([]);
   const [loading, setLoading] = useState(true);
   const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
+  const [viewPerson, setViewPerson] = useState<PersonKYC | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
-  const [creatingKyc, setCreatingKyc] = useState<string | null>(null); // _directorId being created
+  const [creatingKyc, setCreatingKyc] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -545,15 +889,23 @@ function DirectorsTab({ companyId }: { companyId: string }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h2 className="font-bold text-slate-800">Directors & KYC</h2>
           <p className="text-xs text-slate-400 mt-0.5">From MCA Excel upload · Edit to add KYC details</p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
-          + Add Director
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          {persons.length > 0 && (
+            <button onClick={() => printAllDirectors(persons, company)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 flex items-center gap-1">
+              🖨️ Print All Directors
+            </button>
+          )}
+          <button onClick={() => setShowAdd(true)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
+            + Add Director
+          </button>
+        </div>
       </div>
 
       {persons.length === 0 ? (
@@ -601,9 +953,13 @@ function DirectorsTab({ companyId }: { companyId: string }) {
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
+                  <button onClick={() => setViewPerson(p)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
+                    👁️ View
+                  </button>
                   <button onClick={() => handleEditKyc(p)} disabled={isCreating}
                     className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 disabled:opacity-60">
-                    {isCreating ? '⏳ Creating...' : '✏️ Edit KYC'}
+                    {isCreating ? '⏳...' : '✏️ Edit KYC'}
                   </button>
                   <button
                     onClick={() => handleSync(p)}
@@ -613,7 +969,7 @@ function DirectorsTab({ companyId }: { companyId: string }) {
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
                     }`}>
-                    {syncing === p.id ? '...' : p.isShareholder ? '🔗 Also Shareholder' : '🔄 Mark as Shareholder'}
+                    {syncing === p.id ? '...' : p.isShareholder ? '🔗 Shareholder' : '🔄 Add as SH'}
                   </button>
                   {p.id && (
                     <button onClick={() => handleDelete(p)}
@@ -629,6 +985,7 @@ function DirectorsTab({ companyId }: { companyId: string }) {
       )}
 
       {editPerson && <KYCModal person={editPerson} onClose={() => setEditPerson(null)} onSaved={load} />}
+      {viewPerson && <DirectorViewModal person={viewPerson} onClose={() => setViewPerson(null)} />}
       {showAdd && <AddPersonModal companyId={companyId} mode="director" onClose={() => setShowAdd(false)} onSaved={load} />}
     </div>
   );
@@ -649,13 +1006,14 @@ interface ShareholderRow extends ShareholderRecord {
   userId?: string;
 }
 
-function ShareholdersTab({ companyId }: { companyId: string }) {
+function ShareholdersTab({ companyId, company }: { companyId: string; company: Company }) {
   const [shareholders, setShareholders] = useState<ShareholderRow[]>([]);
   const [totalShares, setTotalShares] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
+  const [viewSh, setViewSh] = useState<ShareholderRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -694,17 +1052,25 @@ function ShareholdersTab({ companyId }: { companyId: string }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h2 className="font-bold text-slate-800">Shareholders</h2>
           {totalShares > 0 && (
             <p className="text-xs text-slate-400 mt-0.5">Total issued: {totalShares.toLocaleString('en-IN')} shares</p>
           )}
         </div>
-        <button onClick={() => setShowAdd(true)}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">
-          + Add Shareholder
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          {shareholders.length > 0 && (
+            <button onClick={() => printAllShareholders(shareholders, company, totalShares)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 flex items-center gap-1">
+              🖨️ Print All
+            </button>
+          )}
+          <button onClick={() => setShowAdd(true)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">
+            + Add Shareholder
+          </button>
+        </div>
       </div>
 
       {shareholders.length === 0 ? (
@@ -743,6 +1109,14 @@ function ShareholdersTab({ companyId }: { companyId: string }) {
                 <div className="text-xs text-slate-400 mb-2">Acquired: {sh.dateOfAcquisition}</div>
               )}
               <div className="flex flex-wrap gap-2 mt-3">
+                <button onClick={() => setViewSh(sh)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
+                  👁️ View
+                </button>
+                <button onClick={() => printShareCertificate(sh, company)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">
+                  🖨️ Certificate
+                </button>
                 <button onClick={() => openKYC(sh)}
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100">
                   ✏️ Edit KYC
@@ -755,7 +1129,7 @@ function ShareholdersTab({ companyId }: { companyId: string }) {
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
                   }`}>
-                  {syncing === sh.personId ? '...' : sh.isDirector ? '🔗 Also Director' : '🔄 Add as Director'}
+                  {syncing === sh.personId ? '...' : sh.isDirector ? '🔗 Dir.' : '🔄 Add as Dir.'}
                 </button>
                 <button onClick={() => handleDelete(sh.id)}
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 ml-auto">
@@ -769,6 +1143,14 @@ function ShareholdersTab({ companyId }: { companyId: string }) {
 
       {editPerson && <KYCModal person={editPerson} onClose={() => setEditPerson(null)} onSaved={load} />}
       {showAdd && <AddPersonModal companyId={companyId} mode="shareholder" onClose={() => setShowAdd(false)} onSaved={load} />}
+      {viewSh && (
+        <ShareholderViewModal
+          sh={viewSh}
+          company={company}
+          onClose={() => setViewSh(null)}
+          onPrint={() => { printShareCertificate(viewSh, company); setViewSh(null); }}
+        />
+      )}
     </div>
   );
 }
@@ -1173,11 +1555,11 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
         )}
 
         {activeTab === 'directors' && (
-          <DirectorsTab companyId={companyId} />
+          <DirectorsTab companyId={companyId} company={company!} />
         )}
 
         {activeTab === 'shareholders' && (
-          <ShareholdersTab companyId={companyId} />
+          <ShareholdersTab companyId={companyId} company={company!} />
         )}
 
         {activeTab === 'analysis' && (

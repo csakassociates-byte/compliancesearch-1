@@ -1740,10 +1740,22 @@ export default function ShareCertificatePage() {
                 )}
               </button>
             ) : (
-              <button onClick={() => setPreview(true)} disabled={!canNext()}
+              <button
+                onClick={async () => {
+                  // Save to DB before showing preview
+                  if (session?.user && f.companyId) {
+                    setSaving(true);
+                    await saveShareholdersToDb(f.companyId);
+                    setSaving(false);
+                  }
+                  setPreview(true);
+                }}
+                disabled={!canNext() || saving}
                 className="flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: "linear-gradient(135deg,#16a34a,#15803d)" }}>
-                📜 Generate Certificates →
+                {saving ? (
+                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Saving...</>
+                ) : '📜 Generate Certificates →'}
               </button>
             )}
           </div>
