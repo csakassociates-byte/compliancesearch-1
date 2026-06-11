@@ -4,12 +4,13 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
-  // Only admin can use this bulk upsert endpoint
+  // Require login — any authenticated user can upsert their own companies
   const session = await getServerSession(authOptions);
   const user = session?.user as { id?: string; email?: string } | undefined;
-  if (!user?.email || user.email !== "admin@compliancesearch.in") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = user.id;
 
   try {
     const body = await req.json();
@@ -26,11 +27,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "cin and companyName are required" }, { status: 400 });
     }
 
-    // ── Upsert company profile ──────────────────────────────────
+    // ── Upsert CompanyProfile by CIN ──────────────────────────────
+    // If CIN already exists (MCA data or another user), update & claim ownership
     const company = await prisma.companyProfile.upsert({
       where: { cin },
       update: {
         companyName,
+        uploadedBy:          userId,           // claim / update ownership
         regAddress:          regAddress          || undefined,
         entityType:          entityType          || undefined,
         email:               email               || undefined,
@@ -55,6 +58,7 @@ export async function POST(req: NextRequest) {
       },
       create: {
         cin, companyName,
+        uploadedBy:          userId,
         regAddress:          regAddress          || null,
         entityType:          entityType          || null,
         email:               email               || null,
@@ -78,13 +82,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // ── Smart Director sync ─────────────────────────────────────
+    // ── Smart Director Sync ───────────────────────────────────────
+    // Key: (companyId + DIN) — same DIN can exist in multiple companies (normal)
+    // Dedup rule: within THIS company, same DIN = same person → update, not duplicate
     if (Array.isArray(directors)) {
-      // Fetch existing active directors from DB
       const existing = await prisma.companyDirector.findMany({
         where: { companyId: company.id },
       });
 
+      // Map by DIN (preferred) or normalized name
       const incomingMap = new Map<string, typeof directors[0]>();
       for (const d of directors) {
         const key = (d.din || "").trim() || d.name.trim().toUpperCase();
@@ -102,34 +108,31 @@ export async function POST(req: NextRequest) {
         if (!incomingMap.has(key) && dbDir.isActive) {
           await prisma.companyDirector.update({
             where: { id: dbDir.id },
-            data: {
-              isActive:  false,
-              ceasedAt:  new Date().toISOString().split("T")[0],
-              updatedAt: new Date(),
-            },
+            data: { isActive: false, ceasedAt: new Date().toISOString().split("T")[0], updatedAt: new Date() },
           });
         }
       }
 
-      // Directors in new upload but NOT in DB → create; in both → update
+      // Directors in upload → create or update
       for (const [key, inc] of incomingMap) {
         const dbDir = existingMap.get(key);
         if (dbDir) {
-          // Update: re-activate if was inactive, update designation
+          // Update existing — re-activate if was ceased
           await prisma.companyDirector.update({
             where: { id: dbDir.id },
             data: {
-              name:        inc.name || dbDir.name,
+              name:        inc.name        || dbDir.name,
               designation: inc.designation || dbDir.designation,
               category:    inc.category    || dbDir.category,
               appointedAt: inc.appointedAt || dbDir.appointedAt,
+              din:         inc.din         || dbDir.din,
               isActive:    true,
               ceasedAt:    null,
               updatedAt:   new Date(),
             },
           });
         } else {
-          // New director
+          // New director for this company (may have same DIN in other companies — that's OK)
           await prisma.companyDirector.create({
             data: {
               companyId:   company.id,
@@ -138,19 +141,19 @@ export async function POST(req: NextRequest) {
               designation: inc.designation || null,
               category:    inc.category    || null,
               appointedAt: inc.appointedAt || null,
-              isActive:    true,
+              isActive:    inc.isActive    ?? true,
             },
           });
         }
       }
     }
 
-    // ── Charges: upsert by (companyId + chargeId) or (companyId + holderName) ──
+    // ── Charge Sync ───────────────────────────────────────────────
+    // Dedup by (companyId + chargeId) if chargeId exists, else (companyId + holderName)
     if (Array.isArray(charges)) {
       for (const ch of charges) {
         if (!ch.holderName) continue;
 
-        // Find existing charge — prefer chargeId match, fallback to holderName
         const existing = await prisma.companyCharge.findFirst({
           where: {
             companyId: company.id,
@@ -161,7 +164,6 @@ export async function POST(req: NextRequest) {
         });
 
         if (existing) {
-          // Update only — no duplicate
           await prisma.companyCharge.update({
             where: { id: existing.id },
             data: {
@@ -190,7 +192,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Return updated company with directors
+    // ── Also sync to csi_companies (user's client list + document linking) ──
+    const existingClient = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM csi_companies WHERE "userId" = $1 AND (
+         LOWER("companyName") = LOWER($2) OR (cin IS NOT NULL AND cin = $3)
+       ) LIMIT 1`,
+      userId, companyName, cin
+    );
+    if (existingClient.length) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE csi_companies SET
+          cin = COALESCE($3, cin),
+          "entityType" = COALESCE($4, "entityType"),
+          "regAddress" = COALESCE($5, "regAddress"),
+          "incorporationDate" = COALESCE($6, "incorporationDate"),
+          "updatedAt" = NOW()
+         WHERE id = $1 AND "userId" = $2`,
+        existingClient[0].id, userId,
+        cin || null, entityType || null, regAddress || null, incorporationDate || null
+      );
+    } else {
+      const { default: crypto } = await import("crypto");
+      const csiId = crypto.randomUUID();
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO csi_companies (id, "userId", "companyName", cin, "entityType", "regAddress", "incorporationDate", "updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+        csiId, userId, companyName, cin || null, entityType || null, regAddress || null, incorporationDate || null
+      );
+    }
+
     const result = await prisma.companyProfile.findUnique({
       where: { id: company.id },
       include: {

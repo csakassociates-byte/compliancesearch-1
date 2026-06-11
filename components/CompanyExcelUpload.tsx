@@ -63,18 +63,42 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
         sessionStorage.setItem("csi_temp_company", JSON.stringify(data));
       }
 
-      // If logged in → save to DB
+      // If logged in → save FULL data (directors + charges) to CompanyProfile
       if (session?.user) {
         try {
-          await fetch("/api/companies/save-from-excel", {
+          if (!data.cin || !data.companyName) throw new Error("CIN/name missing");
+          await fetch("/api/companies/upsert", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              companyName: data.companyName || "Unknown Company",
-              cin: data.cin || null,
-              entityType: data.entityType || null,
-              regAddress: data.regAddress || null,
-              incorporationDate: data.incorporationDate || null,
+              cin:              data.cin,
+              companyName:      data.companyName,
+              entityType:       data.entityType       || null,
+              regAddress:       data.regAddress       || null,
+              incorporationDate:data.incorporationDate|| null,
+              paidUpCapital:    data.paidUpCapital    || null,
+              authorisedCapital:data.authorisedCapital|| null,
+              registrationNumber:data.registrationNumber||null,
+              email:            data.email            || null,
+              rocName:          data.rocName          || null,
+              status:           data.status           || null,
+              isListed:         data.isListed         ?? false,
+              directors: (data.directors || []).map(d => ({
+                din:         d.din         || null,
+                name:        d.name,
+                designation: d.designation || null,
+                category:    d.category   || null,
+                appointedAt: d.appointedAt || null,
+                isActive:    d.isActive   ?? true,
+              })),
+              charges: (data.charges || []).map(ch => ({
+                chargeId:       ch.chargeId       || null,
+                holderName:     ch.holderName,
+                dateOfCreation: ch.dateOfCreation || null,
+                amount:         ch.amount         || null,
+                address:        ch.address        || null,
+                isSatisfied:    ch.isSatisfied    ?? false,
+              })),
             }),
           });
           setSaveMsg("saved");
