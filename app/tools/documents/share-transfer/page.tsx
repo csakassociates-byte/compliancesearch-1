@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import CompanySearch from "@/components/CompanySearch";
+import CompanyExcelUpload from "@/components/CompanyExcelUpload";
 import type { CompanyData } from "@/lib/types/company";
 import {
   generateSH4HTML,
@@ -129,6 +130,22 @@ export default function ShareTransferPage() {
   const [step, setStep] = useState(1);
   const [f, setF] = useState<F>(DEFAULT);
   const [companyQuery, setCompanyQuery] = useState("");
+
+  /* ── Restore from sessionStorage on mount (guest users) ── */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = sessionStorage.getItem("csi_temp_company");
+    if (saved) {
+      try {
+        const data: CompanyData = JSON.parse(saved);
+        if (data.companyName) {
+          applyCompanyData(data);
+          setCompanyQuery(data.companyName);
+        }
+      } catch { /* ignore */ }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [savedShareholders, setSavedShareholders] = useState<SavedShareholder[]>([]);
   const [loadingSh, setLoadingSh] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -159,25 +176,51 @@ export default function ShareTransferPage() {
     setLoadingSh(false);
   }, [isLoggedIn]);
 
-  /* Apply company data from search */
-  function applyCompany(c: CompanyData) {
+  /* Extract city from address */
+  function extractCity(addr: string): string {
+    if (!addr) return "";
+    const parts = addr.split(",").map(s => s.trim()).filter(Boolean);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      if (/^\d{6}$/.test(p) || /^india$/i.test(p) || /^\d/.test(p)) continue;
+      return p;
+    }
+    return parts[0] || "";
+  }
+
+  /* Apply company data from Excel upload OR search */
+  async function applyCompanyData(c: CompanyData) {
+    // Auto-fill signers from active directors (top 2)
+    const activeDirs = (c.directors || []).filter(d => d.isActive !== false);
+    const autoSigners: TransferSigner[] = activeDirs
+      .filter(d => d.name)
+      .slice(0, 2)
+      .map(d => ({ name: d.name, designation: d.designation || "Director", din: d.din || "" }));
+    while (autoSigners.length < 2) autoSigners.push({ name: "", designation: "Director", din: "" });
+
     upd({
       companyName: c.companyName || "",
-      cin: c.cin || "",
-      regAddress: c.regAddress || "",
-      companyId: "",
+      cin:         c.cin         || "",
+      regAddress:  c.regAddress  || "",
+      companyId:   "",
+      issuePlace:  extractCity(c.regAddress || ""),
+      signers:     autoSigners,
     });
-    // If logged in, find the companyId from our DB
-    if (isLoggedIn) {
-      fetch(`/api/clients/find?name=${encodeURIComponent(c.companyName || "")}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(d => {
-          if (d?.id) {
-            upd({ companyId: d.id });
-            loadShareholders(d.id);
-          }
-        });
+
+    // Find companyId in our DB (logged-in users)
+    if (isLoggedIn && c.companyName) {
+      const r = await fetch(`/api/clients/find?name=${encodeURIComponent(c.companyName)}`);
+      const d = r.ok ? await r.json() : null;
+      if (d?.id) {
+        upd({ companyId: d.id });
+        loadShareholders(d.id);
+      }
     }
+  }
+
+  /* Thin wrapper for CompanySearch onSelect (same signature) */
+  function applyCompany(c: CompanyData) {
+    void applyCompanyData(c);
   }
 
   /* Apply transferor from saved shareholder */
@@ -395,7 +438,21 @@ export default function ShareTransferPage() {
           {/* ════ STEP 1: Company ════ */}
           {step === 1 && (
             <div>
-              <SHead n={1} title="Company Details" sub="Search the company for which shares are being transferred" />
+              <SHead n={1} title="Company Details" sub="Search or upload Excel to auto-fill company details" />
+
+              {/* ── Excel Upload (fastest way) ── */}
+              <CompanyExcelUpload
+                onFill={data => { applyCompany(data); setCompanyQuery(data.companyName || ""); }}
+                accent="blue"
+                note="Upload MCA Master Data Sheet — company, directors & signatories auto-fill ho jayenge"
+              />
+
+              {/* ── OR label ── */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-1 border-t border-slate-200" />
+                <span className="text-xs text-slate-400 font-semibold uppercase tracking-wide">or search</span>
+                <div className="flex-1 border-t border-slate-200" />
+              </div>
 
               {/* Company Search */}
               <div className="mb-5">
@@ -410,50 +467,61 @@ export default function ShareTransferPage() {
                 />
               </div>
 
+              {/* Filled company preview */}
               {f.companyName && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-5">
-                  <div className="font-bold text-emerald-800 text-sm">{f.companyName}</div>
-                  {f.cin && <div className="text-xs text-emerald-600 mt-1">CIN: {f.cin}</div>}
-                  {f.regAddress && <div className="text-xs text-slate-500 mt-1">{f.regAddress}</div>}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-emerald-800 text-sm">{f.companyName}</div>
+                      {f.cin && <div className="text-xs text-emerald-600 mt-0.5">CIN: {f.cin}</div>}
+                      {f.regAddress && <div className="text-xs text-slate-500 mt-0.5">{f.regAddress}</div>}
+                    </div>
+                    <button onClick={() => { upd({ companyName:"", cin:"", regAddress:"", companyId:"" }); setCompanyQuery(""); setSavedShareholders([]); }}
+                      className="text-slate-400 hover:text-red-500 text-lg leading-none shrink-0">✕</button>
+                  </div>
                   {isLoggedIn && f.companyId && (
-                    <div className="text-xs text-emerald-500 mt-1">✅ Found in your records</div>
+                    <div className="text-xs text-emerald-600 font-semibold mt-2 flex items-center gap-1">
+                      ✅ Found in your records — shareholders loading...
+                    </div>
                   )}
                   {isLoggedIn && !f.companyId && (
-                    <div className="text-xs text-amber-500 mt-1">⚠️ Not in your client list — transfer will not be saved to DB</div>
+                    <div className="text-xs text-amber-600 mt-2">
+                      ⚠️ Not in your client list — transfer will not be saved to DB
+                    </div>
                   )}
                 </div>
               )}
 
               {/* Manual fallback */}
-              {!f.companyName && (
-                <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
-                  <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide">Or enter manually</p>
+              <div className={`space-y-4 transition-all ${f.companyName ? "border-t border-slate-100 pt-4 mt-2" : ""}`}>
+                {f.companyName && (
+                  <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide">Edit / correct details</p>
+                )}
+                <div>
+                  <Lbl c={f.companyName ? "Company Name" : "Company Name *"} />
+                  <input className={INP} value={f.companyName}
+                    onChange={e => upd({ companyName: e.target.value })} placeholder="Full legal name" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Lbl c="Company Name *" />
-                    <input className={INP} value={f.companyName}
-                      onChange={e => upd({ companyName: e.target.value })} placeholder="Full legal name" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Lbl c="CIN" />
-                      <input className={INP} value={f.cin}
-                        onChange={e => upd({ cin: e.target.value.toUpperCase() })} placeholder="U12345XX2020PTC..." />
-                    </div>
-                    <div>
-                      <Lbl c="Share Class" />
-                      <select className={SEL} value={f.shareType} onChange={e => upd({ shareType: e.target.value })}>
-                        <option>Equity</option>
-                        <option>Preference</option>
-                      </select>
-                    </div>
+                    <Lbl c="CIN" />
+                    <input className={INP} value={f.cin}
+                      onChange={e => upd({ cin: e.target.value.toUpperCase() })} placeholder="U12345XX2020PTC..." />
                   </div>
                   <div>
-                    <Lbl c="Registered Address" />
-                    <textarea className={INP} rows={2} value={f.regAddress}
-                      onChange={e => upd({ regAddress: e.target.value })} placeholder="Registered office address" />
+                    <Lbl c="Share Class" />
+                    <select className={SEL} value={f.shareType} onChange={e => upd({ shareType: e.target.value })}>
+                      <option>Equity</option>
+                      <option>Preference</option>
+                    </select>
                   </div>
                 </div>
-              )}
+                <div>
+                  <Lbl c="Registered Address" />
+                  <textarea className={INP} rows={2} value={f.regAddress}
+                    onChange={e => upd({ regAddress: e.target.value })} placeholder="Registered office address" />
+                </div>
+              </div>
             </div>
           )}
 
