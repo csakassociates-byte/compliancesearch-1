@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { PersonKYC, ShareholderRecord } from "@/lib/types/person";
 
 interface Company {
   id: string; companyName: string; cin: string | null;
@@ -218,6 +219,487 @@ function EditDocModal({
   );
 }
 
+/* ── KYC Edit Modal ───────────────────────────────────── */
+function KYCModal({
+  person,
+  onClose,
+  onSaved,
+}: { person: PersonKYC; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState<Partial<PersonKYC>>({ ...person });
+  const [saving, setSaving] = useState(false);
+
+  const set = (k: keyof PersonKYC, v: string | boolean) =>
+    setForm(p => ({ ...p, [k]: v }));
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await fetch(`/api/persons/${person.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  const inp = "w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white";
+  const lbl = "block text-xs font-bold text-slate-500 mb-1";
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4 py-6 overflow-y-auto"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl"
+        onClick={e => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10"
+          style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
+          <h3 className="font-bold text-white">✏️ KYC — {person.name}</h3>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSave} className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
+
+          {/* Section 1: Personal */}
+          <div>
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Personal Details</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Name *</label>
+                <input className={inp} value={form.name||''} onChange={e=>set('name',e.target.value)} required /></div>
+              <div><label className={lbl}>Father Name</label>
+                <input className={inp} value={form.fatherName||''} onChange={e=>set('fatherName',e.target.value)} /></div>
+              <div><label className={lbl}>Date of Birth</label>
+                <input type="date" className={inp} value={form.dateOfBirth||''} onChange={e=>set('dateOfBirth',e.target.value)} /></div>
+              <div><label className={lbl}>Nationality</label>
+                <input className={inp} value={form.nationality||'Indian'} onChange={e=>set('nationality',e.target.value)} /></div>
+              <div><label className={lbl}>Occupation</label>
+                <input className={inp} value={form.occupation||''} onChange={e=>set('occupation',e.target.value)} /></div>
+              <div><label className={lbl}>Occupation Category</label>
+                <select className={inp} value={form.occupationCategory||''} onChange={e=>set('occupationCategory',e.target.value)}>
+                  <option value="">Select</option>
+                  <option>Business</option><option>Service</option><option>Professional</option><option>Retired</option><option>Student</option>
+                </select></div>
+            </div>
+          </div>
+
+          {/* Section 2: Contact */}
+          <div>
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Contact Details</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Mobile</label>
+                <input className={inp} value={form.mobile||''} onChange={e=>set('mobile',e.target.value)} /></div>
+              <div><label className={lbl}>Email</label>
+                <input type="email" className={inp} value={form.email||''} onChange={e=>set('email',e.target.value)} /></div>
+              <div className="col-span-2"><label className={lbl}>Present Address</label>
+                <textarea className={inp} rows={2} value={form.presentAddress||''} onChange={e=>set('presentAddress',e.target.value)} /></div>
+              <div className="col-span-2"><label className={lbl}>Permanent Address</label>
+                <textarea className={inp} rows={2} value={form.permanentAddress||''} onChange={e=>set('permanentAddress',e.target.value)} /></div>
+            </div>
+          </div>
+
+          {/* Section 3: Identity */}
+          <div>
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Identity Documents</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>PAN Number</label>
+                <input className={`${inp} font-mono uppercase`} value={form.panNo||''} onChange={e=>set('panNo',e.target.value)} /></div>
+              <div><label className={lbl}>Aadhaar Number</label>
+                <input className={`${inp} font-mono`} value={form.aadhaarNo||''} onChange={e=>set('aadhaarNo',e.target.value)} /></div>
+            </div>
+          </div>
+
+          {/* Section 4: Bank */}
+          <div>
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Bank Details</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Bank Name</label>
+                <input className={inp} value={form.bankName||''} onChange={e=>set('bankName',e.target.value)} /></div>
+              <div><label className={lbl}>IFSC Code</label>
+                <input className={`${inp} font-mono uppercase`} value={form.ifscCode||''} onChange={e=>set('ifscCode',e.target.value)} /></div>
+              <div className="col-span-2"><label className={lbl}>Account Number</label>
+                <input className={`${inp} font-mono`} value={form.accountNo||''} onChange={e=>set('accountNo',e.target.value)} /></div>
+              <div><label className={lbl}>Demat DP ID</label>
+                <input className={`${inp} font-mono`} value={form.dematDpId||''} onChange={e=>set('dematDpId',e.target.value)} /></div>
+              <div><label className={lbl}>Demat Client ID</label>
+                <input className={`${inp} font-mono`} value={form.dematClientId||''} onChange={e=>set('dematClientId',e.target.value)} /></div>
+            </div>
+          </div>
+
+          {/* Section 5: Company (director fields) */}
+          {form.isDirector && (
+            <div>
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Company-Specific</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={lbl}>DIN</label>
+                  <input className={`${inp} font-mono`} value={form.din||''} onChange={e=>set('din',e.target.value)} /></div>
+                <div><label className={lbl}>Designation</label>
+                  <input className={inp} value={form.designation||''} onChange={e=>set('designation',e.target.value)} /></div>
+                <div><label className={lbl}>Date of Joining</label>
+                  <input type="date" className={inp} value={form.dateOfJoining||''} onChange={e=>set('dateOfJoining',e.target.value)} /></div>
+                <div><label className={lbl}>Director Category</label>
+                  <select className={inp} value={form.directorCategory||''} onChange={e=>set('directorCategory',e.target.value)}>
+                    <option value="">Select</option>
+                    <option>Independent Executive</option>
+                    <option>Independent Non-Executive</option>
+                    <option>Non-Independent Executive</option>
+                    <option>Non-Independent Non-Executive</option>
+                    <option>Whole-time Director</option>
+                    <option>Managing Director</option>
+                    <option>Nominee Director</option>
+                  </select></div>
+              </div>
+            </div>
+          )}
+
+          {/* Section 6: Nominee */}
+          <div>
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Nominee Details</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Nominee Name</label>
+                <input className={inp} value={form.nomineeName||''} onChange={e=>set('nomineeName',e.target.value)} /></div>
+              <div><label className={lbl}>Relation</label>
+                <input className={inp} value={form.nomineeRelation||''} onChange={e=>set('nomineeRelation',e.target.value)} /></div>
+              <div className="col-span-2"><label className={lbl}>Nominee Address</label>
+                <textarea className={inp} rows={2} value={form.nomineeAddress||''} onChange={e=>set('nomineeAddress',e.target.value)} /></div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2 sticky bottom-0 bg-white py-3">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-60"
+              style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
+              {saving ? 'Saving...' : 'Save KYC →'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Add Person Modal ─────────────────────────────────── */
+function AddPersonModal({
+  companyId,
+  mode,
+  onClose,
+  onSaved,
+}: { companyId: string; mode: 'director' | 'shareholder'; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState('');
+  const [din, setDin] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await fetch('/api/persons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyId,
+        name: name.trim(),
+        din: din.trim() || null,
+        isDirector: mode === 'director',
+        isShareholder: mode === 'shareholder',
+      }),
+    });
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e=>e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between"
+          style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
+          <h3 className="font-bold text-white text-sm">
+            {mode === 'director' ? '👥 Add Director' : '📜 Add Shareholder'}
+          </h3>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleAdd} className="p-5 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-1">Full Name *</label>
+            <input required className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Ramesh Kumar" />
+          </div>
+          {mode === 'director' && (
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">DIN (optional)</label>
+              <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+                value={din} onChange={e=>setDin(e.target.value)} placeholder="e.g. 01234567" />
+            </div>
+          )}
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-60"
+              style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
+              {saving ? 'Saving...' : 'Add →'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function kycComplete(p: PersonKYC): boolean {
+  return !!(p.panNo && p.aadhaarNo && p.mobile && p.dateOfBirth);
+}
+
+/* ── Directors Tab ───────────────────────────────────── */
+function DirectorsTab({ companyId }: { companyId: string }) {
+  const [persons, setPersons] = useState<PersonKYC[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [syncing, setSyncing] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await fetch(`/api/persons?companyId=${companyId}&type=director`);
+    const d = r.ok ? await r.json() : { persons: [] };
+    setPersons(d.persons || []);
+    setLoading(false);
+  }, [companyId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleSync(p: PersonKYC) {
+    setSyncing(p.id);
+    await fetch(`/api/persons/${p.id}/sync`, { method: 'POST' });
+    setSyncing(null);
+    load();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Remove this director?')) return;
+    await fetch(`/api/persons/${id}`, { method: 'DELETE' });
+    load();
+  }
+
+  if (loading) return <div className="text-sm text-slate-400 text-center py-12">Loading directors...</div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-bold text-slate-800">Directors & KYC</h2>
+        <button onClick={() => setShowAdd(true)}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
+          + Add Director
+        </button>
+      </div>
+
+      {persons.length === 0 ? (
+        <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
+          <div className="text-4xl mb-3">👥</div>
+          <p className="font-semibold text-slate-600">No directors recorded</p>
+          <p className="text-sm text-slate-400 mt-1 mb-4">Add directors to track their KYC status</p>
+          <button onClick={() => setShowAdd(true)}
+            className="inline-block px-5 py-2.5 rounded-xl font-bold text-white text-sm"
+            style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
+            + Add Director
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {persons.map(p => {
+            const complete = kycComplete(p);
+            return (
+              <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div>
+                    <div className="font-bold text-slate-800">{p.name}</div>
+                    {p.din && <div className="text-xs font-mono text-slate-400 mt-0.5">DIN: {p.din}</div>}
+                    {p.designation && <div className="text-xs text-slate-500 mt-0.5">{p.designation}</div>}
+                    {p.directorCategory && <div className="text-xs text-slate-400">{p.directorCategory}</div>}
+                  </div>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full flex-shrink-0 ${
+                    complete ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                             : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}>
+                    {complete ? '✅ KYC Complete' : '⚠️ KYC Pending'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button onClick={() => setEditPerson(p)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100">
+                    ✏️ Edit KYC
+                  </button>
+                  <button
+                    onClick={() => handleSync(p)}
+                    disabled={syncing === p.id}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+                      p.isShareholder
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
+                    }`}>
+                    {syncing === p.id ? '...' : p.isShareholder ? '🔗 Also Shareholder' : '🔄 Add as Shareholder'}
+                  </button>
+                  <button onClick={() => handleDelete(p.id)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 ml-auto">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {editPerson && <KYCModal person={editPerson} onClose={() => setEditPerson(null)} onSaved={load} />}
+      {showAdd && <AddPersonModal companyId={companyId} mode="director" onClose={() => setShowAdd(false)} onSaved={load} />}
+    </div>
+  );
+}
+
+/* ── Shareholders Tab ────────────────────────────────── */
+interface ShareholderRow extends ShareholderRecord {
+  personName?: string;
+  din?: string;
+  mobile?: string;
+  email?: string;
+  panNo?: string;
+  aadhaarNo?: string;
+  isDirector?: boolean;
+  designation?: string;
+  holdingPercent?: string;
+  companyId?: string;
+  userId?: string;
+}
+
+function ShareholdersTab({ companyId }: { companyId: string }) {
+  const [shareholders, setShareholders] = useState<ShareholderRow[]>([]);
+  const [totalShares, setTotalShares] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await fetch(`/api/shareholders?companyId=${companyId}`);
+    const d = r.ok ? await r.json() : { shareholders: [], totalShares: 0 };
+    setShareholders(d.shareholders || []);
+    setTotalShares(d.totalShares || 0);
+    setLoading(false);
+  }, [companyId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleSyncToDirector(sh: ShareholderRow) {
+    if (!sh.personId) return;
+    setSyncing(sh.personId);
+    await fetch(`/api/persons/${sh.personId}/sync`, { method: 'POST' });
+    setSyncing(null);
+    load();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Remove this shareholder record?')) return;
+    await fetch(`/api/shareholders/${id}`, { method: 'DELETE' });
+    load();
+  }
+
+  async function openKYC(sh: ShareholderRow) {
+    if (!sh.personId) return;
+    const r = await fetch(`/api/persons?companyId=${companyId}`);
+    const d = r.ok ? await r.json() : { persons: [] };
+    const person = (d.persons as PersonKYC[]).find(p => p.id === sh.personId);
+    if (person) setEditPerson(person);
+  }
+
+  if (loading) return <div className="text-sm text-slate-400 text-center py-12">Loading shareholders...</div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="font-bold text-slate-800">Shareholders</h2>
+          {totalShares > 0 && (
+            <p className="text-xs text-slate-400 mt-0.5">Total issued: {totalShares.toLocaleString('en-IN')} shares</p>
+          )}
+        </div>
+        <button onClick={() => setShowAdd(true)}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">
+          + Add Shareholder
+        </button>
+      </div>
+
+      {shareholders.length === 0 ? (
+        <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
+          <div className="text-4xl mb-3">📜</div>
+          <p className="font-semibold text-slate-600">No shareholders recorded</p>
+          <p className="text-sm text-slate-400 mt-1 mb-4">Generate a share certificate or add manually</p>
+          <button onClick={() => setShowAdd(true)}
+            className="inline-block px-5 py-2.5 rounded-xl font-bold text-white text-sm"
+            style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
+            + Add Shareholder
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {shareholders.map(sh => (
+            <div key={sh.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div>
+                  <div className="font-bold text-slate-800">{sh.personName || '—'}</div>
+                  {sh.folioNumber && <div className="text-xs text-slate-400">Folio: {sh.folioNumber}</div>}
+                  {sh.certificateNumber && <div className="text-xs text-slate-400">Cert No: {sh.certificateNumber}</div>}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="font-black text-blue-700 text-lg">{(sh.numberOfShares||0).toLocaleString('en-IN')}</div>
+                  <div className="text-xs text-slate-400">{sh.shareType || 'Equity'}</div>
+                  <div className="text-xs font-semibold text-slate-500">{sh.holdingPercent}%</div>
+                </div>
+              </div>
+              {(sh.distinctiveFrom || sh.distinctiveTo) && (
+                <div className="text-xs text-slate-400 font-mono bg-slate-50 rounded px-2 py-1 mb-2">
+                  Distinctive: {sh.distinctiveFrom} – {sh.distinctiveTo}
+                </div>
+              )}
+              {sh.dateOfAcquisition && (
+                <div className="text-xs text-slate-400 mb-2">Acquired: {sh.dateOfAcquisition}</div>
+              )}
+              <div className="flex flex-wrap gap-2 mt-3">
+                <button onClick={() => openKYC(sh)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100">
+                  ✏️ Edit KYC
+                </button>
+                <button
+                  onClick={() => handleSyncToDirector(sh)}
+                  disabled={syncing === sh.personId}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+                    sh.isDirector
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
+                  }`}>
+                  {syncing === sh.personId ? '...' : sh.isDirector ? '🔗 Also Director' : '🔄 Add as Director'}
+                </button>
+                <button onClick={() => handleDelete(sh.id)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 ml-auto">
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editPerson && <KYCModal person={editPerson} onClose={() => setEditPerson(null)} onSaved={load} />}
+      {showAdd && <AddPersonModal companyId={companyId} mode="shareholder" onClose={() => setShowAdd(false)} onSaved={load} />}
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────
 export default function ClientDetailClient({ companyId }: { companyId: string }) {
   const router = useRouter();
@@ -225,7 +707,7 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
   const [docs, setDocs]         = useState<Doc[]>([]);
   const [loading, setLoading]   = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'timeline' | 'analysis'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'directors' | 'shareholders' | 'analysis'>('timeline');
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Company>>({});
 
@@ -348,13 +830,16 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
               ))}
             </div>
           </div>
-          <div className="flex gap-1 mt-6 border-b border-white/10">
-            {(['timeline','analysis'] as const).map(tab => (
+          <div className="flex gap-1 mt-6 border-b border-white/10 overflow-x-auto">
+            {(['timeline', 'directors', 'shareholders', 'analysis'] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-5 py-2.5 text-sm font-semibold capitalize transition-all border-b-2 ${
+                className={`px-5 py-2.5 text-sm font-semibold whitespace-nowrap transition-all border-b-2 ${
                   activeTab===tab ? 'text-white border-white' : 'text-blue-300 border-transparent hover:text-white'
                 }`}>
-                {tab==='timeline' ? '📅 Meeting Timeline' : '📊 Compliance Analysis'}
+                {tab === 'timeline' ? '📅 Meeting Timeline' :
+                 tab === 'directors' ? '👥 Directors' :
+                 tab === 'shareholders' ? '📜 Shareholders' :
+                 '📊 Compliance Analysis'}
               </button>
             ))}
           </div>
@@ -612,6 +1097,14 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'directors' && (
+          <DirectorsTab companyId={companyId} />
+        )}
+
+        {activeTab === 'shareholders' && (
+          <ShareholdersTab companyId={companyId} />
         )}
 
         {activeTab === 'analysis' && (

@@ -763,6 +763,56 @@ export default function ShareCertificatePage() {
   const set = (k: keyof F, v: unknown) => setF(p => ({ ...p, [k]: v }));
   const { data: session } = useSession();
 
+  async function saveShareholders() {
+    try {
+      const companyRes = await fetch(`/api/clients/find?name=${encodeURIComponent(f.companyName)}`);
+      const { companyId } = companyRes.ok ? await companyRes.json() : {};
+      if (!companyId) return;
+
+      const computedRanges = computeRanges(f.shareholders, f.startDistinctiveNo);
+
+      for (let i = 0; i < f.shareholders.length; i++) {
+        const sh = f.shareholders[i];
+        const range = computedRanges[i];
+        if (!sh.name) continue;
+
+        // Upsert person
+        const personRes = await fetch('/api/persons', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            companyId,
+            name: sh.name,
+            din: sh.din || null,
+            isDirector: sh.isDirector,
+            isShareholder: true,
+          }),
+        });
+        const { id: personId } = await personRes.json();
+        if (!personId) continue;
+
+        // Save shareholder record
+        await fetch('/api/shareholders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            personId,
+            companyId,
+            folioNumber: range?.folioNo || null,
+            certificateNumber: String(i + 1).padStart(2, '0'),
+            distinctiveFrom: range?.from || null,
+            distinctiveTo: range?.to || null,
+            numberOfShares: sh.shares || 0,
+            shareType: f.shareClass || 'Equity',
+            dateOfAcquisition: f.issueDate || null,
+          }),
+        });
+      }
+    } catch {
+      // fire-and-forget — silent failure
+    }
+  }
+
   function openPrintWindow(autoprint = false) {
     const html = generatePrintHTML(f, ranges);
     const win  = window.open("", "_blank", "width=900,height=700");
@@ -771,6 +821,10 @@ export default function ShareCertificatePage() {
       win.document.write(injectPreviewWatermark(html));
       win.document.close();
       return;
+    }
+    // Auto-save shareholders to DB if logged in
+    if (session?.user && f.companyName) {
+      saveShareholders(); // fire-and-forget
     }
     win.document.write(html);
     win.document.close();
