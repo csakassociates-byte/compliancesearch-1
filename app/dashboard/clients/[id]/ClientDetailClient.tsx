@@ -234,11 +234,21 @@ function KYCModal({
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch(`/api/persons/${person.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    if (person.id) {
+      // KYC record exists — update it
+      await fetch(`/api/persons/${person.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+    } else {
+      // No KYC record yet — create it with all form data
+      await fetch('/api/persons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, companyId: person.companyId, isDirector: true }),
+      });
+    }
     setSaving(false);
     onSaved();
     onClose();
@@ -462,6 +472,7 @@ function DirectorsTab({ companyId }: { companyId: string }) {
   const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [creatingKyc, setCreatingKyc] = useState<string | null>(null); // _directorId being created
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -473,16 +484,60 @@ function DirectorsTab({ companyId }: { companyId: string }) {
 
   useEffect(() => { load(); }, [load]);
 
+  /** Ensure csi_persons record exists, return its id */
+  async function ensureKycRecord(p: PersonKYC): Promise<string | null> {
+    if (p.id) return p.id;
+    // Create KYC record for this director
+    const res = await fetch('/api/persons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyId,
+        name: p.name,
+        din: p.din || null,
+        designation: p.designation || null,
+        directorCategory: p.directorCategory || p.category || null,
+        dateOfJoining: p.dateOfJoining || p.appointedAt || null,
+        isDirector: true,
+        isShareholder: false,
+      }),
+    });
+    const d = res.ok ? await res.json() : null;
+    return d?.id ?? null;
+  }
+
+  async function handleEditKyc(p: PersonKYC) {
+    if (!p.id) {
+      // Create KYC record first, then open modal with refreshed data
+      setCreatingKyc(p._directorId || p.name);
+      const newId = await ensureKycRecord(p);
+      setCreatingKyc(null);
+      if (newId) {
+        // Re-fetch to get fresh merged data
+        const r = await fetch(`/api/persons?companyId=${companyId}&type=director`);
+        const d = r.ok ? await r.json() : { persons: [] };
+        const fresh = (d.persons as PersonKYC[]).find(x => x.id === newId || x._directorId === p._directorId);
+        if (fresh) { setPersons(d.persons); setEditPerson(fresh); }
+      }
+    } else {
+      setEditPerson(p);
+    }
+  }
+
   async function handleSync(p: PersonKYC) {
-    setSyncing(p.id);
-    await fetch(`/api/persons/${p.id}/sync`, { method: 'POST' });
+    const id = await ensureKycRecord(p);
+    if (!id) return;
+    setSyncing(id);
+    await fetch(`/api/persons/${id}/sync`, { method: 'POST' });
     setSyncing(null);
     load();
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(p: PersonKYC) {
     if (!confirm('Remove this director?')) return;
-    await fetch(`/api/persons/${id}`, { method: 'DELETE' });
+    if (p.id) {
+      await fetch(`/api/persons/${p.id}`, { method: 'DELETE' });
+    }
     load();
   }
 
@@ -491,7 +546,10 @@ function DirectorsTab({ companyId }: { companyId: string }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-bold text-slate-800">Directors & KYC</h2>
+        <div>
+          <h2 className="font-bold text-slate-800">Directors & KYC</h2>
+          <p className="text-xs text-slate-400 mt-0.5">From MCA Excel upload · Edit to add KYC details</p>
+        </div>
         <button onClick={() => setShowAdd(true)}
           className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
           + Add Director
@@ -501,8 +559,8 @@ function DirectorsTab({ companyId }: { companyId: string }) {
       {persons.length === 0 ? (
         <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
           <div className="text-4xl mb-3">👥</div>
-          <p className="font-semibold text-slate-600">No directors recorded</p>
-          <p className="text-sm text-slate-400 mt-1 mb-4">Add directors to track their KYC status</p>
+          <p className="font-semibold text-slate-600">No directors found</p>
+          <p className="text-sm text-slate-400 mt-1 mb-4">Upload company Excel to auto-import directors, or add manually</p>
           <button onClick={() => setShowAdd(true)}
             className="inline-block px-5 py-2.5 rounded-xl font-bold text-white text-sm"
             style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
@@ -513,26 +571,39 @@ function DirectorsTab({ companyId }: { companyId: string }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {persons.map(p => {
             const complete = kycComplete(p);
+            const cardKey = p.id || p._directorId || p.name;
+            const isCreating = creatingKyc === (p._directorId || p.name);
             return (
-              <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+              <div key={cardKey} className={`bg-white rounded-2xl border p-5 hover:shadow-md transition-shadow ${
+                p.isActive === false ? 'border-slate-100 opacity-60' : 'border-slate-200'
+              }`}>
                 <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
-                    <div className="font-bold text-slate-800">{p.name}</div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-800 truncate">{p.name}</div>
                     {p.din && <div className="text-xs font-mono text-slate-400 mt-0.5">DIN: {p.din}</div>}
                     {p.designation && <div className="text-xs text-slate-500 mt-0.5">{p.designation}</div>}
-                    {p.directorCategory && <div className="text-xs text-slate-400">{p.directorCategory}</div>}
+                    {(p.directorCategory || p.category) && (
+                      <div className="text-xs text-slate-400">
+                        {p.directorCategory || p.category}
+                      </div>
+                    )}
+                    {p.isActive === false && (
+                      <span className="inline-block text-xs bg-red-50 text-red-500 border border-red-200 px-2 py-0.5 rounded-full mt-1">
+                        Ceased
+                      </span>
+                    )}
                   </div>
-                  <span className={`text-xs font-bold px-2 py-1 rounded-full flex-shrink-0 ${
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full flex-shrink-0 whitespace-nowrap ${
                     complete ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                              : 'bg-amber-50 text-amber-700 border border-amber-200'
                   }`}>
-                    {complete ? '✅ KYC Complete' : '⚠️ KYC Pending'}
+                    {complete ? '✅ KYC Done' : '⚠️ KYC Pending'}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
-                  <button onClick={() => setEditPerson(p)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100">
-                    ✏️ Edit KYC
+                  <button onClick={() => handleEditKyc(p)} disabled={isCreating}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 disabled:opacity-60">
+                    {isCreating ? '⏳ Creating...' : '✏️ Edit KYC'}
                   </button>
                   <button
                     onClick={() => handleSync(p)}
@@ -542,12 +613,14 @@ function DirectorsTab({ companyId }: { companyId: string }) {
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
                     }`}>
-                    {syncing === p.id ? '...' : p.isShareholder ? '🔗 Also Shareholder' : '🔄 Add as Shareholder'}
+                    {syncing === p.id ? '...' : p.isShareholder ? '🔗 Also Shareholder' : '🔄 Mark as Shareholder'}
                   </button>
-                  <button onClick={() => handleDelete(p.id)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 ml-auto">
-                    🗑️
-                  </button>
+                  {p.id && (
+                    <button onClick={() => handleDelete(p)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 ml-auto">
+                      🗑️
+                    </button>
+                  )}
                 </div>
               </div>
             );

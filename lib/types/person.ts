@@ -1,6 +1,13 @@
 export interface PersonKYC {
-  id: string;
+  id: string | null;       // null = CompanyDirector only, KYC not yet created in csi_persons
   companyId: string;
+  // Fields from CompanyDirector merge
+  _directorId?: string;   // CompanyDirector.id (source)
+  _source?: string;       // "company_director" | "csi_persons"
+  isActive?: boolean;     // CompanyDirector.isActive
+  appointedAt?: string;   // CompanyDirector.appointedAt
+  category?: string;      // CompanyDirector.category (raw, before mapped to directorCategory)
+  kycComplete?: boolean;  // pre-computed flag
   name: string;
   fatherName?: string;
   dateOfBirth?: string;
