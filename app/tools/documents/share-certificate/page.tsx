@@ -15,9 +15,30 @@ interface Shareholder {
   id: string;
   name: string;
   isDirector: boolean;
-  din: string;
+  din: string;          // DIN (director) or PAN (others)
   shares: number;
   sharesInWords: string; // auto-computed
+  // Extended KYC — filled via "Edit Details"
+  personId?: string;    // csi_persons.id (set after save)
+  panNo?: string;
+  mobile?: string;
+  email?: string;
+  fatherName?: string;
+  dateOfBirth?: string;
+  presentAddress?: string;
+}
+
+interface SavedShareholder {
+  id: string;           // csi_persons.id
+  name: string;
+  din?: string;
+  panNo?: string;
+  mobile?: string;
+  email?: string;
+  isDirector: boolean;
+  isShareholder: boolean;
+  prevShares?: number;  // from csi_shareholders
+  prevFolio?: string;
 }
 
 interface SigningDirector {
@@ -32,6 +53,7 @@ interface F {
   // Step 1 — Company
   companyName: string; cin: string; regAddress: string; entityType: string;
   incorporationDate: string; paidUpCapitalStr: string; authorisedCapitalStr: string;
+  companyId: string;   // csi_companies.id (for DB save)
   // Step 2 — Share Details
   nominalValue: string; paidUpValue: string; shareClass: string;
   issueDate: string; issuePlace: string; startDistinctiveNo: number;
@@ -44,6 +66,7 @@ interface F {
 const DEFAULT: F = {
   companyName:"", cin:"", regAddress:"", entityType:"pvt_ltd",
   incorporationDate:"", paidUpCapitalStr:"", authorisedCapitalStr:"",
+  companyId: "",
   nominalValue:"10", paidUpValue:"10", shareClass:"Equity",
   issueDate:"", issuePlace:"", startDistinctiveNo: 1,
   shareholders: [],
@@ -752,6 +775,102 @@ function CertificateView({ f, sh, range }: {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   EDIT SHAREHOLDER DETAILS MODAL
+══════════════════════════════════════════════════════════════════ */
+function EditShareholderModal({
+  sh, onClose, onSave,
+}: {
+  sh: Shareholder;
+  onClose: () => void;
+  onSave: (updated: Partial<Shareholder>) => void;
+}) {
+  const [form, setForm] = useState({
+    name: sh.name || '',
+    fatherName: sh.fatherName || '',
+    dateOfBirth: sh.dateOfBirth || '',
+    mobile: sh.mobile || '',
+    email: sh.email || '',
+    panNo: sh.panNo || sh.din || '',
+    presentAddress: sh.presentAddress || '',
+  });
+  const inp = "w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400";
+  const lbl = "block text-xs font-bold text-slate-500 mb-1";
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    onSave({ ...form });
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="px-6 py-4 flex items-center justify-between rounded-t-2xl"
+          style={{ background: 'linear-gradient(135deg,#d97706,#b45309)' }}>
+          <h3 className="font-bold text-white">✏️ Shareholder Details — {sh.name}</h3>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSave} className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className={lbl}>Full Name *</label>
+              <input required className={inp} value={form.name}
+                onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div>
+              <label className={lbl}>Father&apos;s Name</label>
+              <input className={inp} value={form.fatherName}
+                onChange={e => setForm(p => ({ ...p, fatherName: e.target.value }))}
+                placeholder="S/o, D/o, W/o" />
+            </div>
+            <div>
+              <label className={lbl}>Date of Birth</label>
+              <input type="date" className={inp} value={form.dateOfBirth}
+                onChange={e => setForm(p => ({ ...p, dateOfBirth: e.target.value }))} />
+            </div>
+            <div>
+              <label className={lbl}>Mobile</label>
+              <input className={inp} value={form.mobile}
+                onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))}
+                placeholder="+91 98765 43210" />
+            </div>
+            <div>
+              <label className={lbl}>Email</label>
+              <input type="email" className={inp} value={form.email}
+                onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+            </div>
+            <div>
+              <label className={lbl}>PAN Number</label>
+              <input className={`${inp} font-mono uppercase`} value={form.panNo}
+                onChange={e => setForm(p => ({ ...p, panNo: e.target.value.toUpperCase() }))}
+                placeholder="ABCDE1234F" maxLength={10} />
+            </div>
+            <div className="col-span-2">
+              <label className={lbl}>Residential Address</label>
+              <textarea className={inp} rows={2} value={form.presentAddress}
+                onChange={e => setForm(p => ({ ...p, presentAddress: e.target.value }))}
+                placeholder="Full residential address" />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit"
+              className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
+              style={{ background: 'linear-gradient(135deg,#d97706,#b45309)' }}>
+              Save Details →
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════════════════════════ */
 export default function ShareCertificatePage() {
@@ -759,45 +878,92 @@ export default function ShareCertificatePage() {
   const [step, setStep] = useState<1|2|3|4|5>(1);
   const [preview, setPreview] = useState(false);
   const [dirRegistry, setDirRegistry] = useState<DirectorInfo[]>([]);
+  const [savedShareholders, setSavedShareholders] = useState<SavedShareholder[]>([]);
+  const [editShIdx, setEditShIdx] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const set = (k: keyof F, v: unknown) => setF(p => ({ ...p, [k]: v }));
   const { data: session } = useSession();
 
-  async function saveShareholders() {
+  /** Fetch csi_companies.id for a given company name */
+  async function fetchCompanyId(name: string): Promise<string | null> {
+    if (!name || !session?.user) return null;
     try {
-      const companyRes = await fetch(`/api/clients/find?name=${encodeURIComponent(f.companyName)}`);
-      const { companyId } = companyRes.ok ? await companyRes.json() : {};
-      if (!companyId) return;
+      const r = await fetch(`/api/clients/find?name=${encodeURIComponent(name)}`);
+      const d = r.ok ? await r.json() : {};
+      return d.companyId || null;
+    } catch { return null; }
+  }
 
-      const computedRanges = computeRanges(f.shareholders, f.startDistinctiveNo);
+  /** Load saved shareholders from DB for this company */
+  async function loadSavedShareholders(cId: string) {
+    if (!cId) return;
+    try {
+      const r = await fetch(`/api/persons?companyId=${cId}&type=shareholder`);
+      const d = r.ok ? await r.json() : { persons: [] };
+      const persons = (d.persons || []) as Array<Record<string, unknown>>;
+      const mapped: SavedShareholder[] = persons.map(p => {
+        // latest shareholder record (if any)
+        const shRecords = (p.shareholders || []) as Array<Record<string, unknown>>;
+        const latest = shRecords.length > 0 ? shRecords[shRecords.length - 1] : null;
+        return {
+          id: String(p.id || ''),
+          name: String(p.name || ''),
+          din: p.din ? String(p.din) : undefined,
+          panNo: p.panNo ? String(p.panNo) : undefined,
+          mobile: p.mobile ? String(p.mobile) : undefined,
+          email: p.email ? String(p.email) : undefined,
+          isDirector: Boolean(p.isDirector),
+          isShareholder: Boolean(p.isShareholder),
+          prevShares: latest?.numberOfShares ? Number(latest.numberOfShares) : undefined,
+          prevFolio: latest?.folioNumber ? String(latest.folioNumber) : undefined,
+        };
+      });
+      setSavedShareholders(mapped);
+    } catch { /* silent */ }
+  }
 
-      for (let i = 0; i < f.shareholders.length; i++) {
-        const sh = f.shareholders[i];
-        const range = computedRanges[i];
-        if (!sh.name) continue;
-
-        // Upsert person
+  /** Save all shareholder KYC to DB (fire-and-forget) */
+  async function saveShareholdersToDb(companyId: string) {
+    if (!companyId || !session?.user) return;
+    const computedRanges = computeRanges(f.shareholders, f.startDistinctiveNo);
+    for (let i = 0; i < f.shareholders.length; i++) {
+      const sh = f.shareholders[i];
+      const range = computedRanges[i];
+      if (!sh.name) continue;
+      try {
         const personRes = await fetch('/api/persons', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             companyId,
             name: sh.name,
-            din: sh.din || null,
+            din: sh.isDirector ? (sh.din || null) : null,
+            panNo: sh.panNo || (!sh.isDirector ? sh.din : null) || null,
+            mobile: sh.mobile || null,
+            email: sh.email || null,
+            fatherName: sh.fatherName || null,
+            dateOfBirth: sh.dateOfBirth || null,
+            presentAddress: sh.presentAddress || null,
             isDirector: sh.isDirector,
             isShareholder: true,
           }),
         });
         const { id: personId } = await personRes.json();
         if (!personId) continue;
-
+        // Update personId in local state
+        setF(prev => ({
+          ...prev,
+          shareholders: prev.shareholders.map((s, idx) =>
+            idx === i ? { ...s, personId } : s
+          ),
+        }));
         // Save shareholder record
         await fetch('/api/shareholders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            personId,
-            companyId,
+            personId, companyId,
             folioNumber: range?.folioNo || null,
             certificateNumber: String(i + 1).padStart(2, '0'),
             distinctiveFrom: range?.from || null,
@@ -807,9 +973,7 @@ export default function ShareCertificatePage() {
             dateOfAcquisition: f.issueDate || null,
           }),
         });
-      }
-    } catch {
-      // fire-and-forget — silent failure
+      } catch { /* silent */ }
     }
   }
 
@@ -822,9 +986,9 @@ export default function ShareCertificatePage() {
       win.document.close();
       return;
     }
-    // Auto-save shareholders to DB if logged in
-    if (session?.user && f.companyName) {
-      saveShareholders(); // fire-and-forget
+    // Auto-save to DB on print
+    if (f.companyId) {
+      saveShareholdersToDb(f.companyId); // fire-and-forget
     }
     win.document.write(html);
     win.document.close();
@@ -833,7 +997,7 @@ export default function ShareCertificatePage() {
     }
   }
 
-  function applyCompanyData(data: CompanyData) {
+  async function applyCompanyData(data: CompanyData) {
     const activeDirs = data.directors.filter(d => d.isActive);
     const reg: DirectorInfo[] = activeDirs.map(d => ({
       name: d.name, designation: d.designation || "Director", din: d.din || "",
@@ -847,10 +1011,9 @@ export default function ShareCertificatePage() {
 
     // Auto-populate signing directors (top 2 active directors with DIN)
     const signingDirectors: SigningDirector[] = activeDirs
-      .filter(d => d.din)  // prefer directors with DIN
+      .filter(d => d.din)
       .slice(0, 2)
       .map(d => ({ name: d.name, designation: d.designation || "Director", din: d.din || "" }));
-    // Pad to 2 if fewer than 2 with DIN
     if (signingDirectors.length < 2) {
       activeDirs
         .filter(d => !d.din)
@@ -872,6 +1035,13 @@ export default function ShareCertificatePage() {
       shareholders:     dirShareholders.length > 0 ? dirShareholders : p.shareholders,
       signingDirectors: signingDirectors,
     }));
+
+    // Fetch companyId + load saved shareholders (non-blocking)
+    const cId = await fetchCompanyId(data.companyName);
+    if (cId) {
+      setF(p => ({ ...p, companyId: cId }));
+      await loadSavedShareholders(cId);
+    }
   }
 
   function extractCity(addr: string): string {
@@ -1123,9 +1293,66 @@ export default function ShareCertificatePage() {
   /* ════════════════════════════════════════════════
      STEP 3: Shareholders
   ════════════════════════════════════════════════ */
+  // Check which saved shareholders are already in the form
+  const addedPersonIds = new Set(f.shareholders.map(s => s.personId).filter(Boolean));
+
+  function addFromSaved(sv: SavedShareholder) {
+    // Don't add duplicate
+    if (f.shareholders.some(s => s.personId === sv.id || s.name === sv.name)) return;
+    const newSh: Shareholder = {
+      id: `saved-${sv.id}`,
+      name: sv.name,
+      isDirector: sv.isDirector,
+      din: sv.isDirector ? (sv.din || '') : (sv.panNo || ''),
+      shares: sv.prevShares || 0,
+      sharesInWords: sv.prevShares ? numberToWords(sv.prevShares) : '',
+      personId: sv.id,
+      panNo: sv.panNo || '',
+      mobile: sv.mobile || '',
+      email: sv.email || '',
+    };
+    set("shareholders", [...f.shareholders, newSh]);
+  }
+
   const s3 = (
     <div className="space-y-4">
       <SHead n={3} title="Shareholders" sub="Add directors and/or external shareholders — each gets a separate certificate" />
+
+      {/* ── From Your Records ── */}
+      {savedShareholders.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <p className="text-xs font-black text-amber-800 uppercase tracking-wide mb-2.5">
+            📁 From Your Records — {f.companyName}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {savedShareholders.map(sv => {
+              const isAdded = addedPersonIds.has(sv.id) ||
+                f.shareholders.some(s => s.name === sv.name);
+              return (
+                <button
+                  key={sv.id}
+                  type="button"
+                  onClick={() => !isAdded && addFromSaved(sv)}
+                  disabled={isAdded}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold transition-all ${
+                    isAdded
+                      ? 'bg-green-50 border-green-300 text-green-700 cursor-default'
+                      : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-100 hover:border-amber-500'
+                  }`}
+                >
+                  <span>{isAdded ? '✅' : '+'}</span>
+                  <span>{sv.name}</span>
+                  {sv.prevShares && <span className="text-slate-400">({sv.prevShares.toLocaleString('en-IN')} shares)</span>}
+                  {sv.isDirector && <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded text-xs">Dir</span>}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-amber-600 mt-2">
+            💡 Click a name to add them to this certificate. Their previous share count is pre-filled.
+          </p>
+        </div>
+      )}
 
       {/* ── Total shares live banner ── */}
       {totalShares > 0 && (
@@ -1282,6 +1509,22 @@ export default function ShareCertificatePage() {
                   )}
                 </div>
               </div>
+
+              {/* ── KYC quick view + edit ── */}
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed border-slate-200">
+                <div className="flex flex-wrap gap-1.5 flex-1 text-xs">
+                  {sh.mobile && <span className="bg-white border border-slate-200 rounded-full px-2 py-0.5 text-slate-600">📱 {sh.mobile}</span>}
+                  {sh.panNo && <span className="bg-white border border-slate-200 rounded-full px-2 py-0.5 font-mono text-slate-600">🪪 {sh.panNo}</span>}
+                  {sh.email && <span className="bg-white border border-slate-200 rounded-full px-2 py-0.5 text-slate-600">✉️ {sh.email}</span>}
+                  {!sh.mobile && !sh.panNo && (
+                    <span className="text-slate-400">No extra details added yet</span>
+                  )}
+                </div>
+                <button type="button" onClick={() => setEditShIdx(idx)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 shrink-0">
+                  ✏️ Edit Details
+                </button>
+              </div>
             </div>
           );
         })}
@@ -1364,10 +1607,27 @@ export default function ShareCertificatePage() {
     if (step === 3) {
       if (f.shareholders.length === 0) return false;
       if (!f.shareholders.every(s => s.name && s.shares > 0 && s.din)) return false;
-      if (paidUpNum > 0 && totalShareValue > paidUpNum) return false; // BLOCK if exceeds paid-up capital
+      if (paidUpNum > 0 && totalShareValue > paidUpNum) return false;
       return true;
     }
     return true;
+  }
+
+  /** Continue → also auto-save Step 3 data */
+  async function handleNext() {
+    if (step === 3 && session?.user && f.companyId) {
+      setSaving(true);
+      await saveShareholdersToDb(f.companyId);
+      setSaving(false);
+    }
+    setStep(s => Math.min(s + 1, TOTAL) as typeof step);
+  }
+
+  /** Update a shareholder's KYC fields from Edit modal */
+  function applyShareholderEdit(idx: number, updates: Partial<Shareholder>) {
+    set("shareholders", f.shareholders.map((s, i) =>
+      i === idx ? { ...s, ...updates } : s
+    ));
   }
 
   return (
@@ -1465,20 +1725,24 @@ export default function ShareCertificatePage() {
           <div className="bg-white mb-6">{stepContent[step]}</div>
 
           <div className="flex items-center justify-between">
-            <button onClick={()=>setStep(s=>Math.max(s-1,1) as typeof step)} disabled={step===1}
+            <button onClick={() => setStep(s => Math.max(s - 1, 1) as typeof step)} disabled={step === 1}
               className="px-6 py-3 rounded-xl font-bold text-slate-600 border-2 border-slate-200 text-sm disabled:opacity-40 hover:bg-slate-50 transition">
               ← Back
             </button>
             {step < TOTAL ? (
-              <button onClick={()=>setStep(s=>Math.min(s+1,TOTAL) as typeof step)} disabled={!canNext()}
-                className="px-8 py-3 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background:"linear-gradient(135deg,#d97706,#b45309)" }}>
-                Continue →
+              <button onClick={handleNext} disabled={!canNext() || saving}
+                className="flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: "linear-gradient(135deg,#d97706,#b45309)" }}>
+                {saving ? (
+                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Saving...</>
+                ) : (
+                  step === 3 && session?.user && f.companyId ? 'Save & Continue →' : 'Continue →'
+                )}
               </button>
             ) : (
-              <button onClick={()=>setPreview(true)} disabled={!canNext()}
+              <button onClick={() => setPreview(true)} disabled={!canNext()}
                 className="flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background:"linear-gradient(135deg,#16a34a,#15803d)" }}>
+                style={{ background: "linear-gradient(135deg,#16a34a,#15803d)" }}>
                 📜 Generate Certificates →
               </button>
             )}
@@ -1547,6 +1811,15 @@ export default function ShareCertificatePage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Edit Shareholder Details Modal */}
+      {editShIdx !== null && f.shareholders[editShIdx] && (
+        <EditShareholderModal
+          sh={f.shareholders[editShIdx]}
+          onClose={() => setEditShIdx(null)}
+          onSave={(updates) => { applyShareholderEdit(editShIdx, updates); setEditShIdx(null); }}
+        />
       )}
 
       <footer className="border-t border-slate-200 py-5 px-4 mt-auto print:hidden">
