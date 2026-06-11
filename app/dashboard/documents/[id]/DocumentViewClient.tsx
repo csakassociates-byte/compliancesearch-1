@@ -30,10 +30,17 @@ export default function DocumentViewClient({ docId }: { docId: string }) {
 
   function handleReOpen() {
     if (!doc) return;
-    // Store form data in sessionStorage and redirect to the tool
+    // Store form data + doc ID so the tool can UPDATE instead of create
     sessionStorage.setItem('csi_restore_doc', doc.formDataJson);
+    sessionStorage.setItem('csi_restore_doc_id', doc.id);
     const path = doc.type === 'agm_minutes'
       ? '/tools/documents/minutes/agm'
+      : doc.type === 'board_minutes'
+      ? '/tools/documents/minutes/board'
+      : doc.type === 'bank_resolution'
+      ? '/tools/documents/bank-resolution'
+      : doc.type === 'share_certificate'
+      ? '/tools/documents/share-certificate'
       : '/tools/documents/minutes/board';
     router.push(`${path}?restore=1`);
   }

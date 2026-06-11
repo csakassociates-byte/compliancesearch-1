@@ -825,17 +825,22 @@ function AgendaCard({
    MAIN PAGE COMPONENT
 ══════════════════════════════════════════════════════════════════ */
 /* ── Restore helper — isolated so useSearchParams can be Suspense-wrapped ── */
-function RestoreDocWatcher({ onRestore }: { onRestore: (data: F) => void }) {
+function RestoreDocWatcher({ onRestore, onDocId }: { onRestore: (data: F) => void; onDocId: (id: string) => void }) {
   const searchParams = useSearchParams();
   useEffect(() => {
     if (searchParams.get('restore') === '1') {
       const saved = sessionStorage.getItem('csi_restore_doc');
+      const docId = sessionStorage.getItem('csi_restore_doc_id');
       if (saved) {
         try {
           const data = JSON.parse(saved) as F;
           onRestore(data);
           sessionStorage.removeItem('csi_restore_doc');
         } catch {}
+      }
+      if (docId) {
+        onDocId(docId);
+        sessionStorage.removeItem('csi_restore_doc_id');
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -849,6 +854,7 @@ export default function AgmMinutesPage() {
   const [f, setF] = useState<F>(INITIAL_F);
   const [draftSaved, setDraftSaved] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [existingDocId, setExistingDocId] = useState<string | null>(null);
   const [showAddAgenda, setShowAddAgenda] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [showSs2, setShowSs2] = useState(false);
@@ -876,18 +882,28 @@ export default function AgmMinutesPage() {
     if (!session) { router.push('/auth/login'); return; }
     setSaveStatus('saving');
     try {
-      const res = await fetch('/api/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'agm_minutes',
-          title: `AGM Minutes — ${f.companyName || 'Company'} — FY ${f.financialYear || ''}`,
-          companyName: f.companyName || null,
-          financialYear: f.financialYear || null,
-          meetingDate: f.meetingDate || null,
-          formDataJson: JSON.stringify(f),
-        }),
-      });
+      const docPayload = {
+        type: 'agm_minutes',
+        title: `AGM Minutes — ${f.companyName || 'Company'} — FY ${f.financialYear || ''}`,
+        companyName: f.companyName || null,
+        financialYear: f.financialYear || null,
+        meetingDate: f.meetingDate || null,
+        formDataJson: JSON.stringify(f),
+      };
+      let res: Response;
+      if (existingDocId) {
+        res = await fetch(`/api/documents/${existingDocId}/full`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(docPayload),
+        });
+      } else {
+        res = await fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(docPayload),
+        });
+      }
       if (res.ok) { setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 3000); }
       else setSaveStatus('error');
     } catch { setSaveStatus('error'); }
@@ -1236,7 +1252,7 @@ _________________    _____________    _______________    ___________` : "";
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col">
       <Suspense fallback={null}>
-        <RestoreDocWatcher onRestore={setF} />
+        <RestoreDocWatcher onRestore={setF} onDocId={setExistingDocId} />
       </Suspense>
       <Navbar />
 

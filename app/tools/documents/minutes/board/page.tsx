@@ -765,12 +765,17 @@ function AgendaCard({
 }
 
 /* ── Restore helper — isolated so useSearchParams can be Suspense-wrapped ── */
-function RestoreDocWatcher({ onRestore, onPrevDate }: { onRestore: (data: F) => void; onPrevDate: (date: string) => void }) {
+function RestoreDocWatcher({ onRestore, onPrevDate, onDocId }: {
+  onRestore: (data: F) => void;
+  onPrevDate: (date: string) => void;
+  onDocId: (id: string) => void;
+}) {
   const searchParams = useSearchParams();
   useEffect(() => {
     // Restore saved document
     if (searchParams.get('restore') === '1') {
       const saved = sessionStorage.getItem('csi_restore_doc');
+      const docId = sessionStorage.getItem('csi_restore_doc_id');
       if (saved) {
         try {
           const data = JSON.parse(saved) as F;
@@ -778,12 +783,14 @@ function RestoreDocWatcher({ onRestore, onPrevDate }: { onRestore: (data: F) => 
           sessionStorage.removeItem('csi_restore_doc');
         } catch {}
       }
+      if (docId) {
+        onDocId(docId);
+        sessionStorage.removeItem('csi_restore_doc_id');
+      }
     }
     // Auto-fill previous board meeting date from client timeline
     const prevDate = searchParams.get('prevDate');
-    if (prevDate) {
-      onPrevDate(prevDate);
-    }
+    if (prevDate) onPrevDate(prevDate);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
@@ -811,6 +818,8 @@ export default function BoardMinutesPage() {
   const [templateSearch, setTemplateSearch] = useState("");
   const [draftSaved, setDraftSaved] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // If re-opened from dashboard, track the existing doc ID to update instead of create
+  const [existingDocId, setExistingDocId] = useState<string | null>(null);
 
   // Auto-save draft on every change
   useEffect(() => {
@@ -826,18 +835,32 @@ export default function BoardMinutesPage() {
     if (!session) { router.push('/auth/login'); return; }
     setSaveStatus('saving');
     try {
-      const res = await fetch('/api/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'board_minutes',
-          title: `Board Meeting Minutes — ${f.companyName || 'Company'} — ${f.meetingDate || ''}`,
-          companyName: f.companyName || null,
-          financialYear: f.financialYear || null,
-          meetingDate: f.meetingDate || null,
-          formDataJson: JSON.stringify(f),
-        }),
-      });
+      const docPayload = {
+        type: 'board_minutes',
+        title: `Board Meeting Minutes — ${f.companyName || 'Company'} — ${f.meetingDate || ''}`,
+        companyName: f.companyName || null,
+        financialYear: f.financialYear || null,
+        meetingDate: f.meetingDate || null,
+        formDataJson: JSON.stringify(f),
+      };
+
+      let res: Response;
+      if (existingDocId) {
+        // UPDATE existing document — no duplicate
+        res = await fetch(`/api/documents/${existingDocId}/full`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(docPayload),
+        });
+      } else {
+        // CREATE new document
+        res = await fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(docPayload),
+        });
+      }
+
       if (res.ok) { setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 3000); }
       else setSaveStatus('error');
     } catch { setSaveStatus('error'); }
@@ -1814,6 +1837,7 @@ export default function BoardMinutesPage() {
         <RestoreDocWatcher
           onRestore={setF}
           onPrevDate={(date) => setF(prev => ({ ...prev, prevMeetingDate: date }))}
+          onDocId={setExistingDocId}
         />
       </Suspense>
       <Navbar />
