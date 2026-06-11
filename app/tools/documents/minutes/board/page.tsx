@@ -765,9 +765,10 @@ function AgendaCard({
 }
 
 /* ── Restore helper — isolated so useSearchParams can be Suspense-wrapped ── */
-function RestoreDocWatcher({ onRestore }: { onRestore: (data: F) => void }) {
+function RestoreDocWatcher({ onRestore, onPrevDate }: { onRestore: (data: F) => void; onPrevDate: (date: string) => void }) {
   const searchParams = useSearchParams();
   useEffect(() => {
+    // Restore saved document
     if (searchParams.get('restore') === '1') {
       const saved = sessionStorage.getItem('csi_restore_doc');
       if (saved) {
@@ -777,6 +778,11 @@ function RestoreDocWatcher({ onRestore }: { onRestore: (data: F) => void }) {
           sessionStorage.removeItem('csi_restore_doc');
         } catch {}
       }
+    }
+    // Auto-fill previous board meeting date from client timeline
+    const prevDate = searchParams.get('prevDate');
+    if (prevDate) {
+      onPrevDate(prevDate);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
@@ -1805,7 +1811,10 @@ export default function BoardMinutesPage() {
   return (
     <main className="min-h-screen bg-white flex flex-col">
       <Suspense fallback={null}>
-        <RestoreDocWatcher onRestore={setF} />
+        <RestoreDocWatcher
+          onRestore={setF}
+          onPrevDate={(date) => setF(prev => ({ ...prev, prevMeetingDate: date }))}
+        />
       </Suspense>
       <Navbar />
 
