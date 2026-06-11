@@ -1158,6 +1158,331 @@ function DirectorViewModal({
   );
 }
 
+/* ── Transfers Tab ───────────────────────────────────── */
+interface TransferRecord {
+  id: string;
+  transferorName: string;
+  transfereeName: string;
+  transferorFolio?: string;
+  transferorCertNo?: string;
+  transfereeFolio?: string;
+  transfereeCertNo?: string;
+  numberOfShares?: number;
+  shareType?: string;
+  distinctiveFrom?: number;
+  distinctiveTo?: number;
+  transferDate?: string;
+  considerationPerShare?: string;
+  totalConsideration?: string;
+  stampDuty?: string;
+  issuePlace?: string;
+  nominalValue?: string;
+  paidUpValue?: string;
+  signingDirectorsJson?: string;
+  status?: string;
+  createdAt: string;
+}
+
+function TransfersTab({ companyId, company }: { companyId: string; company: Company }) {
+  const [transfers, setTransfers] = useState<TransferRecord[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [viewT, setViewT]         = useState<TransferRecord | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const r = await fetch(`/api/share-transfers?companyId=${companyId}`);
+    const d = r.ok ? await r.json() : { transfers: [] };
+    setTransfers(d.transfers || []);
+    setLoading(false);
+  }, [companyId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  function printSH4(t: TransferRecord) {
+    import('@/lib/share-transfer-html').then(({ generateSH4HTML }) => {
+      let signers: { name: string; designation: string; din?: string }[] = [];
+      if (t.signingDirectorsJson) {
+        try { signers = JSON.parse(t.signingDirectorsJson); } catch { /* */ }
+      }
+      const html = generateSH4HTML(
+        {
+          companyName:  company.companyName,
+          cin:          company.cin || '',
+          regAddress:   company.regAddress || '',
+          shareClass:   t.shareType || 'Equity',
+          nominalValue: t.nominalValue || '10',
+          paidUpValue:  t.paidUpValue  || '10',
+        },
+        {
+          name:           t.transferorName,
+          folioNo:        t.transferorFolio || '',
+          certNo:         t.transferorCertNo || '',
+          numberOfShares: t.numberOfShares || 0,
+          distinctiveFrom: t.distinctiveFrom || 1,
+          distinctiveTo:  t.distinctiveTo   || 0,
+        },
+        {
+          name:              t.transfereeName,
+          newFolioNo:        t.transfereeFolio || '—',
+          newCertNo:         t.transfereeCertNo || '—',
+          newDistinctiveFrom: t.distinctiveFrom || 1,
+          newDistinctiveTo:  t.distinctiveTo   || 0,
+        },
+        {
+          transferDate:          t.transferDate || '',
+          considerationPerShare: t.considerationPerShare || undefined,
+          totalConsideration:    t.totalConsideration    || undefined,
+          stampDuty:             t.stampDuty             || undefined,
+          issuePlace:            t.issuePlace            || undefined,
+        },
+        signers
+      );
+      const w = window.open('', '_blank', 'width=900,height=700');
+      if (!w) { alert('Pop-up blocked!'); return; }
+      w.document.write(html); w.document.close();
+    });
+  }
+
+  function printNewCert(t: TransferRecord) {
+    import('@/lib/share-certificate-html').then(({ generateShareCertificateHTML, computeCertRanges }) => {
+      let signers: { name: string; designation: string; din?: string }[] = [];
+      if (t.signingDirectorsJson) {
+        try { signers = JSON.parse(t.signingDirectorsJson); } catch { /* */ }
+      }
+      const ranges = computeCertRanges([{ shares: t.numberOfShares || 0 }], t.distinctiveFrom || 1);
+      const html = generateShareCertificateHTML(
+        {
+          companyName:  company.companyName,
+          cin:          company.cin || '',
+          regAddress:   company.regAddress || '',
+          shareClass:   t.shareType || 'Equity',
+          nominalValue: t.nominalValue || '10',
+          paidUpValue:  t.paidUpValue  || '10',
+          issueDate:    t.transferDate || '',
+          issuePlace:   t.issuePlace   || '',
+        },
+        [{ name: t.transfereeName, din: '', shares: t.numberOfShares || 0 }],
+        [{ ...ranges[0], folioNo: t.transfereeFolio || '01', certNo: t.transfereeCertNo || '01' }],
+        signers
+      );
+      const w = window.open('', '_blank', 'width=900,height=700');
+      if (!w) { alert('Pop-up blocked!'); return; }
+      w.document.write(html); w.document.close();
+    });
+  }
+
+  if (loading) return <div className="text-sm text-slate-400 text-center py-12">Loading transfer history...</div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="font-bold text-slate-800">Share Transfer History</h2>
+          <p className="text-xs text-slate-400 mt-0.5">{transfers.length} transfer{transfers.length !== 1 ? 's' : ''} recorded</p>
+        </div>
+        <a href="/tools/documents/share-transfer"
+          className="text-xs font-semibold px-4 py-2 rounded-xl text-white flex items-center gap-1.5"
+          style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
+          + New Transfer
+        </a>
+      </div>
+
+      {transfers.length === 0 ? (
+        <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
+          <div className="text-4xl mb-3">🔄</div>
+          <p className="font-semibold text-slate-600">No transfers recorded</p>
+          <p className="text-sm text-slate-400 mt-1 mb-4">Execute a share transfer to see history here</p>
+          <a href="/tools/documents/share-transfer"
+            className="inline-block px-5 py-2.5 rounded-xl font-bold text-white text-sm"
+            style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
+            + New Transfer
+          </a>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {transfers.map(t => (
+            <div key={t.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+              {/* Header row */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Transfer arrow visual */}
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-bold text-slate-800">{t.transferorName}</span>
+                    <span className="text-slate-400 font-bold">→</span>
+                    <span className="font-bold text-emerald-700">{t.transfereeName}</span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-black text-blue-700 text-lg">{(t.numberOfShares||0).toLocaleString('en-IN')}</div>
+                  <div className="text-xs text-slate-400">{t.shareType || 'Equity'} shares</div>
+                </div>
+              </div>
+
+              {/* Details chips */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {t.transferDate && (
+                  <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">
+                    📅 {t.transferDate}
+                  </span>
+                )}
+                {t.transferorFolio && (
+                  <span className="text-xs bg-blue-50 text-blue-600 rounded-full px-2.5 py-1">
+                    Folio: {t.transferorFolio} → {t.transfereeFolio || '—'}
+                  </span>
+                )}
+                {t.transferorCertNo && (
+                  <span className="text-xs bg-amber-50 text-amber-600 rounded-full px-2.5 py-1">
+                    Cert: {t.transferorCertNo} → {t.transfereeCertNo || '—'}
+                  </span>
+                )}
+                {t.distinctiveFrom && t.distinctiveTo && (
+                  <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2.5 py-1 font-mono">
+                    {String(t.distinctiveFrom).padStart(5,'0')}–{t.distinctiveTo}
+                  </span>
+                )}
+                {t.totalConsideration && (
+                  <span className="text-xs bg-emerald-50 text-emerald-700 rounded-full px-2.5 py-1 font-semibold">
+                    ₹ {parseFloat(t.totalConsideration).toLocaleString('en-IN')}
+                  </span>
+                )}
+                <span className={`text-xs rounded-full px-2.5 py-1 font-semibold ${
+                  t.status === 'approved'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {t.status === 'approved' ? '✅ Approved' : '⏳ Pending'}
+                </span>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setViewT(t)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
+                  👁️ View Details
+                </button>
+                <button onClick={() => printSH4(t)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100">
+                  🖨️ Print SH-4
+                </button>
+                <button onClick={() => printNewCert(t)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">
+                  📜 New Certificate
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Transfer Detail Modal ── */}
+      {viewT && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4 py-8"
+          onClick={() => setViewT(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-6 py-4 flex items-center justify-between rounded-t-2xl sticky top-0 z-10"
+              style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
+              <div>
+                <h3 className="font-bold text-white text-sm">🔄 Transfer Details</h3>
+                <p className="text-xs text-white/60 mt-0.5">
+                  {viewT.transferorName} → {viewT.transfereeName}
+                </p>
+              </div>
+              <button onClick={() => setViewT(null)} className="text-white/70 hover:text-white text-xl">×</button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Shares */}
+              <div className="bg-emerald-50 rounded-xl p-4 text-center">
+                <div className="text-3xl font-black text-emerald-700">{(viewT.numberOfShares||0).toLocaleString('en-IN')}</div>
+                <div className="text-xs text-emerald-600 mt-1">{viewT.shareType || 'Equity'} Shares Transferred</div>
+                {viewT.transferDate && <div className="text-xs text-slate-500 mt-0.5">on {viewT.transferDate}</div>}
+              </div>
+
+              {/* Transferor */}
+              <div>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📤 Transferor</p>
+                <div className="bg-slate-50 rounded-xl px-4 py-3 space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-slate-400">Name</span><span className="font-bold text-slate-800">{viewT.transferorName}</span></div>
+                  {viewT.transferorFolio && <div className="flex justify-between"><span className="text-slate-400">Folio No.</span><span className="font-semibold">{viewT.transferorFolio}</span></div>}
+                  {viewT.transferorCertNo && <div className="flex justify-between"><span className="text-slate-400">Cert No.</span><span className="font-semibold">{viewT.transferorCertNo}</span></div>}
+                </div>
+              </div>
+
+              {/* Transferee */}
+              <div>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📥 Transferee</p>
+                <div className="bg-emerald-50 rounded-xl px-4 py-3 space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-slate-400">Name</span><span className="font-bold text-emerald-800">{viewT.transfereeName}</span></div>
+                  {viewT.transfereeFolio && <div className="flex justify-between"><span className="text-slate-400">New Folio No.</span><span className="font-semibold text-emerald-700">{viewT.transfereeFolio}</span></div>}
+                  {viewT.transfereeCertNo && <div className="flex justify-between"><span className="text-slate-400">New Cert No.</span><span className="font-semibold text-emerald-700">{viewT.transfereeCertNo}</span></div>}
+                </div>
+              </div>
+
+              {/* Distinctive Nos */}
+              {viewT.distinctiveFrom && viewT.distinctiveTo && (
+                <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs font-mono text-blue-700 text-center">
+                  <span className="font-bold not-italic">Distinctive Nos:</span>&nbsp;
+                  {String(viewT.distinctiveFrom).padStart(5,'0')} – {viewT.distinctiveTo}
+                </div>
+              )}
+
+              {/* Financials */}
+              {(viewT.considerationPerShare || viewT.totalConsideration || viewT.stampDuty) && (
+                <div>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">💰 Financials</p>
+                  <div className="space-y-1 text-xs">
+                    {viewT.considerationPerShare && <div className="flex justify-between"><span className="text-slate-400">Consideration/share</span><span className="font-semibold">₹ {viewT.considerationPerShare}</span></div>}
+                    {viewT.totalConsideration && <div className="flex justify-between"><span className="text-slate-400">Total Consideration</span><span className="font-bold text-emerald-700">₹ {parseFloat(viewT.totalConsideration).toLocaleString('en-IN')}</span></div>}
+                    {viewT.stampDuty && <div className="flex justify-between"><span className="text-slate-400">Stamp Duty</span><span className="font-semibold">₹ {viewT.stampDuty}</span></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Signatories */}
+              {viewT.signingDirectorsJson && (() => {
+                try {
+                  const sigs = JSON.parse(viewT.signingDirectorsJson) as { name: string; designation: string; din?: string }[];
+                  if (!sigs.length) return null;
+                  return (
+                    <div>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">✍️ Signatories</p>
+                      <div className="space-y-1">
+                        {sigs.map((s, i) => (
+                          <div key={i} className="text-xs flex gap-2">
+                            <span className="font-semibold text-slate-700">{s.name}</span>
+                            <span className="text-slate-400">{s.designation}</span>
+                            {s.din && <span className="font-mono text-slate-400">DIN: {s.din}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                } catch { return null; }
+              })()}
+            </div>
+
+            {/* Footer buttons */}
+            <div className="px-5 pb-5 flex gap-3">
+              <button onClick={() => printSH4(viewT)}
+                className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
+                🖨️ Print SH-4
+              </button>
+              <button onClick={() => printNewCert(viewT)}
+                className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg,#1e40af,#1d4ed8)' }}>
+                📜 New Cert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Directors Tab ───────────────────────────────────── */
 function DirectorsTab({ companyId, company }: { companyId: string; company: Company }) {
   const [persons, setPersons] = useState<PersonKYC[]>([]);
@@ -1547,7 +1872,7 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
   const [docs, setDocs]         = useState<Doc[]>([]);
   const [loading, setLoading]   = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'timeline' | 'directors' | 'shareholders' | 'analysis'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'directors' | 'shareholders' | 'transfers' | 'analysis'>('timeline');
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Company>>({});
 
@@ -1671,14 +1996,15 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
             </div>
           </div>
           <div className="flex gap-1 mt-6 border-b border-white/10 overflow-x-auto">
-            {(['timeline', 'directors', 'shareholders', 'analysis'] as const).map(tab => (
+            {(['timeline', 'directors', 'shareholders', 'transfers', 'analysis'] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`px-5 py-2.5 text-sm font-semibold whitespace-nowrap transition-all border-b-2 ${
                   activeTab===tab ? 'text-white border-white' : 'text-blue-300 border-transparent hover:text-white'
                 }`}>
-                {tab === 'timeline' ? '📅 Meeting Timeline' :
-                 tab === 'directors' ? '👥 Directors' :
+                {tab === 'timeline'     ? '📅 Meeting Timeline' :
+                 tab === 'directors'    ? '👥 Directors' :
                  tab === 'shareholders' ? '📜 Shareholders' :
+                 tab === 'transfers'    ? '🔄 Transfers' :
                  '📊 Compliance Analysis'}
               </button>
             ))}
@@ -1945,6 +2271,10 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
 
         {activeTab === 'shareholders' && (
           <ShareholdersTab companyId={companyId} company={company!} />
+        )}
+
+        {activeTab === 'transfers' && (
+          <TransfersTab companyId={companyId} company={company!} />
         )}
 
         {activeTab === 'analysis' && (
