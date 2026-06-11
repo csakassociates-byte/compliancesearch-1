@@ -8,6 +8,7 @@ import {
   computeCertRanges,
   type CertSigner,
 } from "@/lib/share-certificate-html";
+import { generateSH4HTML, type TransferSigner } from "@/lib/share-transfer-html";
 
 interface Company {
   id: string; companyName: string; cin: string | null;
@@ -715,6 +716,356 @@ function ShareholderViewModal({
   );
 }
 
+/* ── Share Transfer Modal ─────────────────────────────── */
+function ShareTransferModal({
+  sh, company, onClose, onDone,
+}: {
+  sh: ShareholderRow & { personName?: string };
+  company: Company;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [step, setStep] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Transfer details
+  const [transferDate, setTransferDate] = useState(new Date().toISOString().slice(0, 10));
+  const [sharesToTransfer, setSharesToTransfer] = useState(sh.numberOfShares || 0);
+  const [consideration, setConsideration] = useState('');
+  const [stampDuty, setStampDuty] = useState('');
+  const [issuePlace, setIssuePlace] = useState('');
+
+  // Transferee details
+  const [transfereeName, setTransfereeName] = useState('');
+  const [transfereeFather, setTransfereeFather] = useState('');
+  const [transfereeAddress, setTransfereeAddress] = useState('');
+  const [transfereePan, setTransfereePan] = useState('');
+  const [transfereeOccupation, setTransfereeOccupation] = useState('');
+
+  // Signing directors (from saved JSON or empty)
+  const [signers, setSigners] = useState<TransferSigner[]>(() => {
+    if (sh.signingDirectorsJson) {
+      try { return JSON.parse(sh.signingDirectorsJson) as TransferSigner[]; } catch { /* */ }
+    }
+    return [{ name: '', designation: 'Director', din: '' }];
+  });
+
+  const remaining = (sh.numberOfShares || 0) - sharesToTransfer;
+  const totalConsideration = consideration
+    ? (parseFloat(consideration) * sharesToTransfer).toFixed(2)
+    : '';
+
+  function addSigner() { setSigners(s => [...s, { name: '', designation: 'Director', din: '' }]); }
+  function removeSigner(i: number) { setSigners(s => s.filter((_, idx) => idx !== i)); }
+  function updateSigner(i: number, field: keyof TransferSigner, val: string) {
+    setSigners(s => s.map((sg, idx) => idx === i ? { ...sg, [field]: val } : sg));
+  }
+
+  function printSH4Preview() {
+    const html = generateSH4HTML(
+      {
+        companyName:  company.companyName,
+        cin:          company.cin || '',
+        regAddress:   company.regAddress || '',
+        shareClass:   sh.shareType || 'Equity',
+        nominalValue: sh.nominalValue || '10',
+        paidUpValue:  sh.paidUpValue  || '10',
+      },
+      {
+        name:           sh.personName || '',
+        folioNo:        sh.folioNumber || '',
+        certNo:         sh.certificateNumber || '',
+        numberOfShares: sharesToTransfer,
+        distinctiveFrom: sh.distinctiveFrom || 1,
+        distinctiveTo:  (sh.distinctiveFrom || 1) + sharesToTransfer - 1,
+        pan:            sh.panNo,
+      },
+      {
+        name:              transfereeName || '_______________',
+        fatherName:        transfereeFather,
+        address:           transfereeAddress,
+        pan:               transfereePan,
+        occupation:        transfereeOccupation,
+        newFolioNo:        '(Auto)',
+        newCertNo:         '(Auto)',
+        newDistinctiveFrom: sh.distinctiveFrom || 1,
+        newDistinctiveTo:  (sh.distinctiveFrom || 1) + sharesToTransfer - 1,
+      },
+      {
+        transferDate,
+        considerationPerShare: consideration,
+        totalConsideration,
+        stampDuty,
+        issuePlace,
+      },
+      signers.filter(s => s.name)
+    );
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) { alert('Pop-up blocked!'); return; }
+    w.document.write(html); w.document.close();
+  }
+
+  async function handleSubmit() {
+    if (!transfereeName.trim()) { setError('Transferee name is required'); return; }
+    if (sharesToTransfer <= 0) { setError('Shares to transfer must be > 0'); return; }
+    if (sharesToTransfer > (sh.numberOfShares || 0)) {
+      setError(`Cannot transfer more than ${sh.numberOfShares} shares`); return;
+    }
+    setSaving(true); setError('');
+    const res = await fetch('/api/share-transfers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyId: company.id,
+        transferorPersonId: sh.personId,
+        transferorName: sh.personName || '',
+        transferorFolio: sh.folioNumber,
+        transferorCertNo: sh.certificateNumber,
+        transferorShareholderId: sh.id,
+        transfereeName: transfereeName.trim(),
+        transfereeFatherName: transfereeFather,
+        transfereeAddress,
+        transfereePan,
+        transfereeOccupation,
+        numberOfShares: sharesToTransfer,
+        shareType: sh.shareType || 'Equity',
+        transferDate,
+        considerationPerShare: consideration || undefined,
+        totalConsideration: totalConsideration || undefined,
+        stampDuty: stampDuty || undefined,
+        issuePlace: issuePlace || undefined,
+        nominalValue: sh.nominalValue || '10',
+        paidUpValue:  sh.paidUpValue  || '10',
+        signingDirectorsJson: JSON.stringify(signers.filter(s => s.name)),
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError((d as { error?: string }).error || 'Transfer failed'); return;
+    }
+    const result = await res.json() as {
+      transferId: string; newFolioNo: string; newCertNo: string; remainingShares: number;
+    };
+    alert(
+      `✅ Transfer Complete!\n\nNew Folio: ${result.newFolioNo}\nNew Cert No: ${result.newCertNo}\n` +
+      `${result.remainingShares > 0 ? `Remaining shares (transferor): ${result.remainingShares}` : 'All shares transferred.'}`
+    );
+    onDone();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4 py-8 overflow-y-auto"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-6 py-4 flex items-center justify-between rounded-t-2xl"
+          style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
+          <div>
+            <h3 className="font-bold text-white text-sm">🔄 Share Transfer</h3>
+            <p className="text-xs text-white/60 mt-0.5">
+              Transferor: {sh.personName} · {sh.numberOfShares?.toLocaleString('en-IN')} shares
+            </p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">×</button>
+        </div>
+
+        {/* Step tabs */}
+        <div className="flex border-b border-slate-100">
+          {['Transfer Details', 'Transferee', 'Signatories'].map((label, i) => (
+            <button key={i} onClick={() => setStep(i + 1)}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${
+                step === i + 1
+                  ? 'border-b-2 border-emerald-600 text-emerald-700'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}>
+              {i + 1}. {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+
+          {/* ── Step 1: Transfer Details ── */}
+          {step === 1 && (
+            <div className="space-y-3">
+              {/* Transferor info box */}
+              <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-500 space-y-1">
+                <div className="font-bold text-slate-600 mb-1">📤 Transferor (Seller)</div>
+                <div><span className="font-semibold">Name:</span> {sh.personName}</div>
+                <div><span className="font-semibold">Folio:</span> {sh.folioNumber || '—'} &nbsp;|&nbsp; <span className="font-semibold">Cert No:</span> {sh.certificateNumber || '—'}</div>
+                <div><span className="font-semibold">Total Shares:</span> {(sh.numberOfShares || 0).toLocaleString('en-IN')}</div>
+                {sh.distinctiveFrom && sh.distinctiveTo && (
+                  <div className="font-mono"><span className="font-semibold not-[font-mono]">Distinctive:</span> {sh.distinctiveFrom} – {sh.distinctiveTo}</div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Shares to Transfer *</label>
+                <input type="number" value={sharesToTransfer} min={1} max={sh.numberOfShares || 0}
+                  onChange={e => setSharesToTransfer(parseInt(e.target.value) || 0)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                {remaining >= 0 && (
+                  <p className={`text-xs mt-1 ${remaining === 0 ? 'text-amber-600 font-semibold' : 'text-slate-400'}`}>
+                    {remaining === 0 ? '⚠️ Full transfer — transferor will have 0 shares' : `Remaining with transferor: ${remaining.toLocaleString('en-IN')} shares`}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Transfer Date *</label>
+                <input type="date" value={transferDate} onChange={e => setTransferDate(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Consideration (₹/share)</label>
+                  <input type="number" value={consideration} onChange={e => setConsideration(e.target.value)}
+                    placeholder="e.g. 10"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Stamp Duty (₹)</label>
+                  <input type="number" value={stampDuty} onChange={e => setStampDuty(e.target.value)}
+                    placeholder="optional"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                </div>
+              </div>
+
+              {totalConsideration && (
+                <div className="bg-emerald-50 rounded-lg px-3 py-2 text-xs text-emerald-700 font-semibold">
+                  💰 Total Consideration: ₹ {parseFloat(totalConsideration).toLocaleString('en-IN')}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Place of Signing</label>
+                <input type="text" value={issuePlace} onChange={e => setIssuePlace(e.target.value)}
+                  placeholder="e.g. Mumbai"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 2: Transferee ── */}
+          {step === 2 && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Full Name of Transferee *</label>
+                <input type="text" value={transfereeName} onChange={e => setTransfereeName(e.target.value)}
+                  placeholder="Full name"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Father's / Spouse's Name</label>
+                <input type="text" value={transfereeFather} onChange={e => setTransfereeFather(e.target.value)}
+                  placeholder="optional"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Address</label>
+                <textarea value={transfereeAddress} onChange={e => setTransfereeAddress(e.target.value)}
+                  rows={2} placeholder="Full address"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">PAN</label>
+                  <input type="text" value={transfereePan} onChange={e => setTransfereePan(e.target.value.toUpperCase())}
+                    placeholder="ABCDE1234F" maxLength={10}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Occupation</label>
+                  <input type="text" value={transfereeOccupation} onChange={e => setTransfereeOccupation(e.target.value)}
+                    placeholder="optional"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                </div>
+              </div>
+              <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-600">
+                <strong>Note:</strong> Folio No. and Certificate No. will be auto-generated (next available number).
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 3: Signatories ── */}
+          {step === 3 && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">Authorised signatories for Form SH-4 &amp; new certificate</p>
+              {signers.map((s, i) => (
+                <div key={i} className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500">Signatory {i + 1}</span>
+                    {signers.length > 1 && (
+                      <button onClick={() => removeSigner(i)} className="text-xs text-red-400 hover:text-red-600">✕ Remove</button>
+                    )}
+                  </div>
+                  <input type="text" value={s.name} onChange={e => updateSigner(i, 'name', e.target.value)}
+                    placeholder="Full Name"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={s.designation} onChange={e => updateSigner(i, 'designation', e.target.value)}
+                      placeholder="Designation"
+                      className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                    <input type="text" value={s.din || ''} onChange={e => updateSigner(i, 'din', e.target.value)}
+                      placeholder="DIN (optional)"
+                      className="border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  </div>
+                </div>
+              ))}
+              <button onClick={addSigner}
+                className="text-xs font-semibold text-emerald-700 border border-emerald-200 rounded-lg px-3 py-2 hover:bg-emerald-50 w-full">
+                + Add Signatory
+              </button>
+
+              {/* Preview SH-4 */}
+              <button onClick={printSH4Preview}
+                className="w-full py-2.5 rounded-xl font-bold text-sm border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center justify-center gap-2">
+                👁️ Preview Form SH-4
+              </button>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600 font-semibold">
+              ⚠️ {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5 flex gap-3 border-t border-slate-100 pt-4">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+            Cancel
+          </button>
+          {step > 1 && (
+            <button onClick={() => setStep(s => s - 1)}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+              ← Back
+            </button>
+          )}
+          {step < 3 ? (
+            <button onClick={() => { setError(''); setStep(s => s + 1); }}
+              className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
+              Next →
+            </button>
+          ) : (
+            <button onClick={handleSubmit} disabled={saving}
+              className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
+              {saving ? '⏳ Saving...' : '✅ Execute Transfer'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Director View Modal ──────────────────────────────── */
 function DirectorViewModal({
   person, onClose,
@@ -1008,6 +1359,10 @@ interface ShareholderRow extends ShareholderRecord {
   paidUpValue?: string;
   issuePlace?: string;
   signingDirectorsJson?: string;
+  // Transfer tracking
+  transferStatus?: string;   // 'transferred' | 'partial' | 'received'
+  transferredShares?: number;
+  sourceTransferId?: string;
 }
 
 function ShareholdersTab({ companyId, company }: { companyId: string; company: Company }) {
@@ -1018,6 +1373,7 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
   const [syncing, setSyncing] = useState<string | null>(null);
   const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
   const [viewSh, setViewSh] = useState<ShareholderRow | null>(null);
+  const [transferSh, setTransferSh] = useState<ShareholderRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1094,7 +1450,18 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
             <div key={sh.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div>
-                  <div className="font-bold text-slate-800">{sh.personName || '—'}</div>
+                  <div className="font-bold text-slate-800 flex items-center gap-2">
+                    {sh.personName || '—'}
+                    {sh.transferStatus === 'transferred' && (
+                      <span className="text-xs font-semibold bg-red-100 text-red-600 rounded px-1.5 py-0.5">Transferred</span>
+                    )}
+                    {sh.transferStatus === 'partial' && (
+                      <span className="text-xs font-semibold bg-amber-100 text-amber-600 rounded px-1.5 py-0.5">Partial</span>
+                    )}
+                    {sh.transferStatus === 'received' && (
+                      <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">Received</span>
+                    )}
+                  </div>
                   {sh.folioNumber && <div className="text-xs text-slate-400">Folio: {sh.folioNumber}</div>}
                   {sh.certificateNumber && <div className="text-xs text-slate-400">Cert No: {sh.certificateNumber}</div>}
                 </div>
@@ -1121,6 +1488,12 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">
                   🖨️ Certificate
                 </button>
+                {(sh.numberOfShares || 0) > 0 && sh.transferStatus !== 'transferred' && (
+                  <button onClick={() => setTransferSh(sh)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+                    🔄 Transfer
+                  </button>
+                )}
                 <button onClick={() => openKYC(sh)}
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100">
                   ✏️ Edit KYC
@@ -1153,6 +1526,14 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
           company={company}
           onClose={() => setViewSh(null)}
           onPrint={() => { printShareCertificate(viewSh, company); setViewSh(null); }}
+        />
+      )}
+      {transferSh && (
+        <ShareTransferModal
+          sh={transferSh}
+          company={company}
+          onClose={() => setTransferSh(null)}
+          onDone={() => { setTransferSh(null); load(); }}
         />
       )}
     </div>
