@@ -37,6 +37,13 @@ const TOOLS = [
     color: "text-amber-600 bg-amber-50",
   },
   {
+    href: "/tools/documents/share-transfer",
+    icon: "🔄",
+    label: "Share Transfer",
+    desc: "Form SH-4 securities transfer form",
+    color: "text-emerald-600 bg-emerald-50",
+  },
+  {
     href: "/tools/documents/minutes",
     icon: "📋",
     label: "Meeting Minutes",
