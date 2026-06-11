@@ -40,6 +40,16 @@ export default function SignupPage() {
     const data = await res.json();
     setLoading(false);
     if (!res.ok) { setError(data.error || "Signup failed"); return; }
+    // Transfer temp Excel data — will be re-saved on next login after session starts
+    try {
+      const tempCompany = sessionStorage.getItem("csi_temp_company");
+      if (tempCompany) {
+        const companyData = JSON.parse(tempCompany);
+        if (companyData.companyName) {
+          // Keep in sessionStorage so login page can transfer it after signIn
+        }
+      }
+    } catch { /* silent */ }
     router.push("/auth/login?success=Account+created+successfully!+Please+sign+in.");
   }
 

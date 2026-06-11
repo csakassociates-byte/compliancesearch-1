@@ -1,5 +1,7 @@
 "use client";
 import { useState, useMemo, useRef } from "react";
+import { useSession } from "next-auth/react";
+import { injectPreviewWatermark } from "@/lib/preview-protection";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -759,11 +761,17 @@ export default function ShareCertificatePage() {
   const [dirRegistry, setDirRegistry] = useState<DirectorInfo[]>([]);
 
   const set = (k: keyof F, v: unknown) => setF(p => ({ ...p, [k]: v }));
+  const { data: session } = useSession();
 
   function openPrintWindow(autoprint = false) {
     const html = generatePrintHTML(f, ranges);
     const win  = window.open("", "_blank", "width=900,height=700");
     if (!win) { alert("Pop-up blocked! Please allow pop-ups for this site."); return; }
+    if (!session?.user) {
+      win.document.write(injectPreviewWatermark(html));
+      win.document.close();
+      return;
+    }
     win.document.write(html);
     win.document.close();
     if (autoprint) {

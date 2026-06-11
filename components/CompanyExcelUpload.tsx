@@ -1,13 +1,13 @@
 "use client";
 import { useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { parseCompanyExcel } from "@/lib/company-excel-parser";
 import type { CompanyData } from "@/lib/types/company";
+import Link from "next/link";
 
 interface Props {
   onFill: (data: CompanyData) => void;
-  /** "blue" (default) for Bank Resolution, "amber" for Share Certificate */
   accent?: "blue" | "amber";
-  /** Extra label shown below the drop zone */
   note?: string;
 }
 
@@ -16,15 +16,17 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
   const [status,   setStatus]   = useState<"idle" | "loading" | "done" | "error">("idle");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [filled,   setFilled]   = useState<string[]>([]);
+  const [saveMsg,  setSaveMsg]  = useState<"saved" | "prompt" | null>(null);
+  const { data: session } = useSession();
 
   const colors = accent === "amber"
     ? { border: "border-amber-200", bg: "bg-amber-50/50", hover: "hover:border-amber-400",
         doneBg: "bg-green-50", doneBorder: "border-green-300",
-        errBg: "bg-red-50",   errBorder: "border-red-300",
+        errBg: "bg-red-50", errBorder: "border-red-300",
         btn: "bg-amber-600", icon: "bg-amber-50" }
     : { border: "border-blue-200", bg: "bg-blue-50/50", hover: "hover:border-blue-400",
         doneBg: "bg-green-50", doneBorder: "border-green-300",
-        errBg: "bg-red-50",   errBorder: "border-red-300",
+        errBg: "bg-red-50", errBorder: "border-red-300",
         btn: "bg-blue-600", icon: "bg-white shadow-sm" };
 
   async function handleFile(file: File) {
@@ -35,16 +37,17 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
     }
     setStatus("loading");
     setWarnings([]);
+    setSaveMsg(null);
     try {
       const { data, warnings: w } = await parseCompanyExcel(file);
 
       const filledFields: string[] = [];
-      if (data.companyName)                                  filledFields.push("Company Name");
-      if (data.cin)                                          filledFields.push("CIN");
-      if (data.regAddress)                                   filledFields.push("Registered Address");
-      if (data.incorporationDate)                            filledFields.push("Incorporation Date");
-      if (data.paidUpCapital)                                filledFields.push("Paid-up Capital");
-      if (data.charges?.[0]?.holderName)                     filledFields.push("Bank Name");
+      if (data.companyName)                filledFields.push("Company Name");
+      if (data.cin)                        filledFields.push("CIN");
+      if (data.regAddress)                 filledFields.push("Registered Address");
+      if (data.incorporationDate)          filledFields.push("Incorporation Date");
+      if (data.paidUpCapital)              filledFields.push("Paid-up Capital");
+      if (data.charges?.[0]?.holderName)   filledFields.push("Bank Name");
       const activeDirs = data.directors.filter(d => d.isActive);
       const sigDirs    = activeDirs.filter(d => d.isSig);
       if (activeDirs.length) filledFields.push(`${activeDirs.length} Director(s)`);
@@ -54,6 +57,33 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
       setFilled(filledFields);
       setWarnings(w);
       setStatus("done");
+
+      // Always save to sessionStorage (temp, for this browser session)
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("csi_temp_company", JSON.stringify(data));
+      }
+
+      // If logged in → save to DB
+      if (session?.user) {
+        try {
+          await fetch("/api/companies/save-from-excel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              companyName: data.companyName || "Unknown Company",
+              cin: data.cin || null,
+              entityType: data.entityType || null,
+              regAddress: data.regAddress || null,
+              incorporationDate: data.incorporationDate || null,
+            }),
+          });
+          setSaveMsg("saved");
+        } catch {
+          // silent fail — form still filled
+        }
+      } else {
+        setSaveMsg("prompt");
+      }
     } catch {
       setStatus("error");
       setWarnings(["Could not read the file. Make sure it is a valid MDS Excel export."]);
@@ -62,7 +92,7 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
 
   const borderCls =
     status === "done"  ? `border-green-300 ${colors.doneBg}` :
-    status === "error" ? `border-red-300   ${colors.errBg}`  :
+    status === "error" ? `border-red-300 ${colors.errBg}`  :
     `${colors.border} ${colors.bg} ${colors.hover}`;
 
   return (
@@ -77,14 +107,12 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
           ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
         />
-
         <div className="px-5 py-4 flex items-start gap-4">
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0 ${
             status === "done" ? "bg-green-100" : status === "error" ? "bg-red-100" : colors.icon
           }`}>
             {status === "loading" ? "⏳" : status === "done" ? "✅" : status === "error" ? "❌" : "📊"}
           </div>
-
           <div className="flex-1 min-w-0">
             {status === "idle" && (
               <>
@@ -110,9 +138,20 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
                     </span>
                   ))}
                 </div>
+                {/* Save status banner */}
+                {saveMsg === "saved" && (
+                  <p className="text-xs text-blue-600 font-semibold mt-2 flex items-center gap-1">
+                    🏢 Saved to <Link href="/dashboard/clients" className="underline">My Companies</Link>
+                  </p>
+                )}
+                {saveMsg === "prompt" && (
+                  <p className="text-xs text-amber-600 font-medium mt-2">
+                    💾 <Link href="/auth/login" className="underline font-semibold">Login to save this company permanently</Link> — data will be lost on browser close
+                  </p>
+                )}
                 <button
                   type="button"
-                  onClick={e => { e.stopPropagation(); setStatus("idle"); setFilled([]); setWarnings([]); }}
+                  onClick={e => { e.stopPropagation(); setStatus("idle"); setFilled([]); setWarnings([]); setSaveMsg(null); }}
                   className="text-xs text-slate-400 hover:text-slate-600 mt-1.5 underline"
                 >
                   Upload a different file
@@ -133,14 +172,12 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
               </div>
             )}
           </div>
-
           {status === "idle" && (
             <span className={`text-xs font-bold px-3 py-1 rounded-full text-white shrink-0 self-center ${colors.btn}`}>
               Upload
             </span>
           )}
         </div>
-
         {warnings.length > 0 && status === "done" && (
           <div className="px-5 pb-3">
             {warnings.map((w, i) => (
@@ -151,7 +188,6 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
           </div>
         )}
       </div>
-
       <p className="text-xs text-slate-400 mt-1.5 text-center">
         {note || "Remaining fields fill karne honge manually."}
       </p>

@@ -2,7 +2,6 @@
 import { useRef, useState } from "react";
 import type { CompanyData, DirectorData, ChargeData } from "@/lib/types/company";
 
-/** Convert raw Prisma CompanyProfile (from search API) → CompanyData */
 function dbToCompanyData(c: Record<string, unknown>): CompanyData {
   return {
     cin:                String(c.cin         || ""),
@@ -35,7 +34,7 @@ function dbToCompanyData(c: Record<string, unknown>): CompanyData {
       appointedAt: (d.appointedAt as string) || undefined,
       ceasedAt:    (d.ceasedAt   as string) || undefined,
       isActive:    Boolean(d.isActive),
-      isSig:       false, // DB doesn't store signatory flag
+      isSig:       false,
     }) as DirectorData),
     charges: ((c.charges || []) as Record<string, unknown>[]).map(ch => ({
       chargeId:       (ch.chargeId       as string) || undefined,
@@ -49,15 +48,11 @@ function dbToCompanyData(c: Record<string, unknown>): CompanyData {
 }
 
 interface Props {
-  /** Current company name value (controlled from parent form state) */
   value: string;
-  /** Called on every keystroke — parent should update form state */
   onChange: (val: string) => void;
-  /** Called when user picks a company from the dropdown */
   onSelect: (company: CompanyData) => void;
   placeholder?: string;
   className?: string;
-  /** Chip color for matching directors: "blue" | "slate" */
   accent?: "blue" | "amber";
 }
 
@@ -95,6 +90,47 @@ export default function CompanySearch({
   const hoverCls = accent === "amber" ? "hover:bg-amber-50" : "hover:bg-blue-50";
   const selTxtCls = accent === "amber" ? "text-amber-600" : "text-blue-500";
 
+  const myCompanies  = results.filter(r => r._source === "my_companies");
+  const mcaCompanies = results.filter(r => r._source === "mca");
+
+  function renderCompanyRow(c: Record<string, unknown>, idx: number) {
+    const activeDirs = ((c.directors || []) as Record<string, unknown>[]).filter(d => d.isActive);
+    const isMyCompany = c._source === "my_companies";
+    return (
+      <button
+        key={String(c.id || idx)}
+        type="button"
+        onMouseDown={() => handleSelect(c)}
+        className={`w-full flex items-start gap-3 px-4 py-3 ${hoverCls} transition-colors text-left border-b border-slate-100 last:border-0`}
+      >
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 mt-0.5 ${
+          isMyCompany
+            ? "bg-blue-600 text-white"
+            : accent === "amber" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
+        }`}>
+          {String(c.companyName || "C")[0]}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-slate-800 text-sm truncate">{String(c.companyName || "")}</p>
+          <p className="text-xs text-slate-400">{String(c.cin || "")}</p>
+          {activeDirs.length > 0 && (
+            <div className="flex gap-1 mt-1 flex-wrap">
+              {activeDirs.slice(0, 3).map((d, di) => (
+                <span key={di} className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">
+                  {String(d.name || "")}
+                </span>
+              ))}
+              {activeDirs.length > 3 && (
+                <span className="text-xs text-slate-400">+{activeDirs.length - 3} more</span>
+              )}
+            </div>
+          )}
+        </div>
+        <span className={`text-xs font-semibold shrink-0 mt-1 ${selTxtCls}`}>Select →</span>
+      </button>
+    );
+  }
+
   return (
     <div className="relative">
       <input
@@ -110,39 +146,25 @@ export default function CompanySearch({
       )}
 
       {results.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
-          {results.map((c, idx) => {
-            const activeDirs = ((c.directors || []) as Record<string, unknown>[]).filter(d => d.isActive);
-            return (
-              <button
-                key={String(c.id || idx)}
-                type="button"
-                onMouseDown={() => handleSelect(c)}
-                className={`w-full flex items-start gap-3 px-4 py-3 ${hoverCls} transition-colors text-left border-b border-slate-100 last:border-0`}
-              >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 mt-0.5 ${
-                  accent === "amber" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
-                }`}>
-                  {String(c.companyName || "C")[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-800 text-sm truncate">{String(c.companyName || "")}</p>
-                  <p className="text-xs text-slate-400">{String(c.cin || "")}</p>
-                  <div className="flex gap-1 mt-1 flex-wrap">
-                    {activeDirs.slice(0, 3).map((d, di) => (
-                      <span key={di} className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">
-                        {String(d.name || "")}
-                      </span>
-                    ))}
-                    {activeDirs.length > 3 && (
-                      <span className="text-xs text-slate-400">+{activeDirs.length - 3} more</span>
-                    )}
-                  </div>
-                </div>
-                <span className={`text-xs font-semibold shrink-0 mt-1 ${selTxtCls}`}>Select →</span>
-              </button>
-            );
-          })}
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden max-h-80 overflow-y-auto">
+          {/* My Companies section */}
+          {myCompanies.length > 0 && (
+            <>
+              <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">📂 My Companies</span>
+              </div>
+              {myCompanies.map((c, i) => renderCompanyRow(c, i))}
+            </>
+          )}
+          {/* MCA Database section */}
+          {mcaCompanies.length > 0 && (
+            <>
+              <div className="px-4 py-2 bg-slate-50 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">🏛️ MCA Database</span>
+              </div>
+              {mcaCompanies.map((c, i) => renderCompanyRow(c, myCompanies.length + i))}
+            </>
+          )}
         </div>
       )}
     </div>

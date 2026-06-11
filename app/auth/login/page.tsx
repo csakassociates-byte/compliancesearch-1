@@ -23,6 +23,27 @@ function LoginForm() {
     if (res?.error) {
       setError("Invalid email or password.");
     } else {
+      // Transfer temp Excel data to user's account
+      const tempCompany = sessionStorage.getItem("csi_temp_company");
+      if (tempCompany) {
+        try {
+          const companyData = JSON.parse(tempCompany);
+          if (companyData.companyName) {
+            await fetch("/api/companies/save-from-excel", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                companyName: companyData.companyName,
+                cin: companyData.cin || null,
+                entityType: companyData.entityType || null,
+                regAddress: companyData.regAddress || null,
+                incorporationDate: companyData.incorporationDate || null,
+              }),
+            });
+            sessionStorage.removeItem("csi_temp_company");
+          }
+        } catch { /* silent */ }
+      }
       router.push(callbackUrl);
     }
   }

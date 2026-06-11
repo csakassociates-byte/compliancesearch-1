@@ -1,5 +1,7 @@
 "use client";
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { injectPreviewWatermark } from "@/lib/preview-protection";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -380,6 +382,7 @@ export default function BankResolutionPage() {
   const [f, setF]         = useState<F>(DEFAULT);
   const [step, setStep]   = useState<1|2|3|4|5|6>(1);
   const [preview, setPreview] = useState(false);
+  const { data: session } = useSession();
 
   const set = (k: keyof F, v: unknown) => setF(p => ({ ...p, [k]: v }));
 
@@ -1339,7 +1342,21 @@ export default function BankResolutionPage() {
                   🖨️ Print
                 </button>
                 <button
-                  onClick={() => downloadResolutionPDF(f.companyName)}
+                  onClick={() => {
+                    if (!session?.user) {
+                      // Non-logged-in: open watermarked preview
+                      const el = document.getElementById("resolution-doc");
+                      if (!el) return;
+                      const title = `Board_Resolution_${f.companyName.replace(/\s+/g,"_").slice(0,30) || "Company"}`;
+                      const rawHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>${title}</title><style>@page{size:A4;margin:14mm 16mm;}*{box-sizing:border-box;margin:0;padding:0;}body{font-family:"Times New Roman",Times,serif;font-size:10.5pt;line-height:1.35;color:#000;background:#fff;}strong,b{font-weight:bold;}p{margin-bottom:4px;}</style></head><body>${el.innerHTML}</body></html>`;
+                      const win = window.open("", "_blank", "width=900,height=700");
+                      if (!win) { alert("Pop-up blocked! Please allow pop-ups for this site."); return; }
+                      win.document.write(injectPreviewWatermark(rawHtml));
+                      win.document.close();
+                    } else {
+                      downloadResolutionPDF(f.companyName);
+                    }
+                  }}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105 shadow-lg"
                   style={{ background:"linear-gradient(135deg,#16a34a,#15803d)", boxShadow:"0 6px 20px rgba(22,163,74,0.35)" }}>
                   ⬇ Download PDF
