@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import type { CompanyData, DirectorData, ChargeData } from "@/lib/types/company";
@@ -68,10 +68,25 @@ export default function CompanySearch({
   const [results, setResults]     = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading]     = useState(false);
   const [showLoginPopup, setShowLoginPopup] = useState(false);
+  const [userTyped, setUserTyped] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(null);
+  const prevValue = useRef(value);
+
+  // When value changes externally (e.g. Excel auto-fill), clear dropdown
+  useEffect(() => {
+    if (prevValue.current !== value) {
+      prevValue.current = value;
+      setResults([]);
+      setLoading(false);
+      setUserTyped(false);
+      if (timer.current) clearTimeout(timer.current);
+    }
+  }, [value]);
 
   function handleInput(val: string) {
     onChange(val);
+    setUserTyped(true);
+    prevValue.current = val; // prevent useEffect from clearing on this change
     if (timer.current) clearTimeout(timer.current);
 
     // Not logged in — show popup, no search
@@ -169,8 +184,8 @@ export default function CompanySearch({
           </div>
         )}
 
-        {/* No results found (logged in but no match) */}
-        {results.length === 0 && loading === false && session?.user && value.length >= 2 && (
+        {/* No results found (logged in but no match) — only show when user actively typed */}
+        {results.length === 0 && loading === false && session?.user && value.length >= 2 && userTyped && (
           <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-md px-4 py-3">
             <p className="text-sm text-slate-500">No company found — <span className="text-slate-700 font-medium">enter name manually</span> or <Link href="/dashboard/clients" className="text-blue-600 underline">upload Excel</Link> to add companies.</p>
           </div>
