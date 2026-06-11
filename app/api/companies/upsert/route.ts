@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
+  // Only admin can use this bulk upsert endpoint
+  const session = await getServerSession(authOptions);
+  const user = session?.user as { id?: string; email?: string } | undefined;
+  if (!user?.email || user.email !== "admin@compliancesearch.in") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const {
