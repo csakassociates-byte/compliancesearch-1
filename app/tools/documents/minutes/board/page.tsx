@@ -10,6 +10,7 @@ import CompanySearch from "@/components/CompanySearch";
 import type { CompanyData } from "@/lib/types/company";
 import { ALL_AGENDA_TEMPLATES, CATEGORY_ORDER as AGENDA_CATEGORY_ORDER, CATEGORY_META as AGENDA_CATEGORY_META, fillTemplate } from "@/lib/agenda-templates";
 import type { AgendaTemplate } from "@/lib/agenda-templates";
+import { RESOLUTION_LIBRARY, RL_CATEGORY_META, RL_CATEGORY_ORDER } from "@/lib/resolution-library";
 
 /* ══════════════════════════════════════════════════════════════════
    TYPES
@@ -817,6 +818,7 @@ export default function BoardMinutesPage() {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
+  const [templateTab, setTemplateTab] = useState<"standard" | "resolution">("standard");
   const [draftSaved, setDraftSaved] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   // If re-opened from dashboard, track the existing doc ID to update instead of create
@@ -1026,23 +1028,44 @@ export default function BoardMinutesPage() {
   }
 
   /* ── Agenda helpers ── */
-  function addAgendaItem(templateId: string) {
-    const template = ALL_AGENDA_TEMPLATES.find(t => t.id === templateId);
-    if (!template) return;
-    const fields: Record<string, string> = {};
-    template.fields.forEach(f => { fields[f.key] = ""; });
-    const newItem: AgendaItemData = {
-      id: `${templateId}-${Date.now()}`,
-      templateId,
-      title: template.title,
-      discussion: template.discussion,
-      resolution: template.resolution,
-      resolutionType: template.resolutionType,
-      fields,
-    };
+  function addAgendaItem(templateId: string, fromLibrary = false) {
+    let newItem: AgendaItemData;
+
+    if (fromLibrary) {
+      // From unified RESOLUTION_LIBRARY
+      const res = RESOLUTION_LIBRARY.find(r => r.id === templateId);
+      if (!res) return;
+      const fields: Record<string, string> = {};
+      res.fields.forEach(f => { fields[f.key] = ""; });
+      newItem = {
+        id: `rl-${templateId}-${Date.now()}`,
+        templateId: `rl_${templateId}`,   // prefix to distinguish from old templates
+        title: res.agendaTitle || res.title,
+        discussion: res.discussion,
+        resolution: res.resolution,
+        resolutionType: res.kind === "special" ? "special" : "ordinary",
+        fields,
+      };
+    } else {
+      // From original agenda-templates
+      const template = ALL_AGENDA_TEMPLATES.find(t => t.id === templateId);
+      if (!template) return;
+      const fields: Record<string, string> = {};
+      template.fields.forEach(f => { fields[f.key] = ""; });
+      newItem = {
+        id: `${templateId}-${Date.now()}`,
+        templateId,
+        title: template.title,
+        discussion: template.discussion,
+        resolution: template.resolution,
+        resolutionType: template.resolutionType,
+        fields,
+      };
+    }
+
     // AOB always last — insert before it if it exists
     const aobIdx = f.agendaItems.findIndex(a => a.templateId === "any_other_business" || a.templateId === "vote_of_thanks");
-    if (aobIdx >= 0 && templateId !== "any_other_business" && templateId !== "vote_of_thanks") {
+    if (aobIdx >= 0 && !["any_other_business", "vote_of_thanks"].includes(templateId)) {
       const next = [...f.agendaItems];
       next.splice(aobIdx, 0, newItem);
       set("agendaItems", next);
@@ -1633,9 +1656,34 @@ export default function BoardMinutesPage() {
       {showTemplates && (
         <div className="border-2 border-blue-200 rounded-2xl bg-blue-50/40 p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold text-blue-800">Select Agenda Item Template</p>
+            <p className="text-sm font-bold text-blue-800">Select Agenda Item</p>
             <button type="button" onClick={() => { setShowTemplates(false); setTemplateSearch(""); }}
               className="text-slate-400 hover:text-slate-600 text-xs font-medium">✕ Close</button>
+          </div>
+
+          {/* Tab switcher */}
+          <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
+            <button type="button"
+              onClick={() => setTemplateTab("standard")}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                templateTab === "standard"
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}>
+              📋 Standard Items
+            </button>
+            <button type="button"
+              onClick={() => setTemplateTab("resolution")}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                templateTab === "resolution"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}>
+              📝 Resolution Library
+              <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-black">
+                {RESOLUTION_LIBRARY.filter(r => r.meetingType === "board" || r.meetingType === "board_agm").length}+
+              </span>
+            </button>
           </div>
 
           {/* Search */}
@@ -1643,60 +1691,136 @@ export default function BoardMinutesPage() {
             type="text"
             value={templateSearch}
             onChange={e => setTemplateSearch(e.target.value)}
-            placeholder="🔍 Search agenda items... (e.g. bank, director, audit)"
+            placeholder={templateTab === "standard"
+              ? "🔍 Search agenda items... (e.g. bank, director, audit)"
+              : "🔍 Search resolutions... (e.g. director, shares, transfer)"
+            }
             className="w-full border border-blue-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
             autoFocus
           />
 
-          {/* Categories with templates */}
-          <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
-            {AGENDA_CATEGORY_ORDER.map(cat => {
-              const meta = AGENDA_CATEGORY_META[cat];
-              const templates = ALL_AGENDA_TEMPLATES.filter(t =>
-                t.category === cat &&
-                (templateSearch === "" || t.title.toLowerCase().includes(templateSearch.toLowerCase()))
-              );
-              if (templates.length === 0) return null;
-              return (
-                <div key={cat}>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
-                    <span>{meta.icon}</span> {meta.label}
-                    <span className="ml-1 text-slate-300 font-normal normal-case">({templates.length})</span>
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    {templates.map(t => {
-                      const alreadyAdded = addedIds.has(t.id);
-                      return (
-                        <button key={t.id} type="button"
-                          onClick={() => !alreadyAdded && addAgendaItem(t.id)}
-                          disabled={alreadyAdded}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left transition-all ${
-                            alreadyAdded
-                              ? "border-green-200 bg-green-50 text-green-700 cursor-default"
-                              : "border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-700"
-                          }`}>
-                          <span className="text-base shrink-0">{t.icon}</span>
-                          <span className="flex-1 text-xs leading-tight">{t.title}</span>
-                          {alreadyAdded
-                            ? <span className="text-xs text-green-600 font-bold shrink-0">✓</span>
-                            : <span className="text-xs text-blue-500 font-bold shrink-0">+</span>
-                          }
-                        </button>
-                      );
-                    })}
+          {/* ── Tab: Standard agenda items ── */}
+          {templateTab === "standard" && (
+            <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+              {AGENDA_CATEGORY_ORDER.map(cat => {
+                const meta = AGENDA_CATEGORY_META[cat];
+                const templates = ALL_AGENDA_TEMPLATES.filter(t =>
+                  t.category === cat &&
+                  (templateSearch === "" || t.title.toLowerCase().includes(templateSearch.toLowerCase()))
+                );
+                if (templates.length === 0) return null;
+                return (
+                  <div key={cat}>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                      <span>{meta.icon}</span> {meta.label}
+                      <span className="ml-1 text-slate-300 font-normal normal-case">({templates.length})</span>
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {templates.map(t => {
+                        const alreadyAdded = addedIds.has(t.id);
+                        return (
+                          <button key={t.id} type="button"
+                            onClick={() => !alreadyAdded && addAgendaItem(t.id)}
+                            disabled={alreadyAdded}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-left transition-all ${
+                              alreadyAdded
+                                ? "border-green-200 bg-green-50 text-green-700 cursor-default"
+                                : "border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-700"
+                            }`}>
+                            <span className="text-base shrink-0">{t.icon}</span>
+                            <span className="flex-1 text-xs leading-tight">{t.title}</span>
+                            {alreadyAdded
+                              ? <span className="text-xs text-green-600 font-bold shrink-0">✓</span>
+                              : <span className="text-xs text-blue-500 font-bold shrink-0">+</span>
+                            }
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+              {templateSearch && ALL_AGENDA_TEMPLATES.filter(t =>
+                t.title.toLowerCase().includes(templateSearch.toLowerCase())
+              ).length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-4">
+                  No matching items for &quot;{templateSearch}&quot;
+                </p>
+              )}
+            </div>
+          )}
 
-            {templateSearch && ALL_AGENDA_TEMPLATES.filter(t =>
-              t.title.toLowerCase().includes(templateSearch.toLowerCase())
-            ).length === 0 && (
-              <p className="text-sm text-slate-400 text-center py-4">
-                No matching templates found for &quot;{templateSearch}&quot;
-              </p>
-            )}
-          </div>
+          {/* ── Tab: Resolution Library ── */}
+          {templateTab === "resolution" && (
+            <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+              {RL_CATEGORY_ORDER
+                .filter(cat => {
+                  const meta = RL_CATEGORY_META[cat];
+                  return meta.meetingType === "board" || meta.meetingType === "board_agm";
+                })
+                .map(cat => {
+                  const meta = RL_CATEGORY_META[cat];
+                  const items = RESOLUTION_LIBRARY.filter(r =>
+                    r.category === cat &&
+                    (r.meetingType === "board" || r.meetingType === "board_agm") &&
+                    (templateSearch === ""
+                      || r.title.toLowerCase().includes(templateSearch.toLowerCase())
+                      || r.agendaTitle.toLowerCase().includes(templateSearch.toLowerCase())
+                    )
+                  );
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={cat}>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                        <span>{meta.icon}</span> {meta.label}
+                        <span className="ml-1 text-slate-300 font-normal normal-case">({items.length})</span>
+                      </p>
+                      <div className="space-y-1.5">
+                        {items.map(r => {
+                          const rlKey = `rl_${r.id}`;
+                          const alreadyAdded = addedIds.has(rlKey);
+                          return (
+                            <button key={r.id} type="button"
+                              onClick={() => !alreadyAdded && addAgendaItem(r.id, true)}
+                              disabled={alreadyAdded}
+                              className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
+                                alreadyAdded
+                                  ? "border-green-200 bg-green-50 text-green-700 cursor-default"
+                                  : "border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50 text-slate-700"
+                              }`}>
+                              <span className="text-base shrink-0 mt-0.5">{r.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold leading-tight">{r.agendaTitle}</div>
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                                    r.kind === "ordinary" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                                  }`}>{r.kind === "ordinary" ? "OBR" : "SR"}</span>
+                                  <span className="text-[10px] text-slate-400 truncate">{r.section}</span>
+                                  {r.rocFiling && <span className="text-[10px] text-amber-600 font-semibold">⚠️ {r.rocFiling}</span>}
+                                </div>
+                              </div>
+                              {alreadyAdded
+                                ? <span className="text-xs text-green-600 font-bold shrink-0">✓</span>
+                                : <span className="text-xs text-indigo-500 font-bold shrink-0">+</span>
+                              }
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              {templateSearch && RESOLUTION_LIBRARY.filter(r =>
+                (r.meetingType === "board" || r.meetingType === "board_agm") &&
+                (r.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                 r.agendaTitle.toLowerCase().includes(templateSearch.toLowerCase()))
+              ).length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-4">
+                  No resolutions found for &quot;{templateSearch}&quot;
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

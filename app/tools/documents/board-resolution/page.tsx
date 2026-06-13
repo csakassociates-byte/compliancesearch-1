@@ -6,9 +6,9 @@ import CompanySearch from "@/components/CompanySearch";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
 import type { CompanyData } from "@/lib/types/company";
 import {
-  ALL_BR_TEMPLATES, BR_CATEGORY_ORDER, BR_CATEGORY_META,
-  fillBRTemplate, type BRTemplate,
-} from "@/lib/board-resolution-templates";
+  RESOLUTION_LIBRARY, RL_CATEGORY_ORDER, RL_CATEGORY_META,
+  fillResolutionTemplate, type UnifiedResolution,
+} from "@/lib/resolution-library";
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 const INP = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white";
@@ -56,7 +56,7 @@ function StepBar({ step }: { step: number }) {
 /* ── Print HTML ───────────────────────────────────────────────── */
 function generateBRHtml(
   company: { companyName: string; cin: string; regAddress: string },
-  template: BRTemplate,
+  template: UnifiedResolution,
   fields: Record<string, string>,
   meetingDate: string,
   meetingSerial: string,
@@ -65,8 +65,8 @@ function generateBRHtml(
   chairmanName: string,
   onLetterhead: boolean,
 ): string {
-  const preamble   = fillBRTemplate(template.preamble,   fields);
-  const resolution = fillBRTemplate(template.resolution, fields);
+  const preamble   = fillResolutionTemplate(template.preamble,   fields);
+  const resolution = fillResolutionTemplate(template.resolution, fields);
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>Board Resolution — ${template.title}</title>
 <style>
@@ -171,18 +171,24 @@ export default function BoardResolutionPage() {
 
   /* Derived */
   const template = useMemo(() =>
-    ALL_BR_TEMPLATES.find(t => t.id === selectedTemplateId) ?? null,
+    RESOLUTION_LIBRARY.find(t => t.id === selectedTemplateId) ?? null,
   [selectedTemplateId]);
 
   const templatesInCategory = useMemo(() =>
-    ALL_BR_TEMPLATES.filter(t => t.category === selectedCategory),
+    RESOLUTION_LIBRARY.filter(t => t.category === selectedCategory),
   [selectedCategory]);
+
+  // Step 1: only show board-relevant categories
+  const boardCategories = RL_CATEGORY_ORDER.filter(cat => {
+    const meta = RL_CATEGORY_META[cat];
+    return meta.meetingType === "board" || meta.meetingType === "board_agm";
+  });
 
   const presentDirectors = directors.filter(d => d.present).map(d => d.name);
 
   const previewResolution = useMemo(() => {
     if (!template) return "";
-    return fillBRTemplate(template.resolution, fieldValues);
+    return fillResolutionTemplate(template.resolution, fieldValues);
   }, [template, fieldValues]);
 
   /* ── Apply company ── */
@@ -250,7 +256,7 @@ export default function BoardResolutionPage() {
     if (!session || !template || !company) return;
     setSaving(true); setError("");
     try {
-      const resolutionText = fillBRTemplate(template.resolution, fieldValues);
+      const resolutionText = fillResolutionTemplate(template.resolution, fieldValues);
       const docRes = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -316,9 +322,9 @@ export default function BoardResolutionPage() {
               <h2 className="text-lg font-black text-slate-700 mb-1">Kaunsi category ka resolution chahiye?</h2>
               <p className="text-sm text-slate-400 mb-5">Category choose karein — resolution list dikhegi</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {BR_CATEGORY_ORDER.map(cat => {
-                  const meta  = BR_CATEGORY_META[cat];
-                  const count = ALL_BR_TEMPLATES.filter(t => t.category === cat).length;
+                {boardCategories.map(cat => {
+                  const meta  = RL_CATEGORY_META[cat];
+                  const count = RESOLUTION_LIBRARY.filter(t => t.category === cat).length;
                   return (
                     <button key={cat}
                       onClick={() => { setSelectedCategory(cat); setStep(2); }}
@@ -340,8 +346,8 @@ export default function BoardResolutionPage() {
                 ← Back
               </button>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-2xl">{BR_CATEGORY_META[selectedCategory]?.icon}</span>
-                <h2 className="text-lg font-black text-slate-700">{BR_CATEGORY_META[selectedCategory]?.label}</h2>
+                <span className="text-2xl">{RL_CATEGORY_META[selectedCategory]?.icon}</span>
+                <h2 className="text-lg font-black text-slate-700">{RL_CATEGORY_META[selectedCategory]?.label}</h2>
               </div>
               <p className="text-sm text-slate-400 mb-5">Konsa resolution banana hai?</p>
               <div className="space-y-3">
