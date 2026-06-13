@@ -51,6 +51,11 @@ export interface TransferDetails {
   issuePlace?: string;
 }
 
+export interface TransferWitness {
+  name: string;
+  address: string;
+}
+
 /* ── Utility: number → words ─────────────────────────────────── */
 const ONES = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
   'Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
@@ -314,7 +319,8 @@ function sh4PageHtml(
   transferor: Transferor,
   transferee: Transferee,
   details: TransferDetails,
-  signers: TransferSigner[]
+  signers: TransferSigner[],
+  witnesses?: TransferWitness[]
 ): string {
   const dt = fmtDate(details.transferDate);
   const sharesInWords = numberToWords(transferor.numberOfShares);
@@ -408,18 +414,19 @@ function sh4PageHtml(
           ${transferor.address ? `<tr><td class="label">Address</td><td class="value" colspan="3">${transferor.address}</td></tr>` : ''}
         </table>
 
-        <!-- Transferor Signature -->
+        <!-- Transferor Signature + Witness 1 -->
         <div class="witness-row" style="margin:6px 0 0">
           <div class="witness-block">
             <div class="witness-line"></div>
             <div><strong>Signature of Transferor</strong></div>
+            <div style="font-size:8pt">Name: <strong>${transferor.name}</strong></div>
             <div style="font-size:8pt">Date: ${dt.full || '___________'}</div>
           </div>
           <div class="witness-block">
-            <div style="font-size:8.5pt;font-weight:bold;margin-bottom:2px">Witness</div>
+            <div style="font-size:8.5pt;font-weight:bold;margin-bottom:2px">Witness 1</div>
             <div class="witness-line"></div>
-            <div style="font-size:8pt">Name: _________________________</div>
-            <div style="font-size:8pt">Address: ______________________</div>
+            <div style="font-size:8pt">Name: <strong>${witnesses?.[0]?.name || '_________________________'}</strong></div>
+            <div style="font-size:8pt">Address: ${witnesses?.[0]?.address || '______________________'}</div>
           </div>
         </div>
 
@@ -432,22 +439,23 @@ function sh4PageHtml(
           </tr>
           ${transferee.fatherName ? `<tr><td class="label">Father's / Spouse's Name</td><td class="value" colspan="3">${transferee.fatherName}</td></tr>` : ''}
           ${transferee.address ? `<tr><td class="label">Address</td><td class="value" colspan="3">${transferee.address}</td></tr>` : ''}
-          ${transferee.pan ? `<tr><td class="label">PAN</td><td class="value" colspan="3">${transferee.pan}</td></tr>` : ''}
+          ${transferee.pan ? `<tr><td class="label">PAN</td><td class="value" colspan="3"><strong>${transferee.pan}</strong></td></tr>` : '<tr><td class="label">PAN</td><td class="value" colspan="3" style="color:#b91c1c;font-style:italic">Not provided — required for unlisted share transfers</td></tr>'}
           ${transferee.occupation ? `<tr><td class="label">Occupation</td><td class="value" colspan="3">${transferee.occupation}</td></tr>` : ''}
         </table>
 
-        <!-- Transferee Signature -->
+        <!-- Transferee Signature + Witness 2 -->
         <div class="witness-row" style="margin:6px 0 0">
           <div class="witness-block">
             <div class="witness-line"></div>
             <div><strong>Signature of Transferee</strong></div>
+            <div style="font-size:8pt">Name: <strong>${transferee.name}</strong></div>
             <div style="font-size:8pt">Date: ${dt.full || '___________'}</div>
           </div>
           <div class="witness-block">
-            <div style="font-size:8.5pt;font-weight:bold;margin-bottom:2px">Witness</div>
+            <div style="font-size:8.5pt;font-weight:bold;margin-bottom:2px">Witness 2</div>
             <div class="witness-line"></div>
-            <div style="font-size:8pt">Name: _________________________</div>
-            <div style="font-size:8pt">Address: ______________________</div>
+            <div style="font-size:8pt">Name: <strong>${witnesses?.[1]?.name || '_________________________'}</strong></div>
+            <div style="font-size:8pt">Address: ${witnesses?.[1]?.address || '______________________'}</div>
           </div>
         </div>
 
@@ -511,7 +519,8 @@ export function generateSH4HTML(
   transferor: Transferor,
   transferee: Transferee,
   details: TransferDetails,
-  signers: TransferSigner[]
+  signers: TransferSigner[],
+  witnesses?: TransferWitness[]
 ): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -522,7 +531,7 @@ export function generateSH4HTML(
   <style>${TRANSFER_CSS}</style>
 </head>
 <body>
-  ${sh4PageHtml(company, transferor, transferee, details, signers)}
+  ${sh4PageHtml(company, transferor, transferee, details, signers, witnesses)}
   <script>window.onload = function(){ window.print(); };<\/script>
 </body>
 </html>`;

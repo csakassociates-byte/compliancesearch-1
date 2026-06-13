@@ -725,25 +725,31 @@ function ShareTransferModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [step, setStep] = useState(1);
+  const INP = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400';
+
+  const [step, setStep]   = useState(1);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]  = useState('');
 
   // Transfer details
-  const [transferDate, setTransferDate] = useState(new Date().toISOString().slice(0, 10));
-  const [sharesToTransfer, setSharesToTransfer] = useState(sh.numberOfShares || 0);
+  const [transferDate, setTransferDate]   = useState(new Date().toISOString().slice(0, 10));
   const [consideration, setConsideration] = useState('');
-  const [stampDuty, setStampDuty] = useState('');
-  const [issuePlace, setIssuePlace] = useState('');
+  const [issuePlace, setIssuePlace]       = useState('');
 
   // Transferee details
-  const [transfereeName, setTransfereeName] = useState('');
-  const [transfereeFather, setTransfereeFather] = useState('');
-  const [transfereeAddress, setTransfereeAddress] = useState('');
-  const [transfereePan, setTransfereePan] = useState('');
+  const [transfereeName, setTransfereeName]           = useState('');
+  const [transfereeFather, setTransfereeFather]       = useState('');
+  const [transfereeAddress, setTransfereeAddress]     = useState('');
+  const [transfereePan, setTransfereePan]             = useState('');
   const [transfereeOccupation, setTransfereeOccupation] = useState('');
 
-  // Signing directors (from saved JSON or empty)
+  // Witnesses
+  const [w1Name, setW1Name]       = useState('');
+  const [w1Address, setW1Address] = useState('');
+  const [w2Name, setW2Name]       = useState('');
+  const [w2Address, setW2Address] = useState('');
+
+  // Signing directors
   const [signers, setSigners] = useState<TransferSigner[]>(() => {
     if (sh.signingDirectorsJson) {
       try { return JSON.parse(sh.signingDirectorsJson) as TransferSigner[]; } catch { /* */ }
@@ -751,16 +757,32 @@ function ShareTransferModal({
     return [{ name: '', designation: 'Director', din: '' }];
   });
 
-  const remaining = (sh.numberOfShares || 0) - sharesToTransfer;
+  // This cert has all shares — full transfer only (partial = split first)
+  const totalShares      = sh.numberOfShares || 0;
   const totalConsideration = consideration
-    ? (parseFloat(consideration) * sharesToTransfer).toFixed(2)
-    : '';
+    ? (parseFloat(consideration) * totalShares).toFixed(2) : '';
+  // Stamp duty = 0.25% of total consideration
+  const autoStampDuty = totalConsideration
+    ? (parseFloat(totalConsideration) * 0.0025).toFixed(2) : '';
+
+  // 60-day warning from execution date
+  const execDate    = new Date(transferDate);
+  const deadline60  = new Date(execDate); deadline60.setDate(deadline60.getDate() + 60);
+  const today       = new Date();
+  const daysLeft    = Math.ceil((deadline60.getTime() - today.getTime()) / 86400000);
+  const show60Warn  = daysLeft < 15 && daysLeft >= 0;
+  const past60      = daysLeft < 0;
 
   function addSigner() { setSigners(s => [...s, { name: '', designation: 'Director', din: '' }]); }
   function removeSigner(i: number) { setSigners(s => s.filter((_, idx) => idx !== i)); }
   function updateSigner(i: number, field: keyof TransferSigner, val: string) {
     setSigners(s => s.map((sg, idx) => idx === i ? { ...sg, [field]: val } : sg));
   }
+
+  const witnesses = [
+    { name: w1Name, address: w1Address },
+    { name: w2Name, address: w2Address },
+  ].filter(w => w.name) as { name: string; address: string }[];
 
   function printSH4Preview() {
     const html = generateSH4HTML(
@@ -776,9 +798,9 @@ function ShareTransferModal({
         name:           sh.personName || '',
         folioNo:        sh.folioNumber || '',
         certNo:         sh.certificateNumber || '',
-        numberOfShares: sharesToTransfer,
+        numberOfShares: totalShares,
         distinctiveFrom: sh.distinctiveFrom || 1,
-        distinctiveTo:  (sh.distinctiveFrom || 1) + sharesToTransfer - 1,
+        distinctiveTo:  sh.distinctiveTo || totalShares,
         pan:            sh.panNo,
       },
       {
@@ -790,16 +812,17 @@ function ShareTransferModal({
         newFolioNo:        '(Auto)',
         newCertNo:         '(Auto)',
         newDistinctiveFrom: sh.distinctiveFrom || 1,
-        newDistinctiveTo:  (sh.distinctiveFrom || 1) + sharesToTransfer - 1,
+        newDistinctiveTo:  sh.distinctiveTo || totalShares,
       },
       {
         transferDate,
         considerationPerShare: consideration,
         totalConsideration,
-        stampDuty,
+        stampDuty: autoStampDuty,
         issuePlace,
       },
-      signers.filter(s => s.name)
+      signers.filter(s => s.name),
+      witnesses
     );
     const w = window.open('', '_blank', 'width=900,height=700');
     if (!w) { alert('Pop-up blocked!'); return; }
@@ -808,10 +831,6 @@ function ShareTransferModal({
 
   async function handleSubmit() {
     if (!transfereeName.trim()) { setError('Transferee name is required'); return; }
-    if (sharesToTransfer <= 0) { setError('Shares to transfer must be > 0'); return; }
-    if (sharesToTransfer > (sh.numberOfShares || 0)) {
-      setError(`Cannot transfer more than ${sh.numberOfShares} shares`); return;
-    }
     setSaving(true); setError('');
     const res = await fetch('/api/share-transfers', {
       method: 'POST',
@@ -828,13 +847,17 @@ function ShareTransferModal({
         transfereeAddress,
         transfereePan,
         transfereeOccupation,
-        numberOfShares: sharesToTransfer,
+        numberOfShares: totalShares,
         shareType: sh.shareType || 'Equity',
         transferDate,
         considerationPerShare: consideration || undefined,
         totalConsideration: totalConsideration || undefined,
-        stampDuty: stampDuty || undefined,
+        stampDuty: autoStampDuty || undefined,
         issuePlace: issuePlace || undefined,
+        witness1Name: w1Name || undefined,
+        witness1Address: w1Address || undefined,
+        witness2Name: w2Name || undefined,
+        witness2Address: w2Address || undefined,
         nominalValue: sh.nominalValue || '10',
         paidUpValue:  sh.paidUpValue  || '10',
         signingDirectorsJson: JSON.stringify(signers.filter(s => s.name)),
@@ -843,15 +866,16 @@ function ShareTransferModal({
     setSaving(false);
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
-      setError((d as { error?: string }).error || 'Transfer failed'); return;
+      const errData = d as { error?: string; needsSplit?: boolean };
+      if (errData.needsSplit) {
+        setError('⚠️ Partial transfer ke liye pehle certificate split karna hoga. "✂️ Split" button use karein.');
+      } else {
+        setError(errData.error || 'Transfer failed');
+      }
+      return;
     }
-    const result = await res.json() as {
-      transferId: string; newFolioNo: string; newCertNo: string; remainingShares: number;
-    };
-    alert(
-      `✅ Transfer Complete!\n\nNew Folio: ${result.newFolioNo}\nNew Cert No: ${result.newCertNo}\n` +
-      `${result.remainingShares > 0 ? `Remaining shares (transferor): ${result.remainingShares}` : 'All shares transferred.'}`
-    );
+    const result = await res.json() as { transferId: string; newFolioNo: string; newCertNo: string };
+    alert(`✅ Transfer Complete!\n\nNew Folio: ${result.newFolioNo}\nNew Cert No: ${result.newCertNo}\nOld certificate CANCELLED.`);
     onDone();
   }
 
@@ -873,7 +897,7 @@ function ShareTransferModal({
 
         {/* Step tabs */}
         <div className="flex border-b border-slate-100">
-          {['Transfer Details', 'Transferee', 'Signatories'].map((label, i) => (
+          {['Details', 'Transferee', 'Witnesses', 'Signatories'].map((label, i) => (
             <button key={i} onClick={() => setStep(i + 1)}
               className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${
                 step === i + 1
@@ -890,61 +914,57 @@ function ShareTransferModal({
           {/* ── Step 1: Transfer Details ── */}
           {step === 1 && (
             <div className="space-y-3">
-              {/* Transferor info box */}
+              {/* 60-day warning */}
+              {past60 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700 font-semibold">
+                  ⛔ 60-day deadline passed! SH-4 must be submitted to company within 60 days of execution date.
+                </div>
+              )}
+              {show60Warn && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700 font-semibold">
+                  ⚠️ Only {daysLeft} days left to submit SH-4 to company (60-day rule — Section 56)
+                </div>
+              )}
+
+              {/* Transferor info */}
               <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-500 space-y-1">
-                <div className="font-bold text-slate-600 mb-1">📤 Transferor (Seller)</div>
+                <div className="font-bold text-slate-600 mb-1">📤 Transferor Certificate</div>
                 <div><span className="font-semibold">Name:</span> {sh.personName}</div>
-                <div><span className="font-semibold">Folio:</span> {sh.folioNumber || '—'} &nbsp;|&nbsp; <span className="font-semibold">Cert No:</span> {sh.certificateNumber || '—'}</div>
-                <div><span className="font-semibold">Total Shares:</span> {(sh.numberOfShares || 0).toLocaleString('en-IN')}</div>
+                <div><span className="font-semibold">Folio:</span> {sh.folioNumber || '—'} · <span className="font-semibold">Cert No:</span> {sh.certificateNumber || '—'}</div>
+                <div className="font-semibold text-blue-700">{totalShares.toLocaleString('en-IN')} shares (full cert transfer)</div>
                 {sh.distinctiveFrom && sh.distinctiveTo && (
-                  <div className="font-mono"><span className="font-semibold not-[font-mono]">Distinctive:</span> {sh.distinctiveFrom} – {sh.distinctiveTo}</div>
+                  <div className="font-mono text-slate-500">DN: {String(sh.distinctiveFrom).padStart(5,'0')} – {sh.distinctiveTo}</div>
                 )}
+                <div className="text-amber-600 font-semibold pt-1">
+                  ⚠️ This will CANCEL Cert No. {sh.certificateNumber}. For partial transfer, use ✂️ Split first.
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Shares to Transfer *</label>
-                <input type="number" value={sharesToTransfer} min={1} max={sh.numberOfShares || 0}
-                  onChange={e => setSharesToTransfer(parseInt(e.target.value) || 0)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
-                {remaining >= 0 && (
-                  <p className={`text-xs mt-1 ${remaining === 0 ? 'text-amber-600 font-semibold' : 'text-slate-400'}`}>
-                    {remaining === 0 ? '⚠️ Full transfer — transferor will have 0 shares' : `Remaining with transferor: ${remaining.toLocaleString('en-IN')} shares`}
-                  </p>
-                )}
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Date of Transfer *</label>
+                <input type="date" value={transferDate} onChange={e => setTransferDate(e.target.value)} className={INP} />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Transfer Date *</label>
-                <input type="date" value={transferDate} onChange={e => setTransferDate(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Consideration (₹/share)</label>
-                  <input type="number" value={consideration} onChange={e => setConsideration(e.target.value)}
-                    placeholder="e.g. 10"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Stamp Duty (₹)</label>
-                  <input type="number" value={stampDuty} onChange={e => setStampDuty(e.target.value)}
-                    placeholder="optional"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
-                </div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Consideration (₹ per share)</label>
+                <input type="number" value={consideration} onChange={e => setConsideration(e.target.value)}
+                  placeholder="e.g. 10" className={INP} />
               </div>
 
               {totalConsideration && (
-                <div className="bg-emerald-50 rounded-lg px-3 py-2 text-xs text-emerald-700 font-semibold">
-                  💰 Total Consideration: ₹ {parseFloat(totalConsideration).toLocaleString('en-IN')}
+                <div className="bg-emerald-50 rounded-xl px-3 py-2.5 space-y-1">
+                  <div className="text-xs font-bold text-emerald-700">💰 Total: ₹ {parseFloat(totalConsideration).toLocaleString('en-IN')}</div>
+                  <div className="text-xs text-emerald-600">
+                    📌 Stamp Duty (0.25%): <strong>₹ {parseFloat(autoStampDuty).toLocaleString('en-IN')}</strong>
+                    <span className="text-slate-400 ml-1">(auto-calculated)</span>
+                  </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Place of Signing</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Place of Execution</label>
                 <input type="text" value={issuePlace} onChange={e => setIssuePlace(e.target.value)}
-                  placeholder="e.g. Mumbai"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  placeholder="e.g. Mumbai" className={INP} />
               </div>
             </div>
           )}
@@ -955,14 +975,12 @@ function ShareTransferModal({
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Full Name of Transferee *</label>
                 <input type="text" value={transfereeName} onChange={e => setTransfereeName(e.target.value)}
-                  placeholder="Full name"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  placeholder="Full name" className={INP} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Father's / Spouse's Name</label>
                 <input type="text" value={transfereeFather} onChange={e => setTransfereeFather(e.target.value)}
-                  placeholder="optional"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  placeholder="optional" className={INP} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Address</label>
@@ -990,8 +1008,38 @@ function ShareTransferModal({
             </div>
           )}
 
-          {/* ── Step 3: Signatories ── */}
+          {/* ── Step 3: Witnesses ── */}
           {step === 3 && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700 font-semibold">
+                ⚖️ Section 56: SH-4 requires 2 independent witnesses (mandatory)
+              </div>
+              {/* Witness 1 */}
+              <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                <div className="text-xs font-bold text-slate-600 mb-1">👤 Witness 1 (Transferor's Side) *</div>
+                <input type="text" value={w1Name} onChange={e => setW1Name(e.target.value)}
+                  placeholder="Full Name of Witness 1" className={INP} />
+                <textarea value={w1Address} onChange={e => setW1Address(e.target.value)}
+                  rows={2} placeholder="Address of Witness 1"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
+              </div>
+              {/* Witness 2 */}
+              <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                <div className="text-xs font-bold text-slate-600 mb-1">👤 Witness 2 (Transferee's Side) *</div>
+                <input type="text" value={w2Name} onChange={e => setW2Name(e.target.value)}
+                  placeholder="Full Name of Witness 2" className={INP} />
+                <textarea value={w2Address} onChange={e => setW2Address(e.target.value)}
+                  rows={2} placeholder="Address of Witness 2"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
+              </div>
+              <div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-600">
+                Witnesses must be independent persons — not related to transferor or transferee.
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 4: Signatories ── */}
+          {step === 4 && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400">Authorised signatories for Form SH-4 &amp; new certificate</p>
               {signers.map((s, i) => (
@@ -1047,7 +1095,7 @@ function ShareTransferModal({
               ← Back
             </button>
           )}
-          {step < 3 ? (
+          {step < 4 ? (
             <button onClick={() => { setError(''); setStep(s => s + 1); }}
               className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
@@ -1666,6 +1714,158 @@ function DirectorsTab({ companyId, company }: { companyId: string; company: Comp
   );
 }
 
+/* ── Split Certificate Modal ─────────────────────────── */
+function SplitCertificateModal({
+  sh, companyId, onClose, onDone,
+}: {
+  sh: ShareholderRow & { personName?: string };
+  companyId: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const INP = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400';
+  const totalShares = sh.numberOfShares || 0;
+
+  // Default: 2 equal parts
+  const half = Math.floor(totalShares / 2);
+  const [parts, setParts] = useState<Array<{ shares: number }>>([
+    { shares: half },
+    { shares: totalShares - half },
+  ]);
+  const [splitDate, setSplitDate] = useState(new Date().toISOString().slice(0, 10));
+  const [remarks, setRemarks]     = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
+
+  const partsTotal = parts.reduce((s, p) => s + (p.shares || 0), 0);
+  const isBalanced = partsTotal === totalShares;
+
+  const updatePart = (i: number, val: number) => {
+    const next = [...parts];
+    next[i] = { shares: val };
+    setParts(next);
+  };
+  const addPart = () => setParts(p => [...p, { shares: 0 }]);
+  const removePart = (i: number) => { if (parts.length > 2) setParts(p => p.filter((_, j) => j !== i)); };
+
+  const handleSplit = async () => {
+    if (!isBalanced) { setError(`Parts total ${partsTotal} ≠ ${totalShares}`); return; }
+    if (parts.some(p => p.shares <= 0)) { setError('All parts must have > 0 shares'); return; }
+    setSaving(true); setError('');
+    try {
+      const r = await fetch('/api/share-splits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, originalShId: sh.id, splitDate, parts, remarks }),
+      });
+      const d = await r.json() as { error?: string; newCertificates?: unknown[] };
+      if (!r.ok) { setError(d.error || 'Split failed'); return; }
+      onDone();
+    } catch { setError('Network error'); } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between"
+          style={{ background: 'linear-gradient(135deg,#4c1d95,#7c3aed)' }}>
+          <div>
+            <h2 className="font-black text-white text-base">✂️ Split Certificate</h2>
+            <p className="text-violet-200 text-xs mt-0.5">
+              Cert No. {sh.certificateNumber} · {totalShares.toLocaleString('en-IN')} shares
+            </p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl">✕</button>
+        </div>
+
+        <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+          {/* Legal notice */}
+          <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 text-xs text-violet-800 space-y-1">
+            <div className="font-bold">📋 Certificate Split Process:</div>
+            <div>1. Old Cert No. <strong>{sh.certificateNumber}</strong> → CANCELLED (status: split)</div>
+            <div>2. New certificates issued with next sequential numbers</div>
+            <div>3. Same folio, same shareholder, same DN range redistributed</div>
+            <div>4. Then transfer one of the new certs via 🔄 Transfer</div>
+          </div>
+
+          {/* Shareholder info */}
+          <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-500 space-y-1">
+            <div><span className="font-semibold">Shareholder:</span> {sh.personName}</div>
+            <div><span className="font-semibold">Folio:</span> {sh.folioNumber} · <span className="font-semibold">Cert:</span> {sh.certificateNumber}</div>
+            {sh.distinctiveFrom && sh.distinctiveTo && (
+              <div className="font-mono">DN: {sh.distinctiveFrom} – {sh.distinctiveTo}</div>
+            )}
+          </div>
+
+          {/* Split date */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Date of Split *</label>
+            <input type="date" value={splitDate} onChange={e => setSplitDate(e.target.value)} className={INP} />
+          </div>
+
+          {/* Parts */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-slate-500">Split into Parts *</label>
+              <button onClick={addPart}
+                className="text-xs font-semibold text-violet-700 border border-violet-200 rounded-lg px-2 py-1 hover:bg-violet-50">
+                + Add Part
+              </button>
+            </div>
+            <div className="space-y-2">
+              {parts.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 w-6">P{i+1}</span>
+                  <input type="number" value={p.shares || ''} min={1} max={totalShares}
+                    onChange={e => updatePart(i, parseInt(e.target.value) || 0)}
+                    placeholder="Shares"
+                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                  <span className="text-xs text-slate-400">shares</span>
+                  {parts.length > 2 && (
+                    <button onClick={() => removePart(i)} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className={`text-xs mt-2 font-semibold ${isBalanced ? 'text-emerald-600' : 'text-red-500'}`}>
+              {isBalanced
+                ? `✅ Total: ${partsTotal} shares (balanced)`
+                : `❌ Total: ${partsTotal} / ${totalShares} shares — must equal original`}
+            </div>
+          </div>
+
+          {/* Remarks */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Remarks (optional)</label>
+            <input type="text" value={remarks} onChange={e => setRemarks(e.target.value)}
+              placeholder="e.g. Split for partial transfer to X" className={INP} />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600 font-semibold">
+              ⚠️ {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5 flex gap-3 border-t border-slate-100 pt-4">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+            Cancel
+          </button>
+          <button onClick={handleSplit} disabled={saving || !isBalanced}
+            className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg,#4c1d95,#7c3aed)' }}>
+            {saving ? '⏳ Splitting...' : '✂️ Execute Split'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Shareholders Tab ────────────────────────────────── */
 interface ShareholderRow extends ShareholderRecord {
   personName?: string;
@@ -1688,6 +1888,11 @@ interface ShareholderRow extends ShareholderRecord {
   transferStatus?: string;   // 'transferred' | 'partial' | 'received'
   transferredShares?: number;
   sourceTransferId?: string;
+  // Certificate lifecycle
+  certStatus?: string;       // 'active' | 'split' | 'cancelled'
+  cancelledReason?: string;
+  splitFromId?: string;
+  splitEventId?: string;
 }
 
 function ShareholdersTab({ companyId, company }: { companyId: string; company: Company }) {
@@ -1699,6 +1904,7 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
   const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
   const [viewSh, setViewSh] = useState<ShareholderRow | null>(null);
   const [transferSh, setTransferSh] = useState<ShareholderRow | null>(null);
+  const [splitSh, setSplitSh]       = useState<ShareholderRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1804,6 +2010,22 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
               {sh.dateOfAcquisition && (
                 <div className="text-xs text-slate-400 mb-2">Acquired: {sh.dateOfAcquisition}</div>
               )}
+              {/* Cert status badge */}
+              {sh.certStatus && sh.certStatus !== 'active' && (
+                <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full mb-2 ${
+                  sh.certStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
+                  sh.certStatus === 'split'     ? 'bg-amber-100 text-amber-700' :
+                  'bg-slate-100 text-slate-500'
+                }`}>
+                  {sh.certStatus === 'cancelled' ? '🚫 Cancelled' : '✂️ Split'}
+                  {sh.cancelledReason ? ` (${sh.cancelledReason})` : ''}
+                </div>
+              )}
+              {sh.transferStatus === 'received' && (
+                <div className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 mb-2 ml-1">
+                  📥 Received via Transfer
+                </div>
+              )}
               <div className="flex flex-wrap gap-2 mt-3">
                 <button onClick={() => setViewSh(sh)}
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
@@ -1813,11 +2035,17 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">
                   🖨️ Certificate
                 </button>
-                {(sh.numberOfShares || 0) > 0 && sh.transferStatus !== 'transferred' && (
-                  <button onClick={() => setTransferSh(sh)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
-                    🔄 Transfer
-                  </button>
+                {(sh.numberOfShares || 0) > 0 && sh.certStatus !== 'cancelled' && sh.certStatus !== 'split' && sh.transferStatus !== 'transferred' && (
+                  <>
+                    <button onClick={() => setTransferSh(sh)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+                      🔄 Transfer
+                    </button>
+                    <button onClick={() => setSplitSh(sh)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100">
+                      ✂️ Split
+                    </button>
+                  </>
                 )}
                 <button onClick={() => openKYC(sh)}
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100">
@@ -1859,6 +2087,14 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
           company={company}
           onClose={() => setTransferSh(null)}
           onDone={() => { setTransferSh(null); load(); }}
+        />
+      )}
+      {splitSh && (
+        <SplitCertificateModal
+          sh={splitSh}
+          companyId={companyId}
+          onClose={() => setSplitSh(null)}
+          onDone={() => { setSplitSh(null); load(); }}
         />
       )}
     </div>
