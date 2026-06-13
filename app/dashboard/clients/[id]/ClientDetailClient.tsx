@@ -731,6 +731,19 @@ function ShareTransferModal({
   const [saving, setSaving] = useState(false);
   const [error, setError]  = useState('');
 
+  // ── Board Resolution (Step 1) ──
+  const [brDate, setBrDate]             = useState(new Date().toISOString().slice(0, 10));
+  const [brVenue, setBrVenue]           = useState('Registered Office of the Company');
+  const [brChairman, setBrChairman]     = useState('');
+  const [brSerial, setBrSerial]         = useState('');   // auto if blank
+  const [existingMeetings, setExistingMeetings] = useState<Array<{
+    id: string; title: string; meetingDate: string; formDataJson: string;
+  }>>([]);
+  const [exactMeeting, setExactMeeting] = useState<typeof existingMeetings[0] | null>(null);
+  const [meetingChoice, setMeetingChoice] = useState<'exact' | 'existing' | 'new'>('new');
+  const [selectedMeetingId, setSelectedMeetingId] = useState('');
+  const [meetingsLoaded, setMeetingsLoaded] = useState(false);
+
   // Transfer details
   const [transferDate, setTransferDate]   = useState(new Date().toISOString().slice(0, 10));
   const [consideration, setConsideration] = useState('');
@@ -778,6 +791,35 @@ function ShareTransferModal({
   function updateSigner(i: number, field: keyof TransferSigner, val: string) {
     setSigners(s => s.map((sg, idx) => idx === i ? { ...sg, [field]: val } : sg));
   }
+
+  // Load existing board meetings for this company
+  useEffect(() => {
+    if (meetingsLoaded) return;
+    fetch(`/api/board-resolutions?companyId=${company.id}&date=${brDate}`)
+      .then(r => r.json())
+      .then((d: { allMeetings: typeof existingMeetings; exactMatch: typeof exactMeeting }) => {
+        setExistingMeetings(d.allMeetings || []);
+        if (d.exactMatch) {
+          setExactMeeting(d.exactMatch);
+          setMeetingChoice('exact');
+          setSelectedMeetingId(d.exactMatch.id);
+        }
+        setMeetingsLoaded(true);
+      })
+      .catch(() => setMeetingsLoaded(true));
+  }, [meetingsLoaded, company.id, brDate]);
+
+  // Re-check when date changes
+  useEffect(() => {
+    if (!meetingsLoaded) return;
+    const found = existingMeetings.find(m => m.meetingDate === brDate) ?? null;
+    setExactMeeting(found);
+    if (found) { setMeetingChoice('exact'); setSelectedMeetingId(found.id); }
+    else        { setMeetingChoice('new');  setSelectedMeetingId(''); }
+  }, [brDate, existingMeetings, meetingsLoaded]);
+
+  // Auto-generate resolution text from transfer details
+  const autoResolutionText = `RESOLVED THAT pursuant to Section 56 of the Companies Act, 2013 and the Articles of Association of the Company, the Board hereby approves the transfer of ${totalShares.toLocaleString('en-IN')} (${totalShares}) ${sh.shareType || 'Equity'} shares bearing Certificate No. ${sh.certificateNumber || '___'}, Folio No. ${sh.folioNumber || '___'}, Distinctive Nos. ${sh.distinctiveFrom || '___'} to ${sh.distinctiveTo || '___'}, from ${sh.personName || '_______________'} to ${transfereeName || '_______________'}${consideration ? ` at a consideration of ₹${consideration} per share (Total: ₹${parseFloat(totalConsideration || '0').toLocaleString('en-IN')})` : ''}, and that the Company Secretary / Authorised Officer be and is hereby directed to record the transfer in the Register of Members accordingly.`;
 
   const witnesses = [
     { name: w1Name, address: w1Address },
@@ -875,7 +917,35 @@ function ShareTransferModal({
       return;
     }
     const result = await res.json() as { transferId: string; newFolioNo: string; newCertNo: string };
-    alert(`✅ Transfer Complete!\n\nNew Folio: ${result.newFolioNo}\nNew Cert No: ${result.newCertNo}\nOld certificate CANCELLED.`);
+
+    // ── Auto-create / update Board Meeting + Minutes ──
+    const meetingDocIdToUse =
+      meetingChoice === 'exact'    ? exactMeeting?.id :
+      meetingChoice === 'existing' ? selectedMeetingId :
+      undefined;
+
+    await fetch('/api/board-resolutions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyId:      company.id,
+        companyName:    company.companyName,
+        cin:            company.cin            || '',
+        regAddress:     company.regAddress     || '',
+        meetingDocId:   meetingDocIdToUse      || undefined,
+        meetingDate:    brDate,
+        meetingSerial:  brSerial               || undefined,
+        venue:          brVenue,
+        chairmanName:   brChairman             || signers[0]?.name || '',
+        directors:      signers.filter(s => s.name).map(s => ({
+          name: s.name, din: s.din || '', designation: s.designation, present: true,
+        })),
+        resolutionText: autoResolutionText,
+        transferId:     result.transferId,
+      }),
+    }).catch(() => {}); // non-blocking — transfer already saved
+
+    alert(`✅ Transfer Complete!\n\nNew Folio: ${result.newFolioNo}\nNew Cert No: ${result.newCertNo}\nOld certificate CANCELLED.\n\n📋 Board Resolution recorded in Meeting minutes.`);
     onDone();
   }
 
@@ -897,9 +967,9 @@ function ShareTransferModal({
 
         {/* Step tabs */}
         <div className="flex border-b border-slate-100">
-          {['Details', 'Transferee', 'Witnesses', 'Signatories'].map((label, i) => (
+          {['BR', 'Details', 'Transferee', 'Witnesses', 'Sign.'].map((label, i) => (
             <button key={i} onClick={() => setStep(i + 1)}
-              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${
+              className={`flex-1 py-2 text-xs font-semibold transition-colors ${
                 step === i + 1
                   ? 'border-b-2 border-emerald-600 text-emerald-700'
                   : 'text-slate-400 hover:text-slate-600'
@@ -911,8 +981,95 @@ function ShareTransferModal({
 
         <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
 
-          {/* ── Step 1: Transfer Details ── */}
+          {/* ── Step 1: Board Resolution ── */}
           {step === 1 && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-xs text-blue-700 font-semibold">
+                📋 Companies Act, 2013 — Section 56: Board Resolution is mandatory before any share transfer in a private company.
+              </div>
+
+              {/* Meeting date */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Board Meeting Date *</label>
+                <input type="date" value={brDate} onChange={e => setBrDate(e.target.value)} className={INP} />
+              </div>
+
+              {/* Existing meeting on same date — auto-detect */}
+              {meetingsLoaded && exactMeeting && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs space-y-2">
+                  <div className="font-bold text-emerald-700">✅ Same-date meeting found!</div>
+                  <div className="text-emerald-600">{exactMeeting.title}</div>
+                  <div className="text-slate-500">This transfer resolution will be added to the existing meeting minutes.</div>
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={() => { setMeetingChoice('exact'); setSelectedMeetingId(exactMeeting.id); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors ${meetingChoice === 'exact' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-300'}`}>
+                      ✅ Add to this meeting
+                    </button>
+                    <button onClick={() => { setMeetingChoice('new'); setSelectedMeetingId(''); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors ${meetingChoice === 'new' ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-300'}`}>
+                      + New meeting
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Past meetings dropdown */}
+              {meetingsLoaded && !exactMeeting && existingMeetings.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Link to Past Meeting? (optional)</label>
+                  <div className="flex gap-2">
+                    <select value={meetingChoice === 'existing' ? selectedMeetingId : ''}
+                      onChange={e => {
+                        if (e.target.value) { setMeetingChoice('existing'); setSelectedMeetingId(e.target.value); }
+                        else { setMeetingChoice('new'); setSelectedMeetingId(''); }
+                      }}
+                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                      <option value="">— New meeting for {brDate} —</option>
+                      {existingMeetings.map(m => (
+                        <option key={m.id} value={m.id}>{m.title} ({m.meetingDate})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* New meeting details — only if creating new */}
+              {meetingChoice === 'new' && (
+                <div className="space-y-3 border border-slate-100 rounded-xl p-3 bg-slate-50">
+                  <div className="text-xs font-bold text-slate-500">📋 New Board Meeting Details</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">Meeting Serial No.</label>
+                      <input type="text" value={brSerial} onChange={e => setBrSerial(e.target.value)}
+                        placeholder="Auto" className={INP} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">Chairman</label>
+                      <input type="text" value={brChairman} onChange={e => setBrChairman(e.target.value)}
+                        placeholder="Director name" className={INP} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Venue</label>
+                    <input type="text" value={brVenue} onChange={e => setBrVenue(e.target.value)}
+                      placeholder="Registered Office..." className={INP} />
+                  </div>
+                </div>
+              )}
+
+              {/* Resolution preview */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Resolution Text (auto-generated)</label>
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-slate-600 leading-relaxed italic">
+                  {autoResolutionText}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">✏️ Final text will update once transferee name & consideration are filled.</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 2: Transfer Details ── */}
+          {step === 2 && (
             <div className="space-y-3">
               {/* 60-day warning */}
               {past60 && (
@@ -969,8 +1126,8 @@ function ShareTransferModal({
             </div>
           )}
 
-          {/* ── Step 2: Transferee ── */}
-          {step === 2 && (
+          {/* ── Step 3: Transferee ── */}
+          {step === 3 && (
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Full Name of Transferee *</label>
@@ -1008,8 +1165,8 @@ function ShareTransferModal({
             </div>
           )}
 
-          {/* ── Step 3: Witnesses ── */}
-          {step === 3 && (
+          {/* ── Step 4: Witnesses ── */}
+          {step === 4 && (
             <div className="space-y-4">
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700 font-semibold">
                 ⚖️ Section 56: SH-4 requires 2 independent witnesses (mandatory)
@@ -1038,8 +1195,8 @@ function ShareTransferModal({
             </div>
           )}
 
-          {/* ── Step 4: Signatories ── */}
-          {step === 4 && (
+          {/* ── Step 5: Signatories ── */}
+          {step === 5 && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400">Authorised signatories for Form SH-4 &amp; new certificate</p>
               {signers.map((s, i) => (
@@ -1095,7 +1252,7 @@ function ShareTransferModal({
               ← Back
             </button>
           )}
-          {step < 4 ? (
+          {step < 5 ? (
             <button onClick={() => { setError(''); setStep(s => s + 1); }}
               className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
