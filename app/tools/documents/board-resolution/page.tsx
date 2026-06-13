@@ -197,11 +197,15 @@ export default function BoardResolutionPage() {
 
   async function loadMeetings(cin: string) {
     try {
+      // First try by companyId (internal DB id)
       const r  = await fetch(`/api/companies/search?q=${encodeURIComponent(cin)}&limit=1`);
       const d  = await r.json() as { companies?: Array<{ id: string }> };
       const id = d.companies?.[0]?.id;
-      if (!id) return;
-      const r2 = await fetch(`/api/board-resolutions?companyId=${id}`);
+
+      // Pass both companyId (if found) AND cin — API will merge results
+      const params = new URLSearchParams({ cin });
+      if (id) params.set("companyId", id);
+      const r2 = await fetch(`/api/board-resolutions?${params.toString()}`);
       const d2 = await r2.json() as { allMeetings: typeof existingMeetings };
       setExistingMeetings(d2.allMeetings || []);
     } catch {}

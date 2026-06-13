@@ -35,23 +35,51 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const companyId = searchParams.get("companyId");
+  const cin       = searchParams.get("cin");
   const date      = searchParams.get("date");
 
-  if (!companyId) return NextResponse.json({ error: "companyId required" }, { status: 400 });
+  if (!companyId && !cin) return NextResponse.json({ error: "companyId or cin required" }, { status: 400 });
 
-  // All board meetings for this company (for dropdown)
-  const allMeetings = await prisma.$queryRawUnsafe<Array<{
-    id: string; title: string; meetingDate: string; formDataJson: string;
-  }>>(
-    `SELECT id, title, "meetingDate", "formDataJson"
-     FROM csi_documents
-     WHERE "userId" = $1
-       AND "companyId" = $2
-       AND type = 'board_minutes'
-     ORDER BY "meetingDate" DESC
-     LIMIT 20`,
-    userId, companyId
-  );
+  // All board meetings for this company
+  // Search by companyId OR by CIN inside formDataJson (for meetings saved via board minutes tool)
+  let allMeetings: Array<{ id: string; title: string; meetingDate: string; formDataJson: string }> = [];
+
+  if (companyId) {
+    // Search by companyId column
+    const byId = await prisma.$queryRawUnsafe<typeof allMeetings>(
+      `SELECT id, title, "meetingDate", "formDataJson"
+       FROM csi_documents
+       WHERE "userId" = $1
+         AND "companyId" = $2
+         AND type = 'board_minutes'
+       ORDER BY "meetingDate" DESC
+       LIMIT 20`,
+      userId, companyId
+    );
+    allMeetings = byId;
+  }
+
+  // Also search by CIN in formDataJson (covers meetings saved via board minutes tool without companyId)
+  if (cin && cin.length > 5) {
+    const byCin = await prisma.$queryRawUnsafe<typeof allMeetings>(
+      `SELECT id, title, "meetingDate", "formDataJson"
+       FROM csi_documents
+       WHERE "userId" = $1
+         AND type = 'board_minutes'
+         AND "formDataJson" ILIKE $2
+       ORDER BY "meetingDate" DESC
+       LIMIT 20`,
+      userId, `%${cin}%`
+    );
+    // Merge, deduplicate by id
+    const ids = new Set(allMeetings.map(m => m.id));
+    for (const m of byCin) {
+      if (!ids.has(m.id)) { allMeetings.push(m); ids.add(m.id); }
+    }
+    // Re-sort by date desc
+    allMeetings.sort((a, b) => b.meetingDate.localeCompare(a.meetingDate));
+    allMeetings = allMeetings.slice(0, 20);
+  }
 
   // Meeting on exact date (if provided)
   let exactMatch: typeof allMeetings[0] | null = null;
