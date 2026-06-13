@@ -1977,27 +1977,47 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {shareholders.map(sh => (
-            <div key={sh.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+          {shareholders.map(sh => {
+            const isCancelled = sh.certStatus === 'cancelled' || sh.certStatus === 'split';
+            return (
+            <div key={sh.id} className={`rounded-2xl border p-5 transition-shadow relative ${
+              isCancelled
+                ? 'bg-slate-50 border-slate-200 opacity-60 hover:opacity-80'
+                : 'bg-white border-slate-200 hover:shadow-md'
+            }`}>
+              {/* Cancelled diagonal stamp */}
+              {isCancelled && (
+                <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+                  <div className="absolute top-3 right-3">
+                    <div className={`text-xs font-black px-2.5 py-1 rounded-lg rotate-12 border-2 ${
+                      sh.certStatus === 'split'
+                        ? 'bg-amber-50 text-amber-600 border-amber-300'
+                        : 'bg-red-50 text-red-500 border-red-300'
+                    }`}>
+                      {sh.certStatus === 'split' ? '✂️ SPLIT' : '🚫 CANCELLED'}
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div>
-                  <div className="font-bold text-slate-800 flex items-center gap-2">
+                  <div className={`font-bold flex items-center gap-2 ${isCancelled ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-800'}`}>
                     {sh.personName || '—'}
                     {sh.transferStatus === 'transferred' && (
-                      <span className="text-xs font-semibold bg-red-100 text-red-600 rounded px-1.5 py-0.5">Transferred</span>
+                      <span className="text-xs font-semibold bg-red-100 text-red-600 rounded px-1.5 py-0.5 no-underline" style={{textDecoration:'none'}}>Transferred</span>
                     )}
                     {sh.transferStatus === 'partial' && (
-                      <span className="text-xs font-semibold bg-amber-100 text-amber-600 rounded px-1.5 py-0.5">Partial</span>
+                      <span className="text-xs font-semibold bg-amber-100 text-amber-600 rounded px-1.5 py-0.5 no-underline" style={{textDecoration:'none'}}>Partial</span>
                     )}
                     {sh.transferStatus === 'received' && (
-                      <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">Received</span>
+                      <span className="text-xs font-semibold bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5 no-underline" style={{textDecoration:'none'}}>Received</span>
                     )}
                   </div>
                   {sh.folioNumber && <div className="text-xs text-slate-400">Folio: {sh.folioNumber}</div>}
-                  {sh.certificateNumber && <div className="text-xs text-slate-400">Cert No: {sh.certificateNumber}</div>}
+                  {sh.certificateNumber && <div className={`text-xs ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-400'}`}>Cert No: {sh.certificateNumber}</div>}
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <div className="font-black text-blue-700 text-lg">{(sh.numberOfShares||0).toLocaleString('en-IN')}</div>
+                  <div className={`font-black text-lg ${isCancelled ? 'text-slate-400' : 'text-blue-700'}`}>{(sh.numberOfShares||0).toLocaleString('en-IN')}</div>
                   <div className="text-xs text-slate-400">{sh.shareType || 'Equity'}</div>
                   <div className="text-xs font-semibold text-slate-500">{sh.holdingPercent}%</div>
                 </div>
@@ -2067,7 +2087,8 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
