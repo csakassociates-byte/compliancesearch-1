@@ -44,12 +44,19 @@ const TOOLS = [
     color: "text-emerald-600 bg-emerald-50",
   },
   {
+    href: "/tools/documents/board-resolution",
+    icon: "📝",
+    label: "Board Resolution",
+    desc: "Instant resolution drafting — 20+ templates",
+    color: "text-indigo-700 bg-indigo-50",
+    badge: "New",
+  },
+  {
     href: "/tools/documents/minutes",
     icon: "📋",
     label: "Meeting Minutes",
     desc: "Board, AGM, EGM minutes generator",
     color: "text-blue-700 bg-blue-50",
-    badge: "New",
   },
   {
     href: "/tools/penalty-calculator",
