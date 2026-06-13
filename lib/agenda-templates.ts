@@ -991,6 +991,124 @@ const CLOSING: AgendaTemplate[] = [
 ];
 
 /* ══════════════════════════════════════════════════════════════════
+   CATEGORY 14 — FIRST BOARD MEETING (Post-Incorporation)
+   Sec. 173(1): Must be held within 30 days of incorporation
+══════════════════════════════════════════════════════════════════ */
+const FIRST_MEETING: AgendaTemplate[] = [
+  {
+    id: "note_incorporation",
+    title: "Note Certificate of Incorporation",
+    icon: "🏛️", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [
+      { key: "cin", label: "CIN", placeholder: "e.g. U74999MH2018PTC123456" },
+      { key: "incorporationDate", label: "Date of Incorporation", placeholder: "e.g. 08-12-2018" },
+    ],
+    discussion: `The Chairman placed before the Board the Certificate of Incorporation issued by the Registrar of Companies bearing CIN {cin}, dated {incorporationDate}, whereby the Company has been duly incorporated under the Companies Act, 2013. The Board took note of the same.`,
+    resolution: `RESOLVED THAT the Certificate of Incorporation issued by the Registrar of Companies bearing CIN {cin} dated {incorporationDate} be and is hereby noted and taken on record.${AUTH}`,
+    resolutionType: "ordinary",
+    resolutionLaw: "Sec. 7 — Companies Act, 2013",
+  },
+  {
+    id: "note_moa_aoa",
+    title: "Note Memorandum & Articles of Association",
+    icon: "📜", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [],
+    discussion: noting("the Memorandum of Association and the Articles of Association of the Company as registered with the Registrar of Companies at the time of incorporation"),
+    resolution: `RESOLVED THAT the Memorandum of Association and the Articles of Association of the Company as registered with the Registrar of Companies be and are hereby noted and taken on record.`,
+    resolutionType: "ordinary",
+    resolutionLaw: "Sec. 4 & 5 — Companies Act, 2013",
+  },
+  {
+    id: "appoint_first_auditor",
+    title: "Appointment of First Auditor",
+    icon: "🔍", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [
+      { key: "auditorName",    label: "Auditor / Firm Name",      placeholder: "e.g. M/s ABC & Associates" },
+      { key: "auditorRegNo",   label: "ICAI Reg. No. (FRN)",      placeholder: "e.g. 100123W" },
+      { key: "auditorAddress", label: "Auditor Address",          placeholder: "e.g. Mumbai, Maharashtra" },
+      { key: "auditFee",       label: "Audit Fee (₹ p.a.)",       placeholder: "e.g. 25,000" },
+    ],
+    discussion: `The Chairman informed the Board that as per Section 139(6) of the Companies Act, 2013, the first Auditor(s) of the Company shall be appointed by the Board of Directors within thirty (30) days of the date of registration of the Company and they shall hold office till the conclusion of the first Annual General Meeting. Accordingly, the Board considered the appointment of {auditorName} (FRN: {auditorRegNo}), {auditorAddress}, as the First Statutory Auditor of the Company.`,
+    resolution: `RESOLVED THAT pursuant to Section 139(6) of the Companies Act, 2013, M/s {auditorName} (FRN: {auditorRegNo}), {auditorAddress}, be and are hereby appointed as the First Statutory Auditors of the Company to hold office from the date of this meeting until the conclusion of the First Annual General Meeting of the Company.\n\nRESOLVED FURTHER THAT the remuneration of the Statutory Auditors be fixed at ₹{auditFee} per annum (plus applicable taxes and reimbursement of out-of-pocket expenses).${AUTH}`,
+    resolutionType: "ordinary",
+    resolutionLaw: "Sec. 139(6) — Companies Act, 2013 [Within 30 days of incorporation]",
+  },
+  {
+    id: "fix_registered_office",
+    title: "Fix Registered Office Address",
+    icon: "🏢", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [
+      { key: "regAddress", label: "Registered Office Address", placeholder: "Full address with PIN code", type: "textarea" },
+    ],
+    discussion: `The Chairman informed the Board that as per Section 12 of the Companies Act, 2013, the Company is required to have a Registered Office within 30 days of its incorporation to which all communications and notices may be addressed. The Board considered the establishment of the Registered Office at {regAddress}.`,
+    resolution: `RESOLVED THAT the Registered Office of the Company be and is hereby situated at {regAddress}.\n\nRESOLVED FURTHER THAT Form INC-22 be filed with the Registrar of Companies intimating the address of the Registered Office within 30 days of incorporation.${AUTH}`,
+    resolutionType: "ordinary",
+    resolutionLaw: "Sec. 12 — Companies Act, 2013 [Within 30 days of incorporation]",
+  },
+  {
+    id: "open_bank_account",
+    title: "Opening of Bank Account",
+    icon: "🏦", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [
+      { key: "bankName",   label: "Bank Name",          placeholder: "e.g. State Bank of India" },
+      { key: "branchName", label: "Branch Name",         placeholder: "e.g. Andheri West Branch, Mumbai" },
+      { key: "signatories", label: "Authorised Signatories", placeholder: "e.g. Any two Directors jointly" },
+    ],
+    discussion: approving(`the opening of a Current Account in the name of the Company with {bankName}, {branchName}`, `The Board deliberated on the signatories and the mode of operation of the said bank account.`),
+    resolution: `RESOLVED THAT the Company be and is hereby authorised to open a Current Account with {bankName}, {branchName}.\n\nRESOLVED FURTHER THAT {signatories} be and are hereby authorised to operate the said bank account and to sign cheques, instruments, instructions and documents on behalf of the Company.${AUTH}`,
+    resolutionType: "ordinary",
+  },
+  {
+    id: "note_share_subscription",
+    title: "Note Subscription of Shares by Subscribers",
+    icon: "📈", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [
+      { key: "totalShares",   label: "Total Subscribed Shares", placeholder: "e.g. 10,000" },
+      { key: "nominalValue",  label: "Nominal Value (₹)",       placeholder: "e.g. 10" },
+    ],
+    discussion: noting(`the Memorandum of Association wherein the subscribers to the Memorandum have subscribed to {totalShares} Equity Shares of ₹{nominalValue} each. The subscription money has been received / is to be received from the subscribers`),
+    resolution: `RESOLVED THAT the Board hereby takes note of the subscription of {totalShares} Equity Shares of ₹{nominalValue} each by the subscribers to the Memorandum of Association and the same be recorded in the Register of Members of the Company.${AUTH}`,
+    resolutionType: "ordinary",
+    resolutionLaw: "Sec. 56 — Companies Act, 2013",
+  },
+  {
+    id: "authorize_inc20a",
+    title: "Authorize Filing of INC-20A (Commencement of Business)",
+    icon: "📋", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [
+      { key: "authorizedPerson", label: "Authorised Person", placeholder: "e.g. Director / Company Secretary" },
+    ],
+    discussion: `The Chairman informed the Board that as per Section 10A of the Companies Act, 2013, a company incorporated after 2nd November 2018 having share capital shall not commence any business or exercise any borrowing powers unless a declaration is filed by a Director in Form INC-20A within 180 days of incorporation. The Board deliberated and authorised {authorizedPerson} to file Form INC-20A with the Registrar of Companies.`,
+    resolution: `RESOLVED THAT pursuant to Section 10A of the Companies Act, 2013, {authorizedPerson} be and is hereby authorised to file Form INC-20A — Declaration for Commencement of Business — with the Registrar of Companies on behalf of the Company, along with the required declaration and supporting documents.${AUTH}`,
+    resolutionType: "ordinary",
+    resolutionLaw: "Sec. 10A — Companies Act, 2013 [Within 180 days of incorporation]",
+  },
+  {
+    id: "fix_financial_year",
+    title: "Fix Financial Year of the Company",
+    icon: "📅", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [
+      { key: "fyStart", label: "Financial Year Start", placeholder: "e.g. 1st April" },
+      { key: "fyEnd",   label: "Financial Year End",   placeholder: "e.g. 31st March" },
+    ],
+    discussion: `The Chairman informed the Board that as per Section 2(41) of the Companies Act, 2013, the Financial Year of the Company needs to be fixed. The Board deliberated and decided to fix the Financial Year of the Company as {fyStart} to {fyEnd} of every year.`,
+    resolution: `RESOLVED THAT the Financial Year of the Company be and is hereby fixed from {fyStart} to {fyEnd} of every calendar year in accordance with Section 2(41) of the Companies Act, 2013.`,
+    resolutionType: "ordinary",
+    resolutionLaw: "Sec. 2(41) — Companies Act, 2013",
+  },
+  {
+    id: "adopt_common_seal",
+    title: "Adoption of Common Seal / Approve Company Stationery",
+    icon: "🔏", category: "first_meeting", categoryLabel: "First Board Meeting", categoryIcon: "🎉",
+    fields: [],
+    discussion: `The Chairman informed the Board about the need to adopt a Common Seal of the Company (if applicable) and approve the design of the Company's letterhead, rubber stamp, and other stationery in accordance with Section 22 of the Companies Act, 2013.`,
+    resolution: `RESOLVED THAT the design of the official letterhead, rubber stamp, and other stationery of the Company as placed before the Board be and is hereby approved.\n\nRESOLVED FURTHER THAT any Director or the Company Secretary be authorised to have the same printed / prepared for use by the Company.`,
+    resolutionType: "ordinary",
+    resolutionLaw: "Sec. 22 — Companies Act, 2013",
+  },
+];
+
+/* ══════════════════════════════════════════════════════════════════
    EXPORT — ALL TEMPLATES COMBINED
 ══════════════════════════════════════════════════════════════════ */
 export const ALL_AGENDA_TEMPLATES: AgendaTemplate[] = [
@@ -1007,15 +1125,18 @@ export const ALL_AGENDA_TEMPLATES: AgendaTemplate[] = [
   ...SECRETARIAL,
   ...STRATEGIC,
   ...CLOSING,
+  ...FIRST_MEETING,
 ];
 
 export const CATEGORY_ORDER = [
+  "first_meeting",
   "routine", "financial", "auditor", "directors",
   "shares", "gen_meeting", "committees", "office",
   "legal", "csr", "secretarial", "strategic", "closing",
 ];
 
 export const CATEGORY_META: Record<string, { label: string; icon: string }> = {
+  first_meeting: { label: "First Board Meeting",       icon: "🎉" },
   routine:    { label: "Routine Matters",             icon: "🔄" },
   financial:  { label: "Financial & Banking",          icon: "💰" },
   auditor:    { label: "Auditor Matters",              icon: "🔍" },

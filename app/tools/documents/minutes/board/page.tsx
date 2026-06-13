@@ -44,6 +44,7 @@ interface F {
   cin: string;
   regAddress: string;
   entityType: string;
+  incorporationDate?: string;  // for first-meeting detection
   // Step 2 — Meeting
   meetingSerial: string;
   financialYear: string;
@@ -821,6 +822,13 @@ export default function BoardMinutesPage() {
   // If re-opened from dashboard, track the existing doc ID to update instead of create
   const [existingDocId, setExistingDocId] = useState<string | null>(null);
 
+  // ── First Meeting & Duplicate Date detection ──
+  const [firstMeetingBannerDismissed, setFirstMeetingBannerDismissed] = useState(false);
+  const [firstMeetingItemsAdded, setFirstMeetingItemsAdded] = useState(false);
+  const [dupMeeting, setDupMeeting] = useState<{ id: string; title: string } | null>(null);
+  const [dupChecked, setDupChecked] = useState('');   // last checked date
+  const [dupDismissed, setDupDismissed] = useState(false);
+
   // Auto-save draft on every change
   useEffect(() => {
     try {
@@ -876,6 +884,83 @@ export default function BoardMinutesPage() {
   const set = useCallback(<K extends keyof F>(k: K, v: F[K]) =>
     setF(p => ({ ...p, [k]: v })), []);
 
+  /* ── First Meeting Detection ── */
+  const isFirstMeetingByDate = useMemo(() => {
+    if (!f.meetingDate || !f.incorporationDate) return false;
+    // Parse incorporation date (can be DD/MM/YYYY or YYYY-MM-DD)
+    let incDate: Date;
+    if (f.incorporationDate.includes('/')) {
+      const [d, m, y] = f.incorporationDate.split('/');
+      incDate = new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
+    } else {
+      incDate = new Date(f.incorporationDate);
+    }
+    const meetDate = new Date(f.meetingDate);
+    const diffDays = Math.floor((meetDate.getTime() - incDate.getTime()) / 86400000);
+    return diffDays >= 0 && diffDays <= 35;
+  }, [f.meetingDate, f.incorporationDate]);
+
+  // Auto-add first meeting agenda items once
+  useEffect(() => {
+    if (!isFirstMeetingByDate || firstMeetingItemsAdded) return;
+    const FIRST_MEETING_IDS = [
+      'note_incorporation', 'note_moa_aoa', 'appoint_first_auditor',
+      'fix_registered_office', 'open_bank_account', 'note_share_subscription',
+      'authorize_inc20a', 'fix_financial_year', 'adopt_common_seal',
+    ];
+    const alreadyAdded = new Set(f.agendaItems.map(a => a.templateId));
+    const toAdd = FIRST_MEETING_IDS.filter(id => !alreadyAdded.has(id));
+    if (toAdd.length === 0) { setFirstMeetingItemsAdded(true); return; }
+
+    // Insert before closing items
+    const closingIds = new Set(['any_other_business', 'vote_of_thanks', 'close_meeting']);
+    const closingIdx = f.agendaItems.findIndex(a => closingIds.has(a.templateId ?? ''));
+    const newItems = toAdd.map(id => {
+      const t = ALL_AGENDA_TEMPLATES.find(x => x.id === id)!;
+      const fields: Record<string, string> = {};
+      t.fields.forEach(field => { fields[field.key] = ''; });
+      // Pre-fill known fields from company data
+      if (fields.cin !== undefined)               fields.cin = f.cin || '';
+      if (fields.incorporationDate !== undefined) fields.incorporationDate = f.incorporationDate || '';
+      if (fields.regAddress !== undefined)        fields.regAddress = f.regAddress || '';
+      return {
+        id: `${id}-first-${Date.now()}-${Math.random()}`,
+        templateId: id,
+        title: t.title,
+        discussion: t.discussion,
+        resolution: t.resolution,
+        resolutionType: t.resolutionType,
+        fields,
+      };
+    });
+    const updated = [...f.agendaItems];
+    if (closingIdx >= 0) { updated.splice(closingIdx, 0, ...newItems); }
+    else                 { updated.push(...newItems); }
+    set('agendaItems', updated);
+    setFirstMeetingItemsAdded(true);
+  }, [isFirstMeetingByDate, firstMeetingItemsAdded, f.agendaItems, f.cin, f.incorporationDate, f.regAddress, set]);
+
+  /* ── Duplicate Date Check (on Step 2 date change) ── */
+  useEffect(() => {
+    if (!f.meetingDate || !f.cin || f.meetingDate === dupChecked) return;
+    if (existingDocId) return;   // editing existing — no dup check needed
+    setDupChecked(f.meetingDate);
+    setDupDismissed(false);
+    // Resolve companyId via CIN search, then check for duplicate meeting
+    fetch(`/api/companies/search?q=${encodeURIComponent(f.cin)}&limit=1`)
+      .then(r => r.json())
+      .then((d: { companies?: Array<{ id: string }> }) => {
+        const companyId = d.companies?.[0]?.id;
+        if (!companyId) return;
+        return fetch(`/api/board-resolutions?companyId=${companyId}&date=${f.meetingDate}`)
+          .then(r => r.json())
+          .then((bd: { exactMatch: { id: string; title: string } | null }) => {
+            setDupMeeting(bd.exactMatch ?? null);
+          });
+      })
+      .catch(() => {});
+  }, [f.meetingDate, f.cin, dupChecked, existingDocId]);
+
   /* ── Company fill ── */
   function applyCompany(data: CompanyData) {
     const dirs: Director[] = data.directors
@@ -888,10 +973,11 @@ export default function BoardMinutesPage() {
 
     setF(p => ({
       ...p,
-      ...(data.companyName && { companyName: data.companyName }),
-      ...(data.cin         && { cin:         data.cin }),
-      ...(data.regAddress  && { regAddress:  data.regAddress }),
-      ...(data.entityType  && { entityType:  data.entityType }),
+      ...(data.companyName        && { companyName:       data.companyName }),
+      ...(data.cin                && { cin:               data.cin }),
+      ...(data.regAddress         && { regAddress:        data.regAddress }),
+      ...(data.entityType         && { entityType:        data.entityType }),
+      ...(data.incorporationDate  && { incorporationDate: data.incorporationDate }),
       directors: dirs.length > 0 ? dirs : p.directors,
       // Auto-fill chairman only if not already set
       ...(autoChairman && !p.chairmanName && {
@@ -901,10 +987,18 @@ export default function BoardMinutesPage() {
       }),
       ctcSignatories: dirs.slice(0, 4).map(d => ({ name: d.name, designation: d.designation, din: d.din })),
     }));
+    // Store cin for duplicate-date API check (companyId resolved server-side via cin)
+    if (data.cin && typeof window !== 'undefined') {
+      try { sessionStorage.setItem('boardMinutesCompany', JSON.stringify({ cin: data.cin })); } catch {}
+    }
+    // Reset first-meeting items added flag so new detection can run
+    setFirstMeetingItemsAdded(false);
+    setDupChecked('');
   }
 
   /* ── Director helpers ── */
   function setDirField(i: number, k: keyof Director, v: boolean | string) {
+
     const next = [...f.directors];
     next[i] = { ...next[i], [k]: v };
     set("directors", next);
@@ -1221,13 +1315,65 @@ export default function BoardMinutesPage() {
             onChange={e => set("financialYear", e.target.value)}
             placeholder="e.g. 2025-26" />
         </div>
-        <div>
+        <div className="sm:col-span-2">
           <Lbl c="Date of Meeting *" />
           <input type="date" className={INP} value={f.meetingDate}
             onChange={e => {
               set("meetingDate", e.target.value);
               if (!f.financialYear) set("financialYear", autoFY(e.target.value));
             }} />
+
+          {/* ── First Meeting Banner ── */}
+          {isFirstMeetingByDate && !firstMeetingBannerDismissed && (
+            <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-bold text-emerald-700">🎉 Pehli Board Meeting detect hui!</p>
+                  <p className="text-emerald-600 text-xs mt-0.5">
+                    Incorporation: <strong>{f.incorporationDate}</strong> — Meeting date is within 30 days ✅
+                  </p>
+                  {firstMeetingItemsAdded ? (
+                    <p className="text-xs text-emerald-700 font-semibold mt-1">
+                      ✅ {`9 special agenda items auto-add ho gaye hain (Auditor, Bank Account, INC-20A, etc.)`}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-600 font-semibold mt-1">
+                      ⏳ First meeting agenda items add ho rahe hain…
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => setFirstMeetingBannerDismissed(true)}
+                  className="text-emerald-400 hover:text-emerald-600 text-lg leading-none flex-shrink-0">✕</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Duplicate Date Warning ── */}
+          {dupMeeting && !dupDismissed && !existingDocId && (
+            <div className="mt-2 bg-amber-50 border border-amber-300 rounded-xl p-3 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1">
+                  <p className="font-bold text-amber-700">⚠️ Is date pe already ek meeting hai!</p>
+                  <p className="text-amber-600 text-xs mt-0.5 font-medium">{dupMeeting.title}</p>
+                  <p className="text-slate-600 text-xs mt-1">
+                    Agar aapko naya agenda ya resolution add karna hai, to ussi meeting mein add karein — naya banane ki zaroorat nahi.
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <a href={`/dashboard`}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700">
+                      📂 Existing meeting open karein →
+                    </a>
+                    <button onClick={() => setDupDismissed(true)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-100">
+                      Phir bhi naya banao
+                    </button>
+                  </div>
+                </div>
+                <button onClick={() => setDupDismissed(true)}
+                  className="text-amber-400 hover:text-amber-600 text-lg leading-none flex-shrink-0">✕</button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
