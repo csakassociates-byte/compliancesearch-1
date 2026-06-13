@@ -470,19 +470,66 @@ export default function BoardResolutionPage() {
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
                 <h3 className="font-bold text-slate-700 text-sm mb-4">📅 Meeting Details</h3>
 
-                {dupMeeting && (
-                  <div className="mb-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs">
-                    <div className="font-bold text-amber-700">⚠️ Is date pe already ek meeting hai!</div>
-                    <div className="text-amber-600 font-medium mt-0.5">{dupMeeting.title}</div>
-                    <div className="text-slate-500 mt-1">Save karne pe yeh resolution us meeting mein auto-add hoga.</div>
-                  </div>
-                )}
-
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
+                  {/* Date field — full width with suggestion below */}
+                  <div className="col-span-2">
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Meeting Date *</label>
                     <input type="date" value={meetingDate} onChange={e => setMeetingDate(e.target.value)} className={INP} />
+
+                    {/* ── Date-based suggestions ── */}
+                    {meetingDate && existingMeetings.length > 0 && (() => {
+                      const sel = new Date(meetingDate).getTime();
+                      // exact match
+                      if (dupMeeting) return (
+                        <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 flex items-start gap-2">
+                          <span className="text-base mt-0.5">⚠️</span>
+                          <div>
+                            <div className="text-xs font-bold text-amber-700">Is date pe already ek meeting recorded hai!</div>
+                            <div className="text-xs text-amber-800 font-semibold mt-0.5">{dupMeeting.title}</div>
+                            <div className="text-xs text-slate-500 mt-1">Save karne pe yeh resolution <strong>us meeting mein auto-add</strong> hoga — alag meeting nahi banega.</div>
+                            <button onClick={() => setSelectedMeetingId(dupMeeting.id)}
+                              className="mt-1.5 text-xs font-bold text-amber-700 underline">
+                              → Us meeting se link karein
+                            </button>
+                          </div>
+                        </div>
+                      );
+                      // nearby meetings (±60 days)
+                      const nearby = existingMeetings.filter(m => {
+                        const diff = Math.abs(new Date(m.meetingDate).getTime() - sel) / 86400000;
+                        return diff > 0 && diff <= 60;
+                      }).slice(0, 3);
+                      if (nearby.length > 0) return (
+                        <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                          <div className="text-xs font-bold text-slate-500 mb-1.5">📋 Is company ke recent meetings (link kar sakte hain):</div>
+                          <div className="space-y-1">
+                            {nearby.map(m => (
+                              <button key={m.id}
+                                onClick={() => { setSelectedMeetingId(m.id); setMeetingDate(m.meetingDate); }}
+                                className={`w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                                  selectedMeetingId === m.id
+                                    ? "bg-indigo-100 border border-indigo-300 text-indigo-700 font-semibold"
+                                    : "bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700"
+                                }`}>
+                                <span className="font-medium">{m.title}</span>
+                                <span className="text-slate-400 font-mono ml-2">{m.meetingDate}</span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1.5">Click karein us meeting se link karne ke liye, ya naya meeting date rakho.</div>
+                        </div>
+                      );
+                      return null;
+                    })()}
+
+                    {/* No meetings at all for this company */}
+                    {meetingDate && company && existingMeetings.length === 0 && (
+                      <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                        ✅ Is company ka koi purana meeting record nahi mila — naya meeting create hoga.
+                      </div>
+                    )}
                   </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Meeting Serial No.</label>
                     <input value={meetingSerial} onChange={e => setMeetingSerial(e.target.value)} placeholder="e.g. 6/2025-26" className={INP} />
@@ -491,7 +538,7 @@ export default function BoardResolutionPage() {
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Resolution No.</label>
                     <input value={resolutionNo} onChange={e => setResolutionNo(e.target.value)} placeholder="e.g. BR-2025-001" className={INP} />
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Chairman</label>
                     {directors.length > 0 ? (
                       <select value={chairmanName} onChange={e => setChairmanName(e.target.value)} className={SEL}>
@@ -506,13 +553,14 @@ export default function BoardResolutionPage() {
 
                 {existingMeetings.length > 0 && (
                   <div className="mt-3">
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Link to Board Meeting Minutes</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">🔗 Board Meeting Minutes se Link</label>
                     <select value={selectedMeetingId} onChange={e => setSelectedMeetingId(e.target.value)} className={SEL}>
-                      <option value="">— Auto-detect by date / New —</option>
+                      <option value="">— Naya meeting banao / Auto-detect —</option>
                       {existingMeetings.map(m => (
-                        <option key={m.id} value={m.id}>{m.title} ({m.meetingDate})</option>
+                        <option key={m.id} value={m.id}>{m.title} · {m.meetingDate}</option>
                       ))}
                     </select>
+                    <p className="text-xs text-slate-400 mt-1">Agar yeh resolution kisi existing meeting ka hissa hai to wahan link karo</p>
                   </div>
                 )}
               </div>
