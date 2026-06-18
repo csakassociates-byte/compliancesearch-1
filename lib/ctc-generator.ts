@@ -85,12 +85,23 @@ function fmtDate(d: string): string {
   }
 }
 
+function fmtTime(t: string): string {
+  if (!t) return "";
+  const [hStr, mStr] = t.split(":");
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr || "0", 10);
+  if (isNaN(h)) return t;
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 /** "Extract of Minutes of Board Meeting No. BM-001 held on..." */
 function meetingHeaderLine(meeting: CtcMeeting, companyName: string): string {
   const date = fmtDate(meeting.meetingDate);
   const timeVenue = [
-    meeting.meetingTime ? `at ${meeting.meetingTime}` : "",
-    meeting.venue       ? `at ${meeting.venue}`       : "",
+    meeting.meetingTime ? `at ${fmtTime(meeting.meetingTime)}` : "",
+    meeting.venue       ? `at ${meeting.venue}`                : "",
   ].filter(Boolean).join(" ");
 
   switch (meeting.meetingType) {
@@ -283,24 +294,32 @@ export function generateCtcDocument(pages: CtcParams[]): string {
 <style>
   @page { size: A4; margin: 20mm 18mm; }
   *, *::before, *::after { box-sizing: border-box; }
-  /* body width = A4(210mm) - left(18mm) - right(18mm) = 174mm
-     This constrains ALL content before printing so nothing overflows @page margins */
-  html { background: #e0e0e0; }
+  html { background: #c8c8c8; }
+  /*
+   * Screen: simulate the A4 printable area.
+   * A4 = 210mm wide. Left+right margin = 18mm each → printable = 174mm.
+   * We set body = 210mm and add 18mm padding each side so content naturally
+   * stays within 174mm. No right-side clipping at any screen resolution.
+   */
   body {
     font-family: "Times New Roman", Times, serif;
     font-size: 12px;
     color: #1a1a1a;
-    width: 174mm;
-    max-width: 174mm;
-    margin: 0 auto;
-    padding: 0;
-    overflow-x: hidden;
+    width: 210mm;
+    max-width: 210mm;
+    margin: 8mm auto;
+    padding: 12mm 18mm;
     background: #fff;
   }
-  p, h2, h3, span { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
+  p, h2, h3, h4, span, td, th { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
   @media print {
     html { background: transparent; }
-    body { width: 100%; max-width: 100%; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body {
+      width: 100%; max-width: 100%;
+      margin: 0; padding: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
   }
   body > div:first-child { page-break-before: auto !important; }
 </style>

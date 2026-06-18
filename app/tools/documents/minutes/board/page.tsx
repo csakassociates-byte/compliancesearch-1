@@ -129,6 +129,17 @@ function fmtDate(d: string): string {
   } catch { return d; }
 }
 
+function fmtTime(t: string): string {
+  if (!t) return "___";
+  const [hStr, mStr] = t.split(":");
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr || "0", 10);
+  if (isNaN(h)) return t;
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 function ordinal(n: number): string {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
@@ -267,15 +278,27 @@ function generateMinutesHTML(f: F): string {
   }).join("");
 
   const css = `
-    @page { size: A4; margin: 18mm 16mm 14mm 16mm; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.4; color: #000; background: #fff; }
+    @page { size: A4; margin: 20mm 18mm; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: #c8c8c8; }
+    body {
+      font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.5;
+      color: #000;
+      width: 210mm; max-width: 210mm;
+      margin: 8mm auto; padding: 12mm 18mm;
+      background: #fff;
+    }
+    p, td, th, span { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
+    @media print {
+      html { background: transparent; }
+      body { width: 100%; max-width: 100%; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
     .center { text-align: center; }
     .upper { text-transform: uppercase; }
     .bold { font-weight: bold; }
     table { width: 100%; border-collapse: collapse; }
     td, th { border: 1px solid #555; padding: 5px 8px; font-size: 9pt; vertical-align: top; }
-    th { font-weight: bold; background: #f5f5f5; text-align: center; }
+    th { font-weight: bold; background: #f5f5f5; text-align: left; }
     .divider { border-top: 1.5px solid #333; margin: 10px 0; }
     .thin-divider { border-top: 1px dashed #bbb; margin: 8px 0; }
   `;
@@ -330,7 +353,7 @@ ${f.printOnLetterhead ? `
     <th style="text-align:left;">Date</th>
     <td>${fmtDate(f.meetingDate)}</td>
     <th style="text-align:left;">Time</th>
-    <td>${f.meetingTime || "___"} — ${f.closingTime || "___"}</td>
+    <td>${fmtTime(f.meetingTime)}${f.closingTime ? " to " + fmtTime(f.closingTime) : ""}</td>
   </tr>
   <tr>
     <th style="text-align:left;">Venue</th>
@@ -417,7 +440,7 @@ ${agendaHTML}
 <p style="font-size:9.5pt;text-align:justify;margin-bottom:16px;line-height:1.6;">
   There being no other business to transact, the Chairman thanked all the Directors and invitees
   present for their valuable contribution. With the permission of the Board, the Chairman declared
-  the meeting concluded at ${f.closingTime || "___"}.
+  the meeting concluded at ${fmtTime(f.closingTime) || "___"}.
 </p>
 
 <!-- SIGNATURE -->

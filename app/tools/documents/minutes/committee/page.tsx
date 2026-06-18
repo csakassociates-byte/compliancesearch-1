@@ -111,6 +111,16 @@ function fmtDate(d: string): string {
   try { return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }); }
   catch { return d; }
 }
+function fmtTime(t: string): string {
+  if (!t) return "—";
+  const [hStr, mStr] = t.split(":");
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr || "0", 10);
+  if (isNaN(h)) return t;
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
 function parseMcaDate(d: string): string {
   if (!d) return "";
   const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -233,12 +243,22 @@ function generateCommitteeHTML(f: F): string {
   <title>${commName} Minutes — ${f.companyName}</title>
   <style>
     @page { size:A4; margin:20mm 18mm; }
-    body { font-family:'Times New Roman',Times,serif; font-size:12px; color:#1a1a1a; margin:0; padding:0; text-align:justify; }
-    @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { background:#c8c8c8; }
+    body {
+      font-family:'Times New Roman',Times,serif; font-size:12px; color:#1a1a1a;
+      width:210mm; max-width:210mm; margin:8mm auto; padding:12mm 18mm;
+      background:#fff; text-align:justify;
+    }
+    p, td, th, span { overflow-wrap:break-word; word-wrap:break-word; }
+    @media print {
+      html { background:transparent; }
+      body { width:100%; max-width:100%; margin:0; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    }
     table { border-collapse:collapse; width:100%; }
   </style>
   </head><body>
-  <div style="max-width:800px;margin:0 auto;padding:0;">
+  <div style="width:100%;">
 
     ${letterheadBlock}
 
@@ -266,7 +286,7 @@ function generateCommitteeHTML(f: F): string {
         </tr>
         <tr>
           <td style="${tdStyle2}font-weight:700;background:#f0fdf4;">Time</td>
-          <td style="${tdStyle2}">${f.meetingTime || "—"}${f.closingTime ? " to " + f.closingTime : ""}</td>
+          <td style="${tdStyle2}">${fmtTime(f.meetingTime)}${f.closingTime ? " to " + fmtTime(f.closingTime) : ""}</td>
           <td style="${tdStyle2}font-weight:700;background:#f0fdf4;">Venue</td>
           <td style="${tdStyle2}">${f.venue || "—"}</td>
         </tr>
