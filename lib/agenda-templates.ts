@@ -1151,3 +1151,14 @@ export const CATEGORY_META: Record<string, { label: string; icon: string }> = {
   strategic:  { label: "Strategic Matters",            icon: "🎯" },
   closing:    { label: "Closing Matter",               icon: "✅" },
 };
+
+// ── Re-export from master-resolutions for new tools ──────────────
+export {
+  ALL_MASTER_RESOLUTIONS,
+  MASTER_CATEGORY_META,
+  getMasterById,
+  getMasterByCategory,
+  getMasterByMeetingType,
+  fillMasterTemplate,
+} from "./master-resolutions";
+export type { MasterResolution, MasterField } from "./master-resolutions";

@@ -10,7 +10,7 @@ import CompanySearch from "@/components/CompanySearch";
 import type { CompanyData } from "@/lib/types/company";
 import { ALL_AGENDA_TEMPLATES, CATEGORY_ORDER as AGENDA_CATEGORY_ORDER, CATEGORY_META as AGENDA_CATEGORY_META, fillTemplate } from "@/lib/agenda-templates";
 import type { AgendaTemplate } from "@/lib/agenda-templates";
-import { RESOLUTION_LIBRARY, RL_CATEGORY_META, RL_CATEGORY_ORDER } from "@/lib/resolution-library";
+import { ALL_MASTER_RESOLUTIONS, MASTER_CATEGORY_META } from "@/lib/master-resolutions";
 
 /* ══════════════════════════════════════════════════════════════════
    TYPES
@@ -1032,18 +1032,18 @@ export default function BoardMinutesPage() {
     let newItem: AgendaItemData;
 
     if (fromLibrary) {
-      // From unified RESOLUTION_LIBRARY
-      const res = RESOLUTION_LIBRARY.find(r => r.id === templateId);
+      // From master-resolutions
+      const res = ALL_MASTER_RESOLUTIONS.find(r => r.id === templateId);
       if (!res) return;
       const fields: Record<string, string> = {};
       res.fields.forEach(f => { fields[f.key] = ""; });
       newItem = {
-        id: `rl-${templateId}-${Date.now()}`,
-        templateId: `rl_${templateId}`,   // prefix to distinguish from old templates
+        id: `mr-${templateId}-${Date.now()}`,
+        templateId,
         title: res.agendaTitle || res.title,
         discussion: res.discussion,
         resolution: res.resolution,
-        resolutionType: res.kind === "special" ? "special" : "ordinary",
+        resolutionType: res.kind === "special" ? "special" : res.kind === "none" ? "none" : "ordinary",
         fields,
       };
     } else {
@@ -1636,7 +1636,9 @@ export default function BoardMinutesPage() {
   /* ════════════════════════════════════════════
      STEP 4 — AGENDA BUILDER
   ════════════════════════════════════════════ */
-  const addedIds = new Set(f.agendaItems.map(a => a.templateId));
+  const addedIds = new Set(f.agendaItems.map(a =>
+    a.templateId.startsWith("rl_") ? a.templateId.slice(3) : a.templateId
+  ));
 
   const s4 = (
     <div className="space-y-4">
@@ -1681,7 +1683,7 @@ export default function BoardMinutesPage() {
               }`}>
               📝 Resolution Library
               <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-black">
-                {RESOLUTION_LIBRARY.filter(r => r.meetingType === "board" || r.meetingType === "board_agm").length}+
+                {ALL_MASTER_RESOLUTIONS.filter(r => r.meetingType === "board").length}+
               </span>
             </button>
           </div>
@@ -1753,19 +1755,16 @@ export default function BoardMinutesPage() {
           {/* ── Tab: Resolution Library ── */}
           {templateTab === "resolution" && (
             <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
-              {RL_CATEGORY_ORDER
-                .filter(cat => {
-                  const meta = RL_CATEGORY_META[cat];
-                  return meta.meetingType === "board" || meta.meetingType === "board_agm";
-                })
+              {Object.keys(MASTER_CATEGORY_META)
+                .filter(cat => MASTER_CATEGORY_META[cat].meetingType === "board")
                 .map(cat => {
-                  const meta = RL_CATEGORY_META[cat];
-                  const items = RESOLUTION_LIBRARY.filter(r =>
+                  const meta = MASTER_CATEGORY_META[cat];
+                  const items = ALL_MASTER_RESOLUTIONS.filter(r =>
                     r.category === cat &&
-                    (r.meetingType === "board" || r.meetingType === "board_agm") &&
+                    r.meetingType === "board" &&
                     (templateSearch === ""
                       || r.title.toLowerCase().includes(templateSearch.toLowerCase())
-                      || r.agendaTitle.toLowerCase().includes(templateSearch.toLowerCase())
+                      || (r.agendaTitle ?? "").toLowerCase().includes(templateSearch.toLowerCase())
                     )
                   );
                   if (items.length === 0) return null;
@@ -1777,8 +1776,7 @@ export default function BoardMinutesPage() {
                       </p>
                       <div className="space-y-1.5">
                         {items.map(r => {
-                          const rlKey = `rl_${r.id}`;
-                          const alreadyAdded = addedIds.has(rlKey);
+                          const alreadyAdded = addedIds.has(r.id);
                           return (
                             <button key={r.id} type="button"
                               onClick={() => !alreadyAdded && addAgendaItem(r.id, true)}
@@ -1790,11 +1788,13 @@ export default function BoardMinutesPage() {
                               }`}>
                               <span className="text-base shrink-0 mt-0.5">{r.icon}</span>
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs font-semibold leading-tight">{r.agendaTitle}</div>
+                                <div className="text-xs font-semibold leading-tight">{r.agendaTitle ?? r.title}</div>
                                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                                    r.kind === "ordinary" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
-                                  }`}>{r.kind === "ordinary" ? "OBR" : "SR"}</span>
+                                  {r.kind !== "none" && (
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                                      r.kind === "ordinary" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                                    }`}>{r.kind === "ordinary" ? "OBR" : "SR"}</span>
+                                  )}
                                   <span className="text-[10px] text-slate-400 truncate">{r.section}</span>
                                   {r.rocFiling && <span className="text-[10px] text-amber-600 font-semibold">⚠️ {r.rocFiling}</span>}
                                 </div>
@@ -1810,10 +1810,10 @@ export default function BoardMinutesPage() {
                     </div>
                   );
                 })}
-              {templateSearch && RESOLUTION_LIBRARY.filter(r =>
-                (r.meetingType === "board" || r.meetingType === "board_agm") &&
+              {templateSearch && ALL_MASTER_RESOLUTIONS.filter(r =>
+                r.meetingType === "board" &&
                 (r.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
-                 r.agendaTitle.toLowerCase().includes(templateSearch.toLowerCase()))
+                 (r.agendaTitle ?? "").toLowerCase().includes(templateSearch.toLowerCase()))
               ).length === 0 && (
                 <p className="text-sm text-slate-400 text-center py-4">
                   No resolutions found for &quot;{templateSearch}&quot;

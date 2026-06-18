@@ -6,9 +6,9 @@ import CompanySearch from "@/components/CompanySearch";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
 import type { CompanyData } from "@/lib/types/company";
 import {
-  RESOLUTION_LIBRARY, RL_CATEGORY_ORDER, RL_CATEGORY_META,
-  fillResolutionTemplate, type UnifiedResolution,
-} from "@/lib/resolution-library";
+  ALL_MASTER_RESOLUTIONS, MASTER_CATEGORY_META,
+  fillMasterTemplate, type MasterResolution,
+} from "@/lib/master-resolutions";
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 const INP = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white";
@@ -56,7 +56,7 @@ function StepBar({ step }: { step: number }) {
 /* ── Print HTML ───────────────────────────────────────────────── */
 function generateBRHtml(
   company: { companyName: string; cin: string; regAddress: string },
-  template: UnifiedResolution,
+  template: MasterResolution,
   fields: Record<string, string>,
   meetingDate: string,
   meetingSerial: string,
@@ -65,8 +65,8 @@ function generateBRHtml(
   chairmanName: string,
   onLetterhead: boolean,
 ): string {
-  const preamble   = fillResolutionTemplate(template.preamble,   fields);
-  const resolution = fillResolutionTemplate(template.resolution, fields);
+  const preamble   = fillMasterTemplate(template.preamble ?? "",   fields);
+  const resolution = fillMasterTemplate(template.resolution, fields);
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>Board Resolution — ${template.title}</title>
 <style>
@@ -114,7 +114,7 @@ ${onLetterhead ? `<div class="lh"><div class="co-name">${company.companyName}</d
   <tr><td>Meeting No.</td><td>${meetingSerial||"—"}</td></tr>
   <tr><td>Date of Meeting</td><td>${fmtDate(meetingDate)||"—"}</td></tr>
   <tr><td>Resolution No.</td><td>${resolutionNo||"—"}</td></tr>
-  <tr><td>Legal Basis</td><td>${template.section}</td></tr>
+  <tr><td>Legal Basis</td><td>${template.section ?? ""}</td></tr>
   <tr><td>ROC Filing</td><td style="${template.rocFiling?"color:#b45309;font-weight:bold":"color:#166534"}">${template.rocFiling?"⚠️ "+template.rocFiling:"✅ Not Required"}</td></tr>
   ${chairmanName?`<tr><td>Chairman</td><td>${chairmanName}</td></tr>`:""}
 </table>
@@ -171,24 +171,24 @@ export default function BoardResolutionPage() {
 
   /* Derived */
   const template = useMemo(() =>
-    RESOLUTION_LIBRARY.find(t => t.id === selectedTemplateId) ?? null,
+    ALL_MASTER_RESOLUTIONS.find(t => t.id === selectedTemplateId) ?? null,
   [selectedTemplateId]);
 
   const templatesInCategory = useMemo(() =>
-    RESOLUTION_LIBRARY.filter(t => t.category === selectedCategory),
+    ALL_MASTER_RESOLUTIONS.filter(t => t.category === selectedCategory),
   [selectedCategory]);
 
   // Step 1: only show board-relevant categories
-  const boardCategories = RL_CATEGORY_ORDER.filter(cat => {
-    const meta = RL_CATEGORY_META[cat];
-    return meta.meetingType === "board" || meta.meetingType === "board_agm";
+  const boardCategories = Object.keys(MASTER_CATEGORY_META).filter(cat => {
+    const meta = MASTER_CATEGORY_META[cat];
+    return meta.meetingType === "board";
   });
 
   const presentDirectors = directors.filter(d => d.present).map(d => d.name);
 
   const previewResolution = useMemo(() => {
     if (!template) return "";
-    return fillResolutionTemplate(template.resolution, fieldValues);
+    return fillMasterTemplate(template.resolution, fieldValues);
   }, [template, fieldValues]);
 
   /* ── Apply company ── */
@@ -256,7 +256,7 @@ export default function BoardResolutionPage() {
     if (!session || !template || !company) return;
     setSaving(true); setError("");
     try {
-      const resolutionText = fillResolutionTemplate(template.resolution, fieldValues);
+      const resolutionText = fillMasterTemplate(template.resolution, fieldValues);
       const docRes = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -323,8 +323,8 @@ export default function BoardResolutionPage() {
               <p className="text-sm text-slate-400 mb-5">Category choose karein — resolution list dikhegi</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {boardCategories.map(cat => {
-                  const meta  = RL_CATEGORY_META[cat];
-                  const count = RESOLUTION_LIBRARY.filter(t => t.category === cat).length;
+                  const meta  = MASTER_CATEGORY_META[cat];
+                  const count = ALL_MASTER_RESOLUTIONS.filter(t => t.category === cat).length;
                   return (
                     <button key={cat}
                       onClick={() => { setSelectedCategory(cat); setStep(2); }}
@@ -346,8 +346,8 @@ export default function BoardResolutionPage() {
                 ← Back
               </button>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-2xl">{RL_CATEGORY_META[selectedCategory]?.icon}</span>
-                <h2 className="text-lg font-black text-slate-700">{RL_CATEGORY_META[selectedCategory]?.label}</h2>
+                <span className="text-2xl">{MASTER_CATEGORY_META[selectedCategory]?.icon}</span>
+                <h2 className="text-lg font-black text-slate-700">{MASTER_CATEGORY_META[selectedCategory]?.label}</h2>
               </div>
               <p className="text-sm text-slate-400 mb-5">Konsa resolution banana hai?</p>
               <div className="space-y-3">

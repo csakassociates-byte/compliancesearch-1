@@ -1248,3 +1248,14 @@ export function getResolutionsByCategory(category: string): UnifiedResolution[] 
 export function getResolutionsByMeetingType(type: "board" | "agm" | "egm"): UnifiedResolution[] {
   return RESOLUTION_LIBRARY.filter(r => r.meetingType === type || r.meetingType === "board_agm");
 }
+
+// ── Re-export from master-resolutions for new tools ──────────────
+export {
+  ALL_MASTER_RESOLUTIONS,
+  MASTER_CATEGORY_META,
+  getMasterById,
+  getMasterByCategory,
+  getMasterByMeetingType,
+  fillMasterTemplate,
+} from "./master-resolutions";
+export type { MasterResolution, MasterField } from "./master-resolutions";
