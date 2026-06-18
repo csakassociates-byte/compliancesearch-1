@@ -195,12 +195,11 @@ export function generateCtcPage(params: CtcParams): string {
   const rocBlock = "";
 
   return `
-  <div style="page-break-before:always;padding:0;">
+  <div style="page-break-before:always;padding:0;width:100%;max-width:100%;">
     ${letterhead}
 
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-      <div></div>
-      <p style="font-size:9px;color:#94a3b8;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin:0;text-align:right;">
+    <div style="text-align:right;margin-bottom:10px;">
+      <p style="font-size:9px;color:#94a3b8;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin:0;">
         CTC ${ctcIndex} of ${ctcTotal}
       </p>
     </div>
@@ -265,10 +264,12 @@ export function generateCtcDocument(pages: CtcParams[]): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4; margin: 20mm 22mm; }
+  @page { size: A4; margin: 20mm 18mm; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
   body  { font-family: "Times New Roman", Times, serif; font-size: 12px; color: #1a1a1a; margin: 0; padding: 0; }
+  p, h2, h3 { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-  /* Remove page-break on the very first CTC page */
   body > div:first-child { page-break-before: auto !important; }
 </style>
 </head><body>${bodyPages}</body></html>`;
