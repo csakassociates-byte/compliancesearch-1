@@ -40,6 +40,12 @@ export interface CtcResolution {
   rocFiling?: string;
   /** Optional — shown only when isDirectCTC=true (Resolution Builder) */
   preamble?: string;
+  /** AGM/EGM only — human-readable label e.g. "Show of Hands" */
+  votingMode?: string;
+  /** AGM/EGM only — human-readable label e.g. "PASSED UNANIMOUSLY" */
+  votingResult?: string;
+  /** AGM/EGM only — false = defeated (red), true/absent = passed (green) */
+  votingResultPassed?: boolean;
 }
 
 /* ── Signatory ─────────────────────────────────────────────────── */
@@ -194,6 +200,16 @@ export function generateCtcPage(params: CtcParams): string {
   // ROC Filing warning intentionally omitted from CTC — it is an internal reminder only, not part of a legal document
   const rocBlock = "";
 
+  const votingBlock = resolution.votingMode ? `
+    <table style="width:100%;border-collapse:collapse;margin-top:12px;margin-bottom:0;font-size:11px;">
+      <tr>
+        <td style="padding:6px 12px;background:#f8fafc;font-weight:700;color:#374151;border:1px solid #e2e8f0;width:35%;">Voting Mode</td>
+        <td style="padding:6px 12px;color:#374151;border:1px solid #e2e8f0;">${resolution.votingMode}</td>
+        <td style="padding:6px 12px;background:#f8fafc;font-weight:700;color:#374151;border:1px solid #e2e8f0;width:20%;">Result</td>
+        <td style="padding:6px 12px;font-weight:700;color:${resolution.votingResultPassed === false ? "#dc2626" : "#16a34a"};border:1px solid #e2e8f0;">${resolution.votingResult || "—"}</td>
+      </tr>
+    </table>` : "";
+
   return `
   <div style="page-break-before:always;padding:0;width:100%;max-width:100%;">
     ${letterhead}
@@ -230,6 +246,7 @@ export function generateCtcPage(params: CtcParams): string {
     </div>
 
     ${rocBlock}
+    ${votingBlock}
 
     <div style="border-top:1.5px dashed #cbd5e1;padding-top:12px;margin-top:16px;margin-bottom:18px;">
       <p style="font-size:11px;line-height:1.8;color:#1e293b;margin:0 0 6px 0;text-align:justify;">
