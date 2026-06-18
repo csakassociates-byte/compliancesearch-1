@@ -50,7 +50,7 @@ const ROUTINE: EgmAgendaTemplate[] = [
     icon: "👑",
     category: "routine", categoryLabel: "Routine / Opening Matters", categoryIcon: "🔄",
     fields: [],
-    discussion: `As per the provisions of Section 104 of the Companies Act, 2013 read with the Articles of Association of the Company and Secretarial Standard-2 (SS-2), the Board of Directors' nominee took the Chair and presided over the Meeting as Chairman. The Chairman welcomed all the Members and thanked them for their presence at the Extraordinary General Meeting.`,
+    discussion: `As per the provisions of Section 104 of the Companies Act, 2013 read with the Articles of Association of the Company and Secretarial Standard-2 (SS-2), the Board of Directors' nominee took the Chair and presided over the Meeting as Chairman. The Chairman welcomed all the Members and thanked them for their presence at the Extraordinary General Meeting. {boardMeetingRef}`,
     resolution: "", resolutionType: "none",
   },
   {

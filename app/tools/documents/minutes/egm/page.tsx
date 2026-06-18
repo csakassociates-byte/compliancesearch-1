@@ -71,6 +71,10 @@ interface F {
   chairmanDesig: string;
   noticeDate: string;
 
+  // Prior Board Meeting (Sec. 100 — Board must pass resolution to convene EGM)
+  boardMeetingSerial: string;
+  boardMeetingDate: string;
+
   // Step 3 — Members
   members: Member[];
   invitees: Invitee[];
@@ -165,6 +169,7 @@ const INITIAL_F: F = {
   egmSerial: "1st", egmPurpose: "", calledBy: "board",
   meetingDate: "", meetingTime: "11:00", closingTime: "", venue: "",
   chairmanName: "", chairmanDesig: "Chairman", noticeDate: "",
+  boardMeetingSerial: "", boardMeetingDate: "",
   members: [BLANK_MEMBER()], invitees: [],
   agendaItems: DEFAULT_ITEM_IDS.map(defaultAgendaItem),
   ctcSignatories: [{ name: "", designation: "Director", din: "" }, { name: "", designation: "Director", din: "" }],
@@ -189,9 +194,19 @@ function generateEgmHTML(f: F): string {
   const calledByLabel = f.calledBy === "members_requisition" ? "Members' Requisition (Sec. 100)"
     : f.calledBy === "nclt" ? "NCLT Order (Sec. 98)" : "Board of Directors";
 
+  const boardMeetingRef = f.calledBy === "board" && f.boardMeetingDate
+    ? `This Meeting was convened pursuant to the Resolution of the Board of Directors passed at its ${f.boardMeetingSerial ? f.boardMeetingSerial + " " : ""}Meeting held on ${fmtDate(f.boardMeetingDate)}, approving the agenda and authorising the issue of Notice for this Extraordinary General Meeting under Section 100 of the Companies Act, 2013.`
+    : "";
+
+  const globalFields: Record<string, string> = {
+    boardMeetingSerial: f.boardMeetingSerial || "",
+    boardMeetingDate: f.boardMeetingDate ? fmtDate(f.boardMeetingDate) : "",
+    boardMeetingRef,
+  };
+
   const agendaRows = f.agendaItems.map((item, idx) => {
-    const filled = fillEgmTemplate(item.discussion, item.fields);
-    const resFilled = item.resolution ? fillEgmTemplate(item.resolution, item.fields) : "";
+    const filled = fillEgmTemplate(item.discussion, { ...globalFields, ...item.fields });
+    const resFilled = item.resolution ? fillEgmTemplate(item.resolution, { ...globalFields, ...item.fields }) : "";
     let resBlock = "";
     if (resFilled) {
       const rType = item.resolutionType;
@@ -217,7 +232,7 @@ function generateEgmHTML(f: F): string {
     }
     return `
       <div style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid #e2e8f0;">
-        <p style="font-weight:700;font-size:12px;color:#1e293b;margin:0 0 8px 0;">${idx + 1}. ${fillEgmTemplate(item.title, item.fields)}</p>
+        <p style="font-weight:700;font-size:12px;color:#1e293b;margin:0 0 8px 0;">${idx + 1}. ${fillEgmTemplate(item.title, { ...globalFields, ...item.fields })}</p>
         <p style="font-size:11.5px;color:#374151;line-height:1.7;margin:0;white-space:pre-wrap;">${filled}</p>
         ${resBlock}
       </div>`;
@@ -305,6 +320,10 @@ function generateEgmHTML(f: F): string {
           <td style="${tdStyle2}font-weight:700;background:#f8fafc;">Purpose</td>
           <td style="${tdStyle2}" colspan="3">${f.egmPurpose}</td>
         </tr>` : ""}
+        ${f.boardMeetingDate ? `<tr>
+          <td style="${tdStyle2}font-weight:700;background:#fef3c7;color:#92400e;">Prior Board Meeting</td>
+          <td style="${tdStyle2}" colspan="3">${f.boardMeetingSerial ? f.boardMeetingSerial + " Meeting held on " : "Held on "}${fmtDate(f.boardMeetingDate)} — Board resolved to convene this EGM (Sec. 100)</td>
+        </tr>` : ""}
       </tbody>
     </table>
 
@@ -387,6 +406,12 @@ function generateEgmCtcHTML(f: F): string {
   const voteLabel = (mode: string) => ({ show_of_hands: "Show of Hands", poll: "By Poll", e_voting: "E-Voting", na: "—" }[mode] ?? "—");
   const voteResultLabel = (result: string) => ({ passed_unanimously: "PASSED UNANIMOUSLY", passed_majority: "PASSED WITH REQUISITE MAJORITY", defeated: "NOT PASSED (DEFEATED)" }[result] ?? "—");
 
+  const ctcGlobalFields: Record<string, string> = {
+    boardMeetingSerial: f.boardMeetingSerial || "",
+    boardMeetingDate: f.boardMeetingDate ? fmtDate(f.boardMeetingDate) : "",
+    boardMeetingRef: "",
+  };
+
   const pages: CtcParams[] = resolutionItems.map((item, i) => ({
     company: {
       companyName: f.companyName,
@@ -404,8 +429,8 @@ function generateEgmCtcHTML(f: F): string {
       venue:            f.venue,
     },
     resolution: {
-      title:              fillEgmTemplate(item.title, item.fields),
-      text:               fillEgmTemplate(item.resolution, item.fields),
+      title:              fillEgmTemplate(item.title, { ...ctcGlobalFields, ...item.fields }),
+      text:               fillEgmTemplate(item.resolution, { ...ctcGlobalFields, ...item.fields }),
       type:               item.resolutionType === "special" ? "special" : item.resolutionType === "none" ? "none" : "ordinary",
       number:             `Item ${f.agendaItems.findIndex(a => a.id === item.id) + 1} — ${f.egmSerial || ""} EGM`,
       votingMode:         voteLabel(item.votingMode),
@@ -474,17 +499,19 @@ const EGM_FILING_REMINDERS: Array<{
    AGENDA CARD COMPONENT
 ══════════════════════════════════════════════════════════════════ */
 function AgendaCard({
-  item, tpl, idx, onChange, onRemove, canRemove,
+  item, tpl, idx, onChange, onRemove, canRemove, globalFields,
 }: {
   item: AgendaItemData; tpl: EgmAgendaTemplate | undefined;
   idx: number; onChange: (u: AgendaItemData) => void;
   onRemove: () => void; canRemove: boolean;
+  globalFields: Record<string, string>;
 }) {
   const [expanded, setExpanded] = useState(idx < 3);
   const set = (key: keyof AgendaItemData, val: unknown) => onChange({ ...item, [key]: val });
   const setField = (key: string, val: string) => onChange({ ...item, fields: { ...item.fields, [key]: val } });
-  const filled = fillEgmTemplate(item.discussion, item.fields);
-  const resFilled = item.resolution ? fillEgmTemplate(item.resolution, item.fields) : "";
+  const merged = { ...globalFields, ...item.fields };
+  const filled = fillEgmTemplate(item.discussion, merged);
+  const resFilled = item.resolution ? fillEgmTemplate(item.resolution, merged) : "";
   const isMandatory = DEFAULT_ITEM_IDS.includes(item.templateId);
 
   return (
@@ -493,7 +520,7 @@ function AgendaCard({
         <span className="text-2xl">{tpl?.icon || "📌"}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-slate-800 text-sm">{idx + 1}. {fillEgmTemplate(item.title, item.fields)}</span>
+            <span className="font-bold text-slate-800 text-sm">{idx + 1}. {fillEgmTemplate(item.title, merged)}</span>
             {tpl?.resolutionLaw && (
               <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">{tpl.resolutionLaw}</span>
             )}
@@ -934,6 +961,51 @@ export default function EgmMinutesPage() {
                   onChange={e => upd({ egmPurpose: e.target.value })}
                   placeholder="e.g. To consider and approve increase in authorised share capital and alteration of MOA" />
               </div>
+
+              {/* Prior Board Meeting — only for Board-called EGM */}
+              {f.calledBy === "board" && (
+                <div className="sm:col-span-2 mt-1">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl mt-0.5">📋</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-amber-900">Prior Board Meeting <span className="text-xs font-normal text-amber-600">(Mandatory — Sec. 100)</span></p>
+                        <p className="text-xs text-amber-800 mb-3">Board MUST pass a resolution to convene the EGM and approve the Notice. Enter the Board Meeting where this was resolved — it will be auto-referenced in the Chairman&apos;s opening item.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Board Meeting Number</label>
+                            <select
+                              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                              value={f.boardMeetingSerial}
+                              onChange={e => upd({ boardMeetingSerial: e.target.value })}>
+                              <option value="">— Select —</option>
+                              {ORDINAL.slice(1).map(o => <option key={o} value={o}>{o} Meeting</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Board Meeting Date</label>
+                            <input type="date"
+                              className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                                f.boardMeetingDate && f.meetingDate && f.boardMeetingDate >= f.meetingDate ? "border-red-400 bg-red-50" : "border-slate-300"
+                              }`}
+                              value={f.boardMeetingDate}
+                              max={f.meetingDate || undefined}
+                              onChange={e => upd({ boardMeetingDate: e.target.value })} />
+                            {f.boardMeetingDate && f.meetingDate && f.boardMeetingDate >= f.meetingDate && (
+                              <p className="text-red-500 text-xs mt-1">❌ Board Meeting must be before EGM date.</p>
+                            )}
+                          </div>
+                        </div>
+                        {f.boardMeetingSerial && f.boardMeetingDate && (
+                          <p className="text-green-700 text-xs mt-2 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                            ✓ <b>{f.boardMeetingSerial} Board Meeting</b> held on <b>{fmtDate(f.boardMeetingDate)}</b> — will be referenced in Chairman&apos;s opening item and Meeting Details.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Print / Letterhead options */}
@@ -1190,7 +1262,8 @@ export default function EgmMinutesPage() {
                   <AgendaCard key={item.id} item={item} tpl={tpl} idx={idx}
                     onChange={updated => updAgenda(item.id, updated)}
                     onRemove={() => removeAgenda(item.id)}
-                    canRemove={!DEFAULT_ITEM_IDS.includes(item.templateId)} />
+                    canRemove={!DEFAULT_ITEM_IDS.includes(item.templateId)}
+                    globalFields={{ boardMeetingSerial: f.boardMeetingSerial, boardMeetingDate: f.boardMeetingDate ? fmtDate(f.boardMeetingDate) : "", boardMeetingRef: f.calledBy === "board" && f.boardMeetingDate ? `This Meeting was convened pursuant to the Resolution of the Board of Directors passed at its ${f.boardMeetingSerial ? f.boardMeetingSerial + " " : ""}Meeting held on ${fmtDate(f.boardMeetingDate)}.` : "" }} />
                 );
               })}
             </div>

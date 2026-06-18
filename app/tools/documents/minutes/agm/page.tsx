@@ -84,6 +84,10 @@ interface F {
   auditorStatus: "fresh_appt" | "reappt_new_term" | "ongoing_term";   // ongoing = no resolution needed
   additionalDirectors: Array<{ name: string; din: string; designation: string; boardApptDate: string }>;
 
+  // Prior Board Meeting (Sec. 134 — mandatory before AGM)
+  boardMeetingSerial: string;
+  boardMeetingDate: string;
+
   // CTC signatories (who will sign each CTC)
   ctcSignatories: Array<{ name: string; designation: string; din: string }>;
 
@@ -269,6 +273,7 @@ const INITIAL_F: F = {
   agmSerial: "1st", financialYear: "", meetingDate: "", meetingTime: "11:00",
   closingTime: "", venue: "", chairmanName: "", chairmanDesig: "Chairman",
   prevAgmDate: "", noticeDate: "",
+  boardMeetingSerial: "", boardMeetingDate: "",
   members: [BLANK_MEMBER()],
   invitees: [],
   agendaItems: DEFAULT_ITEM_IDS.map(defaultAgendaItem),
@@ -292,9 +297,14 @@ function generateAgmHTML(f: F): string {
   let ordinaryCount = 0;
   let specialCount = 0;
 
+  const globalFields: Record<string, string> = {
+    boardMeetingSerial: f.boardMeetingSerial || "",
+    boardMeetingDate: f.boardMeetingDate ? fmtDate(f.boardMeetingDate) : "",
+  };
+
   const agendaRows = f.agendaItems.map((item, idx) => {
-    const filled = fillAgmTemplate(item.discussion, item.fields);
-    const resFilled = item.resolution ? fillAgmTemplate(item.resolution, item.fields) : "";
+    const filled = fillAgmTemplate(item.discussion, { ...globalFields, ...item.fields });
+    const resFilled = item.resolution ? fillAgmTemplate(item.resolution, { ...globalFields, ...item.fields }) : "";
 
     let resBlock = "";
     if (resFilled) {
@@ -323,7 +333,7 @@ function generateAgmHTML(f: F): string {
 
     return `
       <div style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid #e2e8f0;">
-        <p style="font-weight:700;font-size:12px;color:#1e293b;margin:0 0 8px 0;">${idx + 1}. ${fillAgmTemplate(item.title, item.fields)}</p>
+        <p style="font-weight:700;font-size:12px;color:#1e293b;margin:0 0 8px 0;">${idx + 1}. ${fillAgmTemplate(item.title, { ...globalFields, ...item.fields })}</p>
         <p style="font-size:11.5px;color:#374151;line-height:1.7;margin:0;white-space:pre-wrap;">${filled}</p>
         ${resBlock}
       </div>`;
@@ -413,7 +423,11 @@ function generateAgmHTML(f: F): string {
         </tr>
         ${f.prevAgmDate ? `<tr>
           <td style="${tdStyle2}font-weight:700;background:#f8fafc;">Previous AGM</td>
-          <td style="${tdStyle2}" colspan="3">${f.prevAgmDate}</td>
+          <td style="${tdStyle2}" colspan="3">${fmtDate(f.prevAgmDate)}</td>
+        </tr>` : ""}
+        ${f.boardMeetingDate ? `<tr>
+          <td style="${tdStyle2}font-weight:700;background:#f0fdf4;color:#15803d;">Prior Board Meeting</td>
+          <td style="${tdStyle2}" colspan="3">${f.boardMeetingSerial ? f.boardMeetingSerial + " Meeting held on " : "Held on "}${fmtDate(f.boardMeetingDate)} — Financial Statements approved &amp; AGM Notice issued (Sec. 134)</td>
         </tr>` : ""}
       </tbody>
     </table>
@@ -504,6 +518,11 @@ function generateCtcHTML(f: F): string {
   const voteLabel = (mode: string) => ({ show_of_hands: "Show of Hands", poll: "By Poll", e_voting: "E-Voting", na: "—" }[mode] ?? "—");
   const voteResultLabel = (result: string) => ({ passed_unanimously: "PASSED UNANIMOUSLY", passed_majority: "PASSED WITH REQUISITE MAJORITY", defeated: "NOT PASSED (DEFEATED)" }[result] ?? "—");
 
+  const ctcGlobalFields: Record<string, string> = {
+    boardMeetingSerial: f.boardMeetingSerial || "",
+    boardMeetingDate: f.boardMeetingDate ? fmtDate(f.boardMeetingDate) : "",
+  };
+
   const pages: CtcParams[] = resolutionItems.map((item, i) => ({
     company: {
       companyName: f.companyName,
@@ -522,8 +541,8 @@ function generateCtcHTML(f: F): string {
       financialYear:    f.financialYear,
     },
     resolution: {
-      title:               fillAgmTemplate(item.title, item.fields),
-      text:                fillAgmTemplate(item.resolution, item.fields),
+      title:               fillAgmTemplate(item.title, { ...ctcGlobalFields, ...item.fields }),
+      text:                fillAgmTemplate(item.resolution, { ...ctcGlobalFields, ...item.fields }),
       type:                item.resolutionType === "special" ? "special" : item.resolutionType === "none" ? "none" : "ordinary",
       number:              `Item ${f.agendaItems.findIndex(a => a.id === item.id) + 1} — ${f.agmSerial || ""} AGM/${f.financialYear || ""}`,
       votingMode:          voteLabel(item.votingMode),
@@ -603,7 +622,7 @@ const AGM_FILING_REMINDERS: Array<{
    AGENDA CARD COMPONENT
 ══════════════════════════════════════════════════════════════════ */
 function AgendaCard({
-  item, tpl, idx, onChange, onRemove, canRemove,
+  item, tpl, idx, onChange, onRemove, canRemove, globalFields,
 }: {
   item: AgendaItemData;
   tpl: AgmAgendaTemplate | undefined;
@@ -611,6 +630,7 @@ function AgendaCard({
   onChange: (updated: AgendaItemData) => void;
   onRemove: () => void;
   canRemove: boolean;
+  globalFields: Record<string, string>;
 }) {
   const [expanded, setExpanded] = useState(idx < 4);
 
@@ -619,8 +639,9 @@ function AgendaCard({
   const setField = (key: string, val: string) =>
     onChange({ ...item, fields: { ...item.fields, [key]: val } });
 
-  const filled = fillAgmTemplate(item.discussion, item.fields);
-  const resFilled = item.resolution ? fillAgmTemplate(item.resolution, item.fields) : "";
+  const merged = { ...globalFields, ...item.fields };
+  const filled = fillAgmTemplate(item.discussion, merged);
+  const resFilled = item.resolution ? fillAgmTemplate(item.resolution, merged) : "";
 
   const isOB = tpl?.isOrdinaryBusiness;
   const isMandatory = DEFAULT_ITEM_IDS.includes(item.templateId);
@@ -635,7 +656,7 @@ function AgendaCard({
         <span className="text-2xl">{tpl?.icon || "📌"}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-slate-800 text-sm">{idx + 1}. {fillAgmTemplate(item.title, item.fields)}</span>
+            <span className="font-bold text-slate-800 text-sm">{idx + 1}. {fillAgmTemplate(item.title, merged)}</span>
             {isOB && (
               <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full font-semibold">
                 Ordinary Business
@@ -1494,6 +1515,49 @@ _________________    _____________    _______________    ___________` : "";
                   value={f.chairmanDesig} onChange={e => upd({ chairmanDesig: e.target.value })}
                   placeholder="e.g. Managing Director / Chairman" />
               </div>
+
+              {/* Prior Board Meeting */}
+              <div className="sm:col-span-2 mt-1">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl mt-0.5">📋</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-blue-900">Prior Board Meeting <span className="text-xs font-normal text-blue-600">(Mandatory — Sec. 134)</span></p>
+                      <p className="text-xs text-blue-700 mb-3">Board MUST approve Financial Statements and recommend dividend before AGM. Enter the Board Meeting where these were approved — this will auto-appear in all relevant agenda items.</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Board Meeting Number</label>
+                          <select
+                            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
+                            value={f.boardMeetingSerial}
+                            onChange={e => upd({ boardMeetingSerial: e.target.value })}>
+                            <option value="">— Select —</option>
+                            {ORDINAL.slice(1).map(o => <option key={o} value={o}>{o} Meeting</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Board Meeting Date</label>
+                          <input type="date"
+                            className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${
+                              f.boardMeetingDate && f.meetingDate && f.boardMeetingDate >= f.meetingDate ? "border-red-400 bg-red-50" : "border-slate-300"
+                            }`}
+                            value={f.boardMeetingDate}
+                            max={f.meetingDate || undefined}
+                            onChange={e => upd({ boardMeetingDate: e.target.value })} />
+                          {f.boardMeetingDate && f.meetingDate && f.boardMeetingDate >= f.meetingDate && (
+                            <p className="text-red-500 text-xs mt-1">❌ Board Meeting must be before AGM date.</p>
+                          )}
+                        </div>
+                      </div>
+                      {f.boardMeetingSerial && f.boardMeetingDate && (
+                        <p className="text-green-700 text-xs mt-2 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                          ✓ <b>{f.boardMeetingSerial} Board Meeting</b> held on <b>{fmtDate(f.boardMeetingDate)}</b> — will be auto-referenced in Financial Statements Adoption, Dividend Declaration, and Auditor Appointment agenda items.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* ── Meeting Decisions ── */}
@@ -1974,6 +2038,7 @@ _________________    _____________    _______________    ___________` : "";
                     onChange={updated => updAgenda(item.id, updated)}
                     onRemove={() => removeAgenda(item.id)}
                     canRemove={!DEFAULT_ITEM_IDS.includes(item.templateId)}
+                    globalFields={{ boardMeetingSerial: f.boardMeetingSerial, boardMeetingDate: f.boardMeetingDate ? fmtDate(f.boardMeetingDate) : "" }}
                   />
                 );
               })}
