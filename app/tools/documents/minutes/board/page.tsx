@@ -11,6 +11,7 @@ import type { CompanyData } from "@/lib/types/company";
 import { ALL_AGENDA_TEMPLATES, CATEGORY_ORDER as AGENDA_CATEGORY_ORDER, CATEGORY_META as AGENDA_CATEGORY_META, fillTemplate } from "@/lib/agenda-templates";
 import type { AgendaTemplate } from "@/lib/agenda-templates";
 import { ALL_MASTER_RESOLUTIONS, MASTER_CATEGORY_META } from "@/lib/master-resolutions";
+import { generateCtcDocument, type CtcParams } from "@/lib/ctc-generator";
 
 /* ══════════════════════════════════════════════════════════════════
    TYPES
@@ -440,7 +441,7 @@ ${agendaHTML}
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   GENERATE BOARD MEETING CTC HTML — one page per resolution
+   GENERATE BOARD MEETING CTC HTML — delegates to shared generator
 ══════════════════════════════════════════════════════════════════ */
 function generateBoardCtcHTML(f: F): string {
   const resolutionItems = f.agendaItems.filter(
@@ -448,106 +449,43 @@ function generateBoardCtcHTML(f: F): string {
   );
   if (resolutionItems.length === 0) return "";
 
-  const total = resolutionItems.length;
-  const activeSigs = f.ctcSignatories.filter(s => s.name.trim());
-  const fy = f.financialYear || new Date().getFullYear().toString();
+  const total    = resolutionItems.length;
+  const fy       = f.financialYear || new Date().getFullYear().toString();
+  const activeSigs = f.ctcSignatories.filter(s => s.name.trim()).length > 0
+    ? f.ctcSignatories.filter(s => s.name.trim())
+    : [{ name: f.chairmanName || "", designation: f.chairmanDesig || "Director", din: f.chairmanDin || "" }];
 
-  function fmtDateCtc(d: string) {
-    if (!d) return "—";
-    try { return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }); }
-    catch { return d; }
-  }
+  const pages: CtcParams[] = resolutionItems.map((item, i) => ({
+    company: {
+      companyName: f.companyName,
+      cin:         f.cin,
+      regAddress:  f.regAddress,
+      email:       f.printEmail,
+      mobile:      f.printMobile,
+    },
+    meeting: {
+      meetingType:      "board",
+      meetingTypeLabel: "Board Meeting",
+      meetingSerial:    f.meetingSerial,
+      meetingDate:      f.meetingDate,
+      meetingTime:      f.meetingTime,
+      venue:            f.venue,
+      financialYear:    fy,
+    },
+    resolution: {
+      title:     item.title,
+      text:      item.resolution,
+      type:      item.resolutionType === "special" ? "special" : item.resolutionType === "none" ? "none" : "ordinary",
+      number:    `${i + 1}/${f.meetingSerial || "BM"}/${fy}`,
+    },
+    ctcIndex:         i + 1,
+    ctcTotal:         total,
+    signatories:      activeSigs,
+    printOnLetterhead: true,
+    isDirectCTC:      false,
+  }));
 
-  function sigBlock(): string {
-    const sigs = activeSigs.length > 0
-      ? activeSigs
-      : [{ name: f.chairmanName || "___________", designation: f.chairmanDesig || "Director", din: f.chairmanDin || "" }];
-    const colWidth = sigs.length <= 2 ? "45%" : sigs.length === 3 ? "30%" : "22%";
-    return sigs.map(s => `
-      <div style="text-align:center;width:${colWidth};min-width:120px;">
-        <div style="border-top:1.5px solid #1e3a5f;padding-top:8px;">
-          <p style="font-size:11px;font-weight:700;color:#1e293b;margin:0 0 2px 0;">${s.name || "___________"}</p>
-          <p style="font-size:10.5px;color:#475569;margin:0 0 2px 0;">${s.designation || "Director"}</p>
-          ${s.din ? `<p style="font-size:10px;color:#94a3b8;margin:0 0 2px 0;">DIN: ${s.din}</p>` : ""}
-          <p style="font-size:10px;color:#94a3b8;margin:4px 0 0 0;">Date: _______________</p>
-        </div>
-      </div>`).join("");
-  }
-
-  const letterheadTop = `
-    <div style="text-align:center;border-bottom:2px solid #1e3a5f;padding-bottom:12px;margin-bottom:16px;">
-      <h2 style="margin:0;font-size:18px;font-weight:900;color:#1e3a5f;text-transform:uppercase;letter-spacing:1px;">${f.companyName || "[COMPANY NAME]"}</h2>
-      <p style="margin:3px 0 0;font-size:10.5px;color:#475569;">CIN: ${f.cin || "—"}</p>
-      <p style="margin:2px 0 0;font-size:10.5px;color:#475569;">Regd. Office: ${f.regAddress || "—"}</p>
-      ${f.printEmail ? `<p style="margin:2px 0 0;font-size:10.5px;color:#475569;">${f.printEmail}${f.printMobile ? " | " + f.printMobile : ""}</p>` : ""}
-    </div>`;
-
-  const meetingLine = `Board Meeting No. ${f.meetingSerial || "—"} held on ${fmtDateCtc(f.meetingDate)} at ${f.meetingTime || "—"} at ${f.venue || "—"}`;
-
-  let resolutionCounter = 0;
-  const ctcPages = resolutionItems.map((item, i) => {
-    resolutionCounter++;
-    const ctcNum = i + 1;
-    const isSpecial = item.resolutionType === "special";
-    const resNo = `${resolutionCounter}/${f.meetingSerial || "BM"}/${fy}`;
-
-    return `
-    <div style="page-break-before:always;padding:0;">
-      ${letterheadTop}
-
-      <div style="text-align:center;margin-bottom:14px;">
-        <p style="font-size:9.5px;color:#94a3b8;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin:0 0 4px 0;">
-          CTC ${ctcNum} of ${total}
-        </p>
-        <h3 style="font-size:14px;font-weight:900;color:#1e3a5f;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px 0;border:2px solid #1e3a5f;display:inline-block;padding:4px 20px;">
-          CERTIFIED TRUE COPY
-        </h3>
-        <p style="font-size:10.5px;color:#475569;margin:6px 0 0 0;font-style:italic;">
-          Extract of Minutes of the ${meetingLine}
-        </p>
-      </div>
-
-      <div style="background:${isSpecial ? "#fffbeb" : "#eff6ff"};border:1.5px solid ${isSpecial ? "#f59e0b" : "#1d4ed8"};border-radius:6px;padding:10px 14px;margin-bottom:14px;">
-        <p style="font-size:10.5px;font-weight:700;color:${isSpecial ? "#92400e" : "#1e40af"};text-transform:uppercase;margin:0 0 3px 0;letter-spacing:0.5px;">
-          ${isSpecial ? "⚡ SPECIAL RESOLUTION" : "✅ ORDINARY RESOLUTION"} &nbsp;—&nbsp; Resolution No. ${resNo}
-        </p>
-        <p style="font-size:12px;font-weight:800;color:#1e293b;margin:0;">${item.title}</p>
-      </div>
-
-      <div style="border-left:4px solid ${isSpecial ? "#f59e0b" : "#1d4ed8"};padding:12px 16px;margin-bottom:18px;background:#fafafa;">
-        <p style="font-size:11.5px;line-height:1.8;color:#1a1a1a;margin:0;white-space:pre-wrap;text-align:justify;">${item.resolution}</p>
-      </div>
-
-      <div style="border-top:1.5px dashed #cbd5e1;padding-top:14px;margin-bottom:20px;">
-        <p style="font-size:11px;line-height:1.8;color:#1e293b;margin:0;text-align:justify;">
-          Certified to be a <strong>True Copy</strong> of the ${isSpecial ? "Special" : "Ordinary"} Resolution passed at the
-          <strong>Board of Directors Meeting No. ${f.meetingSerial || "—"}</strong> of
-          <strong>${f.companyName || "[COMPANY NAME]"}</strong> (CIN: ${f.cin || "—"}) held on
-          <strong>${fmtDateCtc(f.meetingDate)}</strong>.
-        </p>
-        <p style="font-size:11px;color:#1e293b;margin:8px 0 0 0;">
-          <strong>For ${f.companyName || "[COMPANY NAME]"}</strong>
-        </p>
-      </div>
-
-      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:20px;margin-top:24px;">
-        ${sigBlock()}
-      </div>
-
-      <p style="font-size:9px;color:#94a3b8;text-align:center;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:8px;">
-        Generated by ComplianceSearch.in &nbsp;|&nbsp; Verify against original minute book before use.
-      </p>
-    </div>`;
-  }).join("");
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>CTCs — ${f.companyName} BM ${f.meetingSerial}</title>
-  <style>
-    @page { size:A4; margin:18mm 16mm; }
-    body { font-family:'Times New Roman',Times,serif; font-size:12px; color:#1a1a1a; margin:0; padding:0; }
-    @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
-  </style>
-  </head><body>${ctcPages}</body></html>`;
+  return generateCtcDocument(pages);
 }
 
 function generateBoardAllHTML(f: F): string {
@@ -556,9 +494,8 @@ function generateBoardAllHTML(f: F): string {
     item => item.resolutionType !== "none" && item.resolution && item.resolution.trim()
   );
   if (resolutionItems.length === 0) return minutesHtml;
-  const ctcBody = generateBoardCtcHTML(f);
+  const ctcBody    = generateBoardCtcHTML(f);
   const ctcContent = ctcBody.replace(/^[\s\S]*<body>/, "").replace(/<\/body>[\s\S]*$/, "");
-  // Use regex to handle any whitespace/newlines between </body> and </html>
   return minutesHtml.replace(/<\/body>\s*<\/html>/i, `${ctcContent}</body></html>`);
 }
 

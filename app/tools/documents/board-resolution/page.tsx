@@ -9,6 +9,7 @@ import {
   ALL_MASTER_RESOLUTIONS, MASTER_CATEGORY_META,
   fillMasterTemplate, type MasterResolution,
 } from "@/lib/master-resolutions";
+import { generateCtcDocument, type CtcParams } from "@/lib/ctc-generator";
 
 /* ── Helpers ──────────────────────────────────────────────────── */
 const INP = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white";
@@ -53,7 +54,7 @@ function StepBar({ step }: { step: number }) {
   );
 }
 
-/* ── Print HTML ───────────────────────────────────────────────── */
+/* ── Print HTML — delegates to shared CTC generator ───────────── */
 function generateBRHtml(
   company: { companyName: string; cin: string; regAddress: string },
   template: MasterResolution,
@@ -65,73 +66,35 @@ function generateBRHtml(
   chairmanName: string,
   onLetterhead: boolean,
 ): string {
-  const preamble   = fillMasterTemplate(template.preamble ?? "",   fields);
-  const resolution = fillMasterTemplate(template.resolution, fields);
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>Board Resolution — ${template.title}</title>
-<style>
-  @page{size:A4;margin:20mm}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:"Times New Roman",serif;font-size:11pt;color:#1a1a1a;line-height:1.7}
-  .lh{text-align:center;border-bottom:2.5px double #1a3a6b;padding-bottom:12px;margin-bottom:18px}
-  .co-name{font-size:15pt;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#1a3a6b}
-  .co-sub{font-size:9pt;color:#555;margin-top:3px}
-  .title-box{text-align:center;margin:18px 0 14px}
-  .title-box h2{font-size:12pt;font-weight:bold;text-transform:uppercase;border-bottom:1px solid #333;display:inline-block;padding-bottom:3px}
-  .meta-table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:10pt}
-  .meta-table td{padding:3px 8px;vertical-align:top}
-  .meta-table td:first-child{font-weight:bold;width:35%;color:#333}
-  .badge{display:inline-block;padding:2px 10px;border-radius:3px;font-size:9pt;font-weight:bold}
-  .bo{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
-  .bs{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
-  .sec-label{font-size:9pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:5px}
-  .preamble{font-size:10.5pt;text-align:justify;line-height:1.75;color:#222}
-  .res-box{border-left:4px solid #1a3a6b;background:#f0f4ff;padding:12px 14px;margin:14px 0;border-radius:0 6px 6px 0}
-  .res-box p{font-size:10.5pt;line-height:1.75;white-space:pre-line;text-align:justify}
-  .vote-row{display:flex;gap:20px;margin:14px 0}
-  .vb{text-align:center;padding:8px 18px;border-radius:6px;border:1px solid}
-  .vf{background:#f0fdf4;border-color:#86efac;color:#166534}
-  .va{background:#fef2f2;border-color:#fca5a5;color:#991b1b}
-  .vn{background:#f8fafc;border-color:#cbd5e1;color:#475569}
-  .vp{background:#eff6ff;border-color:#93c5fd;color:#1e40af}
-  .vl{font-size:8pt;color:#888;margin-bottom:2px}
-  .vv{font-weight:bold;font-size:11pt}
-  .sign-row{display:flex;justify-content:space-between;gap:20px;margin-top:24px}
-  .sign-box{flex:1;border-top:1px solid #333;padding-top:8px;text-align:center;font-size:9.5pt}
-  .footer{margin-top:28px;border-top:1px solid #ccc;padding-top:8px;font-size:8.5pt;color:#888;text-align:center}
-  .roc-box{background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;font-size:9.5pt;color:#92400e;margin-bottom:12px}
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style></head><body>
-${onLetterhead ? `<div class="lh"><div class="co-name">${company.companyName}</div><div class="co-sub">CIN: ${company.cin||"—"}</div><div class="co-sub">${company.regAddress||""}</div></div>` : ""}
-<div class="title-box">
-  <h2>Board Resolution</h2>
-  <div style="margin-top:6px;font-size:10pt;color:#555">${template.title}</div>
-  <div style="margin-top:4px"><span class="badge ${template.kind==="ordinary"?"bo":"bs"}">${template.kind==="ordinary"?"Ordinary Board Resolution":"Special Resolution"}</span></div>
-</div>
-<table class="meta-table">
-  <tr><td>Company</td><td>${company.companyName}</td></tr>
-  <tr><td>CIN</td><td>${company.cin||"—"}</td></tr>
-  <tr><td>Meeting No.</td><td>${meetingSerial||"—"}</td></tr>
-  <tr><td>Date of Meeting</td><td>${fmtDate(meetingDate)||"—"}</td></tr>
-  <tr><td>Resolution No.</td><td>${resolutionNo||"—"}</td></tr>
-  <tr><td>Legal Basis</td><td>${template.section ?? ""}</td></tr>
-  <tr><td>ROC Filing</td><td style="${template.rocFiling?"color:#b45309;font-weight:bold":"color:#166534"}">${template.rocFiling?"⚠️ "+template.rocFiling:"✅ Not Required"}</td></tr>
-  ${chairmanName?`<tr><td>Chairman</td><td>${chairmanName}</td></tr>`:""}
-</table>
-${template.rocFiling?`<div class="roc-box">⚠️ <strong>ROC Filing Required:</strong> ${template.rocFiling}</div>`:""}
-<div style="margin-bottom:12px"><div class="sec-label">Preamble / Discussion</div><p class="preamble">${preamble}</p></div>
-<div style="margin-bottom:12px"><div class="sec-label">Resolution</div><div class="res-box"><p>${resolution}</p></div></div>
-<div class="vote-row">
-  <div class="vb vf"><div class="vl">VOTED FOR</div><div class="vv">${directors.length}</div></div>
-  <div class="vb va"><div class="vl">AGAINST</div><div class="vv">0</div></div>
-  <div class="vb vn"><div class="vl">ABSTAINED</div><div class="vv">0</div></div>
-  <div class="vb vp"><div class="vl">STATUS</div><div class="vv">✅ PASSED</div></div>
-</div>
-<p style="font-size:10pt;font-weight:bold;margin-top:16px;margin-bottom:4px">Signed by Directors Present:</p>
-<div class="sign-row">${directors.slice(0,3).map(d=>`<div class="sign-box"><br><br>${d}</div>`).join("")}${directors.length===0?`<div class="sign-box"><br><br>Director 1</div><div class="sign-box"><br><br>Director 2</div>`:""}</div>
-${directors.length>3?`<div class="sign-row">${directors.slice(3).map(d=>`<div class="sign-box"><br><br>${d}</div>`).join("")}</div>`:""}
-<div class="footer">True and correct extract of Resolution passed at Board Meeting of <strong>${company.companyName}</strong> held on ${fmtDate(meetingDate)||"___"}.<br>Generated via ComplianceSearch.in</div>
-</body></html>`;
+  const preamble   = fillMasterTemplate(template.preamble ?? "", fields);
+  const resolution = fillMasterTemplate(template.resolution,     fields);
+
+  const params: CtcParams = {
+    company: { companyName: company.companyName, cin: company.cin, regAddress: company.regAddress },
+    meeting: {
+      meetingType:      "board",
+      meetingTypeLabel: "Board Meeting",
+      meetingSerial,
+      meetingDate,
+      financialYear:    new Date(meetingDate || Date.now()).getFullYear().toString(),
+    },
+    resolution: {
+      title:      template.title,
+      text:       resolution,
+      type:       template.kind === "none" ? "none" : template.kind,
+      number:     resolutionNo,
+      section:    template.section,
+      rocFiling:  template.rocFiling,
+      preamble,
+    },
+    ctcIndex:        1,
+    ctcTotal:        1,
+    signatories:     directors.map(name => ({ name, designation: "Director" })),
+    printOnLetterhead: onLetterhead,
+    isDirectCTC:     true,
+  };
+
+  return generateCtcDocument([params]);
 }
 
 /* ══════════════════════════════════════════════════════════════════
