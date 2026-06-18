@@ -145,7 +145,7 @@ function certificationLine(
   }
 }
 
-/** Signatory block HTML */
+/** Signatory block HTML — always shows Name, Designation, DIN, Date, Place */
 function signatoryBlock(signatories: CtcSignatory[], chairmanFallback?: string): string {
   const sigs = signatories.length > 0
     ? signatories
@@ -154,12 +154,13 @@ function signatoryBlock(signatories: CtcSignatory[], chairmanFallback?: string):
   const colWidth = sigs.length <= 2 ? "45%" : sigs.length === 3 ? "30%" : "22%";
 
   return sigs.map(s => `
-    <div style="text-align:center;width:${colWidth};min-width:120px;">
+    <div style="text-align:center;width:${colWidth};min-width:130px;">
       <div style="border-top:1.5px solid #1e3a5f;padding-top:8px;">
-        <p style="font-size:11px;font-weight:700;color:#1e293b;margin:0 0 2px 0;">${s.name || "___________"}</p>
-        <p style="font-size:10.5px;color:#475569;margin:0 0 2px 0;">${s.designation || "Director"}</p>
-        ${s.din ? `<p style="font-size:10px;color:#94a3b8;margin:0 0 2px 0;">DIN: ${s.din}</p>` : ""}
-        <p style="font-size:10px;color:#94a3b8;margin:4px 0 0 0;">Date: _______________</p>
+        <p style="font-size:11px;font-weight:700;color:#1e293b;margin:0 0 3px 0;">${s.name || "___________"}</p>
+        <p style="font-size:10.5px;color:#475569;margin:0 0 4px 0;">${s.designation || "Director"}</p>
+        <p style="font-size:10px;color:#374151;margin:0 0 3px 0;">DIN: ${s.din || "___________"}</p>
+        <p style="font-size:10px;color:#374151;margin:0 0 3px 0;">Date: _______________</p>
+        <p style="font-size:10px;color:#374151;margin:0 0 0 0;">Place: _______________</p>
       </div>
     </div>`).join("");
 }
@@ -190,10 +191,8 @@ export function generateCtcPage(params: CtcParams): string {
       <p style="font-size:11px;line-height:1.8;color:#374151;text-align:justify;margin:0;">${resolution.preamble}</p>
     </div>` : "";
 
-  const rocBlock = resolution.rocFiling ? `
-    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:5px;padding:7px 12px;margin-top:10px;font-size:10px;color:#92400e;">
-      ⚠️ <strong>ROC Filing Required:</strong> ${resolution.rocFiling}
-    </div>` : "";
+  // ROC Filing warning intentionally omitted from CTC — it is an internal reminder only, not part of a legal document
+  const rocBlock = "";
 
   return `
   <div style="page-break-before:always;padding:0;">
@@ -266,7 +265,7 @@ export function generateCtcDocument(pages: CtcParams[]): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4; margin: 18mm 16mm; }
+  @page { size: A4; margin: 20mm 22mm; }
   body  { font-family: "Times New Roman", Times, serif; font-size: 12px; color: #1a1a1a; margin: 0; padding: 0; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   /* Remove page-break on the very first CTC page */

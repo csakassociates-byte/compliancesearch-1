@@ -62,7 +62,7 @@ function generateBRHtml(
   meetingDate: string,
   meetingSerial: string,
   resolutionNo: string,
-  directors: string[],
+  directors: Array<{ name: string; din?: string }>,
   chairmanName: string,
   onLetterhead: boolean,
 ): string {
@@ -87,11 +87,11 @@ function generateBRHtml(
       rocFiling:  template.rocFiling,
       preamble,
     },
-    ctcIndex:        1,
-    ctcTotal:        1,
-    signatories:     directors.map(name => ({ name, designation: "Director" })),
+    ctcIndex:         1,
+    ctcTotal:         1,
+    signatories:      directors.map(d => ({ name: d.name, designation: "Director", din: d.din })),
     printOnLetterhead: onLetterhead,
-    isDirectCTC:     true,
+    isDirectCTC:      true,
   };
 
   return generateCtcDocument([params]);
@@ -114,7 +114,7 @@ export default function BoardResolutionPage() {
   /* Step 3 — Company */
   const [company, setCompany]           = useState<CompanyData | null>(null);
   const [companyQuery, setCompanyQuery] = useState("");
-  const [directors, setDirectors]       = useState<Array<{ name: string; present: boolean }>>([]);
+  const [directors, setDirectors]       = useState<Array<{ name: string; din?: string; present: boolean }>>([]);
   const [existingMeetings, setExistingMeetings] = useState<Array<{ id: string; title: string; meetingDate: string }>>([]);
 
   /* Step 4 — Details */
@@ -158,7 +158,7 @@ export default function BoardResolutionPage() {
   function applyCompany(data: CompanyData) {
     setCompany(data);
     setCompanyQuery(data.companyName);
-    const dirs = data.directors.filter(d => d.isActive).map(d => ({ name: d.name, present: true }));
+    const dirs = data.directors.filter(d => d.isActive).map(d => ({ name: d.name, din: d.din || "", present: true }));
     setDirectors(dirs);
     if (dirs.length > 0) setChairmanName(dirs[0].name);
     loadMeetings(data.cin);
@@ -206,7 +206,7 @@ export default function BoardResolutionPage() {
     const html = generateBRHtml(
       { companyName: company.companyName, cin: company.cin || "", regAddress: company.regAddress || "" },
       template, fieldValues, meetingDate, meetingSerial, resolutionNo,
-      presentDirectors, chairmanName, onLetterhead,
+      directors.filter(d => d.present).map(d => ({ name: d.name, din: d.din })), chairmanName, onLetterhead,
     );
     const w = window.open("", "_blank", "width=950,height=750");
     if (!w) { alert("Pop-up blocked!"); return; }
@@ -251,7 +251,7 @@ export default function BoardResolutionPage() {
             companyId: cId, companyName: company.companyName, cin: company.cin,
             meetingDocId: selectedMeetingId || undefined,
             meetingDate, meetingSerial, chairmanName,
-            directors: presentDirectors.map(n => ({ name: n, din: "", designation: "Director", present: true })),
+            directors: directors.filter(d => d.present).map(d => ({ name: d.name, din: d.din || "", designation: "Director", present: true })),
             resolutionText, transferId: docData.id,
           }),
         }).catch(() => {});
