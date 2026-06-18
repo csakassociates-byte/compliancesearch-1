@@ -266,10 +266,25 @@ export function generateCtcDocument(pages: CtcParams[]): string {
 <style>
   @page { size: A4; margin: 20mm 18mm; }
   *, *::before, *::after { box-sizing: border-box; }
-  html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
-  body  { font-family: "Times New Roman", Times, serif; font-size: 12px; color: #1a1a1a; margin: 0; padding: 0; }
-  p, h2, h3 { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  /* body width = A4(210mm) - left(18mm) - right(18mm) = 174mm
+     This constrains ALL content before printing so nothing overflows @page margins */
+  html { background: #e0e0e0; }
+  body {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 12px;
+    color: #1a1a1a;
+    width: 174mm;
+    max-width: 174mm;
+    margin: 0 auto;
+    padding: 0;
+    overflow-x: hidden;
+    background: #fff;
+  }
+  p, h2, h3, span { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
+  @media print {
+    html { background: transparent; }
+    body { width: 100%; max-width: 100%; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
   body > div:first-child { page-break-before: auto !important; }
 </style>
 </head><body>${bodyPages}</body></html>`;
