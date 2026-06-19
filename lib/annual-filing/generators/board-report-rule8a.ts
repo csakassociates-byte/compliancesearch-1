@@ -326,15 +326,15 @@ ${
 <!-- ══════════════ DIRECTORS TABLE ══════════════ -->
 <div class="page-break"></div>
 <h2>Details of Directors of the Company as on 31<sup>st</sup> March, ${fyEnd}</h2>
-<table>
+<table style="font-size:9.5pt;">
   <tr>
-    <th class="center">Sl.</th>
-    <th>Name of Director</th>
-    <th>DIN</th>
-    <th>Designation</th>
-    <th class="center">Date of Appointment</th>
-    <th class="center">Date of Cessation</th>
-    <th>Status</th>
+    <th class="center" style="width:5%">Sl.</th>
+    <th style="width:26%">Name of Director</th>
+    <th style="width:12%">DIN</th>
+    <th style="width:18%">Designation</th>
+    <th class="center" style="width:16%">Date of Appointment</th>
+    <th class="center" style="width:16%">Date of Cessation</th>
+    <th style="width:7%">Status</th>
   </tr>
   ${getDirectorRows(data)}
 </table>

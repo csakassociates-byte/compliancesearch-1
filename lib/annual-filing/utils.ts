@@ -114,9 +114,14 @@ export function commonPrintCSS(): string {
 
     /* ── Typography ── */
     h1 { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 6pt; }
-    h2 { font-size: 12pt; font-weight: bold; margin-top: 10pt; margin-bottom: 5pt; }
-    h3 { font-size: 12pt; font-weight: bold; margin-top: 8pt; margin-bottom: 4pt; }
+    h2 {
+      font-size: 12pt; font-weight: bold;
+      margin-top: 14pt; margin-bottom: 5pt;
+      border-bottom: 0.5pt solid #888; padding-bottom: 2pt;
+    }
+    h3 { font-size: 11pt; font-weight: bold; margin-top: 10pt; margin-bottom: 4pt; }
     p  { margin-bottom: 8pt; text-align: justify; }
+    hr { border: none; border-top: 1pt solid #333; margin: 14pt 0; }
     sup { font-size: 8pt; vertical-align: super; line-height: 0; }
 
     /* ── Tables ── */

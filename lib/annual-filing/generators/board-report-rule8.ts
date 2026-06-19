@@ -67,15 +67,25 @@ function getDirectorChanges(data: AnnualFilingData): string {
   let html = "";
   if (appointed.length > 0) {
     html += `<p>The following Directors were appointed during the year:</p>
-    <table>
-      <tr><th>Name</th><th>DIN</th><th>Designation</th><th>Date of Appointment</th></tr>
+    <table style="font-size:9.5pt;">
+      <tr>
+        <th style="width:38%">Name</th>
+        <th style="width:14%">DIN</th>
+        <th style="width:28%">Designation</th>
+        <th style="width:20%">Date of Appointment</th>
+      </tr>
       ${appointed.map(d => `<tr><td>${d.name}</td><td>${d.din||"—"}</td><td>${d.designation}</td><td>${fmtDate(d.dateOfAppointment)}</td></tr>`).join("")}
     </table>`;
   }
   if (resigned.length > 0) {
     html += `<p>The following Directors resigned / ceased to hold office during the year:</p>
-    <table>
-      <tr><th>Name</th><th>DIN</th><th>Designation</th><th>Date of Cessation</th></tr>
+    <table style="font-size:9.5pt;">
+      <tr>
+        <th style="width:38%">Name</th>
+        <th style="width:14%">DIN</th>
+        <th style="width:28%">Designation</th>
+        <th style="width:20%">Date of Cessation</th>
+      </tr>
       ${resigned.map(d => `<tr><td>${d.name}</td><td>${d.din||"—"}</td><td>${d.designation}</td><td>${d.dateOfCessation ? fmtDate(d.dateOfCessation) : "—"}</td></tr>`).join("")}
     </table>`;
   }
@@ -365,16 +375,16 @@ ${
 <!-- ══════════════ DIRECTORS TABLE ══════════════ -->
 <div class="page-break"></div>
 <h2>Composition of Board of Directors as on 31<sup>st</sup> March, ${fyEnd}</h2>
-<table>
+<table style="font-size:9.5pt;">
   <tr>
-    <th class="center">Sl.</th>
-    <th>Name of Director</th>
-    <th>DIN</th>
-    <th>Designation</th>
-    <th>Category</th>
-    <th class="center">Date of Appointment</th>
-    <th class="center">Date of Cessation</th>
-    <th>Status</th>
+    <th class="center" style="width:4%">Sl.</th>
+    <th style="width:22%">Name of Director</th>
+    <th style="width:11%">DIN</th>
+    <th style="width:15%">Designation</th>
+    <th style="width:12%">Category</th>
+    <th class="center" style="width:14%">Date of Appointment</th>
+    <th class="center" style="width:14%">Date of Cessation</th>
+    <th style="width:8%">Status</th>
   </tr>
   ${getDirectorRows(data)}
 </table>
