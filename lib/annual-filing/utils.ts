@@ -74,19 +74,24 @@ export function fyStartYear(fy: string): string {
 /** Common print page CSS for all generated documents */
 export function commonPrintCSS(): string {
   return `
-    /* ── Print page setup ── */
-    @page { size: A4 portrait; margin: 20mm; }
+    /*
+     * PRINT LAYOUT STRATEGY:
+     *   @page handles top/bottom margin on EVERY printed page.
+     *   body width=210mm + padding 0 20mm handles left/right margins.
+     *   Content area = 210mm - 20mm - 20mm = 170mm. Zero browser guessing.
+     */
+    @page { size: A4 portrait; margin: 20mm 0; }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* body width = A4 210mm − 20mm left − 20mm right = 170mm (exact content area) */
     body {
       font-family: "Times New Roman", Times, serif;
       font-size: 12pt;
       color: #000;
       background: #fff;
       line-height: 1.6;
-      width: 170mm;
+      width: 210mm;
+      padding: 0 20mm;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }

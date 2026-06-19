@@ -292,15 +292,15 @@ export function generateCtcDocument(pages: CtcParams[]): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4; margin: 20mm 18mm; }
+  @page { size: A4; margin: 20mm 0; }
   *, *::before, *::after { box-sizing: border-box; }
-  /* body width = A4 210mm − 18mm left − 18mm right = 174mm */
   body {
     font-family: "Times New Roman", Times, serif;
     font-size: 12px;
     color: #1a1a1a;
     background: #fff;
-    width: 174mm;
+    width: 210mm;
+    padding: 0 20mm;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -310,11 +310,7 @@ export function generateCtcDocument(pages: CtcParams[]): string {
     body { margin: 10mm auto; }
   }
   @media print {
-    body {
-      margin: 0;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
+    body { margin: 0; }
   }
   body > div:first-child { page-break-before: auto !important; }
 </style>

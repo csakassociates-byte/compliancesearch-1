@@ -264,13 +264,12 @@ function generateEgmHTML(f: F): string {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>EGM Minutes — ${f.companyName}</title>
   <style>
-    @page { size:A4; margin:20mm 18mm; }
+    @page { size:A4; margin:20mm 0; }
     *, *::before, *::after { box-sizing: border-box; }
-    /* body width = A4 210mm − 18mm − 18mm = 174mm */
     body {
       font-family:'Times New Roman',Times,serif; font-size:12px; color:#1a1a1a;
       background:#fff; text-align:justify;
-      width:174mm;
+      width:210mm; padding:0 20mm;
       -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
     p, td, th, span { overflow-wrap:break-word; word-wrap:break-word; }
