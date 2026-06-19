@@ -236,7 +236,7 @@ function downloadResolutionPDF(companyName: string) {
   <meta charset="UTF-8"/>
   <title>${title}</title>
   <style>
-    @page { size: A4; margin: 0; }
+    @page { size: A4; margin: 14mm 16mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: "Times New Roman", Times, serif;
@@ -250,7 +250,7 @@ function downloadResolutionPDF(companyName: string) {
     }
     strong, b { font-weight: bold; }
     p { margin-bottom: 4px; }
-    @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    @media print { body { width: 100%; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
 <body>${html}</body>

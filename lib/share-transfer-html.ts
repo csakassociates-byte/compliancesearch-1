@@ -103,7 +103,7 @@ export function fmtDate(d: string): { day: string; month: string; year: string; 
 ══════════════════════════════════════════════════════════════════ */
 const TRANSFER_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap');
-  @page { size: A4; margin: 0; }
+  @page { size: A4; margin: 12mm 14mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: "Times New Roman", Times, serif;
@@ -111,14 +111,16 @@ const TRANSFER_CSS = `
     background: #fff;
     font-size: 10pt;
     width: 210mm;
-    padding: 12mm 14mm;
     margin: 10mm auto;
+    padding: 12mm 14mm;
   }
-  @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media print {
+    body { width: 100%; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
   .page {
-    width: 100%;
-    min-height: 273mm;
-    margin: 0;
+    width: 182mm;
+    min-height: 267mm;
+    margin: 0 auto;
     padding: 0;
     page-break-after: always;
   }

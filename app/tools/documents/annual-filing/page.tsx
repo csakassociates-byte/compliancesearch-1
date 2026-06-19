@@ -375,13 +375,11 @@ function AnnualFilingTool() {
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 
-  function downloadDoc(html: string, docName: string) {
+  function downloadDoc(html: string) {
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = docName.replace(/[^\w\s-]/g, "").trim().slice(0, 60) + ".html";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    const w = window.open(url, "_blank");
+    if (w) { w.addEventListener("load", () => { w.focus(); w.print(); }); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 
   // ── Step navigation ───────────────────────────────────────────────────
@@ -1347,19 +1345,19 @@ function AnnualFilingTool() {
                     Print / PDF
                   </button>
                   <button
-                    onClick={() => downloadDoc(generated[a.key]!, `${a.label} — ${data.companyName}`)}
+                    onClick={() => downloadDoc(generated[a.key]!)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
-                    title="Download as HTML file"
+                    title="Open and auto-trigger Save as PDF dialog"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Download
+                    Save PDF
                   </button>
                 </div>
               ))}
             </div>
             <p className="text-xs text-slate-500 mt-3 text-center">
-              Print / PDF opens in new tab — use <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs">Ctrl+P</kbd> → Save as PDF.
-              Download saves the HTML file directly.
+              <b>Print / PDF</b> — opens in new tab, use <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs">Ctrl+P</kbd> → Save as PDF.&nbsp;
+              <b>Save PDF</b> — auto-opens print dialog directly.
             </p>
           </SectionCard>
         )}

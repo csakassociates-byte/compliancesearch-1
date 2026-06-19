@@ -74,9 +74,9 @@ export function fyStartYear(fy: string): string {
 /** Common print page CSS for all generated documents */
 export function commonPrintCSS(): string {
   return `
-    /* @page margin=0: body padding provides margins in BOTH screen and print.
-       Never rely on @page margins in document.write/blob popups — Chrome is inconsistent. */
-    @page { size: A4 portrait; margin: 0; }
+    /* Blob URL approach: @page margins are reliable (unlike document.write).
+       Screen: body simulates A4 paper with padding. Print: @page margin handles spacing. */
+    @page { size: A4 portrait; margin: 20mm; }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -100,8 +100,10 @@ export function commonPrintCSS(): string {
     @media print {
       html { background: transparent; }
       body {
+        width: 100%;
+        max-width: 100%;
         margin: 0;
-        /* padding: 20mm stays — this IS the margin */
+        padding: 0;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }

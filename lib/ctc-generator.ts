@@ -292,7 +292,7 @@ export function generateCtcDocument(pages: CtcParams[]): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4; margin: 0; }
+  @page { size: A4; margin: 16mm 18mm; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { background: #c8c8c8; }
   body {
@@ -308,7 +308,8 @@ export function generateCtcDocument(pages: CtcParams[]): string {
   @media print {
     html { background: transparent; }
     body {
-      margin: 0;
+      width: 100%; max-width: 100%;
+      margin: 0; padding: 0;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }

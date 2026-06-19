@@ -278,7 +278,7 @@ function generateMinutesHTML(f: F): string {
   }).join("");
 
   const css = `
-    @page { size: A4; margin: 0; }
+    @page { size: A4; margin: 18mm; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { background: #c8c8c8; }
     body {
@@ -292,7 +292,7 @@ function generateMinutesHTML(f: F): string {
     p, td, th, span { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
     @media print {
       html { background: transparent; }
-      body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { width: 100%; max-width: 100%; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
     .center { text-align: center; }
     .upper { text-transform: uppercase; }
