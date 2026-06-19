@@ -50,8 +50,9 @@ export interface FinancialFigures {
 // ── Auditor ───────────────────────────────────────────────────────────────────
 
 export interface AuditorDetails {
+  firmType: "firm" | "proprietorship" | "partnership";
   firmName: string;
-  frn: string;           // Firm Registration Number e.g. "123456W"
+  frn: string;           // Firm Registration Number — optional for Proprietorship
   partnerName: string;
   membershipNo: string;  // ICAI membership number
   udin: string;
@@ -240,6 +241,7 @@ export const BLANK_FINANCIALS: FinancialFigures = {
 };
 
 export const BLANK_AUDITOR: AuditorDetails = {
+  firmType: "firm",
   firmName: "",
   frn: "",
   partnerName: "",

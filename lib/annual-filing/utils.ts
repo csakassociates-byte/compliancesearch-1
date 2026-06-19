@@ -12,7 +12,7 @@ export function fmtDate(raw: string): string {
     const [dd, mm, yyyy] = raw.split("/");
     d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
   }
-  if (!d || isNaN(d.getTime())) return raw;
+  if (!d || isNaN(d.getTime()) || d.getFullYear() < 1950 || d.getDate() === 0) return "";
   const day = d.getDate();
   const suffix = day === 1 || day === 21 || day === 31 ? "st"
                : day === 2 || day === 22 ? "nd"

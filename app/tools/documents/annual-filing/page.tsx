@@ -13,7 +13,7 @@ import {
   type CompanyType,
 } from "@/lib/annual-filing/generators/index";
 import type { AuditReportOptions } from "@/lib/annual-filing/generators/audit-report";
-import type { BoardMeeting, DirectorRecord, ShareholderRecord } from "@/lib/annual-filing/types";
+import type { AuditorDetails, BoardMeeting, DirectorRecord, ShareholderRecord } from "@/lib/annual-filing/types";
 import { stateFromCIN } from "@/lib/annual-filing/cin-state";
 
 interface SavedCA {
@@ -54,6 +54,29 @@ function maxReportDate(fy: string): string {
   const endYear = parseInt("20" + fy.split("-")[1]);
   return `${endYear + 1}-03-31`;
 }
+
+// ── Financial row configs — MUST be outside render to avoid React remount ──
+// Defining these as module-level constants prevents FinRow from being a new
+// component type on every render (which causes input focus loss on keystroke).
+const PL_ROWS = [
+  { label: "Revenue from Operations", fKey: "revenueFromOperations",  prevKey: "prevRevenueFromOperations"  },
+  { label: "Other Income",            fKey: "otherIncome",            prevKey: "prevOtherIncome"            },
+  { label: "Total Income",            fKey: "totalIncome",            prevKey: "prevTotalIncome"            },
+  { label: "Total Expenses",          fKey: "totalExpenses",          prevKey: "prevTotalExpenses"          },
+  { label: "Profit Before Tax (PBT)", fKey: "profitBeforeTax",        prevKey: "prevProfitBeforeTax"        },
+  { label: "Current Tax",             fKey: "currentTax",             prevKey: "prevCurrentTax"             },
+  { label: "Deferred Tax",            fKey: "deferredTax",            prevKey: "prevDeferredTax"            },
+  { label: "Profit After Tax (PAT)",  fKey: "profitAfterTax",         prevKey: "prevProfitAfterTax"         },
+] as const;
+
+const BS_ROWS = [
+  { label: "Authorised Share Capital", fKey: "authorisedCapital",  prevKey: "prevAuthorisedCapital"  },
+  { label: "Paid-up Share Capital",    fKey: "paidUpCapital",      prevKey: "prevPaidUpCapital"      },
+  { label: "Reserves & Surplus",       fKey: "reservesAndSurplus", prevKey: "prevReservesAndSurplus" },
+  { label: "Total Assets",             fKey: "totalAssets",        prevKey: "prevTotalAssets"        },
+  { label: "Total Liabilities",        fKey: "totalLiabilities",   prevKey: "prevTotalLiabilities"   },
+  { label: "Net Worth",                fKey: "netWorth",           prevKey: "prevNetWorth"           },
+] as const;
 
 // ── Company type detection from entityType ─────────────────────────────────
 function detectCompanyType(entityType: string, smallCompany?: boolean): CompanyType {
@@ -190,7 +213,7 @@ function AnnualFilingTool() {
   const [auditOpts, setAuditOpts] = useState<AuditReportOptions>({
     opinionType: "unmodified",
     cashFlowIncluded: false,
-    emphasisOfMatter: "",
+    emphasisOfMatter: "There are no matters to be emphasized in the financial statements. Accordingly, no Emphasis of Matter paragraph has been reported.",
     qualificationDetails: "",
   });
   const [saving, setSaving]         = useState(false);
@@ -232,6 +255,13 @@ function AnnualFilingTool() {
       .then((j: { auditors?: SavedCA[] }) => setSavedCAs(j.auditors || []))
       .catch(() => {});
   }, [session]);
+
+  // ── Auto-fill audit report date from board report date ─────────────────
+  useEffect(() => {
+    if (data.dateOfReport && !data.auditor.reportDate) {
+      patchAud({ reportDate: data.dateOfReport });
+    }
+  }, [data.dateOfReport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Patch helper ──────────────────────────────────────────────────────
   const patch = useCallback((partial: Partial<AnnualFilingData>) => {
@@ -535,7 +565,10 @@ function AnnualFilingTool() {
   // STEP 2 — Auditor Details
   // ══════════════════════════════════════════════════════════════════════
   function renderStep2() {
-    const auditorFilled = data.auditor.firmName && data.auditor.frn && data.auditor.partnerName && data.auditor.membershipNo;
+    const isProprietorship = data.auditor.firmType === "proprietorship";
+    const auditorFilled = data.auditor.firmName &&
+      (isProprietorship || data.auditor.frn) &&
+      data.auditor.partnerName && data.auditor.membershipNo;
     const alreadySaved = savedCAs.some(c =>
       c.frn === data.auditor.frn && c.membershipNo === data.auditor.membershipNo
     );
@@ -582,8 +615,25 @@ function AnnualFilingTool() {
 
         <SectionCard title="Statutory Auditor Details" color="blue">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <Field label="Firm Name" value={data.auditor.firmName} onChange={v => patchAud({ firmName: v })} required placeholder="ABC & Co." hint="Without 'M/s' prefix — it is added automatically in documents" />
-            <Field label="Firm Registration Number (FRN)" value={data.auditor.frn} onChange={v => patchAud({ frn: v })} required placeholder="123456W" />
+            <Select
+              label="Auditor Type"
+              value={data.auditor.firmType}
+              onChange={v => patchAud({ firmType: v as AuditorDetails["firmType"] })}
+              options={[
+                { value: "firm",           label: "Firm (CA Firm)" },
+                { value: "proprietorship", label: "Proprietorship" },
+                { value: "partnership",    label: "Partnership Firm" },
+              ]}
+            />
+            <Field label="Firm / Proprietor Name" value={data.auditor.firmName} onChange={v => patchAud({ firmName: v })} required placeholder="ABC & Co." hint="Without 'M/s' prefix — it is added automatically in documents" />
+            <Field
+              label={`Firm Registration Number (FRN)${isProprietorship ? " — Optional for Proprietorship" : ""}`}
+              value={data.auditor.frn}
+              onChange={v => patchAud({ frn: v })}
+              required={!isProprietorship}
+              placeholder="123456W"
+              hint={isProprietorship ? "FRN is not mandatory for proprietorship auditors" : undefined}
+            />
             <Field label="Partner / Proprietor Name" value={data.auditor.partnerName} onChange={v => patchAud({ partnerName: v })} required placeholder="CA Ramesh Kumar" />
             <Field label="ICAI Membership Number" value={data.auditor.membershipNo} onChange={v => patchAud({ membershipNo: v })} required placeholder="123456" />
             <Field label="UDIN" value={data.auditor.udin} onChange={v => patchAud({ udin: v })} placeholder="24123456ABCDEF1234" hint="Generate on ICAI UDIN portal after signing" />
@@ -673,34 +723,6 @@ function AnnualFilingTool() {
     const fyStartYr = parseInt(fy.split("-")[0]);
     const prevFY = `${fyStartYr - 1}-${String(fyStartYr).slice(2)}`;
 
-    function FinRow({ label, fKey, prevKey }: {
-      label: string;
-      fKey: keyof typeof fin;
-      prevKey: keyof typeof fin;
-    }) {
-      return (
-        <tr>
-          <td className="py-2 pr-3 text-sm text-slate-700 font-medium">{label}</td>
-          <td className="py-2 pr-2">
-            <input
-              type="text" value={fin[fKey] as string}
-              onChange={e => patchFin({ [fKey]: e.target.value })}
-              placeholder="0"
-              className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            />
-          </td>
-          <td className="py-2">
-            <input
-              type="text" value={fin[prevKey] as string}
-              onChange={e => patchFin({ [prevKey]: e.target.value })}
-              placeholder="0"
-              className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50"
-            />
-          </td>
-        </tr>
-      );
-    }
-
     return (
       <>
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
@@ -717,14 +739,27 @@ function AnnualFilingTool() {
               </tr>
             </thead>
             <tbody>
-              <FinRow label="Revenue from Operations"  fKey="revenueFromOperations" prevKey="prevRevenueFromOperations" />
-              <FinRow label="Other Income"             fKey="otherIncome"           prevKey="prevOtherIncome"           />
-              <FinRow label="Total Income"             fKey="totalIncome"           prevKey="prevTotalIncome"           />
-              <FinRow label="Total Expenses"           fKey="totalExpenses"         prevKey="prevTotalExpenses"         />
-              <FinRow label="Profit Before Tax (PBT)"  fKey="profitBeforeTax"       prevKey="prevProfitBeforeTax"       />
-              <FinRow label="Current Tax"              fKey="currentTax"            prevKey="prevCurrentTax"            />
-              <FinRow label="Deferred Tax"             fKey="deferredTax"           prevKey="prevDeferredTax"           />
-              <FinRow label="Profit After Tax (PAT)"   fKey="profitAfterTax"        prevKey="prevProfitAfterTax"        />
+              {PL_ROWS.map(row => (
+                <tr key={row.fKey}>
+                  <td className="py-2 pr-3 text-sm text-slate-700 font-medium">{row.label}</td>
+                  <td className="py-2 pr-2">
+                    <input
+                      type="text" value={fin[row.fKey]}
+                      onChange={e => patchFin({ [row.fKey]: e.target.value })}
+                      placeholder="0"
+                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </td>
+                  <td className="py-2">
+                    <input
+                      type="text" value={fin[row.prevKey]}
+                      onChange={e => patchFin({ [row.prevKey]: e.target.value })}
+                      placeholder="0"
+                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50"
+                    />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </SectionCard>
@@ -739,12 +774,27 @@ function AnnualFilingTool() {
               </tr>
             </thead>
             <tbody>
-              <FinRow label="Authorised Share Capital"  fKey="authorisedCapital"   prevKey="prevAuthorisedCapital"   />
-              <FinRow label="Paid-up Share Capital"     fKey="paidUpCapital"       prevKey="prevPaidUpCapital"       />
-              <FinRow label="Reserves & Surplus"        fKey="reservesAndSurplus"  prevKey="prevReservesAndSurplus"  />
-              <FinRow label="Total Assets"              fKey="totalAssets"         prevKey="prevTotalAssets"         />
-              <FinRow label="Total Liabilities"         fKey="totalLiabilities"    prevKey="prevTotalLiabilities"    />
-              <FinRow label="Net Worth"                 fKey="netWorth"            prevKey="prevNetWorth"            />
+              {BS_ROWS.map(row => (
+                <tr key={row.fKey}>
+                  <td className="py-2 pr-3 text-sm text-slate-700 font-medium">{row.label}</td>
+                  <td className="py-2 pr-2">
+                    <input
+                      type="text" value={fin[row.fKey]}
+                      onChange={e => patchFin({ [row.fKey]: e.target.value })}
+                      placeholder="0"
+                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </td>
+                  <td className="py-2">
+                    <input
+                      type="text" value={fin[row.prevKey]}
+                      onChange={e => patchFin({ [row.prevKey]: e.target.value })}
+                      placeholder="0"
+                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50"
+                    />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </SectionCard>
