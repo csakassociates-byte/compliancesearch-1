@@ -370,18 +370,16 @@ function generateAgmHTML(f: F): string {
   <style>
     @page { size:A4; margin:20mm 18mm; }
     *, *::before, *::after { box-sizing: border-box; }
+    /* body width = A4 210mm − 18mm − 18mm = 174mm */
     body {
       font-family:'Times New Roman',Times,serif; font-size:12px; color:#1a1a1a;
       background:#fff; text-align:justify;
+      width:174mm;
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
     }
     p, td, th, span { overflow-wrap:break-word; word-wrap:break-word; }
-    @media screen {
-      html { background:#c8c8c8; }
-      body { width:210mm; max-width:210mm; margin:8mm auto; padding:12mm 18mm; background:#fff; }
-    }
-    @media print {
-      body { margin:0; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    }
+    @media screen { html { background:#c8c8c8; } body { margin:10mm auto; } }
+    @media print  { body { margin:0; } }
     table { border-collapse:collapse; width:100%; }
   </style>
   </head><body>

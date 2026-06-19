@@ -79,13 +79,16 @@ export function commonPrintCSS(): string {
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* ── Base: applies to both screen and print ── */
+    /* body width = A4 210mm − 20mm left − 20mm right = 170mm (exact content area) */
     body {
       font-family: "Times New Roman", Times, serif;
       font-size: 12pt;
       color: #000;
       background: #fff;
       line-height: 1.6;
+      width: 170mm;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     p, li, td, th, span, div, h1, h2, h3 {
       overflow-wrap: break-word;
@@ -93,15 +96,12 @@ export function commonPrintCSS(): string {
       word-break: break-word;
     }
 
-    /* ── Screen only: simulate A4 paper with margins ── */
     @media screen {
       html { background: #c8c8c8; }
-      body { width: 210mm; max-width: 210mm; margin: 8mm auto; padding: 20mm; background: #fff; }
+      body { margin: 10mm auto; }
     }
-
-    /* ── Print: @page margin handles spacing, reset body layout ── */
     @media print {
-      body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { margin: 0; }
     }
 
     /* ── Typography ── */

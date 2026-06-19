@@ -280,18 +280,16 @@ function generateMinutesHTML(f: F): string {
   const css = `
     @page { size: A4; margin: 20mm 18mm; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* body width = A4 210mm − 18mm left − 18mm right = 174mm */
     body {
       font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.5;
       color: #000; background: #fff;
+      width: 174mm;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     p, td, th, span { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
-    @media screen {
-      html { background: #c8c8c8; }
-      body { width: 210mm; max-width: 210mm; margin: 8mm auto; padding: 12mm 18mm; background: #fff; }
-    }
-    @media print {
-      body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
+    @media screen { html { background: #c8c8c8; } body { margin: 10mm auto; } }
+    @media print  { body { margin: 0; } }
     .center { text-align: center; }
     .upper { text-transform: uppercase; }
     .bold { font-weight: bold; }
