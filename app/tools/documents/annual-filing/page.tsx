@@ -369,13 +369,19 @@ function AnnualFilingTool() {
     }
   }
 
-  function openDoc(html: string, docName: string) {
-    const w = window.open("", "_blank");
-    if (w) {
-      w.document.write(html);
-      w.document.close();
-      w.document.title = docName;
-    }
+  function openDoc(html: string) {
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  function downloadDoc(html: string, docName: string) {
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = docName.replace(/[^\w\s-]/g, "").trim().slice(0, 60) + ".html";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
   // ── Step navigation ───────────────────────────────────────────────────
@@ -1324,25 +1330,36 @@ function AnnualFilingTool() {
         </SectionCard>
 
         {Object.keys(generated).length > 0 && (
-          <SectionCard title="Generated — Click to Open / Print" color="blue">
+          <SectionCard title="Generated Documents" color="blue">
             <div className="grid grid-cols-1 gap-3">
               {applicable.filter(a => generated[a.key]).map(a => (
-                <button
-                  key={a.key}
-                  onClick={() => openDoc(generated[a.key]!, `${a.label} — ${data.companyName}`)}
-                  className="flex items-center gap-3 p-4 bg-white border-2 border-blue-200 hover:border-blue-400 rounded-xl text-left transition-all group"
-                >
-                  <span className="text-2xl">{a.icon}</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-slate-800 group-hover:text-blue-700">{a.label}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Click to open → Ctrl+P to print/save as PDF</p>
+                <div key={a.key} className="flex items-center gap-2 p-3 bg-white border-2 border-blue-200 rounded-xl">
+                  <span className="text-2xl flex-shrink-0">{a.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-800 truncate">{a.label}</p>
                   </div>
-                  <svg className="w-5 h-5 text-blue-400 group-hover:text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                </button>
+                  <button
+                    onClick={() => openDoc(generated[a.key]!)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-all flex-shrink-0"
+                    title="Open in new tab → Ctrl+P to print or save as PDF"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Print / PDF
+                  </button>
+                  <button
+                    onClick={() => downloadDoc(generated[a.key]!, `${a.label} — ${data.companyName}`)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
+                    title="Download as HTML file"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download
+                  </button>
+                </div>
               ))}
             </div>
-            <p className="text-xs text-slate-500 mt-4 text-center">
-              All documents open in a new tab. Use <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs">Ctrl+P</kbd> → Save as PDF to download.
+            <p className="text-xs text-slate-500 mt-3 text-center">
+              Print / PDF opens in new tab — use <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs">Ctrl+P</kbd> → Save as PDF.
+              Download saves the HTML file directly.
             </p>
           </SectionCard>
         )}

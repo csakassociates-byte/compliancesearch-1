@@ -230,16 +230,13 @@ function downloadResolutionPDF(companyName: string) {
   const html = el.innerHTML;
   const title = `Board_Resolution_${companyName.replace(/\s+/g,"_").slice(0,30) || "Company"}`;
 
-  const win = window.open("", "_blank");
-  if (!win) { alert("Pop-up blocked. Please allow pop-ups for this site."); return; }
-
-  win.document.write(`<!DOCTYPE html>
+  const fullHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <title>${title}</title>
   <style>
-    @page { size: A4; margin: 14mm 16mm; }
+    @page { size: A4; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: "Times New Roman", Times, serif;
@@ -247,23 +244,22 @@ function downloadResolutionPDF(companyName: string) {
       line-height: 1.35;
       color: #000;
       background: #fff;
+      width: 210mm;
+      padding: 14mm 16mm;
+      margin: 10mm auto;
     }
     strong, b { font-weight: bold; }
     p { margin-bottom: 4px; }
+    @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
 <body>${html}</body>
-</html>`);
-  win.document.close();
-  win.focus();
-
-  // Small delay so content renders, then print
-  setTimeout(() => {
-    win.print();
-    // Close after print dialog closes (or after 3s fallback)
-    win.onafterprint = () => win.close();
-    setTimeout(() => { try { win.close(); } catch(_) {} }, 4000);
-  }, 400);
+</html>`;
+  const url = URL.createObjectURL(new Blob([fullHtml], { type: "text/html;charset=utf-8" }));
+  const win = window.open(url, "_blank");
+  if (!win) { alert("Pop-up blocked. Please allow pop-ups for this site."); URL.revokeObjectURL(url); return; }
+  win.addEventListener("load", () => { win.focus(); win.print(); });
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
 }
 
 function DocPreview({ f, presentDirs }: { f: F; presentDirs?: Director[] }) {

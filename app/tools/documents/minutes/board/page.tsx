@@ -278,20 +278,21 @@ function generateMinutesHTML(f: F): string {
   }).join("");
 
   const css = `
-    @page { size: A4; margin: 20mm 18mm; }
+    @page { size: A4; margin: 0; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { background: #c8c8c8; }
     body {
       font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.5;
       color: #000;
-      width: 210mm; max-width: 210mm;
-      margin: 8mm auto; padding: 12mm 18mm;
+      width: 210mm;
+      padding: 14mm 18mm;
+      margin: 8mm auto;
       background: #fff;
     }
     p, td, th, span { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
     @media print {
       html { background: transparent; }
-      body { width: 100%; max-width: 100%; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
     .center { text-align: center; }
     .upper { text-transform: uppercase; }
@@ -1209,18 +1210,12 @@ export default function BoardMinutesPage() {
 
   /* ── Print helpers ── */
   function openPrintWindow(html: string) {
-    const win = window.open("", "_blank", "width=900,height=700");
-    if (!win) { alert("Pop-up blocked! Please allow pop-ups."); return; }
-    if (!session) {
-      // Non-logged user: show watermarked preview
-      win.document.write(injectPreviewWatermark(html));
-      win.document.close();
-    } else {
-      // Logged-in user: direct print
-      win.document.write(html);
-      win.document.close();
-      win.onload = () => { win.focus(); win.print(); };
-    }
+    const src = session ? html : injectPreviewWatermark(html);
+    const url = URL.createObjectURL(new Blob([src], { type: "text/html;charset=utf-8" }));
+    const win = window.open(url, "_blank");
+    if (!win) { alert("Pop-up blocked! Please allow pop-ups."); URL.revokeObjectURL(url); return; }
+    if (session) { win.addEventListener("load", () => { win.focus(); win.print(); }); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
   function openPrint()    { openPrintWindow(generateMinutesHTML(f)); }
   function openPrintCtc() { openPrintWindow(generateBoardCtcHTML(f)); }

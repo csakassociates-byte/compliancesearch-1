@@ -742,10 +742,12 @@ export default function EgmMinutesPage() {
   }
 
   function openPrint(html: string) {
-    const win = window.open("", "_blank");
-    if (!win) { alert("Please allow popups to open."); return; }
-    if (!session) { win.document.write(injectPreviewWatermark(html)); win.document.close(); }
-    else { win.document.write(html); win.document.close(); win.onload = () => win.print(); }
+    const src = session ? html : injectPreviewWatermark(html);
+    const url = URL.createObjectURL(new Blob([src], { type: "text/html;charset=utf-8" }));
+    const win = window.open(url, "_blank");
+    if (!win) { alert("Please allow popups to open."); URL.revokeObjectURL(url); return; }
+    if (session) { win.addEventListener("load", () => { win.focus(); win.print(); }); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 
   const ctcCount = f.agendaItems.filter(a => a.resolutionType !== "none" && a.resolution.trim()).length;

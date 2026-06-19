@@ -292,31 +292,23 @@ export function generateCtcDocument(pages: CtcParams[]): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>${title}</title>
 <style>
-  @page { size: A4; margin: 20mm 18mm; }
-  *, *::before, *::after { box-sizing: border-box; }
+  @page { size: A4; margin: 0; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { background: #c8c8c8; }
-  /*
-   * Screen: simulate the A4 printable area.
-   * A4 = 210mm wide. Left+right margin = 18mm each → printable = 174mm.
-   * We set body = 210mm and add 18mm padding each side so content naturally
-   * stays within 174mm. No right-side clipping at any screen resolution.
-   */
   body {
     font-family: "Times New Roman", Times, serif;
     font-size: 12px;
     color: #1a1a1a;
     width: 210mm;
-    max-width: 210mm;
+    padding: 14mm 18mm;
     margin: 8mm auto;
-    padding: 12mm 18mm;
     background: #fff;
   }
   p, h2, h3, h4, span, td, th { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
   @media print {
     html { background: transparent; }
     body {
-      width: 100%; max-width: 100%;
-      margin: 0; padding: 0;
+      margin: 0;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }

@@ -550,22 +550,13 @@ export default function ShareCertificatePage() {
 
   function openPrintWindow(autoprint = false) {
     const html = generatePrintHTML(f, ranges);
-    const win  = window.open("", "_blank", "width=900,height=700");
-    if (!win) { alert("Pop-up blocked! Please allow pop-ups for this site."); return; }
-    if (!session?.user) {
-      win.document.write(injectPreviewWatermark(html));
-      win.document.close();
-      return;
-    }
-    // Auto-save to DB on print
-    if (f.companyId) {
-      saveShareholdersToDb(f.companyId); // fire-and-forget
-    }
-    win.document.write(html);
-    win.document.close();
-    if (autoprint) {
-      win.onload = () => { win.focus(); win.print(); };
-    }
+    const src  = session?.user ? html : injectPreviewWatermark(html);
+    if (session?.user && f.companyId) saveShareholdersToDb(f.companyId);
+    const url = URL.createObjectURL(new Blob([src], { type: "text/html;charset=utf-8" }));
+    const win = window.open(url, "_blank");
+    if (!win) { alert("Pop-up blocked! Please allow pop-ups for this site."); URL.revokeObjectURL(url); return; }
+    if (autoprint && session?.user) { win.addEventListener("load", () => { win.focus(); win.print(); }); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 
   async function applyCompanyData(data: CompanyData) {

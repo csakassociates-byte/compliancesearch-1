@@ -1034,21 +1034,21 @@ function Step4({ f, upd }: { f: F; upd: (x: Partial<F>) => void }) {
 function Step5({ f, upd, session }: { f: F; upd: (x: Partial<F>) => void; session: any }) {
   const commName = getCommitteeDisplayName(f);
 
-  function openMinutes() {
-    const html = generateCommitteeHTML(f);
-    const w = window.open("", "_blank");
-    if (!w) { alert("Please allow popups to open."); return; }
-    if (!session) { w.document.write(injectPreviewWatermark(html)); w.document.close(); }
-    else { w.document.write(html); w.document.close(); w.onload = () => w.print(); }
+  function openBlobWindow(html: string) {
+    const src = session ? html : injectPreviewWatermark(html);
+    const url = URL.createObjectURL(new Blob([src], { type: "text/html;charset=utf-8" }));
+    const w = window.open(url, "_blank");
+    if (!w) { alert("Please allow popups to open."); URL.revokeObjectURL(url); return; }
+    if (session) { w.addEventListener("load", () => { w.focus(); w.print(); }); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
+
+  function openMinutes() { openBlobWindow(generateCommitteeHTML(f)); }
 
   function openCTC() {
     const html = generateCommitteeCtcHTML(f);
     if (!html) { alert("No decisions/recommendations found. Please add at least one agenda item with a Decision or Recommendation."); return; }
-    const w = window.open("", "_blank");
-    if (!w) { alert("Please allow popups to open."); return; }
-    if (!session) { w.document.write(injectPreviewWatermark(html)); w.document.close(); }
-    else { w.document.write(html); w.document.close(); w.onload = () => w.print(); }
+    openBlobWindow(html);
   }
 
   const resolutionItems = f.agendaItems.filter(a => a.resolutionType !== "none" && a.resolution.trim());

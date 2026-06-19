@@ -208,10 +208,11 @@ export default function BoardResolutionPage() {
       template, fieldValues, meetingDate, meetingSerial, resolutionNo,
       directors.filter(d => d.present).map(d => ({ name: d.name, din: d.din })), chairmanName, onLetterhead,
     );
-    const w = window.open("", "_blank", "width=950,height=750");
-    if (!w) { alert("Pop-up blocked!"); return; }
-    w.document.write(html); w.document.close();
-    setTimeout(() => w.print(), 800);
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const w = window.open(url, "_blank");
+    if (!w) { alert("Pop-up blocked!"); URL.revokeObjectURL(url); return; }
+    w.addEventListener("load", () => { w.focus(); w.print(); });
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 
   /* ── Save ── */

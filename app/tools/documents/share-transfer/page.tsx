@@ -287,9 +287,10 @@ export default function ShareTransferPage() {
       } as TransferDetails,
       f.signers.filter(s => s.name) as TransferSigner[]
     );
-    const w = window.open("", "_blank", "width=900,height=700");
-    if (!w) { alert("Pop-up blocked!"); return; }
-    w.document.write(html); w.document.close();
+    const url1 = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const w1 = window.open(url1, "_blank");
+    if (!w1) { alert("Pop-up blocked!"); URL.revokeObjectURL(url1); return; }
+    setTimeout(() => URL.revokeObjectURL(url1), 120_000);
   }
 
   /* Print new share certificate for transferee */
@@ -313,9 +314,10 @@ export default function ShareTransferPage() {
       [{ ...ranges[0], folioNo: newFolioNo, certNo: newCertNo }],
       f.signers.filter(s => s.name)
     );
-    const w = window.open("", "_blank", "width=900,height=700");
-    if (!w) { alert("Pop-up blocked!"); return; }
-    w.document.write(html); w.document.close();
+    const url2 = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const w2 = window.open(url2, "_blank");
+    if (!w2) { alert("Pop-up blocked!"); URL.revokeObjectURL(url2); return; }
+    setTimeout(() => URL.revokeObjectURL(url2), 120_000);
   }
 
   /* Execute transfer */
