@@ -74,13 +74,7 @@ export function fyStartYear(fy: string): string {
 /** Common print page CSS for all generated documents */
 export function commonPrintCSS(): string {
   return `
-    /*
-     * PRINT LAYOUT STRATEGY:
-     *   @page handles top/bottom margin on EVERY printed page.
-     *   body width=210mm + padding 0 20mm handles left/right margins.
-     *   Content area = 210mm - 20mm - 20mm = 170mm. Zero browser guessing.
-     */
-    @page { size: A4 portrait; margin: 20mm 0; }
+    @page { size: A4 portrait; margin: 20mm; }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -90,8 +84,6 @@ export function commonPrintCSS(): string {
       color: #000;
       background: #fff;
       line-height: 1.6;
-      width: 210mm;
-      padding: 0 20mm;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -101,12 +93,14 @@ export function commonPrintCSS(): string {
       word-break: break-word;
     }
 
+    /* Screen: simulate A4 paper — 170mm = 210mm minus 20mm margins each side */
     @media screen {
       html { background: #c8c8c8; }
-      body { margin: 10mm auto; }
+      body { width: 170mm; margin: 20mm auto; }
     }
+    /* Print: 170mm body centered — @page margin:20mm handles all 4 sides every page */
     @media print {
-      body { margin: 0; }
+      body { width: 170mm; margin: 0 auto; }
     }
 
     /* ── Typography ── */

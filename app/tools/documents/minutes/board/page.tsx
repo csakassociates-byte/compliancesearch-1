@@ -278,17 +278,16 @@ function generateMinutesHTML(f: F): string {
   }).join("");
 
   const css = `
-    @page { size: A4; margin: 20mm 0; }
+    @page { size: A4; margin: 20mm; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.5;
       color: #000; background: #fff;
-      width: 210mm; padding: 0 20mm;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     p, td, th, span { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
-    @media screen { html { background: #c8c8c8; } body { margin: 10mm auto; } }
-    @media print  { body { margin: 0; } }
+    @media screen { html { background: #c8c8c8; } body { width: 170mm; margin: 20mm auto; } }
+    @media print  { body { width: 170mm; margin: 0 auto; } }
     .center { text-align: center; }
     .upper { text-transform: uppercase; }
     .bold { font-weight: bold; }

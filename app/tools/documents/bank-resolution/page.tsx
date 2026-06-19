@@ -236,7 +236,7 @@ function downloadResolutionPDF(companyName: string) {
   <meta charset="UTF-8"/>
   <title>${title}</title>
   <style>
-    @page { size: A4; margin: 16mm 0; }
+    @page { size: A4; margin: 16mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: "Times New Roman", Times, serif;
@@ -244,14 +244,12 @@ function downloadResolutionPDF(companyName: string) {
       line-height: 1.35;
       color: #000;
       background: #fff;
-      width: 210mm;
-      padding: 0 16mm;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     strong, b { font-weight: bold; }
     p { margin-bottom: 4px; }
-    @media screen { html { background:#c8c8c8; } body { margin: 10mm auto; } }
-    @media print  { body { margin: 0; } }
+    @media screen { html { background:#c8c8c8; } body { width: 178mm; margin: 16mm auto; } }
+    @media print  { body { width: 178mm; margin: 0 auto; } }
   </style>
 </head>
 <body>${html}</body>
