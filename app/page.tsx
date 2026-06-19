@@ -210,9 +210,10 @@ export default function HomePage() {
               { href:"/gst-due-dates",              icon:"📊", title:"GST Due Dates",         desc:"FY 2025-26 complete calendar" },
               { href:"/income-tax-due-dates",       icon:"💰", title:"Income Tax Dates",     desc:"ITR, advance tax, TDS deadlines" },
               { href:"/roc-filing-due-dates",       icon:"📋", title:"ROC / MCA Dates",      desc:"AOC-4, MGT-7, ADT-1, DIR-3 KYC" },
-              { href:"/tools/penalty-calculator",   icon:"🧮", title:"Penalty Calculator",   desc:"GST, TDS, ITR, PF penalties" },
-              { href:"/tools/business-valuation",   icon:"📈", title:"Business Valuation",   desc:"DCF · SOTP · Listed · 46 Sectors" },
-              { href:"/companies-act-compliance",   icon:"🏛️", title:"Companies Act Guide",  desc:"Annual checklist, CSR, directors" },
+              { href:"/tools/penalty-calculator",        icon:"🧮", title:"Penalty Calculator",   desc:"GST, TDS, ITR, PF penalties" },
+              { href:"/tools/documents/annual-filing",   icon:"📑", title:"Annual Filing",       desc:"AOC-4 & MGT-7 attachments — all at once" },
+              { href:"/tools/business-valuation",        icon:"📈", title:"Business Valuation",   desc:"DCF · SOTP · Listed · 46 Sectors" },
+              { href:"/companies-act-compliance",        icon:"🏛️", title:"Companies Act Guide",  desc:"Annual checklist, CSR, directors" },
             ].map(l => (
               <Link key={l.href} href={l.href}
                 className="bg-slate-800 rounded-2xl p-4 border border-slate-700 hover:border-blue-400 hover:bg-slate-750 transition-all group">

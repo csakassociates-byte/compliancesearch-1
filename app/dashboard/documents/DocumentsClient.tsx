@@ -11,7 +11,7 @@ interface Doc {
 export default function DocumentsClient() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'agm_minutes' | 'board_minutes'>('all');
+  const [filter, setFilter] = useState<'all' | 'agm_minutes' | 'board_minutes' | 'annual_filing'>('all');
   const [deleting, setDeleting] = useState<string | null>(null);
 
   async function loadDocs() {
@@ -32,11 +32,20 @@ export default function DocumentsClient() {
   }
 
   const filtered = filter === 'all' ? docs : docs.filter(d => d.type === filter);
-  const typeLabel: Record<string, string> = { agm_minutes: "AGM Minutes", board_minutes: "Board Minutes" };
-  const typeIcon: Record<string, string> = { agm_minutes: "🏛️", board_minutes: "📋" };
+  const typeLabel: Record<string, string> = {
+    agm_minutes:   "AGM Minutes",
+    board_minutes: "Board Minutes",
+    annual_filing: "Annual Filing",
+  };
+  const typeIcon: Record<string, string> = {
+    agm_minutes:   "🏛️",
+    board_minutes: "📋",
+    annual_filing: "📑",
+  };
   const typeBadge: Record<string, string> = {
-    agm_minutes: "bg-purple-100 text-purple-700",
+    agm_minutes:   "bg-purple-100 text-purple-700",
     board_minutes: "bg-blue-100 text-blue-700",
+    annual_filing: "bg-emerald-100 text-emerald-700",
   };
 
   return (
@@ -49,17 +58,18 @@ export default function DocumentsClient() {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex gap-2 mb-5">
-          {(['all', 'agm_minutes', 'board_minutes'] as const).map(f => (
+        <div className="flex gap-2 mb-5 flex-wrap">
+          {(['all', 'agm_minutes', 'board_minutes', 'annual_filing'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
               className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
                 filter === f
                   ? 'bg-blue-600 text-white border-blue-600'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
               }`}>
-              {f === 'all' ? `All (${docs.length})` :
-               f === 'agm_minutes' ? `🏛️ AGM (${docs.filter(d=>d.type==='agm_minutes').length})` :
-               `📋 Board (${docs.filter(d=>d.type==='board_minutes').length})`}
+              {f === 'all'           ? `All (${docs.length})` :
+               f === 'agm_minutes'   ? `🏛️ AGM (${docs.filter(d=>d.type==='agm_minutes').length})` :
+               f === 'board_minutes' ? `📋 Board (${docs.filter(d=>d.type==='board_minutes').length})` :
+               `📑 Annual Filing (${docs.filter(d=>d.type==='annual_filing').length})`}
             </button>
           ))}
         </div>
@@ -91,7 +101,10 @@ export default function DocumentsClient() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Link href={`/dashboard/documents/${doc.id}`}
+                  <Link
+                    href={doc.type === 'annual_filing'
+                      ? `/tools/documents/annual-filing?load=${doc.id}`
+                      : `/dashboard/documents/${doc.id}`}
                     className="text-xs font-semibold text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50">
                     Open →
                   </Link>

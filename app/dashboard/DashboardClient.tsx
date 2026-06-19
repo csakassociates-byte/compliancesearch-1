@@ -28,7 +28,8 @@ export default function DashboardClient({ userName }: { userName: string }) {
   const tools = [
     { icon: "🏛️", title: "AGM Minutes", desc: "Annual General Meeting minutes", href: "/tools/documents/minutes/agm", color: "from-purple-50 to-purple-100 border-purple-200" },
     { icon: "📋", title: "Board Minutes", desc: "Board meeting minutes + CTC", href: "/tools/documents/minutes/board", color: "from-blue-50 to-blue-100 border-blue-200" },
-    { icon: "🏦", title: "Bank Resolution", desc: "Bank account opening resolution", href: "/tools/documents/bank-resolution", color: "from-emerald-50 to-emerald-100 border-emerald-200" },
+    { icon: "📑", title: "Annual Filing", desc: "AOC-4 & MGT-7/7A attachments generator", href: "/tools/documents/annual-filing", color: "from-emerald-50 to-emerald-100 border-emerald-200" },
+    { icon: "🏦", title: "Bank Resolution", desc: "Bank account opening resolution", href: "/tools/documents/bank-resolution", color: "from-teal-50 to-teal-100 border-teal-200" },
     { icon: "⚖️", title: "Compliance Check", desc: "Check applicable compliance rules", href: "/check", color: "from-amber-50 to-amber-100 border-amber-200" },
   ];
 
