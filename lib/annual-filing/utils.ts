@@ -74,44 +74,112 @@ export function fyStartYear(fy: string): string {
 /** Common print page CSS for all generated documents */
 export function commonPrintCSS(): string {
   return `
-    @page { size: A4 portrait; margin: 20mm 20mm 20mm 25mm; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; background: #fff; line-height: 1.6; }
-    h1 { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 4pt; }
-    h2 { font-size: 13pt; font-weight: bold; margin-bottom: 6pt; }
-    h3 { font-size: 12pt; font-weight: bold; margin-bottom: 4pt; }
-    p { margin-bottom: 8pt; text-align: justify; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 10pt; font-size: 11pt; }
-    th { background: #f2f2f2; font-weight: bold; padding: 6pt 8pt; border: 1px solid #333; text-align: left; }
-    td { padding: 5pt 8pt; border: 1px solid #333; vertical-align: top; }
-    .center { text-align: center; }
-    .right { text-align: right; }
-    .bold { font-weight: bold; }
+    /* ── Print page setup ── */
+    @page { size: A4 portrait; margin: 20mm 20mm 20mm 20mm; }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Screen: render as A4 paper centred on a grey canvas ── */
+    html { background: #b8b8b8; }
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      color: #000;
+      background: #fff;
+      line-height: 1.6;
+      /* A4 content width = 210mm − 2 × 20mm margins = 170mm */
+      max-width: 170mm;
+      margin: 12mm auto;
+      padding: 0;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+    }
+
+    /* ── Print: let @page margins take over, reset body ── */
+    @media print {
+      html { background: #fff; }
+      body {
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+
+    /* ── Typography ── */
+    h1 { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 6pt; }
+    h2 { font-size: 12pt; font-weight: bold; margin-top: 10pt; margin-bottom: 5pt; }
+    h3 { font-size: 12pt; font-weight: bold; margin-top: 8pt; margin-bottom: 4pt; }
+    p  { margin-bottom: 8pt; text-align: justify; }
+    sup { font-size: 8pt; vertical-align: super; line-height: 0; }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10pt;
+      font-size: 11pt;
+      table-layout: fixed;
+    }
+    th {
+      background: #f0f0f0;
+      font-weight: bold;
+      padding: 5pt 7pt;
+      border: 1px solid #444;
+      text-align: left;
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+    td {
+      padding: 4pt 7pt;
+      border: 1px solid #444;
+      vertical-align: top;
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+
+    /* ── Utility classes ── */
+    .center    { text-align: center; }
+    .right     { text-align: right; }
+    .bold      { font-weight: bold; }
+    .italic    { font-style: italic; }
     .underline { text-decoration: underline; }
-    .mt-8 { margin-top: 8pt; }
+    .mt-8  { margin-top: 8pt; }
     .mt-16 { margin-top: 16pt; }
     .mt-24 { margin-top: 24pt; }
-    .mb-4 { margin-bottom: 4pt; }
-    .page-break { page-break-before: always; }
-    .no-break { page-break-inside: avoid; }
-    .header-block { text-align: center; margin-bottom: 20pt; }
-    .header-block .company-name { font-size: 15pt; font-weight: bold; text-transform: uppercase; }
-    .header-block .cin-line { font-size: 10pt; margin-top: 3pt; }
-    .header-block .doc-title { font-size: 13pt; font-weight: bold; margin-top: 10pt; text-decoration: underline; }
-    .header-block .fy-line { font-size: 11pt; margin-top: 3pt; }
-    .sig-block { margin-top: 30pt; }
-    .sig-row { display: flex; justify-content: space-between; margin-top: 40pt; }
-    .sig-col { width: 45%; }
-    .sig-col .sig-line { border-top: 1px solid #000; padding-top: 4pt; margin-top: 40pt; }
-    ol { padding-left: 20pt; margin-bottom: 8pt; }
-    ol li { margin-bottom: 6pt; }
-    ul { padding-left: 20pt; margin-bottom: 8pt; }
-    ul li { margin-bottom: 4pt; }
-    .indent { margin-left: 20pt; }
-    .section-num { font-weight: bold; }
-    @media print {
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .mb-4  { margin-bottom: 4pt; }
+    .page-break  { page-break-before: always; }
+    .no-break    { page-break-inside: avoid; }
+
+    /* ── Document header block ── */
+    .header-block { text-align: center; margin-bottom: 16pt; }
+    .header-block .company-name {
+      font-size: 14pt; font-weight: bold; text-transform: uppercase;
     }
+    .header-block .cin-line {
+      font-size: 9.5pt; margin-top: 2pt;
+    }
+    .header-block .doc-title {
+      font-size: 13pt; font-weight: bold; margin-top: 10pt;
+      text-decoration: underline; letter-spacing: 0.5pt;
+    }
+    .header-block .fy-line { font-size: 10.5pt; margin-top: 3pt; }
+
+    /* ── Signature block ── */
+    .sig-block   { margin-top: 28pt; }
+    .sig-row     { display: flex; justify-content: space-between; margin-top: 36pt; }
+    .sig-col     { width: 45%; }
+    .sig-col .sig-line { border-top: 1px solid #000; padding-top: 4pt; margin-top: 36pt; }
+
+    /* ── Lists ── */
+    ol { padding-left: 22pt; margin-bottom: 8pt; }
+    ol li { margin-bottom: 5pt; text-align: justify; }
+    ul { padding-left: 22pt; margin-bottom: 8pt; }
+    ul li { margin-bottom: 5pt; text-align: justify; }
+
+    .indent      { margin-left: 20pt; }
+    .section-num { font-weight: bold; }
   `;
 }
 
