@@ -79,26 +79,31 @@ export function commonPrintCSS(): string {
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* ── Screen: render as A4 paper centred on a grey canvas ── */
-    html { background: #b8b8b8; }
+    /* ── Screen: show as A4 paper (210mm) with simulated margins ── */
+    html { background: #c8c8c8; }
     body {
       font-family: "Times New Roman", Times, serif;
       font-size: 12pt;
       color: #000;
       background: #fff;
       line-height: 1.6;
-      /* A4 content width = 210mm − 2 × 20mm margins = 170mm */
-      max-width: 170mm;
-      margin: 12mm auto;
-      padding: 0;
+      width: 210mm;
+      max-width: 210mm;
+      margin: 8mm auto;
+      padding: 20mm 20mm 20mm 20mm;
+    }
+    /* Every text node must wrap — prevents any element from bursting the A4 column */
+    p, li, td, th, span, div, h1, h2, h3 {
       overflow-wrap: break-word;
       word-wrap: break-word;
+      word-break: break-word;
     }
 
-    /* ── Print: let @page margins take over, reset body ── */
+    /* ── Print: let @page margins take over, reset body padding ── */
     @media print {
-      html { background: #fff; }
+      html { background: transparent; }
       body {
+        width: 100%;
         max-width: 100%;
         margin: 0;
         padding: 0;
