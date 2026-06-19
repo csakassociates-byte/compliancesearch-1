@@ -110,12 +110,6 @@ const TRANSFER_CSS = `
     color: #000;
     background: #fff;
     font-size: 10pt;
-    width: 210mm;
-    margin: 10mm auto;
-    padding: 12mm 14mm;
-  }
-  @media print {
-    body { width: 100%; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
   .page {
     width: 182mm;

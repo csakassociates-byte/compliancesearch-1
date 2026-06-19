@@ -250,7 +250,7 @@ function downloadResolutionPDF(companyName: string) {
     }
     strong, b { font-weight: bold; }
     p { margin-bottom: 4px; }
-    @media print { body { width: 100%; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    @media print { body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
 <body>${html}</body>
@@ -1345,10 +1345,10 @@ export default function BankResolutionPage() {
                       if (!el) return;
                       const title = `Board_Resolution_${f.companyName.replace(/\s+/g,"_").slice(0,30) || "Company"}`;
                       const rawHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>${title}</title><style>@page{size:A4;margin:14mm 16mm;}*{box-sizing:border-box;margin:0;padding:0;}body{font-family:"Times New Roman",Times,serif;font-size:10.5pt;line-height:1.35;color:#000;background:#fff;}strong,b{font-weight:bold;}p{margin-bottom:4px;}</style></head><body>${el.innerHTML}</body></html>`;
-                      const win = window.open("", "_blank", "width=900,height=700");
-                      if (!win) { alert("Pop-up blocked! Please allow pop-ups for this site."); return; }
-                      win.document.write(injectPreviewWatermark(rawHtml));
-                      win.document.close();
+                      const blobUrl = URL.createObjectURL(new Blob([injectPreviewWatermark(rawHtml)], { type: "text/html;charset=utf-8" }));
+                      const win = window.open(blobUrl, "_blank");
+                      if (!win) { alert("Pop-up blocked! Please allow pop-ups for this site."); URL.revokeObjectURL(blobUrl); return; }
+                      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
                     } else {
                       downloadResolutionPDF(f.companyName);
                     }

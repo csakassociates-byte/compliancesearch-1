@@ -253,7 +253,7 @@ function generateCommitteeHTML(f: F): string {
     p, td, th, span { overflow-wrap:break-word; word-wrap:break-word; }
     @media print {
       html { background:transparent; }
-      body { width:100%; max-width:100%; margin:0; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      body { margin:0; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     }
     table { border-collapse:collapse; width:100%; }
   </style>
