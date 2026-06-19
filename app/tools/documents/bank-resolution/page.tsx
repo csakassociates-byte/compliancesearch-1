@@ -244,12 +244,10 @@ function downloadResolutionPDF(companyName: string) {
       line-height: 1.35;
       color: #000;
       background: #fff;
-      width: 210mm;
-      padding: 14mm 16mm;
-      margin: 10mm auto;
     }
     strong, b { font-weight: bold; }
     p { margin-bottom: 4px; }
+    @media screen { body { width: 210mm; padding: 14mm 16mm; margin: 10mm auto; } }
     @media print { body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
   </style>
 </head>
