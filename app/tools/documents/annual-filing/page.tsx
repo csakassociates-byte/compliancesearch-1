@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
+import CompanySearch from "@/components/CompanySearch";
 import type { CompanyData } from "@/lib/types/company";
 import {
   generateAllAttachments,
@@ -13,6 +14,26 @@ import {
 } from "@/lib/annual-filing/generators/index";
 import type { AuditReportOptions } from "@/lib/annual-filing/generators/audit-report";
 import type { BoardMeeting, DirectorRecord, ShareholderRecord } from "@/lib/annual-filing/types";
+import { stateFromCIN } from "@/lib/annual-filing/cin-state";
+
+interface SavedCA {
+  id: string;
+  firmName: string;
+  frn: string;
+  partnerName: string;
+  membershipNo: string;
+  place?: string | null;
+}
+
+// Min date for report: first day after FY end (e.g. FY 2024-25 → 2025-04-01)
+function minReportDate(fy: string): string {
+  const endYear = parseInt("20" + fy.split("-")[1]);
+  return `${endYear}-04-01`;
+}
+function maxReportDate(fy: string): string {
+  const endYear = parseInt("20" + fy.split("-")[1]);
+  return `${endYear + 1}-03-31`;
+}
 
 // ── Company type detection from entityType ─────────────────────────────────
 function detectCompanyType(entityType: string, smallCompany?: boolean): CompanyType {
@@ -152,11 +173,14 @@ function AnnualFilingTool() {
     emphasisOfMatter: "",
     qualificationDetails: "",
   });
-  const [saving, setSaving]       = useState(false);
-  const [loadMsg, setLoadMsg]     = useState("");
-  const [saveId, setSaveId]       = useState<string | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [loadMsg, setLoadMsg]       = useState("");
+  const [saveId, setSaveId]         = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated]   = useState<Record<string, string>>({});
+  const [savedCAs, setSavedCAs]     = useState<SavedCA[]>([]);
+  const [savingCA, setSavingCA]     = useState(false);
+  const [showCAManager, setShowCAManager] = useState(false);
 
   // ── Load saved draft via ?load=<id> ──────────────────────────────────
   useEffect(() => {
@@ -180,6 +204,15 @@ function AnnualFilingTool() {
       .finally(() => setLoadMsg(""));
   }, [searchParams, session]);
 
+  // ── Load saved CAs for logged-in user ─────────────────────────────────
+  useEffect(() => {
+    if (!session?.user) return;
+    fetch("/api/auditors")
+      .then(r => r.json())
+      .then((j: { auditors?: SavedCA[] }) => setSavedCAs(j.auditors || []))
+      .catch(() => {});
+  }, [session]);
+
   // ── Patch helper ──────────────────────────────────────────────────────
   const patch = useCallback((partial: Partial<AnnualFilingData>) => {
     setData(prev => ({ ...prev, ...partial }));
@@ -196,14 +229,16 @@ function AnnualFilingTool() {
   // ── Company fill from Excel ────────────────────────────────────────────
   function handleCompanyFill(co: CompanyData) {
     const companyType = detectCompanyType(co.entityType || "", co.smallCompany);
+    const derivedState = stateFromCIN(co.cin || "");
     patch({
-      companyName:       co.companyName || "",
-      cin:               co.cin || "",
-      regAddress:        co.regAddress || "",
-      entityType:        co.entityType || "",
+      companyName:           co.companyName || "",
+      cin:                   co.cin || "",
+      regAddress:            co.regAddress || "",
+      entityType:            co.entityType || "",
       companyType,
-      rocName:           co.rocName || "",
-      incorporationDate: co.incorporationDate || "",
+      rocName:               co.rocName || "",
+      incorporationDate:     co.incorporationDate || "",
+      stateOfIncorporation:  derivedState || "",
       directors: (co.directors || []).map(d => ({
         din:               d.din || "",
         name:              d.name || "",
@@ -242,6 +277,33 @@ function AnnualFilingTool() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // ── Save a new CA to list ─────────────────────────────────────────────
+  async function handleSaveCA() {
+    if (!session?.user) return;
+    const a = data.auditor;
+    if (!a.firmName || !a.frn || !a.partnerName || !a.membershipNo) return;
+    setSavingCA(true);
+    try {
+      const res = await fetch("/api/auditors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firmName: a.firmName, frn: a.frn, partnerName: a.partnerName, membershipNo: a.membershipNo, place: a.place }),
+      });
+      const json = await res.json() as { id?: string };
+      if (json.id) {
+        setSavedCAs(prev => [{ id: json.id!, firmName: a.firmName, frn: a.frn, partnerName: a.partnerName, membershipNo: a.membershipNo, place: a.place }, ...prev]);
+      }
+    } finally {
+      setSavingCA(false);
+    }
+  }
+
+  // ── Delete a saved CA ─────────────────────────────────────────────────
+  async function handleDeleteCA(id: string) {
+    await fetch(`/api/auditors/${id}`, { method: "DELETE" });
+    setSavedCAs(prev => prev.filter(c => c.id !== id));
   }
 
   // ── Generate All ──────────────────────────────────────────────────────
@@ -305,20 +367,72 @@ function AnnualFilingTool() {
   // STEP 1 — Company & Financial Year
   // ══════════════════════════════════════════════════════════════════════
   function renderStep1() {
+    const minDate = minReportDate(data.financialYear);
+    const maxDate = maxReportDate(data.financialYear);
+    const dateInvalid = data.dateOfReport && data.dateOfReport < minDate;
+    const fyEndLabel = `31 March ${minDate.split("-")[0]}`; // e.g. "31 March 2025"
+
     return (
       <>
         <SectionCard title="Import Company Data from MCA Excel" color="blue">
+          <p className="text-xs text-slate-500 mb-3">Import from MCA Excel <strong>or</strong> type company name below to search from your saved companies.</p>
           <CompanyExcelUpload onFill={handleCompanyFill} accent="blue" note="Import company master data" />
         </SectionCard>
 
         <SectionCard title="Company Details" color="emerald">
+          {/* Company Name — uses CompanySearch for suggestions from My Companies */}
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-slate-700 mb-1">
+              Company Name <span className="text-red-500 ml-1">*</span>
+            </label>
+            <CompanySearch
+              value={data.companyName}
+              onChange={v => patch({ companyName: v })}
+              onSelect={handleCompanyFill}
+              placeholder="e.g. ABC Enterprises Private Limited"
+              accent="blue"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <Field label="Company Name" value={data.companyName} onChange={v => patch({ companyName: v })} required placeholder="ABC Private Limited" />
-            <Field label="CIN" value={data.cin} onChange={v => patch({ cin: v })} required placeholder="U12345MH2020PTC123456" />
+            <Field label="CIN" value={data.cin} onChange={v => {
+              patch({ cin: v, stateOfIncorporation: stateFromCIN(v) || data.stateOfIncorporation });
+            }} required placeholder="U12345MH2020PTC123456" hint="State auto-derives from CIN" />
             <Field label="PAN" value={data.pan} onChange={v => patch({ pan: v })} placeholder="AABCA1234A" />
             <Field label="ROC Name" value={data.rocName} onChange={v => patch({ rocName: v })} placeholder="Registrar of Companies, Mumbai" />
-            <Field label="Incorporation Date" value={data.incorporationDate} onChange={v => patch({ incorporationDate: v })} type="date" />
-            <Field label="State of Incorporation" value={data.stateOfIncorporation} onChange={v => patch({ stateOfIncorporation: v })} placeholder="Maharashtra" />
+            {/* Incorporation Date — auto-filled from Excel / DB */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Incorporation Date</label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={data.incorporationDate}
+                  onChange={e => patch({ incorporationDate: e.target.value })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {data.incorporationDate && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600 font-semibold">✓ auto</span>
+                )}
+              </div>
+            </div>
+            {/* State of Incorporation — auto-derived from CIN */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">State of Incorporation</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={data.stateOfIncorporation}
+                  onChange={e => patch({ stateOfIncorporation: e.target.value })}
+                  placeholder="Auto-derived from CIN"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {data.stateOfIncorporation && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600 font-semibold">✓ auto</span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Automatically derived from CIN. Edit if needed.</p>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-x-6">
             <Field label="Registered Office Address" value={data.regAddress} onChange={v => patch({ regAddress: v })} placeholder="Full registered address" />
@@ -354,7 +468,33 @@ function AnnualFilingTool() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
             <Field label="Principal Business Activity" value={data.principalActivity} onChange={v => patch({ principalActivity: v })} placeholder="e.g., Software Services, Trading in Goods" />
             <Field label="Place of Signing (for Board Report & Auditor)" value={data.placeOfSigning} onChange={v => patch({ placeOfSigning: v })} placeholder="Mumbai" required />
-            <Field label="Date of Board Report / Auditor Report" value={data.dateOfReport} onChange={v => patch({ dateOfReport: v })} type="date" required />
+
+            {/* Date of Report — with FY-based validation */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                Date of Board Report / Auditor Report <span className="text-red-500 ml-1">*</span>
+              </label>
+              <p className="text-xs text-slate-500 mb-1">
+                Must be <strong>after {fyEndLabel}</strong> (i.e., after financial year ends)
+              </p>
+              <input
+                type="date"
+                value={data.dateOfReport}
+                onChange={e => patch({ dateOfReport: e.target.value })}
+                min={minDate}
+                max={maxDate}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                  dateInvalid
+                    ? "border-red-400 focus:ring-red-400 bg-red-50"
+                    : "border-slate-300 focus:ring-emerald-500"
+                }`}
+              />
+              {dateInvalid && (
+                <p className="text-xs text-red-600 mt-1 font-semibold">
+                  ⚠ Report date cannot be before {fyEndLabel}. Board/Auditor report must be signed after FY ends.
+                </p>
+              )}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1">State of Affairs / Business Operations <span className="text-slate-400 font-normal">(for Board Report)</span></label>
@@ -375,18 +515,84 @@ function AnnualFilingTool() {
   // STEP 2 — Auditor Details
   // ══════════════════════════════════════════════════════════════════════
   function renderStep2() {
+    const auditorFilled = data.auditor.firmName && data.auditor.frn && data.auditor.partnerName && data.auditor.membershipNo;
+    const alreadySaved = savedCAs.some(c =>
+      c.frn === data.auditor.frn && c.membershipNo === data.auditor.membershipNo
+    );
+
     return (
       <>
+        {/* ── Saved CA Selection ── */}
+        {session?.user && (
+          <SectionCard title="Select from Saved CAs" color="emerald">
+            {savedCAs.length === 0 ? (
+              <p className="text-sm text-slate-500">No CAs saved yet. Fill details below and click <strong>Save CA</strong> to add to your list.</p>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 mb-3">Select a CA to auto-fill all details. You can edit after selecting.</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {savedCAs.map(ca => (
+                    <div key={ca.id} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl hover:border-emerald-300 transition-all">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800">{ca.firmName}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">FRN: {ca.frn} • {ca.partnerName} (M.No. {ca.membershipNo}){ca.place ? ` • ${ca.place}` : ""}</p>
+                      </div>
+                      <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                        <button
+                          onClick={() => patchAud({ firmName: ca.firmName, frn: ca.frn, partnerName: ca.partnerName, membershipNo: ca.membershipNo, place: ca.place || "" })}
+                          className="text-xs font-bold text-emerald-700 border border-emerald-300 px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition"
+                        >
+                          Select →
+                        </button>
+                        <button
+                          onClick={() => { if (confirm(`Remove "${ca.firmName}" from saved CAs?`)) handleDeleteCA(ca.id); }}
+                          className="text-xs text-red-400 hover:text-red-600 px-2 py-1.5 rounded-lg hover:bg-red-50 transition"
+                          title="Remove"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </SectionCard>
+        )}
+
         <SectionCard title="Statutory Auditor Details" color="blue">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <Field label="Firm Name" value={data.auditor.firmName} onChange={v => patchAud({ firmName: v })} required placeholder="M/s ABC & Co." hint="Without 'M/s' prefix" />
+            <Field label="Firm Name" value={data.auditor.firmName} onChange={v => patchAud({ firmName: v })} required placeholder="ABC & Co." hint="Without 'M/s' prefix — it is added automatically in documents" />
             <Field label="Firm Registration Number (FRN)" value={data.auditor.frn} onChange={v => patchAud({ frn: v })} required placeholder="123456W" />
             <Field label="Partner / Proprietor Name" value={data.auditor.partnerName} onChange={v => patchAud({ partnerName: v })} required placeholder="CA Ramesh Kumar" />
             <Field label="ICAI Membership Number" value={data.auditor.membershipNo} onChange={v => patchAud({ membershipNo: v })} required placeholder="123456" />
             <Field label="UDIN" value={data.auditor.udin} onChange={v => patchAud({ udin: v })} placeholder="24123456ABCDEF1234" hint="Generate on ICAI UDIN portal after signing" />
             <Field label="Place of Signing" value={data.auditor.place} onChange={v => patchAud({ place: v })} placeholder="Mumbai" />
-            <Field label="Date of Audit Report" value={data.auditor.reportDate} onChange={v => patchAud({ reportDate: v })} type="date" required />
+            <Field label="Date of Audit Report" value={data.auditor.reportDate} onChange={v => patchAud({ reportDate: v })} type="date" required
+              hint={`Must be after ${minReportDate(data.financialYear).split("-").reverse().join("/")}`}
+            />
           </div>
+
+          {/* Save CA to list */}
+          {session?.user && (
+            <div className="mt-4 pt-4 border-t border-blue-200 flex items-center justify-between">
+              <div className="text-sm text-slate-600">
+                {alreadySaved
+                  ? <span className="text-emerald-600 font-semibold">✓ This CA is already in your saved list</span>
+                  : <span>Save these CA details for future use across all companies</span>
+                }
+              </div>
+              {!alreadySaved && (
+                <button
+                  onClick={handleSaveCA}
+                  disabled={savingCA || !auditorFilled}
+                  className="text-xs font-bold text-blue-700 border border-blue-300 px-4 py-2 rounded-lg hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  {savingCA ? "Saving…" : "Save CA to My List"}
+                </button>
+              )}
+            </div>
+          )}
         </SectionCard>
 
         <SectionCard title="Audit Opinion" color="amber">
