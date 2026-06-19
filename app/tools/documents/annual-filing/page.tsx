@@ -25,6 +25,26 @@ interface SavedCA {
   place?: string | null;
 }
 
+// Convert any common date format → YYYY-MM-DD (required by <input type="date">)
+function toDateInput(raw: string): string {
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;                // already YYYY-MM-DD
+  // DD/MM/YYYY or D/M/YYYY
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+    const [d, mo, y] = raw.split("/");
+    return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}`;
+  }
+  // DD-MM-YYYY or D-M-YYYY
+  if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(raw)) {
+    const [d, mo, y] = raw.split("-");
+    return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}`;
+  }
+  // Try generic JS Date parse as fallback
+  const p = new Date(raw);
+  if (!isNaN(p.getTime())) return p.toISOString().split("T")[0];
+  return raw;
+}
+
 // Min date for report: first day after FY end (e.g. FY 2024-25 → 2025-04-01)
 function minReportDate(fy: string): string {
   const endYear = parseInt("20" + fy.split("-")[1]);
@@ -237,7 +257,7 @@ function AnnualFilingTool() {
       entityType:            co.entityType || "",
       companyType,
       rocName:               co.rocName || "",
-      incorporationDate:     co.incorporationDate || "",
+      incorporationDate:     toDateInput(co.incorporationDate || ""),
       stateOfIncorporation:  derivedState || "",
       directors: (co.directors || []).map(d => ({
         din:               d.din || "",
