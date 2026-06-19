@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -130,6 +130,18 @@ function SectionCard({ title, color = "slate", children }: { title: string; colo
 
 // ── Main Page ──────────────────────────────────────────────────────────────
 export default function AnnualFilingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center">
+        <div className="text-slate-500 text-sm">Loading…</div>
+      </div>
+    }>
+      <AnnualFilingTool />
+    </Suspense>
+  );
+}
+
+function AnnualFilingTool() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
