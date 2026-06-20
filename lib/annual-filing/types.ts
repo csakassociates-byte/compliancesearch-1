@@ -68,6 +68,7 @@ export interface BoardMeeting {
   directorsPresent: string[];
   meetingType?: "regular" | "agm_board" | "extraordinary";
   purpose?: string;      // e.g. "Approval of Fin. Statements & calling of AGM"
+  dateConfirmed?: boolean; // true once user explicitly confirms an auto-filled/suggested date
 }
 
 // ── Member Meetings (AGM / EGM) ───────────────────────────────────────────────
@@ -193,7 +194,8 @@ export interface AnnualFilingData {
   financials: FinancialFigures;
 
   // ── Step 4: Board & Compliance ──────────────
-  prevFYLastMeetingDate?: string;  // Last board meeting date of previous FY (for gap check)
+  prevFYLastMeetingDate?: string;
+  prevFYLastMeetingDateConfirmed?: boolean; // false = auto-filled from MCA, needs user confirmation
   boardMeetings: BoardMeeting[];
   memberMeetings?: MemberMeeting[];
   committeeMeetings?: CommitteeMeeting[];

@@ -283,6 +283,8 @@ function AnnualFilingTool() {
     const companyType = detectCompanyType(co.entityType || "", co.smallCompany);
     const derivedState = stateFromCIN(co.cin || "");
     if (co.id) setCompanyId(co.id);
+    // Auto-fill prevFYLastMeetingDate from MCA dateOfLastAGM — mark as unconfirmed (red)
+    const lastAgm = co.dateOfLastAGM ? toDateInput(co.dateOfLastAGM) : "";
     patch({
       companyName:           co.companyName || "",
       cin:                   co.cin || "",
@@ -294,6 +296,7 @@ function AnnualFilingTool() {
       stateOfIncorporation:  derivedState || "",
       ...(co.email  && { companyEmail: co.email }),
       ...(co.mobile && { companyPhone: co.mobile }),
+      ...(lastAgm   && { prevFYLastMeetingDate: lastAgm, prevFYLastMeetingDateConfirmed: false }),
       directors: (co.directors || []).map(d => ({
         din:               d.din || "",
         name:              d.name || "",
@@ -950,7 +953,7 @@ function AnnualFilingTool() {
       const prev        = meetings[idx].directorsPresent;
       const stillIn     = prev.filter(n => eligibleSet.has(n));
       const newOnes     = eligible.filter(d => !prev.includes(d.name)).map(d => d.name);
-      meetings[idx] = { ...meetings[idx], date, directorsPresent: [...stillIn, ...newOnes] };
+      meetings[idx] = { ...meetings[idx], date, directorsPresent: [...stillIn, ...newOnes], dateConfirmed: false };
       patch({ boardMeetings: meetings });
     }
 
@@ -1061,7 +1064,13 @@ function AnnualFilingTool() {
 
           {/* ── Previous FY last meeting (non-first-year) ── */}
           {!isFirstYear && (
-            <div className={`mb-4 p-3 rounded-lg border ${data.prevFYLastMeetingDate ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-300"}`}>
+            <div className={`mb-4 p-3 rounded-lg border ${
+              !data.prevFYLastMeetingDate
+                ? "bg-amber-50 border-amber-300"
+                : !data.prevFYLastMeetingDateConfirmed
+                  ? "bg-red-50 border-red-400"
+                  : "bg-emerald-50 border-emerald-200"
+            }`}>
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Last Board Meeting Date of Previous FY (FY {`${Number(fyStartYear)-1}-${fyStartYear.slice(2)}`})
                 <span className="text-red-500 ml-1">*</span>
@@ -1069,15 +1078,35 @@ function AnnualFilingTool() {
               <p className="text-xs text-slate-500 mb-2">
                 Required to verify the 120-day gap rule (Sec. 173) between last meeting of prev FY and first meeting of this FY, and for smart date auto-suggestion.
               </p>
-              <input
-                type="date"
-                value={data.prevFYLastMeetingDate || ""}
-                onChange={e => patch({ prevFYLastMeetingDate: e.target.value })}
-                max={fyStart}
-                className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="date"
+                  value={data.prevFYLastMeetingDate || ""}
+                  onChange={e => patch({ prevFYLastMeetingDate: e.target.value, prevFYLastMeetingDateConfirmed: false })}
+                  max={fyStart}
+                  className={`border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                    data.prevFYLastMeetingDate && !data.prevFYLastMeetingDateConfirmed
+                      ? "border-red-400 bg-red-50"
+                      : "border-slate-300"
+                  }`}
+                />
+                {data.prevFYLastMeetingDate && !data.prevFYLastMeetingDateConfirmed && (
+                  <button
+                    onClick={() => patch({ prevFYLastMeetingDateConfirmed: true })}
+                    className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700"
+                  >
+                    ✓ Confirm Date
+                  </button>
+                )}
+                {data.prevFYLastMeetingDate && data.prevFYLastMeetingDateConfirmed && (
+                  <span className="text-xs text-emerald-700 font-semibold">✓ Confirmed</span>
+                )}
+              </div>
               {!data.prevFYLastMeetingDate && (
                 <p className="text-xs text-amber-700 mt-1 font-semibold">⚠ Fill this date for smart auto-suggestion and complete gap validation.</p>
+              )}
+              {data.prevFYLastMeetingDate && !data.prevFYLastMeetingDateConfirmed && (
+                <p className="text-xs text-red-700 mt-1 font-semibold">⚠ Auto-filled from MCA last AGM date. Please verify and confirm.</p>
               )}
               {/* Gap from prev FY last meeting to first meeting of this FY */}
               {prevToFirstGap !== null && (
@@ -1125,6 +1154,13 @@ function AnnualFilingTool() {
                   </span>
                 );
               })}
+            </div>
+          )}
+
+          {/* ── Reminder: missing Pre-AGM Board Meeting ── */}
+          {!isFirstYear && meetings.length > 0 && !meetings.some(m => m.meetingType === "agm_board") && (
+            <div className="mb-4 p-3 rounded-lg border border-amber-400 bg-amber-50 text-xs text-amber-800 font-semibold">
+              ⚠ Please add the Pre-AGM Board Meeting — the board meeting held before the previous year&apos;s AGM (usually August–September) to approve Financial Statements, Directors&apos; Report and issue the AGM Notice. Use &ldquo;Auto-suggest Dates&rdquo; or add it manually using the &ldquo;+ Add Meeting&rdquo; button and select type &ldquo;Pre-AGM Board Meeting&rdquo;.
             </div>
           )}
 
@@ -1202,16 +1238,38 @@ function AnnualFilingTool() {
                       <label className="text-xs text-slate-500 block mb-1">
                         Meeting Date <span className="text-slate-400">(allowed: {effectiveMin} → {fyEnd})</span>
                       </label>
-                      <input
-                        type="date"
-                        value={m.date}
-                        min={effectiveMin}
-                        max={isAGMBoard ? `${fyStartYear}-09-29` : fyEnd}
-                        onChange={e => updateMeetingDate(i, e.target.value)}
-                        className={`border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full ${
-                          m.date && !dateOk ? "border-red-400 bg-red-50" : "border-slate-300"
-                        }`}
-                      />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          type="date"
+                          value={m.date}
+                          min={effectiveMin}
+                          max={isAGMBoard ? `${fyStartYear}-09-29` : fyEnd}
+                          onChange={e => updateMeetingDate(i, e.target.value)}
+                          className={`border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1 min-w-0 ${
+                            m.date && !dateOk
+                              ? "border-red-400 bg-red-50"
+                              : isAGMBoard && m.date && !m.dateConfirmed
+                                ? "border-red-400 bg-red-50"
+                                : "border-slate-300"
+                          }`}
+                        />
+                        {isAGMBoard && m.date && !m.dateConfirmed && (
+                          <button
+                            onClick={() => {
+                              const ms = [...meetings]; ms[i] = { ...ms[i], dateConfirmed: true }; patch({ boardMeetings: ms });
+                            }}
+                            className="text-xs px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 whitespace-nowrap"
+                          >
+                            ✓ Confirm
+                          </button>
+                        )}
+                        {isAGMBoard && m.date && m.dateConfirmed && (
+                          <span className="text-xs text-emerald-700 font-semibold whitespace-nowrap">✓ Confirmed</span>
+                        )}
+                      </div>
+                      {isAGMBoard && m.date && !m.dateConfirmed && (
+                        <p className="text-xs text-red-700 mt-1 font-semibold">⚠ Auto-suggested date — please verify and confirm.</p>
+                      )}
                       {dateTooEarly && <p className="text-xs text-red-600 mt-1">⚠ Before {isFirstYear ? "incorporation" : "FY start"} ({effectiveMin}).</p>}
                       {dateTooLate  && <p className="text-xs text-red-600 mt-1">⚠ After FY end ({fyEnd}).</p>}
                     </div>
