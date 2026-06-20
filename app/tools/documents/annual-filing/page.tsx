@@ -215,8 +215,12 @@ function AnnualFilingTool() {
   const [auditOpts, setAuditOpts] = useState<AuditReportOptions>({
     opinionType: "unmodified",
     cashFlowIncluded: false,
-    emphasisOfMatter: "There are no matters to be emphasized in the financial statements. Accordingly, no Emphasis of Matter paragraph has been reported.",
+    emphasisOfMatter: "",
     qualificationDetails: "",
+    dividendDeclared: false,
+    dividendDetails: "",
+    auditTrailCompliant: false,
+    auditTrailSoftware: "",
   });
   const [saving, setSaving]         = useState(false);
   const [loadMsg, setLoadMsg]       = useState("");
@@ -902,9 +906,75 @@ function AnnualFilingTool() {
               value={auditOpts.emphasisOfMatter || ""}
               onChange={e => setAuditOpts(o => ({ ...o, emphasisOfMatter: e.target.value }))}
               rows={3}
-              placeholder="If any matter needs to be emphasised (e.g. going concern uncertainty, pending litigation)..."
+              placeholder="If any matter needs to be emphasised (e.g. going concern uncertainty, pending litigation). Leave blank to omit the section."
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
+          </div>
+
+          {/* Rule 11(v) — Dividend */}
+          <div className="mt-4">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Rule 11(v): Dividend — Was any dividend declared or paid during the year?
+            </label>
+            <div className="flex gap-6 mb-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="auditDividend"
+                  checked={!auditOpts.dividendDeclared}
+                  onChange={() => setAuditOpts(o => ({ ...o, dividendDeclared: false, dividendDetails: "" }))}
+                  className="accent-emerald-600"
+                />
+                No dividend declared / paid
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="auditDividend"
+                  checked={!!auditOpts.dividendDeclared}
+                  onChange={() => setAuditOpts(o => ({ ...o, dividendDeclared: true }))}
+                  className="accent-emerald-600"
+                />
+                Dividend was declared / paid
+              </label>
+            </div>
+            {auditOpts.dividendDeclared && (
+              <input
+                value={auditOpts.dividendDetails || ""}
+                onChange={e => setAuditOpts(o => ({ ...o, dividendDetails: e.target.value }))}
+                placeholder="e.g. ₹2 per share (Final Dividend)"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            )}
+          </div>
+
+          {/* Rule 11(vi) — Audit Trail */}
+          <div className="mt-4">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Rule 11(vi): Audit Trail — Does the company use audit-trail-compliant accounting software?
+            </label>
+            <div className="flex gap-6 mb-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="auditTrail"
+                  checked={!auditOpts.auditTrailCompliant}
+                  onChange={() => setAuditOpts(o => ({ ...o, auditTrailCompliant: false, auditTrailSoftware: "" }))}
+                  className="accent-emerald-600"
+                />
+                No — software lacked audit trail feature
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="auditTrail"
+                  checked={!!auditOpts.auditTrailCompliant}
+                  onChange={() => setAuditOpts(o => ({ ...o, auditTrailCompliant: true }))}
+                  className="accent-emerald-600"
+                />
+                Yes — software has audit trail feature
+              </label>
+            </div>
+            {auditOpts.auditTrailCompliant && (
+              <input
+                value={auditOpts.auditTrailSoftware || ""}
+                onChange={e => setAuditOpts(o => ({ ...o, auditTrailSoftware: e.target.value }))}
+                placeholder="Software name (e.g. Tally Prime, Busy, QuickBooks)"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            )}
           </div>
 
           <div className="mt-3 p-3 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-600">

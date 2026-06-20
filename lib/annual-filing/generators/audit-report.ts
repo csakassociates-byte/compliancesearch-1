@@ -20,8 +20,12 @@ export type OpinionType = "unmodified" | "qualified" | "adverse" | "disclaimer";
 export interface AuditReportOptions {
   opinionType: OpinionType;
   qualificationDetails?: string;  // required when opinion is qualified / adverse / disclaimer
-  emphasisOfMatter?: string;      // SA 706 paragraph
+  emphasisOfMatter?: string;      // SA 706 paragraph — omit section when empty
   cashFlowIncluded: boolean;      // Section 8 / FPC must include; OPC / Small exempt
+  dividendDeclared?: boolean;     // Rule 11(v) — true if dividend declared/paid during year
+  dividendDetails?: string;       // e.g. "₹2 per share (Final Dividend)"
+  auditTrailCompliant?: boolean;  // Rule 11(vi) — true if software has audit trail feature
+  auditTrailSoftware?: string;    // software name when auditTrailCompliant is true
 }
 
 export function generateAuditReport(
@@ -74,11 +78,25 @@ export function generateAuditReport(
   // Auditor's remarks — unmodified → clean remark; modified → shows the qualification
   const auditRemark = isModified
     ? (opts.qualificationDetails || "[Insert qualification / disclaimer details]")
-    : "There is no any qualifications, reservation or adverse remark or disclaimer";
+    : "There are no qualifications, reservations or adverse remarks or disclaimers.";
 
-  // Emphasis of Matter text
-  const eomText = opts.emphasisOfMatter
-    || "There are no matters to be emphasized in the financial statements. Accordingly, no Emphasis of Matter paragraph has been reported.";
+  // Emphasis of Matter — only render section when text is provided (Bug 5 fix)
+  const eomSection = opts.emphasisOfMatter
+    ? `<h2>Emphasis of Matter</h2>\n<p>${opts.emphasisOfMatter}</p>`
+    : "";
+
+  // Rule 11(v) — Dividend
+  const dividendPara = opts.dividendDeclared
+    ? `<p>v. The Company has declared and/or paid dividend of Rs.${opts.dividendDetails || "[amount]"} during the year in compliance with the provisions of Section 123 of the Companies Act, 2013.</p>`
+    : `<p>v. No dividend has been declared or paid during the year by the Company.</p>`;
+
+  // Rule 11(vi) — Audit trail
+  const auditTrailPara = opts.auditTrailCompliant
+    ? `<p>vi. Pursuant to Rule 11(g) of the Companies (Audit and Auditors) Rules, 2014, we report that, based on our examination, which included test checks and information provided, the Company utilized ${opts.auditTrailSoftware || "accounting"} software for maintaining its books of account. The software has an audit trail (edit log) feature to record all relevant transactions throughout the year as required by the Proviso to Rule 3(1) of the Companies (Accounts) Rules, 2014. Based on our examination, the audit trail feature was enabled and operated throughout the year for all the relevant transactions recorded in the software.</p>`
+    : `<p>vi. Pursuant to Rule 11(g) of the Companies (Audit and Auditors) Rules, 2014, we report that, based on our examination, which included test checks and information provided, the Company utilized accounting software for maintaining its books of account. However, the software lacked an audit trail (edit log) feature to record all relevant transactions throughout the year, as required by the Proviso to Rule 3(1) of the Companies (Accounts) Rules, 2014. Consequently, we are unable to give an opinion on this.</p>`;
+
+  // Firm display name — strip any leading "M/s" before adding it back (form says "without M/s")
+  const firmDisplayName = (aud.firmName || "[Firm Name]").replace(/^M\/s\s*/i, "");
 
   // Signature block
   const partnerLabel = aud.firmType === "proprietorship" ? "Proprietor" : "Partner";
@@ -108,8 +126,7 @@ ${isModified ? `
 <h2>Basis for Opinion</h2>
 <p>We conducted our audit in accordance with the Standards on Auditing (SAs) specified under section 143(10) of the Companies Act, 2013. Our responsibilities under those Standards are further described in the Auditor&rsquo;s Responsibilities for the Audit of the Financial Statements section of our report. We are independent of the Company in accordance with the Code of Ethics issued by the Institute of Chartered Accountants of India together with the ethical requirements that are relevant to our audit of the financial statements under the provisions of the Companies Act, 2013 and the Rules thereunder, and we have fulfilled our other ethical responsibilities in accordance with these requirements and the Code of Ethics. We believe that the audit evidence we have obtained is sufficient and appropriate to provide a basis for our opinion.</p>
 
-<h2>Emphasis of Matter</h2>
-<p>${eomText}</p>
+${eomSection}
 
 <h2>Key Audit Matters</h2>
 <p>Key audit matters are those matters that, in our professional judgement, were most significance in our audit of the financial statements of the current period. These matters were addressed in the context of our audit of the financial statement as a whole, and in forming our opinion thereon, and we do not provide a separate opinion on these matters. Reporting of Key audit matters as per SA 701, Key Audit matters are not applicable to the Company since the Company falls under the category of unlisted companies, and as such, the requirement for reporting Key Audit Matters does not apply to it.</p>
@@ -143,7 +160,6 @@ ${isModified ? `
 
 <div class="page-break"></div>
 <h2>Report on Other Legal and Regulatory Requirements</h2>
-<p>State other matters as per Rule 11 of Companies (Audit and Auditors) Rules, 2014.</p>
 
 <p>With respect to the other matters to be included in the Auditor&rsquo;s Report in accordance with Rule 11 of the Companies (Audit and Auditors) Rules, 2014, in our opinion and to the best of our information and according to the explanations given to us:</p>
 <p>i. The Company does not have any pending litigations which would impact its financial position.</p>
@@ -163,14 +179,14 @@ ${isModified ? `
 <p>iv. (a) The management has represented that, to the best of it&rsquo;s knowledge and belief, other than as disclosed in the notes to the accounts, no funds have been advanced or loaned or invested (either from borrowed funds or share premium or any other sources or kind of funds) by the company to or in any other person(s) or entity(ies), including foreign entities (&ldquo;Intermediaries&rdquo;), with the understanding, whether recorded in writing or otherwise, that the Intermediary shall, whether, directly or indirectly lend or invest in other persons or entities identified in any manner whatsoever by or on behalf of the company (&ldquo;Ultimate Beneficiaries&rdquo;) or provide any guarantee, security or the like on behalf of the Ultimate Beneficiaries;</p>
 <p>(b) The management has represented, that, to the best of it&rsquo;s knowledge and belief, other than as disclosed in the notes to the accounts, no funds have been received by the company from any person(s) or entity(ies), including foreign entities (&ldquo;Funding Parties&rdquo;), with the understanding, whether recorded in writing or otherwise, that the company shall, whether, directly or indirectly, lend or invest in other persons or entities identified in any manner whatsoever by or on behalf of the Funding Party (&ldquo;Ultimate Beneficiaries&rdquo;) or provide any guarantee, security or the like on behalf of the Ultimate Beneficiaries; and</p>
 <p>(c) Based on such audit procedures that have been considered reasonable and appropriate in the circumstances, nothing has come to our notice that has caused us to believe that the representations under sub-clause (i) and (ii) of Rule 11(e), as provided under (a) and (b) above, contain any material misstatement.</p>
-<p>v. No dividend have been declared or paid during the year by the company.</p>
-<p>vi. The Pursuant to Rule 11(g) of the Companies (Audit and Auditors) Rules, 2014, we report that, based on our examination, which included test checks and information provided, the Company utilized accounting software for maintaining its books of account. However, the software lacked an audit trail (edit log) feature to record all relevant transactions throughout the year, as required by the Proviso to Rule 3(1) of the Companies (Accounts) Rules, 2014. Consequently, we are unable to give any opinion on this.</p>
-<p>g) With respect to the matter to be included in the Auditor&rsquo;s Report under section 197(16), In our opinion and according to the information and explanations given to us, the remuneration paid by the Company to its directors during the current year is in accordance with the provisions of section 197 of the Act. The remuneration paid to any director is not in excess of the limit laid down under section 197 of the Act. The Ministry of Corporate Affairs has not prescribed other details under section 197(16) which are required to be commented upon by us. (applicable in case of Public Company)</p>
+${dividendPara}
+${auditTrailPara}
+<p>g) With respect to the matter to be included in the Auditor&rsquo;s Report under section 197(16), in our opinion and according to the information and explanations given to us, the remuneration paid by the Company to its directors during the current year is in accordance with the provisions of section 197 of the Act. The remuneration paid to any director is not in excess of the limit laid down under section 197 of the Act. The Ministry of Corporate Affairs has not prescribed other details under section 197(16) which are required to be commented upon by us.</p>
 
 <div class="sig-block mt-24">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;">
     <div style="min-width:45%;">
-      <p><em>For ${aud.firmName || "[Firm Name]"}</em><br>
+      <p><em>For M/s ${firmDisplayName}</em><br>
       <em>Chartered Accountants</em><br>
       ${frnLine}</p>
       ${aud.sealBase64
