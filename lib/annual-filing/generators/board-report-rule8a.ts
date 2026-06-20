@@ -134,6 +134,46 @@ function getDirectorChanges(data: AnnualFilingData): string {
   return html;
 }
 
+function ordinalStr(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  switch (n % 10) { case 1: return `${n}st`; case 2: return `${n}nd`; case 3: return `${n}rd`; default: return `${n}th`; }
+}
+
+const TENURE_WORDS: Record<number, string> = {
+  1: "one (1)", 2: "two (2)", 3: "three (3)", 4: "four (4)", 5: "five (5)"
+};
+
+function getStatutoryAuditorPara(data: AnnualFilingData): string {
+  const a = data.auditor;
+  const isProp = a.firmType === "proprietorship";
+  const auditorWord = isProp ? "Auditor" : "Auditors";
+  const auditorName = isProp
+    ? `${a.partnerName}, Chartered Accountant (Membership No. ${a.membershipNo})`
+    : `M/s. ${a.firmName}, Chartered Accountants (Firm Registration No. ${a.frn})`;
+
+  if (a.appointmentType === "board" && a.boardAppointmentDate) {
+    return `The Board of Directors of the Company, at its meeting held on ${fmtDate(a.boardAppointmentDate)}, appointed ${auditorName}, as the First Statutory ${auditorWord} of the Company pursuant to Section 139(6) of the Companies Act, 2013, to hold office until the conclusion of the First Annual General Meeting of the Company.`;
+  }
+
+  if (a.appointmentType === "agm" && a.appointmentAGMNo && a.appointmentYear) {
+    const tenure = a.tenureYears || 5;
+    const tenureWord = TENURE_WORDS[tenure] || `${tenure}`;
+    const endAGMNo = a.appointmentAGMNo + tenure;
+    const apptOrd = ordinalStr(a.appointmentAGMNo);
+    const endOrd = ordinalStr(endAGMNo);
+    return `The Company at its ${apptOrd} Annual General Meeting held in ${a.appointmentYear}, appointed ${auditorName}, as the Statutory ${auditorWord} of the Company for a period of ${tenureWord} consecutive year${tenure > 1 ? "s" : ""}, to hold office from the conclusion of the ${apptOrd} Annual General Meeting until the conclusion of the ${endOrd} Annual General Meeting of the Company.`;
+  }
+
+  if (a.firmName) {
+    return isProp
+      ? `${a.partnerName}, Chartered Accountant (Membership No. ${a.membershipNo}), is the Statutory ${auditorWord} of the Company. The appointment is in compliance with the applicable provisions of Section 139 of the Companies Act, 2013.`
+      : `M/s. ${a.firmName}, Chartered Accountants (Firm Registration No. ${a.frn}), are the Statutory ${auditorWord} of the Company. The appointment is in compliance with the applicable provisions of Section 139 of the Companies Act, 2013.`;
+  }
+
+  return `The Statutory Auditors of the Company hold office as per applicable provisions of the Companies Act, 2013. Their appointment has been duly made in compliance with Section 139 of the Companies Act, 2013.`;
+}
+
 export function generateBoardReportRule8A(data: AnnualFilingData): string {
   const fy       = data.financialYear;
   const fyEnd    = fyEndYear(fy);
@@ -163,13 +203,8 @@ export function generateBoardReportRule8A(data: AnnualFilingData): string {
     const fyStart = parseInt(data.financialYear.split("-")[0]);
     return Math.max(1, fyStart - incFYStart + 1);
   }
-  function ordinal(n: number): string {
-    const v = n % 100;
-    if (v >= 11 && v <= 13) return `${n}th`;
-    switch (n % 10) { case 1: return `${n}st`; case 2: return `${n}nd`; case 3: return `${n}rd`; default: return `${n}th`; }
-  }
   const arNo    = data.annualReportNo || calcARNo();
-  const arLabel = `${ordinal(arNo)} Annual Report`;
+  const arLabel = `${ordinalStr(arNo)} Annual Report`;
 
   // ── Letter Head ────────────────────────────────────────────────────────
   const showLetterHead = data.useLetterHead !== false;
@@ -412,10 +447,7 @@ ${data.hasDeposits
 
 <!-- ══════════════ 27. STATUTORY AUDITOR ══════════════ -->
 <h2>27. Statutory Auditor</h2>
-<p>${data.auditor.firmName
-  ? `M/s ${data.auditor.firmName} (Firm Registration No.: ${data.auditor.frn}), Chartered Accountants, are the Statutory Auditors of the Company. The Company has received a certificate from the Auditors confirming that their appointment is in accordance with the conditions prescribed under Section 141 of the Companies Act, 2013.`
-  : `The Statutory Auditors of the Company hold office as per applicable provisions of the Companies Act, 2013. Their appointment has been duly made in compliance with Section 139 of the Companies Act, 2013.`
-}</p>
+<p>${getStatutoryAuditorPara(data)}</p>
 
 <!-- ══════════════ 28. SECRETARIAL AUDIT [Sec. 204] ══════════════ -->
 <h2>28. Secretarial Audit</h2>

@@ -896,6 +896,91 @@ function AnnualFilingTool() {
             <p className="text-xs text-slate-400 mt-2">Images are saved with this CA&apos;s record and auto-loaded in future years when you select this CA.</p>
           </div>
 
+          {/* Auditor Appointment Details — for Board Report Section 26 / 27 */}
+          <div className="mt-5 pt-4 border-t border-blue-200">
+            <p className="text-xs font-bold text-slate-700 mb-3">Auditor Appointment Details <span className="font-normal text-slate-400">(used in Board Report — Section 26 / 27)</span></p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Appointment Type</label>
+                <select
+                  value={data.auditor.appointmentType || ""}
+                  onChange={e => patchAud({ appointmentType: e.target.value as "agm" | "board" | undefined || undefined })}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">— Select —</option>
+                  <option value="board">Board of Directors — Sec. 139(6) (First Auditor)</option>
+                  <option value="agm">Annual General Meeting — Sec. 139(1)</option>
+                </select>
+                <p className="text-xs text-slate-400 mt-1">
+                  {data.auditor.appointmentType === "board"
+                    ? "First auditor — appointed by Board within 30 days of incorporation"
+                    : data.auditor.appointmentType === "agm"
+                    ? "Regular appointment / reappointment at AGM"
+                    : "Choose how the auditor was appointed"}
+                </p>
+              </div>
+
+              {data.auditor.appointmentType === "board" && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Board Meeting Date <span className="text-red-500">*</span></label>
+                  <input
+                    type="date"
+                    value={data.auditor.boardAppointmentDate || ""}
+                    onChange={e => patchAud({ boardAppointmentDate: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Date of board meeting where auditor was appointed</p>
+                </div>
+              )}
+            </div>
+
+            {data.auditor.appointmentType === "agm" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">AGM Number <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={data.auditor.appointmentAGMNo || ""}
+                    onChange={e => patchAud({ appointmentAGMNo: e.target.value ? Number(e.target.value) : undefined })}
+                    placeholder="e.g. 2"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Which AGM was the auditor appointed at?</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Year of that AGM <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    min={2000}
+                    max={2099}
+                    value={data.auditor.appointmentYear || ""}
+                    onChange={e => patchAud({ appointmentYear: e.target.value ? Number(e.target.value) : undefined })}
+                    placeholder="e.g. 2021"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Calendar year the AGM was held</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Tenure (Years)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={data.auditor.tenureYears ?? 5}
+                    onChange={e => patchAud({ tenureYears: e.target.value ? Number(e.target.value) : 5 })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    {data.auditor.appointmentAGMNo
+                      ? `Holds office till: ${(() => { const end = (data.auditor.appointmentAGMNo || 0) + (data.auditor.tenureYears || 5); const v = end % 100; const sfx = (v >= 11 && v <= 13) ? "th" : [,"st","nd","rd"][end % 10] || "th"; return `${end}${sfx}`; })()} AGM`
+                      : "Default: 5 years (max under Sec. 139)"}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Save CA to list */}
           {session?.user && (
             <div className="mt-4 pt-4 border-t border-blue-200 flex items-center justify-between">

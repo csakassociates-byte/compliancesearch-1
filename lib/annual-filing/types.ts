@@ -61,6 +61,12 @@ export interface AuditorDetails {
   signatureBase64?: string;  // CA partner's signature image (base64 JPEG/PNG)
   sealBase64?: string;       // Firm rubber stamp / seal image (base64 JPEG/PNG)
   _savedCAId?: string;       // csi_auditors.id — to update signature/seal on saved record
+  // Board Report — Section 27 / 26 appointment details
+  appointmentType?: "agm" | "board";  // Sec. 139(1) AGM or Sec. 139(6) Board (first auditor)
+  boardAppointmentDate?: string;      // YYYY-MM-DD — board meeting date (board type only)
+  appointmentAGMNo?: number;          // ordinal AGM at which appointed (AGM type only)
+  appointmentYear?: number;           // calendar year of that AGM
+  tenureYears?: number;               // tenure in years (default 5)
 }
 
 // ── Board Meetings ────────────────────────────────────────────────────────────
