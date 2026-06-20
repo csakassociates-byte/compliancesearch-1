@@ -302,8 +302,8 @@ function AnnualFilingTool() {
         name:              d.name || "",
         designation:       d.designation || "Director",
         category:          d.category || "Non-Executive",
-        dateOfAppointment: d.appointedAt || "",
-        dateOfCessation:   d.ceasedAt || "",
+        dateOfAppointment: toDateInput(d.appointedAt || ""),
+        dateOfCessation:   toDateInput(d.ceasedAt || ""),
         isActive:          d.isActive,
         changedDuringYear: false,
       })),
@@ -312,25 +312,38 @@ function AnnualFilingTool() {
       authorisedCapital: co.authorisedCapital || "",
       paidUpCapital:     co.paidUpCapital     || "",
     });
+    // Auto-load KYC from person records — pass dirs directly to avoid stale state
+    if (co.id) {
+      const newDirs = (co.directors || []).map(d => ({
+        din:               d.din || "",
+        name:              d.name || "",
+        designation:       d.designation || "Director",
+        category:          d.category || "Non-Executive",
+        dateOfAppointment: toDateInput(d.appointedAt || ""),
+        dateOfCessation:   toDateInput(d.ceasedAt || ""),
+        isActive:          d.isActive,
+        changedDuringYear: false,
+      }));
+      void loadPersonsForCompany(co.id, newDirs);
+    }
   }
 
-  // ── Load director KYC from Person Records ─────────────────────────────
-  async function handleLoadPersons() {
-    if (!companyId || !session?.user) return;
+  // ── Core KYC load: fetch persons and merge into given dirs array ──────
+  async function loadPersonsForCompany(cId: string, currentDirs: DirectorRecord[]) {
+    if (!cId || !session?.user) return;
     setLoadingPersons(true);
     try {
-      const res = await fetch(`/api/persons?companyId=${companyId}&type=director`);
+      const res = await fetch(`/api/persons?companyId=${cId}&type=director`);
       const json = await res.json() as { persons?: Array<{
         id: string | null; din?: string; name: string;
         fatherName?: string | null; dateOfBirth?: string | null;
         email?: string | null; nationality?: string | null;
         occupation?: string | null; presentAddress?: string | null;
-        panNo?: string | null;
+        panNo?: string | null; appointedAt?: string | null;
       }> };
       const persons = json.persons || [];
       if (!persons.length) return;
-      // Merge KYC data into existing directors by DIN then by name
-      const dirs = [...(data.directors || [])];
+      const dirs = [...currentDirs];
       for (const p of persons) {
         const idx = dirs.findIndex(d =>
           (p.din && d.din && p.din === d.din) ||
@@ -339,6 +352,8 @@ function AnnualFilingTool() {
         if (idx !== -1) {
           dirs[idx] = {
             ...dirs[idx],
+            // Appointment date: use what's in dirs first, then fall back to persons API
+            dateOfAppointment: dirs[idx].dateOfAppointment || toDateInput(p.appointedAt || ""),
             fatherName:  p.fatherName  || dirs[idx].fatherName,
             dateOfBirth: p.dateOfBirth ? toDateInput(p.dateOfBirth) : dirs[idx].dateOfBirth,
             email:       p.email       || dirs[idx].email,
@@ -356,6 +371,12 @@ function AnnualFilingTool() {
     }
   }
 
+  // ── Load director KYC from Person Records (manual button) ────────────
+  async function handleLoadPersons() {
+    if (!companyId) return;
+    await loadPersonsForCompany(companyId, data.directors || []);
+  }
+
   // ── Save director KYC back to csi_persons ─────────────────────────────
   async function saveDirectorKYC(d: DirectorRecord) {
     if (!companyId || !session?.user || !d.name.trim()) return;
@@ -366,7 +387,7 @@ function AnnualFilingTool() {
         id:              d._personId || undefined,
         companyId,
         name:            d.name,
-        din:             d.din || undefined,
+        din:             d.din         || undefined,
         fatherName:      d.fatherName  || undefined,
         dateOfBirth:     d.dateOfBirth || undefined,
         email:           d.email       || undefined,
@@ -374,6 +395,9 @@ function AnnualFilingTool() {
         occupation:      d.occupation  || undefined,
         presentAddress:  d.address     || undefined,
         panNo:           d.pan         || undefined,
+        designation:     d.designation || undefined,
+        directorCategory: d.category  || undefined,
+        dateOfJoining:   d.dateOfAppointment || undefined,
         isDirector:      true,
       }),
     });
@@ -1627,7 +1651,8 @@ function AnnualFilingTool() {
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Designation</label>
-                  <select value={d.designation} onChange={e => updateDir(i, { designation: e.target.value })} className={inp + " bg-white"}>
+                  <select value={d.designation} onChange={e => updateDir(i, { designation: e.target.value })} className={inp + " bg-white"}
+                    onBlur={() => companyId && saveDirectorKYC(d)}>
                     <option>Managing Director</option>
                     <option>Whole Time Director</option>
                     <option>Director</option>
@@ -1638,7 +1663,8 @@ function AnnualFilingTool() {
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Category</label>
-                  <select value={d.category} onChange={e => updateDir(i, { category: e.target.value })} className={inp + " bg-white"}>
+                  <select value={d.category} onChange={e => updateDir(i, { category: e.target.value })} className={inp + " bg-white"}
+                    onBlur={() => companyId && saveDirectorKYC(d)}>
                     <option>Executive</option>
                     <option>Non-Executive</option>
                     <option>Independent</option>
@@ -1680,11 +1706,13 @@ function AnnualFilingTool() {
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">No. of Equity Shares Held</label>
-                  <input type="number" min="0" value={d.sharesHeld ?? ""} onChange={e => updateDir(i, { sharesHeld: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="0" className={inp} />
+                  <input type="number" min="0" value={d.sharesHeld ?? ""} onChange={e => updateDir(i, { sharesHeld: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="0" className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(d)} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Date of Appointment</label>
-                  <input type="date" value={d.dateOfAppointment} onChange={e => updateDir(i, { dateOfAppointment: e.target.value })} className={inp} />
+                  <input type="date" value={d.dateOfAppointment} onChange={e => updateDir(i, { dateOfAppointment: e.target.value })} className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(d)} />
                 </div>
                 {(d.changedDuringYear && !d.isActive) ? (
                   <div>
