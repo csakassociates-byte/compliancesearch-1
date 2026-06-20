@@ -155,7 +155,10 @@ ${isOPC ? `<p>The Company is a One Person Company (OPC) within the meaning of Se
 
 <!-- ══════════════ 2. DIVIDEND [Sec. 134(3)(k)] ══════════════ -->
 <h2>2. Dividend</h2>
-<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd} in order to conserve resources for the future operations of the Company. No dividend was paid during the Financial Year ${fy}. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>
+${data.dividendDeclared
+  ? `<p>Your Directors are pleased to report that the Company has declared and/or paid dividend of ${data.dividendDetails || "[details]"} on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd}. The dividend was paid in compliance with the provisions of Section 123 of the Companies Act, 2013. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
+  : `<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd} in order to conserve resources for the future operations of the Company. No dividend was paid during the Financial Year ${fy}. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
+}
 
 <!-- ══════════════ 3. TRANSFER TO RESERVES ══════════════ -->
 <h2>3. Transfer to Reserves</h2>
@@ -200,10 +203,15 @@ ${isOPC ? `<p>The Company is a One Person Company (OPC) within the meaning of Se
 
 <!-- ══════════════ 7. GENERAL MEETINGS / AGM ══════════════ -->
 <h2>7. General Meetings</h2>
-${isOPC
-  ? `<p>The Company being a One Person Company is exempt from holding Annual General Meeting pursuant to Section 96 of the Companies Act, 2013. As per the provisions applicable to One Person Companies, resolutions are passed by the sole member / sole director by means of circular resolutions or in writing, as applicable.</p>`
-  : `<p>The Annual General Meeting (AGM) of the Company for the Financial Year ${prevFY} was held on ${data.boardMeetings?.[0] ? "________________" : "________________"}. The next AGM for the Financial Year ${fy} will be held within the stipulated time as prescribed under Section 96 of the Companies Act, 2013.</p>`
-}
+${(() => {
+  if (isOPC) {
+    return `<p>The Company being a One Person Company is exempt from holding Annual General Meeting pursuant to Section 96 of the Companies Act, 2013. As per the provisions applicable to One Person Companies, resolutions are passed by the sole member / sole director by means of circular resolutions or in writing, as applicable.</p>`;
+  }
+  const agm = data.memberMeetings?.find(m => m.type === "agm");
+  const agmDate = agm?.date ? fmtDate(agm.date) : "________________";
+  const agmVenue = agm?.venue ? `, held at ${agm.venue}` : "";
+  return `<p>The Annual General Meeting (AGM) of the Company for the Financial Year ${prevFY} was held on <strong>${agmDate}</strong>${agmVenue}. The next AGM for the Financial Year ${fy} will be held within the stipulated time as prescribed under Section 96 of the Companies Act, 2013.</p>`;
+})()}
 
 <!-- ══════════════ 8. SHARE CAPITAL [Rule 8A(c)] ══════════════ -->
 <h2>8. Share Capital</h2>
@@ -316,7 +324,10 @@ ${data.hasSubsidiaries
 
 <!-- ══════════════ 25. CSR [Sec. 135] ══════════════ -->
 <h2>25. Corporate Social Responsibility</h2>
-<p>The provisions of Section 135 of the Companies Act, 2013 regarding Corporate Social Responsibility are not applicable to the Company for the Financial Year ${fy} as the Company's net worth, turnover and net profit are below the prescribed thresholds. Hence, no CSR activity is required to be undertaken and no disclosure is required under the Companies (Corporate Social Responsibility Policy) Rules, 2014.</p>
+${data.csrApplicable && data.csrDetails
+  ? `<p>The Company is required to undertake CSR activities as per the provisions of Section 135 of the Companies Act, 2013. A CSR Committee has been constituted. Details of CSR activities and expenditure during the Financial Year ${fy} are as follows:</p><p>${data.csrDetails}</p>`
+  : `<p>The provisions of Section 135 of the Companies Act, 2013 regarding Corporate Social Responsibility are not applicable to the Company for the Financial Year ${fy} as the Company's net worth, turnover and net profit are below the prescribed thresholds under Section 135(1) of the Companies Act, 2013. Hence, no CSR activity is required to be undertaken and no disclosure is required under the Companies (Corporate Social Responsibility Policy) Rules, 2014.</p>`
+}
 
 <!-- ══════════════ 26. DEPOSITS [Sec. 73-76] ══════════════ -->
 <h2>26. Deposits</h2>
@@ -416,10 +427,14 @@ ${data.significantOrders && data.significantOrdersDetails
     <th style="width:50%">Category</th>
     <th class="right">Number of Employees</th>
   </tr>
-  <tr><td>Female</td><td class="right">________________</td></tr>
-  <tr><td>Male</td><td class="right">________________</td></tr>
-  <tr><td>Transgender</td><td class="right">________________</td></tr>
-  <tr><td><strong>Total</strong></td><td class="right"><strong>________________</strong></td></tr>
+  <tr><td>Female</td><td class="right">${data.employeesFemale ?? "________________"}</td></tr>
+  <tr><td>Male</td><td class="right">${data.employeesMale ?? "________________"}</td></tr>
+  <tr><td>Transgender / Other</td><td class="right">${data.employeesOther ?? "________________"}</td></tr>
+  <tr><td><strong>Total</strong></td><td class="right"><strong>${
+    (data.employeesMale != null || data.employeesFemale != null || data.employeesOther != null)
+      ? ((data.employeesMale || 0) + (data.employeesFemale || 0) + (data.employeesOther || 0))
+      : "________________"
+  }</strong></td></tr>
 </table>
 
 <!-- ══════════════ 42. SECRETARIAL STANDARDS ══════════════ -->

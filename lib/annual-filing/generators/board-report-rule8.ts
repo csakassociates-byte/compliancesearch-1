@@ -185,8 +185,12 @@ ${companyTypeNote}
 ${isSection8
   ? `<p>The Company is incorporated under Section 8 of the Companies Act, 2013 as a not-for-profit entity. The Company is prohibited from declaring or paying any dividend to its Members. The surplus, if any, arising from the ${pandlLabel} is applied solely towards the furtherance of the Company's objects as stated in its Memorandum of Association.</p>`
   : isFPC
-  ? `<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ${fy}. The Board may, subject to the provisions of Part IXA of the Companies Act, 1956, declare a Patronage Bonus from the surplus available after making required provisions. No Patronage Bonus has been declared for the Financial Year ${fy}.</p>`
-  : `<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd} in order to conserve resources for the future operations of the Company. No dividend was paid during the Financial Year ${fy}. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
+  ? (data.dividendDeclared
+      ? `<p>Your Directors are pleased to report that the Board has declared a Patronage Bonus / dividend of ${data.dividendDetails || "[details]"} for the Financial Year ${fy} in compliance with the applicable provisions of the Companies Act. The same was paid to the Producer Members during the year.</p>`
+      : `<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ${fy}. The Board may, subject to the provisions of Part IXA of the Companies Act, 1956, declare a Patronage Bonus from the surplus available after making required provisions. No Patronage Bonus has been declared for the Financial Year ${fy}.</p>`)
+  : (data.dividendDeclared
+      ? `<p>Your Directors are pleased to report that the Company has declared and/or paid dividend of ${data.dividendDetails || "[details]"} on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd}. The dividend was paid in compliance with the provisions of Section 123 of the Companies Act, 2013. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
+      : `<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd} in order to conserve resources for the future operations of the Company. No dividend was paid during the Financial Year ${fy}. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`)
 }
 
 <!-- ══════════════ 3. TRANSFER TO RESERVES ══════════════ -->
@@ -235,7 +239,11 @@ ${isSection8
 
 <!-- ══════════════ 7. GENERAL MEETINGS / AGM ══════════════ -->
 <h2>7. General Meetings</h2>
-<p>The Annual General Meeting (AGM) of the Company for the Financial Year ${prevFY} was held on <strong>________________</strong>. The ${membersLabel} present at the AGM were:</p>
+${(() => {
+  const agm = data.memberMeetings?.find(m => m.type === "agm");
+  const agmDate = agm?.date ? fmtDate(agm.date) : "________________";
+  const agmVenue = agm?.venue ? ` at ${agm.venue}` : "";
+  return `<p>The Annual General Meeting (AGM) of the Company for the Financial Year ${prevFY} was held on <strong>${agmDate}</strong>${agmVenue}. The ${membersLabel} present at the AGM were:</p>
 <table>
   <tr>
     <th style="width:50%">Name</th>
@@ -244,7 +252,8 @@ ${isSection8
   </tr>
   ${data.directors.filter(d => d.isActive).map(d => `<tr><td>${d.name}</td><td>${d.designation}</td><td class="center">Present</td></tr>`).join("") || `<tr><td colspan="3" class="center">Details to be filled</td></tr>`}
 </table>
-<p>The next AGM for the Financial Year ${fy} shall be held within the time stipulated under Section 96 of the Companies Act, 2013.</p>
+<p>The next AGM for the Financial Year ${fy} shall be held within the time stipulated under Section 96 of the Companies Act, 2013.</p>`;
+})()}
 
 <!-- ══════════════ 8. SHARE CAPITAL [Sec. 134(3)] ══════════════ -->
 <h2>8. Share Capital</h2>
@@ -461,10 +470,14 @@ ${data.significantOrders && data.significantOrdersDetails
     <th style="width:50%">Category</th>
     <th class="right">Number of Employees</th>
   </tr>
-  <tr><td>Female</td><td class="right">________________</td></tr>
-  <tr><td>Male</td><td class="right">________________</td></tr>
-  <tr><td>Transgender</td><td class="right">________________</td></tr>
-  <tr><td><strong>Total</strong></td><td class="right"><strong>________________</strong></td></tr>
+  <tr><td>Female</td><td class="right">${data.employeesFemale ?? "________________"}</td></tr>
+  <tr><td>Male</td><td class="right">${data.employeesMale ?? "________________"}</td></tr>
+  <tr><td>Transgender / Other</td><td class="right">${data.employeesOther ?? "________________"}</td></tr>
+  <tr><td><strong>Total</strong></td><td class="right"><strong>${
+    (data.employeesMale != null || data.employeesFemale != null || data.employeesOther != null)
+      ? ((data.employeesMale || 0) + (data.employeesFemale || 0) + (data.employeesOther || 0))
+      : "________________"
+  }</strong></td></tr>
 </table>
 
 <!-- ══════════════ 41. SECRETARIAL STANDARDS ══════════════ -->

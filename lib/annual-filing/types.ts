@@ -236,6 +236,15 @@ export interface AnnualFilingData {
   foreignExchangeOutgo?: string;
   riskManagementDetails?: string;
 
+  // ── Dividend [Sec. 134(3)(k)] ──────────────
+  dividendDeclared?: boolean;     // true if dividend declared/paid during year
+  dividendDetails?: string;       // e.g. "₹2 per share (Final Dividend)"
+
+  // ── Employee Count ──────────────────────────
+  employeesMale?: number;
+  employeesFemale?: number;
+  employeesOther?: number;        // transgender / other
+
   // ── Company Contact (for MGT-7 CTC) ────────
   companyEmail?: string;
   companyPhone?: string;

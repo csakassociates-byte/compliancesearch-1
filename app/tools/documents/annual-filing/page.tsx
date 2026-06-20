@@ -217,8 +217,6 @@ function AnnualFilingTool() {
     cashFlowIncluded: false,
     emphasisOfMatter: "",
     qualificationDetails: "",
-    dividendDeclared: false,
-    dividendDetails: "",
     auditTrailCompliant: false,
     auditTrailSoftware: "",
   });
@@ -909,39 +907,6 @@ function AnnualFilingTool() {
               placeholder="If any matter needs to be emphasised (e.g. going concern uncertainty, pending litigation). Leave blank to omit the section."
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
-          </div>
-
-          {/* Rule 11(v) — Dividend */}
-          <div className="mt-4">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Rule 11(v): Dividend — Was any dividend declared or paid during the year?
-            </label>
-            <div className="flex gap-6 mb-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" name="auditDividend"
-                  checked={!auditOpts.dividendDeclared}
-                  onChange={() => setAuditOpts(o => ({ ...o, dividendDeclared: false, dividendDetails: "" }))}
-                  className="accent-emerald-600"
-                />
-                No dividend declared / paid
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" name="auditDividend"
-                  checked={!!auditOpts.dividendDeclared}
-                  onChange={() => setAuditOpts(o => ({ ...o, dividendDeclared: true }))}
-                  className="accent-emerald-600"
-                />
-                Dividend was declared / paid
-              </label>
-            </div>
-            {auditOpts.dividendDeclared && (
-              <input
-                value={auditOpts.dividendDetails || ""}
-                onChange={e => setAuditOpts(o => ({ ...o, dividendDetails: e.target.value }))}
-                placeholder="e.g. ₹2 per share (Final Dividend)"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            )}
           </div>
 
           {/* Rule 11(vi) — Audit Trail */}
@@ -1691,6 +1656,79 @@ function AnnualFilingTool() {
           <Toggle label="Significant Orders by Regulators / Courts / Tribunals" value={data.significantOrders} onChange={v => patch({ significantOrders: v })} />
           {data.significantOrders && (
             <Field label="Order Details" value={data.significantOrdersDetails || ""} onChange={v => patch({ significantOrdersDetails: v })} placeholder="Details of significant orders..." />
+          )}
+
+          {/* Dividend — used in Board Report + Audit Report Rule 11(v) */}
+          <div className="mt-2 pt-3 border-t border-slate-100">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Dividend [Sec. 134(3)(k) + Audit Report Rule 11(v)]
+            </label>
+            <div className="flex gap-6 mb-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="dividend"
+                  checked={!data.dividendDeclared}
+                  onChange={() => patch({ dividendDeclared: false, dividendDetails: "" })}
+                  className="accent-emerald-600"
+                />
+                No dividend declared / paid
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="dividend"
+                  checked={!!data.dividendDeclared}
+                  onChange={() => patch({ dividendDeclared: true })}
+                  className="accent-emerald-600"
+                />
+                Dividend was declared / paid
+              </label>
+            </div>
+            {data.dividendDeclared && (
+              <input
+                value={data.dividendDetails || ""}
+                onChange={e => patch({ dividendDetails: e.target.value })}
+                placeholder="e.g. ₹2 per share (Final Dividend)"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            )}
+            <p className="text-xs text-slate-400 mt-1">This affects both the Board Report (Section 2) and the Audit Report (Rule 11(v)).</p>
+          </div>
+        </SectionCard>
+
+        {/* Employee Count */}
+        <SectionCard title="Employee Count — Gender-wise [Sec. 197(12)]" color="slate">
+          <p className="text-xs text-slate-500 mb-3">As on 31st March {data.financialYear?.split("-")[1] ? "20" + data.financialYear.split("-")[1] : ""}. Required in the Board Report under Section 197(12).</p>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Male</label>
+              <input type="number" min="0"
+                value={data.employeesMale ?? ""}
+                onChange={e => patch({ employeesMale: e.target.value === "" ? undefined : parseInt(e.target.value) })}
+                placeholder="0"
+                className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Female</label>
+              <input type="number" min="0"
+                value={data.employeesFemale ?? ""}
+                onChange={e => patch({ employeesFemale: e.target.value === "" ? undefined : parseInt(e.target.value) })}
+                placeholder="0"
+                className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Transgender / Other</label>
+              <input type="number" min="0"
+                value={data.employeesOther ?? ""}
+                onChange={e => patch({ employeesOther: e.target.value === "" ? undefined : parseInt(e.target.value) })}
+                placeholder="0"
+                className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+          {(data.employeesMale != null || data.employeesFemale != null || data.employeesOther != null) && (
+            <p className="text-xs text-slate-500 mt-2">
+              Total: <strong>{(data.employeesMale || 0) + (data.employeesFemale || 0) + (data.employeesOther || 0)}</strong> employees
+            </p>
           )}
         </SectionCard>
 

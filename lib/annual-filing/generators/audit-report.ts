@@ -22,8 +22,6 @@ export interface AuditReportOptions {
   qualificationDetails?: string;  // required when opinion is qualified / adverse / disclaimer
   emphasisOfMatter?: string;      // SA 706 paragraph — omit section when empty
   cashFlowIncluded: boolean;      // Section 8 / FPC must include; OPC / Small exempt
-  dividendDeclared?: boolean;     // Rule 11(v) — true if dividend declared/paid during year
-  dividendDetails?: string;       // e.g. "₹2 per share (Final Dividend)"
   auditTrailCompliant?: boolean;  // Rule 11(vi) — true if software has audit trail feature
   auditTrailSoftware?: string;    // software name when auditTrailCompliant is true
 }
@@ -85,9 +83,9 @@ export function generateAuditReport(
     ? `<h2>Emphasis of Matter</h2>\n<p>${opts.emphasisOfMatter}</p>`
     : "";
 
-  // Rule 11(v) — Dividend
-  const dividendPara = opts.dividendDeclared
-    ? `<p>v. The Company has declared and/or paid dividend of Rs.${opts.dividendDetails || "[amount]"} during the year in compliance with the provisions of Section 123 of the Companies Act, 2013.</p>`
+  // Rule 11(v) — Dividend (read from data, shared with board reports)
+  const dividendPara = data.dividendDeclared
+    ? `<p>v. The Company has declared and/or paid dividend of Rs.${data.dividendDetails || "[amount]"} during the year in compliance with the provisions of Section 123 of the Companies Act, 2013.</p>`
     : `<p>v. No dividend has been declared or paid during the year by the Company.</p>`;
 
   // Rule 11(vi) — Audit trail
