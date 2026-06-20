@@ -894,57 +894,241 @@ function AnnualFilingTool() {
   // STEP 4 — Board & Compliance
   // ══════════════════════════════════════════════════════════════════════
   function renderStep4() {
-    function addMeeting() {
-      const meetings: BoardMeeting[] = [...(data.boardMeetings || []), {
-        serialNo: (data.boardMeetings?.length || 0) + 1,
-        date: "",
-        directorsPresent: [],
-      }];
-      patch({ boardMeetings: meetings });
+    // ── Board Meeting Helpers ──────────────────────────────────────────
+    // Directors eligible for a given meeting date (appointed before/on that date, not yet ceased)
+    function getEligible(meetingDate: string): DirectorRecord[] {
+      if (!data.directors?.length) return [];
+      if (!meetingDate) return data.directors;
+      return data.directors.filter(d => {
+        if (d.dateOfAppointment && d.dateOfAppointment > meetingDate) return false;
+        if (d.dateOfCessation && d.dateOfCessation < meetingDate) return false;
+        return true;
+      });
     }
+
+    function daysBetween(d1: string, d2: string): number {
+      if (!d1 || !d2) return 0;
+      return Math.round((new Date(d2).getTime() - new Date(d1).getTime()) / 86400000);
+    }
+
+    // Min quorum = max(ceil(eligible/3), 2) per Sec. 174
+    function quorumRequired(totalEligible: number): number {
+      return Math.max(Math.ceil(totalEligible / 3), 2);
+    }
+
     function removeMeeting(idx: number) {
       const meetings = (data.boardMeetings || []).filter((_, i) => i !== idx)
         .map((m, i) => ({ ...m, serialNo: i + 1 }));
       patch({ boardMeetings: meetings });
     }
+
     function updateMeetingDate(idx: number, date: string) {
       const meetings = [...(data.boardMeetings || [])];
-      meetings[idx] = { ...meetings[idx], date };
-      patch({ boardMeetings: meetings });
-    }
-    function updateDirectorsPresent(idx: number, val: string) {
-      const meetings = [...(data.boardMeetings || [])];
-      meetings[idx] = { ...meetings[idx], directorsPresent: val.split(",").map(s => s.trim()).filter(Boolean) };
+      const eligible  = getEligible(date);
+      // Re-filter existing present list to only keep still-eligible directors
+      const prevPresent = meetings[idx].directorsPresent;
+      const eligibleNames = new Set(eligible.map(d => d.name));
+      const stillPresent = prevPresent.filter(n => eligibleNames.has(n));
+      // Add newly eligible directors that weren't in old list (they should default to present)
+      const newlyEligible = eligible.filter(d => !prevPresent.includes(d.name) && !meetings[idx].directorsPresent.includes(d.name));
+      meetings[idx] = { ...meetings[idx], date, directorsPresent: [...stillPresent, ...newlyEligible.map(d => d.name)] };
       patch({ boardMeetings: meetings });
     }
 
+    function toggleDirector(meetingIdx: number, dirName: string, checked: boolean) {
+      const meetings = [...(data.boardMeetings || [])];
+      const m = meetings[meetingIdx];
+      meetings[meetingIdx] = {
+        ...m,
+        directorsPresent: checked
+          ? [...m.directorsPresent, dirName]
+          : m.directorsPresent.filter(n => n !== dirName),
+      };
+      patch({ boardMeetings: meetings });
+    }
+
+    function markAllPresent(meetingIdx: number) {
+      const m = data.boardMeetings[meetingIdx];
+      const meetings = [...(data.boardMeetings || [])];
+      meetings[meetingIdx] = { ...m, directorsPresent: getEligible(m.date).map(d => d.name) };
+      patch({ boardMeetings: meetings });
+    }
+
+    function addBlankMeeting() {
+      patch({
+        boardMeetings: [...(data.boardMeetings || []), {
+          serialNo: (data.boardMeetings?.length || 0) + 1,
+          date: "", directorsPresent: data.directors?.map(d => d.name) || [],
+        }],
+      });
+    }
+
+    // Auto-suggest quarterly dates based on FY and company type
+    function suggestMeetings() {
+      const fyStart    = data.financialYear.split("-")[0];       // "2024"
+      const fyEndFull  = "20" + data.financialYear.split("-")[1]; // "2025"
+      const isOPCSmall = data.companyType === "opc" || data.companyType === "private_small";
+      const dates = isOPCSmall
+        ? [`${fyStart}-04-15`, `${fyStart}-10-15`]
+        : [`${fyStart}-04-15`, `${fyStart}-07-15`, `${fyStart}-10-15`, `${fyEndFull}-01-15`];
+      const newMeetings: BoardMeeting[] = dates.map((date, i) => ({
+        serialNo: i + 1,
+        date,
+        directorsPresent: getEligible(date).map(d => d.name),
+      }));
+      patch({ boardMeetings: newMeetings });
+    }
+
+    const minMeetings  = (data.companyType === "opc" || data.companyType === "private_small") ? 2 : 4;
+    const meetingCount = data.boardMeetings?.length || 0;
+    const meetings     = data.boardMeetings || [];
+    // Sort by date for gap calculation display
+    const sortedDates  = meetings.map(m => m.date).filter(Boolean).sort();
+
     return (
       <>
-        <SectionCard title="Board Meetings Held During FY 2024-25" color="emerald">
-          <p className="text-xs text-slate-500 mb-3">Add all Board Meetings. Gap between 2 consecutive meetings must not exceed 120 days (Sec. 173).</p>
-          {(data.boardMeetings || []).map((m, i) => (
-            <div key={i} className="flex gap-3 items-start mb-3 p-3 bg-white rounded-lg border border-slate-200">
-              <span className="text-xs font-bold text-slate-500 mt-2 w-5 flex-shrink-0">{i + 1}.</span>
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Meeting Date</label>
-                  <input type="date" value={m.date} onChange={e => updateMeetingDate(i, e.target.value)}
-                    className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+        <SectionCard title={`Board Meetings — FY ${data.financialYear}`} color="emerald">
+          {/* Header row: count badge + suggest button */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                meetingCount >= minMeetings ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              }`}>
+                {meetingCount}/{minMeetings} meetings {meetingCount >= minMeetings ? "✓" : "required"}
+              </span>
+              <span className="text-xs text-slate-400">
+                {data.companyType === "opc" || data.companyType === "private_small"
+                  ? "Min. 2 meetings/year (Sec. 173 — OPC/Small)"
+                  : "Min. 4 meetings/year, gap ≤ 120 days (Sec. 173)"}
+              </span>
+            </div>
+            <button
+              onClick={suggestMeetings}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+              title="Auto-fill suggested quarterly meeting dates based on FY"
+            >
+              ⚡ Auto-suggest Dates
+            </button>
+          </div>
+
+          {/* 120-day gap summary (shown when 2+ dated meetings) */}
+          {sortedDates.length >= 2 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {sortedDates.slice(1).map((d, i) => {
+                const gap  = daysBetween(sortedDates[i], d);
+                const ok   = gap <= 120;
+                return (
+                  <span key={i} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                    ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                       : "bg-red-50 text-red-700 border border-red-300"
+                  }`}>
+                    Meeting {i + 1}→{i + 2}: {gap} days {ok ? "✓" : "⚠ >120!"}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Meeting cards */}
+          {meetings.map((m, i) => {
+            const eligible       = getEligible(m.date);
+            const presentCount   = m.directorsPresent.length;
+            const quorum         = quorumRequired(eligible.length);
+            const quorumMet      = presentCount >= quorum;
+            const hasDirectors   = data.directors?.length > 0;
+
+            return (
+              <div key={i} className="mb-4 bg-white border border-slate-200 rounded-xl overflow-hidden">
+                {/* Meeting header */}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                  <span className="text-xs font-bold text-slate-600">Meeting {i + 1}</span>
+                  <div className="flex items-center gap-2">
+                    {m.date && hasDirectors && (
+                      <>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                          quorumMet ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                        }`}>
+                          Quorum: {presentCount}/{quorum} {quorumMet ? "✓" : "✗"}
+                        </span>
+                        <button
+                          onClick={() => markAllPresent(i)}
+                          className="text-xs text-emerald-600 font-semibold hover:text-emerald-800 border border-emerald-300 rounded px-2 py-0.5"
+                        >
+                          All Present
+                        </button>
+                      </>
+                    )}
+                    <button onClick={() => removeMeeting(i)} className="text-red-400 hover:text-red-600 ml-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Directors Present (comma-separated names)</label>
-                  <input type="text" value={m.directorsPresent.join(", ")}
-                    onChange={e => updateDirectorsPresent(i, e.target.value)}
-                    placeholder="Rajesh Kumar, Priya Sharma"
-                    className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+
+                {/* Meeting body */}
+                <div className="px-4 py-3">
+                  <div className="mb-3">
+                    <label className="text-xs text-slate-500 block mb-1">Meeting Date</label>
+                    <input
+                      type="date"
+                      value={m.date}
+                      onChange={e => updateMeetingDate(i, e.target.value)}
+                      className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  {/* Director checkboxes */}
+                  {hasDirectors ? (
+                    m.date ? (
+                      eligible.length > 0 ? (
+                        <div>
+                          <p className="text-xs text-slate-500 mb-2">Directors Present ({presentCount}/{eligible.length}):</p>
+                          <div className="flex flex-wrap gap-2">
+                            {eligible.map((d, di) => {
+                              const isPresent = m.directorsPresent.includes(d.name);
+                              return (
+                                <label
+                                  key={di}
+                                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border transition-colors ${
+                                    isPresent
+                                      ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                      : "bg-slate-50 border-slate-200 text-slate-500"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isPresent}
+                                    onChange={e => toggleDirector(i, d.name, e.target.checked)}
+                                    className="accent-emerald-600"
+                                  />
+                                  {d.name}
+                                  <span className="text-slate-400">({d.designation})</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {eligible.length < data.directors.length && (
+                            <p className="text-xs text-slate-400 mt-2 italic">
+                              {data.directors.length - eligible.length} director(s) not yet appointed on this date — not shown.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-amber-600">No directors were appointed on or before this date.</p>
+                      )
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">Select meeting date to see director checkboxes.</p>
+                    )
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">Add directors in Step 5 to enable attendance tracking.</p>
+                  )}
                 </div>
               </div>
-              <button onClick={() => removeMeeting(i)} className="text-red-400 hover:text-red-600 mt-2 flex-shrink-0">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-          ))}
-          <button onClick={addMeeting} className="text-sm text-emerald-700 font-semibold flex items-center gap-1 hover:text-emerald-900">
+            );
+          })}
+
+          <button onClick={addBlankMeeting} className="text-sm text-emerald-700 font-semibold flex items-center gap-1 hover:text-emerald-900">
             <span className="text-lg leading-none">+</span> Add Board Meeting
           </button>
         </SectionCard>
