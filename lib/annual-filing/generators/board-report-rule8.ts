@@ -140,23 +140,55 @@ export function generateBoardReportRule8(data: AnnualFilingData): string {
     ? `<p>The Company is a Farmer Producer Company (FPC) registered under Part IXA of the Companies Act, 1956 as preserved by Section 465 of the Companies Act, 2013, formed to promote the economic interests of its Producer Members engaged in primary produce activities.</p>`
     : "";
 
-  const bodyHtml = `
+  // ── Annual Report Number ───────────────────────────────────────────────
+  function calcARNo(): number {
+    if (!data.incorporationDate) return 1;
+    const d = new Date(data.incorporationDate);
+    const incFYStart = d.getMonth() + 1 >= 4 ? d.getFullYear() : d.getFullYear() - 1;
+    const fyStart = parseInt(data.financialYear.split("-")[0]);
+    return Math.max(1, fyStart - incFYStart + 1);
+  }
+  function ordinal(n: number): string {
+    const v = n % 100;
+    if (v >= 11 && v <= 13) return `${n}th`;
+    switch (n % 10) { case 1: return `${n}st`; case 2: return `${n}nd`; case 3: return `${n}rd`; default: return `${n}th`; }
+  }
+  const arNo    = data.annualReportNo || calcARNo();
+  const arLabel = `${ordinal(arNo)} Annual Report`;
 
-<!-- ══════════════ HEADER ══════════════ -->
+  // ── Letter Head ────────────────────────────────────────────────────────
+  const showLetterHead = data.useLetterHead !== false;
+  const contactLine = [
+    data.companyPhone ? `Tel: ${data.companyPhone}` : "",
+    data.companyEmail ? `Email: ${data.companyEmail}` : "",
+  ].filter(Boolean).join(" &nbsp;|&nbsp; ");
+
+  const headerHtml = showLetterHead ? `
 <div class="header-block">
   <div class="company-name">${data.companyName}</div>
   <div class="cin-line">CIN: ${data.cin}</div>
   <div class="cin-line">Registered Office: ${data.regAddress}</div>
+  ${contactLine ? `<div class="cin-line">${contactLine}</div>` : ""}
+  ${data.gstin ? `<div class="cin-line">GSTIN: ${data.gstin}</div>` : ""}
   <div class="doc-title">DIRECTORS' REPORT</div>
   <div class="fy-line">For the Financial Year ended 31<sup>st</sup> March, ${fyEnd}</div>
-</div>
+</div>` : `
+<div class="header-block">
+  <div class="doc-title">DIRECTORS' REPORT</div>
+  <div class="fy-line">For the Financial Year ended 31<sup>st</sup> March, ${fyEnd}</div>
+</div>`;
+
+  const bodyHtml = `
+
+<!-- ══════════════ HEADER ══════════════ -->
+${headerHtml}
 
 <!-- ══════════════ OPENING ══════════════ -->
 <p>To,<br>
 The ${membersLabel},<br>
 <strong>${data.companyName}</strong></p>
 
-<p>Your Directors have pleasure in presenting the Annual Report of the Company together with the Audited Financial Statements${isSection8 ? ` (${pandlLabel})` : ""} for the Financial Year ended 31<sup>st</sup> March, ${fyEnd}.</p>
+<p>Your Directors have pleasure in presenting the <strong>${arLabel}</strong> of the Company together with the Audited Financial Statements${isSection8 ? ` (${pandlLabel})` : ""} for the Financial Year ended 31<sup>st</sup> March, ${fyEnd}.</p>
 ${companyTypeNote}
 
 <!-- ══════════════ 1. FINANCIAL SUMMARY ══════════════ -->

@@ -600,9 +600,55 @@ function AnnualFilingTool() {
             <Field label="Registered Office Address" value={data.regAddress} onChange={v => patch({ regAddress: v })} placeholder="Full registered address" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <Field label="Company Email" value={data.companyEmail || ""} onChange={v => patch({ companyEmail: v })} placeholder="info@yourcompany.com" hint="Used in MGT-7/7A CTC document" />
-            <Field label="Company Contact No." value={data.companyPhone || ""} onChange={v => patch({ companyPhone: v })} placeholder="9876543210" />
+            <Field label="Company Email" value={data.companyEmail || ""} onChange={v => patch({ companyEmail: v })} placeholder="info@yourcompany.com" hint="Compulsory on letter head (as per law) · also used in MGT-7/7A CTC" />
+            <Field label="Company Contact No." value={data.companyPhone || ""} onChange={v => patch({ companyPhone: v })} placeholder="9876543210" hint="Compulsory on letter head (as per law)" />
+            <Field label="GSTIN (optional)" value={data.gstin || ""} onChange={v => patch({ gstin: v })} placeholder="22AAAAA0000A1Z5" hint="Shown on letter head if entered" />
           </div>
+        </SectionCard>
+
+        <SectionCard title="Document Preferences" color="violet">
+          <Toggle
+            label="Print Company Letter Head on Documents"
+            value={data.useLetterHead !== false}
+            onChange={v => patch({ useLetterHead: v })}
+            hint="Turn OFF if company has its own printed letter head paper — documents will show only title, not company branding"
+          />
+          {(() => {
+            const calcARNo = (incDate: string, fy: string): number => {
+              if (!incDate) return 1;
+              const d = new Date(incDate);
+              const incFYStart = d.getMonth() + 1 >= 4 ? d.getFullYear() : d.getFullYear() - 1;
+              const fyStart = parseInt(fy.split("-")[0]);
+              return Math.max(1, fyStart - incFYStart + 1);
+            };
+            const autoARNo   = calcARNo(data.incorporationDate, data.financialYear);
+            const displayARNo = data.annualReportNo ?? autoARNo;
+            const isOverridden = !!data.annualReportNo && data.annualReportNo !== autoARNo;
+            return (
+              <div className="mt-3">
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Annual Report Number
+                  <span className="ml-2 text-xs font-normal text-slate-400">(auto-calculated from incorporation date)</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number" min="1"
+                    value={displayARNo}
+                    onChange={e => patch({ annualReportNo: parseInt(e.target.value) || 1 })}
+                    className="w-28 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  />
+                  <span className="text-xs text-slate-500">
+                    → <strong>{displayARNo === 1 ? "1st" : displayARNo === 2 ? "2nd" : displayARNo === 3 ? "3rd" : `${displayARNo}th`} Annual Report</strong>
+                    {data.incorporationDate && <span className="ml-1 text-slate-400">(auto: {autoARNo})</span>}
+                  </span>
+                  {isOverridden && (
+                    <button onClick={() => patch({ annualReportNo: undefined })} className="text-xs text-blue-600 hover:underline font-semibold">Reset to auto</button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Appears in the Board Report opening: "Your Directors have pleasure in presenting the <em>{displayARNo === 1 ? "1st" : displayARNo === 2 ? "2nd" : displayARNo === 3 ? "3rd" : `${displayARNo}th`} Annual Report</em>..."</p>
+              </div>
+            );
+          })()}
         </SectionCard>
 
         <SectionCard title="Financial Year & Company Classification" color="amber">

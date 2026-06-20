@@ -263,9 +263,14 @@ export interface AnnualFilingData {
   directorRemunerationCurrent?: string;
   directorRemunerationPrev?: string;
 
-  // ── Company Contact (for MGT-7 CTC) ────────
+  // ── Company Contact ────────────────────────
   companyEmail?: string;
   companyPhone?: string;
+  gstin?: string;             // GSTIN — shown on letter head (optional)
+
+  // ── Document Preferences ────────────────────
+  useLetterHead?: boolean;    // Print company letter head on documents (default: true)
+  annualReportNo?: number;    // Annual Report number — auto-calc from inc. date, user-overridable
 
   // ── MGT-7/7A CTC Board Resolution ──────────
   mgt7MeetingTime?: string;   // e.g. "11.00 A.M."
