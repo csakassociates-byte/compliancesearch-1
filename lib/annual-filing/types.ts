@@ -197,6 +197,14 @@ export interface AnnualFilingData {
   foreignExchangeOutgo?: string;
   riskManagementDetails?: string;
 
+  // ── Company Contact (for MGT-7 CTC) ────────
+  companyEmail?: string;
+  companyPhone?: string;
+
+  // ── MGT-7/7A CTC Board Resolution ──────────
+  mgt7MeetingTime?: string;   // e.g. "11.00 A.M."
+  mgt7MeetingVenue?: string;  // e.g. "Registered Office of the Company"
+
   // ── Step 5: Directors ───────────────────────
   directors: DirectorRecord[];
   signatoryDirectors: {

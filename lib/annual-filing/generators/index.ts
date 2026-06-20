@@ -16,6 +16,7 @@ export { generateAOC2 }                  from "./aoc2";
 
 export { generateDirectorList }          from "./director-list";
 export { generateShareholderList }       from "./shareholder-list";
+export { generateMGT7CTC }               from "./mgt7-ctc";
 
 export type { AnnualFilingData, CompanyType, FinancialYear } from "../types";
 export { INITIAL_FILING_DATA }           from "../types";
@@ -33,6 +34,7 @@ import { generateAOC1 }              from "./aoc1";
 import { generateAOC2 }              from "./aoc2";
 import { generateDirectorList }      from "./director-list";
 import { generateShareholderList }   from "./shareholder-list";
+import { generateMGT7CTC }          from "./mgt7-ctc";
 
 export interface GeneratedDocuments {
   "audit-report":      string;
@@ -40,6 +42,7 @@ export interface GeneratedDocuments {
   "notes-on-accounts": string;
   "director-list":     string;
   "shareholder-list":  string;
+  "mgt7-ctc":          string;
   "aoc-1"?:            string;  // Conditional — only if has subsidiaries
   "aoc-2"?:            string;  // Conditional — only if has RPT
 }
@@ -73,6 +76,7 @@ export function generateAllAttachments(
     "notes-on-accounts": generateNotesOnAccounts(data),
     "director-list":     generateDirectorList(data),
     "shareholder-list":  generateShareholderList(data),
+    "mgt7-ctc":          generateMGT7CTC(data),
   };
 
   // Conditional: AOC-1 only if company has subsidiaries/associates/JVs

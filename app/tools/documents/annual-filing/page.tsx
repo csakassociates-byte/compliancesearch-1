@@ -292,6 +292,8 @@ function AnnualFilingTool() {
       rocName:               co.rocName || "",
       incorporationDate:     toDateInput(co.incorporationDate || ""),
       stateOfIncorporation:  derivedState || "",
+      ...(co.email  && { companyEmail: co.email }),
+      ...(co.mobile && { companyPhone: co.mobile }),
       directors: (co.directors || []).map(d => ({
         din:               d.din || "",
         name:              d.name || "",
@@ -558,6 +560,10 @@ function AnnualFilingTool() {
           </div>
           <div className="grid grid-cols-1 gap-x-6">
             <Field label="Registered Office Address" value={data.regAddress} onChange={v => patch({ regAddress: v })} placeholder="Full registered address" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+            <Field label="Company Email" value={data.companyEmail || ""} onChange={v => patch({ companyEmail: v })} placeholder="info@yourcompany.com" hint="Used in MGT-7/7A CTC document" />
+            <Field label="Company Contact No." value={data.companyPhone || ""} onChange={v => patch({ companyPhone: v })} placeholder="9876543210" />
           </div>
         </SectionCard>
 
@@ -996,6 +1002,27 @@ function AnnualFilingTool() {
             )}
           </SectionCard>
         )}
+
+        <SectionCard title="MGT-7/7A — CTC Board Resolution Details" color="slate">
+          <p className="text-xs text-slate-500 mb-4">Details for the &quot;Extract of Resolution&quot; CTC document (Rule 9, Sec. 89 &amp; 90 — Appointment of Designated Person). Meeting date is taken from Date of Report (Step 1).</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+            <Field
+              label="Meeting Time"
+              value={data.mgt7MeetingTime || ""}
+              onChange={v => patch({ mgt7MeetingTime: v })}
+              placeholder="11.00 A.M."
+              hint="Time at which the board meeting was held"
+            />
+            <Field
+              label="Meeting Venue"
+              value={data.mgt7MeetingVenue || ""}
+              onChange={v => patch({ mgt7MeetingVenue: v })}
+              placeholder="Registered Office of the Company"
+              hint="Leave blank to use 'Registered Office of the Company'"
+            />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">Designated persons are auto-filled from Signatory Directors (Step 5).</p>
+        </SectionCard>
       </>
     );
   }
@@ -1424,8 +1451,9 @@ function AnnualFilingTool() {
       { key: "audit-report",      label: "Independent Auditor's Report",    icon: "📋", always: true },
       { key: "board-report",      label: `Directors' Report (${isOPCOrSmall ? "Rule 8A — Abridged" : "Rule 8 — Full"})`, icon: "📄", always: true },
       { key: "notes-on-accounts", label: "Notes to Financial Statements",   icon: "📊", always: true },
-      { key: "director-list",     label: "List of Directors (31 March 2025)", icon: "👥", always: true },
+      { key: "director-list",     label: "Details of Directors",            icon: "👥", always: true },
       { key: "shareholder-list",  label: "List of Shareholders (31 March 2025)", icon: "🏛️", always: true },
+      { key: "mgt7-ctc",          label: "MGT-7/7A CTC — Extract of Board Resolution (Rule 9 / Sec. 89 & 90)", icon: "📝", always: true },
       { key: "aoc-1",             label: "Form AOC-1 — Subsidiaries Statement", icon: "🔗", always: false, condition: data.hasSubsidiaries },
       { key: "aoc-2",             label: "Form AOC-2 — Related Party Transactions", icon: "🤝", always: false, condition: data.hasRPT },
     ];
