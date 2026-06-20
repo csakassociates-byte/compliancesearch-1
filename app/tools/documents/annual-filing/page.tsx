@@ -426,6 +426,24 @@ function AnnualFilingTool() {
     });
   }
 
+  // ── Strip large base64 images before saving (they live in csi_persons / csi_auditors) ──
+  function stripImagesForSave(d: AnnualFilingData): AnnualFilingData {
+    return {
+      ...d,
+      auditor: { ...d.auditor, signatureBase64: undefined, sealBase64: undefined },
+      signatoryDirectors: {
+        director1: { ...d.signatoryDirectors.director1, signatureBase64: undefined },
+        director2: d.signatoryDirectors.director2
+          ? { ...d.signatoryDirectors.director2, signatureBase64: undefined }
+          : undefined,
+        director3: d.signatoryDirectors.director3
+          ? { ...d.signatoryDirectors.director3, signatureBase64: undefined }
+          : undefined,
+      },
+      directors: d.directors.map(dir => ({ ...dir, signatureBase64: undefined })),
+    };
+  }
+
   // ── DB Save ───────────────────────────────────────────────────────────
   async function handleSave() {
     if (!session?.user) return;
@@ -444,7 +462,7 @@ function AnnualFilingTool() {
           companyName:   data.companyName,
           cin:           data.cin,
           financialYear: data.financialYear,
-          formDataJson:  JSON.stringify({ data, auditOpts }),
+          formDataJson:  JSON.stringify({ data: stripImagesForSave(data), auditOpts }),
         }),
       });
       const json = await res.json() as { id?: string; error?: string };
@@ -2845,6 +2863,22 @@ function AnnualFilingTool() {
                       setFoundDraft(null);
                       setSavedMsg({ ok: true, text: "Draft loaded successfully" });
                       setTimeout(() => setSavedMsg(null), 4000);
+                      // Re-load director signatures from csi_persons
+                      if (companyId) void loadPersonsForCompany(companyId, parsed.data.directors);
+                      // Re-load auditor signature from saved CA list (already in state)
+                      if (parsed.data.auditor._savedCAId) {
+                        const ca = savedCAs.find(c => c.id === parsed.data.auditor._savedCAId);
+                        if (ca) {
+                          setData(prev => ({
+                            ...prev,
+                            auditor: {
+                              ...prev.auditor,
+                              signatureBase64: ca.signatureBase64 || undefined,
+                              sealBase64: ca.sealBase64 || undefined,
+                            },
+                          }));
+                        }
+                      }
                     } catch { setFoundDraft(null); }
                   }}
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
