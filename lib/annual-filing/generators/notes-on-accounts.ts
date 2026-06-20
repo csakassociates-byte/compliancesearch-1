@@ -31,9 +31,11 @@ export function generateNotesOnAccounts(data: AnnualFilingData): string {
   } else if (isSection8) {
     corporateInfo = `${data.companyName} is a Company incorporated under Section 8 of the Companies Act, 2013 for the promotion of charitable objects including ${data.businessDescription || "promotion of commerce, arts, science, education, research, social welfare, religion, charity, protection of environment or any such other object"}. The CIN of the Company is ${data.cin || "____"}. The Company is registered under ${data.rocName || "Registrar of Companies"}. The registered office of the Company is situated at ${data.regAddress || "____"}.`;
   } else if (isOPC) {
-    corporateInfo = `${data.companyName} is a One Person Company (OPC) incorporated in India under Section 3(1)(c) of the Companies Act, 2013 having a single member. The CIN of the Company is ${data.cin || "____"}. The Company is registered under ${data.rocName || "Registrar of Companies"}. The registered office of the Company is situated at ${data.regAddress || "____"}.`;
+    const bizDesc = data.businessDescription || data.principalActivity || "";
+    corporateInfo = `${data.companyName} is a One Person Company (OPC) incorporated in India under Section 3(1)(c) of the Companies Act, 2013 having a single member${bizDesc ? `, engaged in ${bizDesc}` : ""}. The CIN of the Company is ${data.cin || "____"}. The Company is registered under ${data.rocName || "Registrar of Companies"}. The registered office of the Company is situated at ${data.regAddress || "____"}.`;
   } else {
-    corporateInfo = `${data.companyName} is a Private Limited Company incorporated in India under the Companies Act, 2013. The CIN of the Company is ${data.cin || "____"}. The Company is registered under ${data.rocName || "Registrar of Companies"}. The registered office of the Company is situated at ${data.regAddress || "____"}.`;
+    const bizDesc = data.businessDescription || data.principalActivity || "";
+    corporateInfo = `${data.companyName} is a Private Limited Company incorporated in India under the Companies Act, 2013${bizDesc ? `, engaged in ${bizDesc}` : ""}. The CIN of the Company is ${data.cin || "____"}. The Company is registered under ${data.rocName || "Registrar of Companies"}. The registered office of the Company is situated at ${data.regAddress || "____"}.`;
   }
 
   // ── OPC Nominee Note ──────────────────────────────────────────────────────────
@@ -60,9 +62,20 @@ export function generateNotesOnAccounts(data: AnnualFilingData): string {
 
   // ── Section B.p: Director Remuneration ──────────────────────────────────────
 
-  const dirRemunerationText = isOPC
-    ? `Details of Directors Remuneration: As per the terms of appointment, the sole director was paid a remuneration of Rs. ${data.directorRemunerationCurrent || "__________"} during the Financial Year ${fy}. (Previous Year: Rs. ${data.directorRemunerationPrev || "__________"})`
+  const dirRemunerationText = data.directorRemunerationCurrent
+    ? `Details of Directors Remuneration: Rs. ${data.directorRemunerationCurrent} paid during the Financial Year ${fy}. (Previous Year: Rs. ${data.directorRemunerationPrev || "NIL"})`
+    : isOPC
+    ? `Details of Directors Remuneration: As per the terms of appointment, the sole director was paid a remuneration of Rs. __________ during the Financial Year ${fy}. (Previous Year: Rs. __________)`
     : `Details of Directors Remuneration: NIL`;
+
+  // ── EPS Computation (AS 20) ───────────────────────────────────────────────────
+
+  const patCurrent = parseFloat((data.financials.profitAfterTax    || "0").replace(/,/g, "")) || 0;
+  const patPrev    = parseFloat((data.financials.prevProfitAfterTax || "0").replace(/,/g, "")) || 0;
+  const sharesNum  = data.totalShares || 0;
+  const faceVal    = data.nominalValuePerShare || "10";
+  const epsCurr    = sharesNum > 0 ? (patCurrent / sharesNum).toFixed(2) : "—";
+  const epsPrev    = sharesNum > 0 ? (patPrev    / sharesNum).toFixed(2) : "—";
 
   // ── Section B.u: Other ───────────────────────────────────────────────────────
 
@@ -179,6 +192,18 @@ ${data.inventoryMethod === "na"
 
 <h3>j. Earnings Per Share</h3>
 ${epsText}
+${!isSection8 && sharesNum > 0 ? `
+<table style="width:80%;">
+  <tr>
+    <th style="width:55%">Particulars</th>
+    <th class="right">FY ${fy}</th>
+    <th class="right">FY ${prevFY}</th>
+  </tr>
+  <tr><td>Net Profit / (Loss) after Tax attributable to equity shareholders (₹)</td><td class="right">${data.financials.profitAfterTax || "—"}</td><td class="right">${data.financials.prevProfitAfterTax || "—"}</td></tr>
+  <tr><td>Weighted average number of equity shares outstanding</td><td class="right">${sharesNum.toLocaleString("en-IN")}</td><td class="right">${sharesNum.toLocaleString("en-IN")}</td></tr>
+  <tr><td>Face value per share (₹)</td><td class="right">${faceVal}</td><td class="right">${faceVal}</td></tr>
+  <tr><td><strong>Basic and Diluted Earnings Per Share (₹)</strong></td><td class="right"><strong>${epsCurr}</strong></td><td class="right"><strong>${epsPrev}</strong></td></tr>
+</table>` : ""}
 
 <h3>k. Impairment of Asset</h3>
 <p>An asset is treated as impaired when the carrying cost of the asset exceeds its recoverable value. An impairment loss is charged to the ${pandlLabel} in the year in which an asset is identified as impaired. The impairment loss recognised in prior accounting periods is reversed if there has been a change in the estimate of recoverable amount.</p>
@@ -229,6 +254,14 @@ ${epsText}
 <h3>u. Other</h3>
 ${otherNote}
 ${surplusNote}
+
+<h3>v. Dividend</h3>
+${isSection8
+  ? `<p>The Company being a Section 8 not-for-profit entity is prohibited from declaring or paying any dividend. Any surplus is applied solely towards the furtherance of the Company&rsquo;s objects.</p>`
+  : data.dividendDeclared
+  ? `<p>The Board of Directors has declared / recommended a dividend of ${data.dividendDetails || "[details]"} on the Equity Shares of the Company for the Financial Year ${fy} in compliance with the provisions of Section 123 of the Companies Act, 2013.</p>`
+  : `<p>The Board of Directors has not recommended any dividend on the Equity Shares of the Company for the Financial Year ${fy}. No dividend was paid during the year. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
+}
 
 <!-- ══════════════ SIGNATURE BLOCK ══════════════ -->
 <div class="sig-block no-break">

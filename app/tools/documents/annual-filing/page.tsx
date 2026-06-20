@@ -1114,15 +1114,16 @@ function AnnualFilingTool() {
               </div>
             </div>
           </div>
-          {data.companyType === "opc" && (
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Director Remuneration (OPC — Note p)</label>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label={`Current Year — FY ${data.financialYear} (₹)`} value={data.directorRemunerationCurrent || ""} onChange={v => patch({ directorRemunerationCurrent: v })} placeholder="e.g. 1,20,000" />
-                <Field label="Previous Year (₹)" value={data.directorRemunerationPrev || ""} onChange={v => patch({ directorRemunerationPrev: v })} placeholder="e.g. 1,20,000" />
-              </div>
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <label className="block text-sm font-semibold text-slate-700 mb-1">
+              Director Remuneration — Note (p)
+            </label>
+            <p className="text-xs text-slate-400 mb-2">Leave blank if NIL. For OPC enter sole director salary; for Private/Section8/FPC enter MD / WTD remuneration if any.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label={`FY ${data.financialYear} (₹)`} value={data.directorRemunerationCurrent || ""} onChange={v => patch({ directorRemunerationCurrent: v })} placeholder="Leave blank if NIL" />
+              <Field label="Previous Year (₹)" value={data.directorRemunerationPrev || ""} onChange={v => patch({ directorRemunerationPrev: v })} placeholder="Leave blank if NIL" />
             </div>
-          )}
+          </div>
         </SectionCard>
       </>
     );
