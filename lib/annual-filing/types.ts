@@ -245,6 +245,21 @@ export interface AnnualFilingData {
   employeesFemale?: number;
   employeesOther?: number;        // transgender / other
 
+  // ── Notes on Accounts — Accounting Policies ─
+  depreciationMethod?: "wdv" | "slm";                   // WDV or SLM
+  inventoryMethod?: "fifo" | "weighted_avg" | "na";     // inventory valuation
+  hasUdyamRegistration?: boolean;                       // Udyam / MSME registration
+
+  // ── Notes on Accounts — Audit Fees ──────────
+  auditFeesCurrent?: string;      // Statutory audit fees — current year (₹)
+  taxAuditFeesCurrent?: string;   // Tax audit fees — current year (₹)
+  auditFeesPrev?: string;         // Statutory audit fees — previous year (₹)
+  taxAuditFeesPrev?: string;      // Tax audit fees — previous year (₹)
+
+  // ── Notes on Accounts — Director Remuneration (OPC) ─
+  directorRemunerationCurrent?: string;
+  directorRemunerationPrev?: string;
+
   // ── Company Contact (for MGT-7 CTC) ────────
   companyEmail?: string;
   companyPhone?: string;

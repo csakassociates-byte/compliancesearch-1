@@ -948,6 +948,16 @@ function AnnualFilingTool() {
             Key Audit Matters — NOT APPLICABLE (unlisted company)
           </div>
         </SectionCard>
+
+        <SectionCard title="Audit Fees — Note (r) in Notes on Accounts" color="slate">
+          <p className="text-xs text-slate-500 mb-3">Fees paid to Statutory Auditors — appears in Note (r) of Notes to Financial Statements.</p>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label={`Statutory Audit Fees — FY ${data.financialYear} (₹)`} value={data.auditFeesCurrent || ""} onChange={v => patch({ auditFeesCurrent: v })} placeholder="e.g. 15000" />
+            <Field label={`Statutory Audit Fees — Prev FY (₹)`} value={data.auditFeesPrev || ""} onChange={v => patch({ auditFeesPrev: v })} placeholder="e.g. 15000" />
+            <Field label={`Tax Audit Fees — FY ${data.financialYear} (₹)`} value={data.taxAuditFeesCurrent || ""} onChange={v => patch({ taxAuditFeesCurrent: v })} placeholder="e.g. 5000 or leave blank" />
+            <Field label={`Tax Audit Fees — Prev FY (₹)`} value={data.taxAuditFeesPrev || ""} onChange={v => patch({ taxAuditFeesPrev: v })} placeholder="e.g. 5000 or leave blank" />
+          </div>
+        </SectionCard>
       </>
     );
   }
@@ -1045,6 +1055,74 @@ function AnnualFilingTool() {
             placeholder="e.g., Authorised capital increased from ₹10,00,000 to ₹50,00,000 during the year. OR: No change in capital during the year."
             hint="Leave blank if no change"
           />
+        </SectionCard>
+
+        <SectionCard title="Accounting Policies — Notes on Accounts" color="blue">
+          <p className="text-xs text-slate-500 mb-4">These settings control the accounting policy text that appears in Notes to Financial Statements.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Depreciation Method */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Depreciation Method</label>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="depMethod" checked={(data.depreciationMethod || "wdv") === "wdv"}
+                    onChange={() => patch({ depreciationMethod: "wdv" })} className="accent-emerald-600" />
+                  WDV — Written Down Value
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="depMethod" checked={data.depreciationMethod === "slm"}
+                    onChange={() => patch({ depreciationMethod: "slm" })} className="accent-emerald-600" />
+                  SLM — Straight Line Method
+                </label>
+              </div>
+            </div>
+            {/* Inventory Method */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Inventory Valuation Method</label>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="invMethod" checked={(data.inventoryMethod || "fifo") === "fifo"}
+                    onChange={() => patch({ inventoryMethod: "fifo" })} className="accent-emerald-600" />
+                  FIFO — First In First Out
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="invMethod" checked={data.inventoryMethod === "weighted_avg"}
+                    onChange={() => patch({ inventoryMethod: "weighted_avg" })} className="accent-emerald-600" />
+                  Weighted Average Method
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="invMethod" checked={data.inventoryMethod === "na"}
+                    onChange={() => patch({ inventoryMethod: "na" })} className="accent-emerald-600" />
+                  Not Applicable (no inventory)
+                </label>
+              </div>
+            </div>
+            {/* Udyam Registration */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Udyam / MSME Registration</label>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="udyam" checked={!data.hasUdyamRegistration}
+                    onChange={() => patch({ hasUdyamRegistration: false })} className="accent-emerald-600" />
+                  Not registered
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="udyam" checked={!!data.hasUdyamRegistration}
+                    onChange={() => patch({ hasUdyamRegistration: true })} className="accent-emerald-600" />
+                  Udyam Registration obtained
+                </label>
+              </div>
+            </div>
+          </div>
+          {data.companyType === "opc" && (
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Director Remuneration (OPC — Note p)</label>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label={`Current Year — FY ${data.financialYear} (₹)`} value={data.directorRemunerationCurrent || ""} onChange={v => patch({ directorRemunerationCurrent: v })} placeholder="e.g. 1,20,000" />
+                <Field label="Previous Year (₹)" value={data.directorRemunerationPrev || ""} onChange={v => patch({ directorRemunerationPrev: v })} placeholder="e.g. 1,20,000" />
+              </div>
+            </div>
+          )}
         </SectionCard>
       </>
     );

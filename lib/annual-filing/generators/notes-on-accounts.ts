@@ -61,7 +61,7 @@ export function generateNotesOnAccounts(data: AnnualFilingData): string {
   // ── Section B.p: Director Remuneration ──────────────────────────────────────
 
   const dirRemunerationText = isOPC
-    ? `Details of Directors Remuneration: As per the terms of appointment, the sole director was paid a remuneration of Rs. __________ during the Financial Year ${fy}. (Previous Year: Rs. __________)`
+    ? `Details of Directors Remuneration: As per the terms of appointment, the sole director was paid a remuneration of Rs. ${data.directorRemunerationCurrent || "__________"} during the Financial Year ${fy}. (Previous Year: Rs. ${data.directorRemunerationPrev || "__________"})`
     : `Details of Directors Remuneration: NIL`;
 
   // ── Section B.u: Other ───────────────────────────────────────────────────────
@@ -73,7 +73,10 @@ export function generateNotesOnAccounts(data: AnnualFilingData): string {
     otherNote = `<p>The Company is a Producer Company formed and registered under the provisions of Part IXA of the Companies Act, 1956 read with the Companies Act, 2013. The objects of the Company include production, harvesting, procurement, grading, pooling, handling, marketing, selling and export of primary produce of members and import of goods or services for their benefit. The Company complies with Sections 581A to 581ZT of the Companies Act, 1956 as saved and continued under the Companies Act, 2013.</p>
 <p>Disclosure pursuant to Notification No. S.O. 1702(E) dated 16th June, 2016 issued by the Ministry of Corporate Affairs: The amount due to Micro, Small and Medium Enterprises as on date is Rs. NIL.</p>`;
   } else {
-    otherNote = `<p>Disclosure pursuant to Notification No. S.O. 1702(E) dated 16th June, 2016 issued by the Ministry of Corporate Affairs: The Company has obtained Udyam Registration under the Micro, Small and Medium Enterprises Development Act, 2006. The amount due to Micro, Small and Medium Enterprises as on date is Rs. NIL.</p>`;
+    const udyamLine = data.hasUdyamRegistration
+      ? `The Company has obtained Udyam Registration under the Micro, Small and Medium Enterprises Development Act, 2006.`
+      : `The Company has not obtained Udyam Registration under the Micro, Small and Medium Enterprises Development Act, 2006.`;
+    otherNote = `<p>Disclosure pursuant to Notification No. S.O. 1702(E) dated 16th June, 2016 issued by the Ministry of Corporate Affairs: ${udyamLine} The amount due to Micro, Small and Medium Enterprises as on date is Rs. NIL.</p>`;
   }
 
   // ── Surplus / Reserves note (FPC / Section 8 specific) ──────────────────────
@@ -86,13 +89,16 @@ export function generateNotesOnAccounts(data: AnnualFilingData): string {
 
   // ── Auditor & Signatory details ───────────────────────────────────────────────
 
-  const auditorFirmName = data.auditor.firmName
-    ? `M/s ${data.auditor.firmName}`
+  const aud          = data.auditor;
+  const auditorFirmName = aud.firmName
+    ? `M/s ${aud.firmName.replace(/^M\/s\s*/i, "")}`
     : "[Firm Name]";
-  const auditorFRN   = data.auditor.frn          || "[_______]";
-  const partnerName  = data.auditor.partnerName   || "[Partner Name]";
-  const memberNo     = data.auditor.membershipNo  || "[_______]";
-  const udin         = data.auditor.udin          || "[____________________]";
+  const auditorFRN   = aud.frn          || "[_______]";
+  const partnerName  = aud.partnerName  || "[Partner Name]";
+  const partnerLabel = aud.firmType === "proprietorship" ? "Proprietor" : "Partner";
+  const memberNo     = aud.membershipNo || "[_______]";
+  const udin         = aud.udin         || "[____________________]";
+  const auditorDate  = fmtDate(aud.reportDate || data.dateOfReport) || "________________";
   const reportDate   = data.dateOfReport ? fmtDate(data.dateOfReport) : "________________";
   const signingPlace = data.placeOfSigning || "________________";
 
@@ -133,7 +139,7 @@ ${opcNomineeNote}
 <p>Fixed assets are stated at cost of acquisition net of recoverable taxes less depreciation. All costs attributable to acquisition including incidental expenditure incurred during installation and erection forming part of the asset has been capitalised as part of the asset.</p>
 
 <h3>d. Depreciation and Amortization</h3>
-<p>Depreciation on fixed assets is provided on Written Down Value Method (WDV Method) for the following assets for the period from the date they are available for use:</p>
+<p>Depreciation on fixed assets is provided on ${data.depreciationMethod === "slm" ? "Straight Line Method (SLM)" : "Written Down Value Method (WDV Method)"} for the following assets for the period from the date they are available for use:</p>
 <table style="width:65%;">
   <tr>
     <th style="width:70%">Asset</th>
@@ -147,7 +153,10 @@ ${opcNomineeNote}
 </table>
 
 <h3>e. Inventories</h3>
-<p>The inventories are valued at cost or net realisable value, whichever is lower. Cost is determined by First In First Out (FIFO) Method.</p>
+${data.inventoryMethod === "na"
+  ? `<p>The Company does not hold any inventories in the normal course of its operations. Accordingly, this accounting policy is not applicable to the Company.</p>`
+  : `<p>The inventories are valued at cost or net realisable value, whichever is lower. Cost is determined by ${data.inventoryMethod === "weighted_avg" ? "Weighted Average Method" : "First In First Out (FIFO) Method"}.</p>`
+}
 
 <h3>f. Revenue Recognition</h3>
 <p>${revenueText}</p>
@@ -201,18 +210,18 @@ ${epsText}
   </tr>
   <tr>
     <td>Statutory Audit Fees</td>
-    <td class="right"></td>
-    <td class="right"></td>
+    <td class="right">${data.auditFeesCurrent || "—"}</td>
+    <td class="right">${data.auditFeesPrev || "—"}</td>
   </tr>
   <tr>
     <td>Tax Audit Fees</td>
-    <td class="right"></td>
-    <td class="right"></td>
+    <td class="right">${data.taxAuditFeesCurrent || "—"}</td>
+    <td class="right">${data.taxAuditFeesPrev || "—"}</td>
   </tr>
 </table>
 
 <h3>s. Depreciation</h3>
-<p>Depreciation has been provided for in the accounts on Written Down Value (WDV) Method in accordance with and on the basis of useful life of the assets as prescribed under Schedule II of the Companies Act, 2013. Assets costing less than Rs. 5,000/- are fully depreciated in the year of acquisition.</p>
+<p>Depreciation has been provided for in the accounts on ${data.depreciationMethod === "slm" ? "Straight Line (SLM) Method" : "Written Down Value (WDV) Method"} in accordance with and on the basis of useful life of the assets as prescribed under Schedule II of the Companies Act, 2013. Assets costing less than Rs. 5,000/- are fully depreciated in the year of acquisition.</p>
 
 <h3>t. Functional and Presentation Currency</h3>
 <p>The functional and presentation currency of the Company is Indian Rupees (₹). Amounts in the financial statements are rounded off to the nearest rupee.</p>
@@ -229,15 +238,15 @@ ${surplusNote}
       For <strong>${auditorFirmName}</strong><br>
       Chartered Accountants<br>
       Firm No.: ${auditorFRN}</p>
-      ${data.auditor.sealBase64
-        ? `<img src="data:image/jpeg;base64,${data.auditor.sealBase64}" style="height:50pt;max-width:110pt;display:block;margin-top:6pt;object-fit:contain;" alt="Firm Seal">`
+      ${aud.sealBase64
+        ? `<img src="data:image/jpeg;base64,${aud.sealBase64}" style="height:50pt;max-width:110pt;display:block;margin-top:6pt;object-fit:contain;" alt="Firm Seal">`
         : ""}
-      ${data.auditor.signatureBase64
-        ? `<img src="data:image/jpeg;base64,${data.auditor.signatureBase64}" style="height:36pt;max-width:110pt;display:block;margin-top:${data.auditor.sealBase64 ? "4pt" : "20pt"};object-fit:contain;" alt="Signature">`
+      ${aud.signatureBase64
+        ? `<img src="data:image/jpeg;base64,${aud.signatureBase64}" style="height:36pt;max-width:110pt;display:block;margin-top:${aud.sealBase64 ? "4pt" : "20pt"};object-fit:contain;" alt="Signature">`
         : ""}
-      <div class="sig-line"${(data.auditor.signatureBase64 || data.auditor.sealBase64) ? ' style="margin-top:4pt"' : ""}>
+      <div class="sig-line"${(aud.signatureBase64 || aud.sealBase64) ? ' style="margin-top:4pt"' : ""}>
         <strong>${partnerName}</strong><br>
-        Partner<br>
+        ${partnerLabel}<br>
         M.No.: ${memberNo}<br>
         UDIN: ${udin}
       </div>
@@ -268,7 +277,7 @@ ${surplusNote}
     </div>
   </div>
   <p class="mt-16">
-    Date: ${reportDate}&nbsp;&nbsp;&nbsp;&nbsp;Place: ${signingPlace}
+    Date: ${auditorDate}&nbsp;&nbsp;&nbsp;&nbsp;Place: ${signingPlace}
   </p>
 </div>
 
