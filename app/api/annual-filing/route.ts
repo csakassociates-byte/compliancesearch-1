@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
 
     const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `INSERT INTO csi_documents
-        ("userId", type, title, "companyName", "financialYear", "formDataJson", "createdAt", "updatedAt")
-       VALUES ($1, 'annual_filing', $2, $3, $4, $5, NOW(), NOW())
+        (id, "userId", type, title, "companyName", "financialYear", "formDataJson", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::TEXT, $1, 'annual_filing', $2, $3, $4, $5, NOW(), NOW())
        RETURNING id`,
       userId,
       `Annual Filing — ${body.companyName} — FY ${body.financialYear}`,
