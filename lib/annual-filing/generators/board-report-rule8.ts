@@ -51,52 +51,84 @@ function getAttendanceRows(data: AnnualFilingData): string {
     }).join("") || `<tr><td colspan="5" class="center">No director data available</td></tr>`;
 }
 
+function dirIsFirstDirector(d: AnnualFilingData["directors"][0], data: AnnualFilingData): boolean {
+  return !!(d.dateOfAppointment && data.incorporationDate && d.dateOfAppointment === data.incorporationDate);
+}
+
+function dirHasLeft(d: AnnualFilingData["directors"][0]): boolean {
+  return d.changedDuringYear === true && (
+    d.changeType === "resigned" || d.changeType === "ceased" || d.isActive === false
+  );
+}
+
 function getDirectorRows(data: AnnualFilingData): string {
   return data.directors
-    .filter(d => d.isActive || d.changeType === "resigned" || d.changeType === "ceased")
-    .map((d, i) => `
+    .filter(d => d.isActive || dirHasLeft(d) || d.changeType === "resigned" || d.changeType === "ceased")
+    .map((d, i) => {
+      const left        = dirHasLeft(d);
+      const statusLabel = left
+        ? (d.changeType === "resigned" ? "Resigned" : "Ceased")
+        : "Active";
+      const isFirst = dirIsFirstDirector(d, data);
+      const apptCell = `${fmtDate(d.dateOfAppointment) || "—"}${isFirst ? `<br><em style="font-size:7.5pt;">(First Director)</em>` : ""}`;
+      return `
     <tr>
       <td class="center">${i + 1}</td>
       <td>${d.name}</td>
       <td>${d.din || "—"}</td>
       <td>${d.designation}</td>
       <td>${d.category || "—"}</td>
-      <td class="center">${fmtDate(d.dateOfAppointment)}</td>
+      <td class="center">${apptCell}</td>
       <td class="center">${d.dateOfCessation ? fmtDate(d.dateOfCessation) : "—"}</td>
-      <td>${d.isActive ? "Active" : "Ceased"}</td>
-    </tr>`).join("");
+      <td>${statusLabel}</td>
+    </tr>`;
+    }).join("");
 }
 
 function getDirectorChanges(data: AnnualFilingData): string {
-  const changed = data.directors.filter(d => d.changedDuringYear);
-  if (changed.length === 0) {
+  const fy      = data.financialYear;
+  const fyStart = fy.split("-")[0];
+  const fyEnd   = String(parseInt(fyStart) + 1);
+  const fyFrom  = new Date(`${fyStart}-04-01`);
+  const fyTo    = new Date(`${fyEnd}-03-31`);
+
+  const isInFY = (dateStr: string): boolean => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    return d >= fyFrom && d <= fyTo;
+  };
+
+  // Auto-detect newly appointed: appointment date in current FY and NOT first director
+  const appointed = data.directors.filter(d =>
+    isInFY(d.dateOfAppointment) && !dirIsFirstDirector(d, data) && !dirHasLeft(d)
+  );
+
+  // Resigned / ceased: manual flag OR isActive=false + changedDuringYear
+  const resigned = data.directors.filter(d => dirHasLeft(d));
+
+  if (appointed.length === 0 && resigned.length === 0) {
     return `<p>There were no changes in the composition of the Board of Directors of the Company during the Financial Year under review.</p>`;
   }
-  const appointed = changed.filter(d => d.changeType === "appointed");
-  const resigned  = changed.filter(d => d.changeType === "resigned" || d.changeType === "ceased");
+
   let html = "";
   if (appointed.length > 0) {
-    html += `<p>The following Directors were appointed during the year:</p>
+    html += `<p>During the Financial Year ${fy}, the following Director(s) were appointed on the Board of the Company:</p>
     <table style="font-size:9.5pt;">
       <tr>
-        <th style="width:38%">Name</th>
-        <th style="width:14%">DIN</th>
-        <th style="width:28%">Designation</th>
-        <th style="width:20%">Date of Appointment</th>
+        <th style="width:38%">Name of Director</th><th style="width:14%">DIN</th>
+        <th style="width:28%">Designation</th><th style="width:20%" class="center">Date of Appointment</th>
       </tr>
-      ${appointed.map(d => `<tr><td>${d.name}</td><td>${d.din||"—"}</td><td>${d.designation}</td><td>${fmtDate(d.dateOfAppointment)}</td></tr>`).join("")}
+      ${appointed.map(d => `<tr><td>${d.name}</td><td>${d.din||"—"}</td><td>${d.designation}</td><td class="center">${fmtDate(d.dateOfAppointment)}</td></tr>`).join("")}
     </table>`;
   }
   if (resigned.length > 0) {
-    html += `<p>The following Directors resigned / ceased to hold office during the year:</p>
+    html += `<p>During the Financial Year ${fy}, the following Director(s) resigned / ceased to hold office as Director(s) of the Company:</p>
     <table style="font-size:9.5pt;">
       <tr>
-        <th style="width:38%">Name</th>
-        <th style="width:14%">DIN</th>
-        <th style="width:28%">Designation</th>
-        <th style="width:20%">Date of Cessation</th>
+        <th style="width:38%">Name of Director</th><th style="width:14%">DIN</th>
+        <th style="width:28%">Designation</th><th style="width:20%" class="center">Date of Cessation</th>
       </tr>
-      ${resigned.map(d => `<tr><td>${d.name}</td><td>${d.din||"—"}</td><td>${d.designation}</td><td>${d.dateOfCessation ? fmtDate(d.dateOfCessation) : "—"}</td></tr>`).join("")}
+      ${resigned.map(d => `<tr><td>${d.name}</td><td>${d.din||"—"}</td><td>${d.designation}</td><td class="center">${d.dateOfCessation ? fmtDate(d.dateOfCessation) : "—"}</td></tr>`).join("")}
     </table>`;
   }
   return html;

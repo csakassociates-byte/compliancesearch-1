@@ -2045,22 +2045,31 @@ function AnnualFilingTool() {
                   <input type="date" value={d.dateOfAppointment} onChange={e => updateDir(i, { dateOfAppointment: e.target.value })} className={inp}
                     onBlur={() => companyId && saveDirectorKYC(d)} />
                 </div>
-                {(d.changedDuringYear && !d.isActive) ? (
+                {d.changedDuringYear && (
+                  <div>
+                    <label className="text-xs text-slate-400 block mb-0.5">Change Type</label>
+                    <select
+                      value={d.changeType || (!d.isActive ? "ceased" : "appointed")}
+                      onChange={e => {
+                        const ct = e.target.value as "appointed" | "resigned" | "ceased";
+                        updateDir(i, {
+                          changeType: ct,
+                          isActive: ct === "appointed" ? true : ct === "resigned" || ct === "ceased" ? false : d.isActive,
+                        });
+                      }}
+                      className={inp + " bg-white"}
+                    >
+                      <option value="appointed">Appointed</option>
+                      <option value="resigned">Resigned</option>
+                      <option value="ceased">Ceased</option>
+                    </select>
+                  </div>
+                )}
+                {d.changedDuringYear && (d.changeType === "resigned" || d.changeType === "ceased" || !d.isActive) && (
                   <div>
                     <label className="text-xs text-slate-400 block mb-0.5">Date of Cessation</label>
                     <input type="date" value={d.dateOfCessation || ""} onChange={e => updateDir(i, { dateOfCessation: e.target.value })} className={inp} />
                   </div>
-                ) : (
-                  d.changedDuringYear ? (
-                    <div>
-                      <label className="text-xs text-slate-400 block mb-0.5">Change Type</label>
-                      <select value={d.changeType || "appointed"} onChange={e => updateDir(i, { changeType: e.target.value as "appointed" | "resigned" | "ceased" })} className={inp + " bg-white"}>
-                        <option value="appointed">Appointed</option>
-                        <option value="resigned">Resigned</option>
-                        <option value="ceased">Ceased</option>
-                      </select>
-                    </div>
-                  ) : null
                 )}
               </div>
 
