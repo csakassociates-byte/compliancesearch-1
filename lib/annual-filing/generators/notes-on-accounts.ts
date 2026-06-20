@@ -229,7 +229,13 @@ ${surplusNote}
       For <strong>${auditorFirmName}</strong><br>
       Chartered Accountants<br>
       Firm No.: ${auditorFRN}</p>
-      <div class="sig-line">
+      ${data.auditor.sealBase64
+        ? `<img src="data:image/jpeg;base64,${data.auditor.sealBase64}" style="height:50pt;max-width:110pt;display:block;margin-top:6pt;object-fit:contain;" alt="Firm Seal">`
+        : ""}
+      ${data.auditor.signatureBase64
+        ? `<img src="data:image/jpeg;base64,${data.auditor.signatureBase64}" style="height:36pt;max-width:110pt;display:block;margin-top:${data.auditor.sealBase64 ? "4pt" : "20pt"};object-fit:contain;" alt="Signature">`
+        : ""}
+      <div class="sig-line"${(data.auditor.signatureBase64 || data.auditor.sealBase64) ? ' style="margin-top:4pt"' : ""}>
         <strong>${partnerName}</strong><br>
         Partner<br>
         M.No.: ${memberNo}<br>

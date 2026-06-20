@@ -58,6 +58,9 @@ export interface AuditorDetails {
   udin: string;
   place: string;         // Place of signing
   reportDate: string;    // YYYY-MM-DD
+  signatureBase64?: string;  // CA partner's signature image (base64 JPEG/PNG)
+  sealBase64?: string;       // Firm rubber stamp / seal image (base64 JPEG/PNG)
+  _savedCAId?: string;       // csi_auditors.id — to update signature/seal on saved record
 }
 
 // ── Board Meetings ────────────────────────────────────────────────────────────

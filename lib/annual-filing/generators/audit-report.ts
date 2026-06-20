@@ -168,16 +168,26 @@ ${isModified ? `
 <p>g) With respect to the matter to be included in the Auditor&rsquo;s Report under section 197(16), In our opinion and according to the information and explanations given to us, the remuneration paid by the Company to its directors during the current year is in accordance with the provisions of section 197 of the Act. The remuneration paid to any director is not in excess of the limit laid down under section 197 of the Act. The Ministry of Corporate Affairs has not prescribed other details under section 197(16) which are required to be commented upon by us. (applicable in case of Public Company)</p>
 
 <div class="sig-block mt-24">
-  <p><em>For ${aud.firmName || "[Firm Name]"}</em><br>
-  <em>Chartered Accountants</em><br>
-  ${frnLine}</p>
-  <div style="margin-top: 40pt;">
-    <p><strong>${aud.partnerName || "[Partner Name]"}</strong><br>
-    (${partnerLabel})<br>
-    <em>M. No.: ${aud.membershipNo || "[Membership No.]"}</em><br>
-    Date: ${reportDate || "________________"}<br>
-    Place: ${aud.place || data.placeOfSigning || "________________"}<br>
-    <strong>UDIN: ${aud.udin || "[UDIN]"}</strong></p>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div style="min-width:45%;">
+      <p><em>For ${aud.firmName || "[Firm Name]"}</em><br>
+      <em>Chartered Accountants</em><br>
+      ${frnLine}</p>
+      ${aud.sealBase64
+        ? `<img src="data:image/jpeg;base64,${aud.sealBase64}" style="height:60pt;max-width:120pt;display:block;margin-top:8pt;object-fit:contain;" alt="Firm Seal">`
+        : '<div style="height:60pt;"></div>'}
+    </div>
+    <div style="text-align:right;min-width:45%;">
+      ${aud.signatureBase64
+        ? `<img src="data:image/jpeg;base64,${aud.signatureBase64}" style="height:40pt;max-width:120pt;display:inline-block;object-fit:contain;margin-bottom:2pt;" alt="Signature">`
+        : '<div style="height:40pt;"></div>'}
+      <p><strong>${aud.partnerName || "[Partner Name]"}</strong><br>
+      (${partnerLabel})<br>
+      <em>M. No.: ${aud.membershipNo || "[Membership No.]"}</em><br>
+      Date: ${reportDate || "________________"}<br>
+      Place: ${aud.place || data.placeOfSigning || "________________"}<br>
+      <strong>UDIN: ${aud.udin || "[UDIN]"}</strong></p>
+    </div>
   </div>
 </div>
 `;

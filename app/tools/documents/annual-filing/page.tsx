@@ -23,6 +23,8 @@ interface SavedCA {
   partnerName: string;
   membershipNo: string;
   place?: string | null;
+  signatureBase64?: string | null;
+  sealBase64?: string | null;
 }
 
 // Convert any common date format → YYYY-MM-DD (required by <input type="date">)
@@ -438,11 +440,16 @@ function AnnualFilingTool() {
       const res = await fetch("/api/auditors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firmName: a.firmName, frn: a.frn, partnerName: a.partnerName, membershipNo: a.membershipNo, place: a.place }),
+        body: JSON.stringify({ firmName: a.firmName, frn: a.frn, partnerName: a.partnerName, membershipNo: a.membershipNo, place: a.place, signatureBase64: a.signatureBase64, sealBase64: a.sealBase64 }),
       });
       const json = await res.json() as { id?: string };
       if (json.id) {
-        setSavedCAs(prev => [{ id: json.id!, firmName: a.firmName, frn: a.frn, partnerName: a.partnerName, membershipNo: a.membershipNo, place: a.place }, ...prev]);
+        patchAud({ _savedCAId: json.id });
+        setSavedCAs(prev => {
+          const exists = prev.find(c => c.id === json.id);
+          const updated: SavedCA = { id: json.id!, firmName: a.firmName, frn: a.frn, partnerName: a.partnerName, membershipNo: a.membershipNo, place: a.place, signatureBase64: a.signatureBase64, sealBase64: a.sealBase64 };
+          return exists ? prev.map(c => c.id === json.id ? updated : c) : [updated, ...prev];
+        });
       }
     } finally {
       setSavingCA(false);
@@ -699,7 +706,7 @@ function AnnualFilingTool() {
                       </div>
                       <div className="flex items-center gap-2 ml-3 flex-shrink-0">
                         <button
-                          onClick={() => patchAud({ firmName: ca.firmName, frn: ca.frn, partnerName: ca.partnerName, membershipNo: ca.membershipNo, place: ca.place || "" })}
+                          onClick={() => patchAud({ firmName: ca.firmName, frn: ca.frn, partnerName: ca.partnerName, membershipNo: ca.membershipNo, place: ca.place || "", signatureBase64: ca.signatureBase64 || undefined, sealBase64: ca.sealBase64 || undefined, _savedCAId: ca.id })}
                           className="text-xs font-bold text-emerald-700 border border-emerald-300 px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition"
                         >
                           Select →
@@ -750,6 +757,97 @@ function AnnualFilingTool() {
             />
           </div>
 
+          {/* Signature & Seal upload */}
+          <div className="mt-5 pt-4 border-t border-blue-200">
+            <p className="text-xs font-bold text-slate-700 mb-3">Signature &amp; Firm Seal — appear in Auditor&apos;s Report &amp; Notes on Accounts</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Partner Signature */}
+              <div>
+                <p className="text-xs text-slate-500 mb-2 font-semibold">Partner / Proprietor Signature</p>
+                {data.auditor.signatureBase64 ? (
+                  <div className="p-2 border border-emerald-200 rounded-lg bg-emerald-50">
+                    <img src={`data:image/jpeg;base64,${data.auditor.signatureBase64}`} alt="Signature" className="h-12 object-contain mb-1" style={{ maxWidth: "140px" }} />
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-emerald-700 font-semibold">✓ Saved</span>
+                      <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
+                        Change
+                        <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
+                          const file = e.target.files?.[0]; if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = ev => {
+                            const b64 = (ev.target?.result as string).split(",")[1];
+                            patchAud({ signatureBase64: b64 });
+                            if (data.auditor._savedCAId) void fetch(`/api/auditors/${data.auditor._savedCAId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signatureBase64: b64 }) });
+                          };
+                          reader.readAsDataURL(file);
+                        }} />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center gap-1.5 cursor-pointer border-2 border-dashed border-slate-200 rounded-lg p-3 hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    <span className="text-xs text-slate-500 font-semibold">Upload Signature</span>
+                    <span className="text-xs text-slate-400">JPEG / PNG</span>
+                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
+                      const file = e.target.files?.[0]; if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = ev => {
+                        const b64 = (ev.target?.result as string).split(",")[1];
+                        patchAud({ signatureBase64: b64 });
+                        if (data.auditor._savedCAId) void fetch(`/api/auditors/${data.auditor._savedCAId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signatureBase64: b64 }) });
+                      };
+                      reader.readAsDataURL(file);
+                    }} />
+                  </label>
+                )}
+              </div>
+
+              {/* Firm Seal */}
+              <div>
+                <p className="text-xs text-slate-500 mb-2 font-semibold">Firm Rubber Stamp / Seal</p>
+                {data.auditor.sealBase64 ? (
+                  <div className="p-2 border border-emerald-200 rounded-lg bg-emerald-50">
+                    <img src={`data:image/jpeg;base64,${data.auditor.sealBase64}`} alt="Firm Seal" className="h-14 object-contain mb-1" style={{ maxWidth: "140px" }} />
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-emerald-700 font-semibold">✓ Saved</span>
+                      <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
+                        Change
+                        <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
+                          const file = e.target.files?.[0]; if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = ev => {
+                            const b64 = (ev.target?.result as string).split(",")[1];
+                            patchAud({ sealBase64: b64 });
+                            if (data.auditor._savedCAId) void fetch(`/api/auditors/${data.auditor._savedCAId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sealBase64: b64 }) });
+                          };
+                          reader.readAsDataURL(file);
+                        }} />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center gap-1.5 cursor-pointer border-2 border-dashed border-slate-200 rounded-lg p-3 hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    <span className="text-xs text-slate-500 font-semibold">Upload Firm Seal</span>
+                    <span className="text-xs text-slate-400">JPEG / PNG</span>
+                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
+                      const file = e.target.files?.[0]; if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = ev => {
+                        const b64 = (ev.target?.result as string).split(",")[1];
+                        patchAud({ sealBase64: b64 });
+                        if (data.auditor._savedCAId) void fetch(`/api/auditors/${data.auditor._savedCAId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sealBase64: b64 }) });
+                      };
+                      reader.readAsDataURL(file);
+                    }} />
+                  </label>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">Images are saved with this CA&apos;s record and auto-loaded in future years when you select this CA.</p>
+          </div>
+
           {/* Save CA to list */}
           {session?.user && (
             <div className="mt-4 pt-4 border-t border-blue-200 flex items-center justify-between">
@@ -759,15 +857,13 @@ function AnnualFilingTool() {
                   : <span>Save these CA details for future use across all companies</span>
                 }
               </div>
-              {!alreadySaved && (
-                <button
-                  onClick={handleSaveCA}
-                  disabled={savingCA || !auditorFilled}
-                  className="text-xs font-bold text-blue-700 border border-blue-300 px-4 py-2 rounded-lg hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                >
-                  {savingCA ? "Saving…" : "Save CA to My List"}
-                </button>
-              )}
+              <button
+                onClick={handleSaveCA}
+                disabled={savingCA || !auditorFilled}
+                className="text-xs font-bold text-blue-700 border border-blue-300 px-4 py-2 rounded-lg hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                {savingCA ? "Saving…" : alreadySaved ? "Update Saved CA" : "Save CA to My List"}
+              </button>
             </div>
           )}
         </SectionCard>
