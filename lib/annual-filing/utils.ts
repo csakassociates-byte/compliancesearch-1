@@ -184,6 +184,23 @@ export function commonPrintCSS(): string {
   `;
 }
 
+/** Generate a single signature column div (with optional embedded signature image) */
+export function sigCol(sig: { name?: string; din?: string; designation?: string; signatureBase64?: string }, opts?: { width?: string }): string {
+  const imgHtml = sig.signatureBase64
+    ? `<img src="data:image/jpeg;base64,${sig.signatureBase64}" style="height:40pt;max-width:130pt;display:block;object-fit:contain;">`
+    : "";
+  const lineMargin = sig.signatureBase64 ? "margin-top:4pt" : "";
+  const colStyle   = opts?.width ? ` style="width:${opts.width}"` : "";
+  return `<div class="sig-col"${colStyle}>
+  ${imgHtml}
+  <div class="sig-line"${lineMargin ? ` style="${lineMargin}"` : ""}>
+    <strong>${sig.name || "________________"}</strong><br>
+    ${sig.designation || "Director"}<br>
+    DIN: ${sig.din || "________________"}
+  </div>
+</div>`;
+}
+
 /** Wrap HTML content in a full printable page */
 export function wrapPage(title: string, bodyHtml: string): string {
   return `<!DOCTYPE html>

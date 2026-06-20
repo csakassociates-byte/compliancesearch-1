@@ -22,7 +22,8 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
   // Signature block
   const sig1 = `
     <div class="sig-col">
-      <div class="sig-line">
+      ${dir1.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir1.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
+      <div class="sig-line"${dir1.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
         <strong>${dir1.name || "________________"}</strong><br>
         ${dir1.designation || "Director"}<br>
         DIN: ${dir1.din || "________________"}
@@ -31,7 +32,8 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
 
   const sig2 = dir2?.name ? `
     <div class="sig-col">
-      <div class="sig-line">
+      ${dir2.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir2.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
+      <div class="sig-line"${dir2.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
         <strong>${dir2.name}</strong><br>
         ${dir2.designation || "Director"}<br>
         DIN: ${dir2.din || "________________"}

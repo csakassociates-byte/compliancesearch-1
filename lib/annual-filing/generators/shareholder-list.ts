@@ -6,7 +6,7 @@
  */
 
 import type { AnnualFilingData, ShareholderRecord } from "../types";
-import { fmtDate, fmtIndian, fyEndYear, wrapPage } from "../utils";
+import { fmtDate, fmtIndian, fyEndYear, sigCol, wrapPage } from "../utils";
 
 const SHAREHOLDER_TYPE_LABELS: Record<string, string> = {
   resident_individual: "Resident Individual",
@@ -157,21 +157,9 @@ export function generateShareholderList(data: AnnualFilingData): string {
   <strong>${data.companyName}</strong></p>
 
   <div class="sig-row">
-    <div class="sig-col">
-      <div class="sig-line">
-        <strong>${data.signatoryDirectors.director1.name || "________________"}</strong><br>
-        ${data.signatoryDirectors.director1.designation || "Director"}<br>
-        DIN: ${data.signatoryDirectors.director1.din || "________________"}
-      </div>
-    </div>
-    ${data.signatoryDirectors.director2?.name ? `
-    <div class="sig-col">
-      <div class="sig-line">
-        <strong>${data.signatoryDirectors.director2.name}</strong><br>
-        ${data.signatoryDirectors.director2.designation || "Director"}<br>
-        DIN: ${data.signatoryDirectors.director2.din || "________________"}
-      </div>
-    </div>` : ""}
+    ${sigCol(data.signatoryDirectors.director1)}
+    ${data.signatoryDirectors.director2?.name ? sigCol(data.signatoryDirectors.director2) : ""}
+    ${data.signatoryDirectors.director3?.name ? sigCol(data.signatoryDirectors.director3, { width: "30%" }) : ""}
   </div>
 
   <p class="mt-16">

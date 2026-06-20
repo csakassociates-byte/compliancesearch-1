@@ -111,7 +111,17 @@ export interface DirectorRecord {
   email?: string;
   sharesHeld?: number;
   address?: string;
+  signatureBase64?: string;  // base64 JPEG/PNG signature image — stored in csi_persons
   _personId?: string | null;  // csi_persons.id — null means not yet saved
+}
+
+// ── Signatory ─────────────────────────────────────────────────────────────────
+
+export interface SignatoryEntry {
+  name: string;
+  din: string;
+  designation: string;
+  signatureBase64?: string;  // base64 image shown in generated documents
 }
 
 // ── Shareholder ───────────────────────────────────────────────────────────────
@@ -234,8 +244,9 @@ export interface AnnualFilingData {
   // ── Step 5: Directors ───────────────────────
   directors: DirectorRecord[];
   signatoryDirectors: {
-    director1: { name: string; din: string; designation: string };
-    director2?: { name: string; din: string; designation: string };
+    director1: SignatoryEntry;
+    director2?: SignatoryEntry;
+    director3?: SignatoryEntry;
   };
   placeOfSigning: string;
   dateOfReport: string;   // YYYY-MM-DD

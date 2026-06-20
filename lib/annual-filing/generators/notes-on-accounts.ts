@@ -6,7 +6,7 @@
  */
 
 import type { AnnualFilingData } from "../types";
-import { fmtDate, fyEndYear, fyStartYear, wrapPage } from "../utils";
+import { fmtDate, fyEndYear, fyStartYear, sigCol, wrapPage } from "../utils";
 
 export function generateNotesOnAccounts(data: AnnualFilingData): string {
   const fy      = data.financialYear;
@@ -98,6 +98,7 @@ export function generateNotesOnAccounts(data: AnnualFilingData): string {
 
   const dir1 = data.signatoryDirectors.director1;
   const dir2 = data.signatoryDirectors.director2;
+  const dir3 = data.signatoryDirectors.director3;
 
   // ── HTML Body ─────────────────────────────────────────────────────────────────
 
@@ -238,16 +239,26 @@ ${surplusNote}
     <div class="sig-col">
       <p>For and on behalf of the Board<br>
       <strong>FOR:- ${data.companyName}</strong></p>
-      <div class="sig-line">
+      ${dir1.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir1.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
+      <div class="sig-line"${dir1.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
         <strong>${dir1.name || "________________"}</strong><br>
         ${dir1.designation || "Director"}<br>
         DIN: ${dir1.din || "________________"}
       </div>
-      ${dir2 ? `<div class="sig-line" style="margin-top:20pt;">
-        <strong>${dir2.name || "________________"}</strong><br>
-        ${dir2.designation || "Director"}<br>
-        DIN: ${dir2.din || "________________"}
-      </div>` : ""}
+      ${dir2?.name ? `
+        ${dir2.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir2.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;margin-top:16pt;">` : ""}
+        <div class="sig-line" style="margin-top:${dir2.signatureBase64 ? "4pt" : "20pt"};">
+          <strong>${dir2.name}</strong><br>
+          ${dir2.designation || "Director"}<br>
+          DIN: ${dir2.din || "________________"}
+        </div>` : ""}
+      ${dir3?.name ? `
+        ${dir3.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir3.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;margin-top:16pt;">` : ""}
+        <div class="sig-line" style="margin-top:${dir3.signatureBase64 ? "4pt" : "20pt"};">
+          <strong>${dir3.name}</strong><br>
+          ${dir3.designation || "Director"}<br>
+          DIN: ${dir3.din || "________________"}
+        </div>` : ""}
     </div>
   </div>
   <p class="mt-16">

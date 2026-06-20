@@ -18,7 +18,7 @@
  */
 
 import type { AnnualFilingData } from "../types";
-import { fmtDate, fmtRs, fyEndYear, fyStartYear, wrapPage } from "../utils";
+import { fmtDate, fmtRs, fyEndYear, fyStartYear, sigCol, wrapPage } from "../utils";
 
 function getMeetingRows(data: AnnualFilingData): string {
   if (!data.boardMeetings || data.boardMeetings.length === 0) {
@@ -117,6 +117,7 @@ export function generateBoardReportRule8(data: AnnualFilingData): string {
 
   const sig1 = data.signatoryDirectors.director1;
   const sig2 = data.signatoryDirectors.director2;
+  const sig3 = data.signatoryDirectors.director3;
   const reportDate  = fmtDate(data.dateOfReport);
   const reportPlace = data.placeOfSigning || data.stateOfIncorporation || "";
   const totalMeetings = data.boardMeetings?.length || 0;
@@ -506,21 +507,9 @@ ${data.significantOrders && data.significantOrdersDetails
   <strong>${data.companyName}</strong></p>
 
   <div class="sig-row">
-    <div class="sig-col">
-      <div class="sig-line">
-        <strong>${sig1.name || "________________"}</strong><br>
-        ${sig1.designation || "Director"}<br>
-        DIN: ${sig1.din || "________________"}
-      </div>
-    </div>
-    ${sig2 && sig2.name ? `
-    <div class="sig-col">
-      <div class="sig-line">
-        <strong>${sig2.name}</strong><br>
-        ${sig2.designation || "Director"}<br>
-        DIN: ${sig2.din || "________________"}
-      </div>
-    </div>` : ""}
+    ${sigCol(sig1)}
+    ${sig2?.name ? sigCol(sig2) : ""}
+    ${sig3?.name ? sigCol(sig3, { width: "30%" }) : ""}
   </div>
 
   <p class="mt-16">

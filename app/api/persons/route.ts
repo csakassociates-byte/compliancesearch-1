@@ -9,6 +9,11 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
+  // One-time migration: add signatureBase64 column if missing
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE csi_persons ADD COLUMN IF NOT EXISTS "signatureBase64" TEXT`
+  );
+
   const { searchParams } = new URL(req.url);
   const companyId = searchParams.get("companyId"); // csi_companies.id
   const type = searchParams.get("type"); // "director" | "shareholder" | null
@@ -59,6 +64,7 @@ export async function GET(req: NextRequest) {
     dateOfJoining: string | null; designation: string | null; directorCategory: string | null;
     nomineeName: string | null; nomineeRelation: string | null; nomineeAddress: string | null;
     dematDpId: string | null; dematClientId: string | null;
+    signatureBase64: string | null;
     isDirector: boolean; isShareholder: boolean;
   }>>(
     `SELECT * FROM csi_persons WHERE "userId" = $1 AND "companyId" = $2 ORDER BY "createdAt" ASC`,
@@ -117,6 +123,7 @@ export async function GET(req: NextRequest) {
         nomineeAddress: kyc?.nomineeAddress ?? null,
         dematDpId: kyc?.dematDpId ?? null,
         dematClientId: kyc?.dematClientId ?? null,
+        signatureBase64: kyc?.signatureBase64 ?? null,
         kycComplete: !!(kyc?.panNo && kyc?.mobile),
       };
     });
@@ -170,6 +177,7 @@ export async function POST(req: NextRequest) {
     din?: string; dateOfJoining?: string; designation?: string; directorCategory?: string;
     nomineeName?: string; nomineeRelation?: string; nomineeAddress?: string;
     dematDpId?: string; dematClientId?: string;
+    signatureBase64?: string;
     isDirector?: boolean; isShareholder?: boolean;
   };
 
@@ -200,6 +208,7 @@ export async function POST(req: NextRequest) {
         "dematDpId" = COALESCE($24, "dematDpId"), "dematClientId" = COALESCE($25, "dematClientId"),
         "isDirector" = CASE WHEN $26::boolean IS NOT NULL THEN $26::boolean ELSE "isDirector" END,
         "isShareholder" = CASE WHEN $27::boolean IS NOT NULL THEN $27::boolean ELSE "isShareholder" END,
+        "signatureBase64" = COALESCE($28, "signatureBase64"),
         "updatedAt" = NOW()
        WHERE id = $1 AND "userId" = $2`,
       existing[0].id, userId,
@@ -210,7 +219,8 @@ export async function POST(req: NextRequest) {
       body.din||null, body.dateOfJoining||null, body.designation||null, body.directorCategory||null,
       body.nomineeName||null, body.nomineeRelation||null, body.nomineeAddress||null,
       body.dematDpId||null, body.dematClientId||null,
-      body.isDirector ?? null, body.isShareholder ?? null
+      body.isDirector ?? null, body.isShareholder ?? null,
+      body.signatureBase64||null
     );
     return NextResponse.json({ id: existing[0].id });
   }
@@ -221,8 +231,8 @@ export async function POST(req: NextRequest) {
       id,"userId","companyId",name,"fatherName","dateOfBirth",mobile,email,
       "presentAddress","permanentAddress","aadhaarNo","panNo","accountNo","ifscCode","bankName",
       nationality,occupation,"occupationCategory",din,"dateOfJoining",designation,"directorCategory",
-      "nomineeName","nomineeRelation","nomineeAddress","dematDpId","dematClientId","isDirector","isShareholder"
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
+      "nomineeName","nomineeRelation","nomineeAddress","dematDpId","dematClientId","isDirector","isShareholder","signatureBase64"
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
     id, userId, body.companyId, body.name.trim(),
     body.fatherName||null, body.dateOfBirth||null, body.mobile||null, body.email||null,
     body.presentAddress||null, body.permanentAddress||null,
@@ -231,7 +241,7 @@ export async function POST(req: NextRequest) {
     body.din||null, body.dateOfJoining||null, body.designation||null, body.directorCategory||null,
     body.nomineeName||null, body.nomineeRelation||null, body.nomineeAddress||null,
     body.dematDpId||null, body.dematClientId||null,
-    body.isDirector ?? false, body.isShareholder ?? false
+    body.isDirector ?? false, body.isShareholder ?? false, body.signatureBase64||null
   );
   return NextResponse.json({ id });
 }

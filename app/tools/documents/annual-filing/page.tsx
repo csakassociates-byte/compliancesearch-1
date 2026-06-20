@@ -340,6 +340,7 @@ function AnnualFilingTool() {
         email?: string | null; nationality?: string | null;
         occupation?: string | null; presentAddress?: string | null;
         panNo?: string | null; appointedAt?: string | null;
+        signatureBase64?: string | null;
       }> };
       const persons = json.persons || [];
       if (!persons.length) return;
@@ -352,16 +353,16 @@ function AnnualFilingTool() {
         if (idx !== -1) {
           dirs[idx] = {
             ...dirs[idx],
-            // Appointment date: use what's in dirs first, then fall back to persons API
             dateOfAppointment: dirs[idx].dateOfAppointment || toDateInput(p.appointedAt || ""),
-            fatherName:  p.fatherName  || dirs[idx].fatherName,
-            dateOfBirth: p.dateOfBirth ? toDateInput(p.dateOfBirth) : dirs[idx].dateOfBirth,
-            email:       p.email       || dirs[idx].email,
-            nationality: p.nationality || dirs[idx].nationality,
-            occupation:  p.occupation  || dirs[idx].occupation,
-            address:     p.presentAddress || dirs[idx].address,
-            pan:         p.panNo       || dirs[idx].pan,
-            _personId:   p.id,
+            fatherName:       p.fatherName       || dirs[idx].fatherName,
+            dateOfBirth:      p.dateOfBirth ? toDateInput(p.dateOfBirth) : dirs[idx].dateOfBirth,
+            email:            p.email            || dirs[idx].email,
+            nationality:      p.nationality      || dirs[idx].nationality,
+            occupation:       p.occupation       || dirs[idx].occupation,
+            address:          p.presentAddress   || dirs[idx].address,
+            pan:              p.panNo            || dirs[idx].pan,
+            signatureBase64:  p.signatureBase64  || dirs[idx].signatureBase64,
+            _personId:        p.id,
           };
         }
       }
@@ -394,11 +395,12 @@ function AnnualFilingTool() {
         nationality:     d.nationality || undefined,
         occupation:      d.occupation  || undefined,
         presentAddress:  d.address     || undefined,
-        panNo:           d.pan         || undefined,
-        designation:     d.designation || undefined,
-        directorCategory: d.category  || undefined,
-        dateOfJoining:   d.dateOfAppointment || undefined,
-        isDirector:      true,
+        panNo:            d.pan              || undefined,
+        designation:      d.designation     || undefined,
+        directorCategory: d.category        || undefined,
+        dateOfJoining:    d.dateOfAppointment || undefined,
+        signatureBase64:  d.signatureBase64  || undefined,
+        isDirector:       true,
       }),
     });
   }
@@ -1747,21 +1749,139 @@ function AnnualFilingTool() {
         </SectionCard>
 
         <SectionCard title="Signatory Directors (for Board Report signature)" color="blue">
-          <p className="text-xs text-slate-500 mb-3">Select the directors who will sign the Board Report and other documents.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <p className="text-xs font-bold text-slate-600 mb-2">Signatory 1 (Required)</p>
-              <Field label="Name" value={data.signatoryDirectors.director1.name} onChange={v => patch({ signatoryDirectors: { ...data.signatoryDirectors, director1: { ...data.signatoryDirectors.director1, name: v } } })} />
-              <Field label="DIN" value={data.signatoryDirectors.director1.din} onChange={v => patch({ signatoryDirectors: { ...data.signatoryDirectors, director1: { ...data.signatoryDirectors.director1, din: v } } })} />
-              <Field label="Designation" value={data.signatoryDirectors.director1.designation} onChange={v => patch({ signatoryDirectors: { ...data.signatoryDirectors, director1: { ...data.signatoryDirectors.director1, designation: v } } })} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-600 mb-2">Signatory 2 (Optional — for Private/Section 8)</p>
-              <Field label="Name" value={data.signatoryDirectors.director2?.name || ""} onChange={v => patch({ signatoryDirectors: { ...data.signatoryDirectors, director2: { name: v, din: data.signatoryDirectors.director2?.din || "", designation: data.signatoryDirectors.director2?.designation || "Director" } } })} />
-              <Field label="DIN" value={data.signatoryDirectors.director2?.din || ""} onChange={v => patch({ signatoryDirectors: { ...data.signatoryDirectors, director2: { name: data.signatoryDirectors.director2?.name || "", din: v, designation: data.signatoryDirectors.director2?.designation || "Director" } } })} />
-              <Field label="Designation" value={data.signatoryDirectors.director2?.designation || ""} onChange={v => patch({ signatoryDirectors: { ...data.signatoryDirectors, director2: { name: data.signatoryDirectors.director2?.name || "", din: data.signatoryDirectors.director2?.din || "", designation: v } } })} />
-            </div>
-          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            Select directors who will sign the Board Report and documents. Signatures will appear in all generated PDFs and are saved for future years.
+          </p>
+
+          {(() => {
+            // Sort directors by designation hierarchy for dropdown
+            const HIER: Record<string, number> = {
+              "Managing Director": 1, "Whole Time Director": 2, "Executive Director": 2,
+              "Chairman": 3, "Director": 4, "Independent Director": 5, "Nominee Director": 6,
+            };
+            const sortedDirs = [...(data.directors || [])]
+              .filter(d => d.isActive && d.name)
+              .sort((a, b) => (HIER[a.designation] || 9) - (HIER[b.designation] || 9));
+
+            function selectSignatory(slot: "director1" | "director2" | "director3", name: string) {
+              if (!name) {
+                if (slot === "director1") patch({ signatoryDirectors: { ...data.signatoryDirectors, director1: { name: "", din: "", designation: "" } } });
+                else patch({ signatoryDirectors: { ...data.signatoryDirectors, [slot]: undefined } });
+                return;
+              }
+              const dir = data.directors.find(d => d.name === name);
+              if (!dir) return;
+              patch({ signatoryDirectors: { ...data.signatoryDirectors, [slot]: { name: dir.name, din: dir.din, designation: dir.designation, signatureBase64: dir.signatureBase64 } } });
+            }
+
+            function uploadSignature(slot: "director1" | "director2" | "director3", file: File) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const raw = e.target?.result as string;
+                const base64 = raw.split(",")[1];
+                const currentSig = data.signatoryDirectors[slot];
+                if (!currentSig?.name) return;
+                patch({ signatoryDirectors: { ...data.signatoryDirectors, [slot]: { ...currentSig, signatureBase64: base64 } } });
+                const dirs = [...(data.directors || [])];
+                const idx = dirs.findIndex(d => (currentSig.din && d.din === currentSig.din) || d.name.trim().toLowerCase() === currentSig.name.trim().toLowerCase());
+                if (idx !== -1) {
+                  const updated = { ...dirs[idx], signatureBase64: base64 };
+                  dirs[idx] = updated;
+                  patch({ directors: dirs });
+                  if (companyId) void saveDirectorKYC(updated);
+                }
+              };
+              reader.readAsDataURL(file);
+            }
+
+            const slots: Array<"director1" | "director2" | "director3"> = ["director1", "director2", "director3"];
+            const slotLabels = ["Signatory 1 (Required)", "Signatory 2", "Signatory 3"];
+            const activeSlots = slots.filter((s, i) => i === 0 || data.signatoryDirectors[s]);
+            const showAddBtn = activeSlots.length < 3;
+
+            return (
+              <>
+                <div className={`grid grid-cols-1 md:grid-cols-${activeSlots.length > 1 ? activeSlots.length : "2"} gap-4`}>
+                  {activeSlots.map((slot, i) => {
+                    const sig = data.signatoryDirectors[slot];
+                    return (
+                      <div key={slot} className="bg-white border border-blue-100 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs font-bold text-slate-600">{slotLabels[slots.indexOf(slot)]}</span>
+                          {slot !== "director1" && (
+                            <button onClick={() => patch({ signatoryDirectors: { ...data.signatoryDirectors, [slot]: undefined } })} className="text-red-400 hover:text-red-600 text-xs font-semibold">Remove</button>
+                          )}
+                        </div>
+
+                        {/* Director dropdown */}
+                        <select
+                          value={sig?.name || ""}
+                          onChange={e => selectSignatory(slot, e.target.value)}
+                          className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 mb-2"
+                        >
+                          <option value="">— Select Director —</option>
+                          {sortedDirs.map(d => (
+                            <option key={d.din || d.name} value={d.name}>
+                              {d.name} — {d.designation}
+                            </option>
+                          ))}
+                        </select>
+
+                        {sig?.name && (
+                          <>
+                            <div className="text-xs text-slate-500 mb-3 space-y-0.5">
+                              <p><span className="text-slate-400">DIN:</span> {sig.din || "—"}</p>
+                              <p><span className="text-slate-400">Designation:</span> {sig.designation}</p>
+                            </div>
+
+                            {/* Signature upload / preview */}
+                            {sig.signatureBase64 ? (
+                              <div className="p-2 border border-emerald-200 rounded-lg bg-emerald-50">
+                                <img
+                                  src={`data:image/jpeg;base64,${sig.signatureBase64}`}
+                                  alt="Signature"
+                                  className="h-12 object-contain mb-1"
+                                  style={{ maxWidth: "140px" }}
+                                />
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs text-emerald-700 font-semibold">✓ Signature saved</span>
+                                  <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
+                                    Change
+                                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => e.target.files?.[0] && uploadSignature(slot, e.target.files[0])} />
+                                  </label>
+                                </div>
+                              </div>
+                            ) : (
+                              <label className="flex flex-col items-center gap-1.5 cursor-pointer border-2 border-dashed border-slate-200 rounded-lg p-3 hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span className="text-xs text-slate-500 font-semibold">Upload Signature</span>
+                                <span className="text-xs text-slate-400">JPEG / PNG — saved to director record</span>
+                                <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => e.target.files?.[0] && uploadSignature(slot, e.target.files[0])} />
+                              </label>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {showAddBtn && (
+                  <button
+                    onClick={() => {
+                      const nextSlot = activeSlots.length === 1 ? "director2" : "director3";
+                      patch({ signatoryDirectors: { ...data.signatoryDirectors, [nextSlot]: { name: "", din: "", designation: "" } } });
+                    }}
+                    className="mt-3 text-xs text-blue-700 font-semibold flex items-center gap-1 hover:text-blue-900"
+                  >
+                    <span className="text-lg leading-none">+</span> Add Another Signatory
+                  </button>
+                )}
+              </>
+            );
+          })()}
         </SectionCard>
       </>
     );
