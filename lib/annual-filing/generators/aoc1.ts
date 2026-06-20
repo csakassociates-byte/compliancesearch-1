@@ -103,9 +103,9 @@ function renderPartB(
       <td>${s.type === "joint_venture" ? "Joint Venture" : "Associate"}</td>
       <td>${s.reportingPeriod || `01/04/${Number(fyEnd) - 1} to 31/03/${fyEnd}`}</td>
       <td class="right">${s.percentShareholding || "—"}%</td>
-      <td class="right">${s.reservesSurplus || "—"}</td>
+      <td class="right">${s.netWorthAttributable || s.reservesSurplus || "—"}</td>
       <td class="right">${s.profitAfterTax || "—"}</td>
-      <td class="right">${s.profitAfterTax || "—"}</td>
+      <td class="right">${s.profitConsideredInConsolidation || s.profitAfterTax || "—"}</td>
       <td class="right">${s.proposedDividend || "—"}</td>
     </tr>`).join("");
 
@@ -176,7 +176,7 @@ ${renderPartB(subsidiaries, fyEnd)}
   <div class="sig-row">
     ${sigCol(sig1)}
     ${sig2?.name ? sigCol(sig2) : ""}
-    ${sig3?.name ? sigCol(sig3, { width: "30%" }) : ""}
+    ${sig3?.name ? sigCol(sig3) : ""}
   </div>
 
   <p class="mt-16">

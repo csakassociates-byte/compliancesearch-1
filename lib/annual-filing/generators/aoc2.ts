@@ -43,8 +43,8 @@ function renderPartA(
       <td>${t.duration || "—"}</td>
       <td>${t.salientTerms || "—"}</td>
       <td>${t.justification || "—"}</td>
-      <td class="right">₹${t.amount || "—"}</td>
       <td class="center">${t.approvalDate ? fmtDate(t.approvalDate) : "—"}</td>
+      <td class="right">₹${t.amount || "—"}</td>
       <td>${"—"}</td>
     </tr>`).join("");
 
@@ -59,8 +59,8 @@ function renderPartA(
     <th style="width:8%">Duration of contracts / arrangements / transactions</th>
     <th style="width:15%">Salient terms of contracts / arrangements / transactions including the value</th>
     <th style="width:12%">Justification for entering into such contracts / arrangements / transactions</th>
-    <th class="right" style="width:10%">Date(s) of approval by the Board</th>
-    <th class="center" style="width:10%">Amount paid as advances, if any</th>
+    <th class="center" style="width:10%">Date(s) of approval by the Board</th>
+    <th class="right" style="width:10%">Amount paid as advances, if any</th>
     <th style="width:8%">Date on which special resolution was passed in general meeting</th>
   </tr>
   ${rows}
@@ -156,7 +156,7 @@ ${renderPartB(txns, fyEnd)}
   <div class="sig-row">
     ${sigCol(sig1)}
     ${sig2?.name ? sigCol(sig2) : ""}
-    ${sig3?.name ? sigCol(sig3, { width: "30%" }) : ""}
+    ${sig3?.name ? sigCol(sig3) : ""}
   </div>
 
   <p class="mt-16">

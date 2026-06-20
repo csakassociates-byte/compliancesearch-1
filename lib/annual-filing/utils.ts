@@ -169,8 +169,8 @@ export function commonPrintCSS(): string {
 
     /* ── Signature block ── */
     .sig-block   { margin-top: 28pt; }
-    .sig-row     { display: flex; justify-content: space-between; margin-top: 36pt; }
-    .sig-col     { width: 45%; }
+    .sig-row     { display: flex; justify-content: space-between; gap: 16pt; margin-top: 36pt; }
+    .sig-col     { flex: 1; min-width: 0; }
     .sig-col .sig-line { border-top: 1px solid #000; padding-top: 4pt; margin-top: 36pt; }
 
     /* ── Lists ── */

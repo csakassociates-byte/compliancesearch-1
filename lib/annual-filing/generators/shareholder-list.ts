@@ -159,7 +159,7 @@ export function generateShareholderList(data: AnnualFilingData): string {
   <div class="sig-row">
     ${sigCol(data.signatoryDirectors.director1)}
     ${data.signatoryDirectors.director2?.name ? sigCol(data.signatoryDirectors.director2) : ""}
-    ${data.signatoryDirectors.director3?.name ? sigCol(data.signatoryDirectors.director3, { width: "30%" }) : ""}
+    ${data.signatoryDirectors.director3?.name ? sigCol(data.signatoryDirectors.director3) : ""}
   </div>
 
   <p class="mt-16">

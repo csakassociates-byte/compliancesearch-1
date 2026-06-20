@@ -99,7 +99,7 @@ export function generateDirectorList(data: AnnualFilingData): string {
   <div class="sig-row">
     ${sigCol(data.signatoryDirectors.director1)}
     ${data.signatoryDirectors.director2?.name ? sigCol(data.signatoryDirectors.director2) : ""}
-    ${data.signatoryDirectors.director3?.name ? sigCol(data.signatoryDirectors.director3, { width: "30%" }) : ""}
+    ${data.signatoryDirectors.director3?.name ? sigCol(data.signatoryDirectors.director3) : ""}
   </div>
 
   <p class="mt-16">
@@ -167,8 +167,8 @@ export function generateDirectorList(data: AnnualFilingData): string {
     p { margin-bottom: 6pt; text-align: justify; font-size: 9pt; }
 
     .sig-block { margin-top: 20pt; }
-    .sig-row { display: flex; justify-content: space-between; margin-top: 24pt; }
-    .sig-col { width: 45%; }
+    .sig-row { display: flex; justify-content: space-between; gap: 16pt; margin-top: 24pt; }
+    .sig-col { flex: 1; min-width: 0; }
     .sig-col .sig-line { border-top: 1px solid #000; padding-top: 3pt; margin-top: 24pt; font-size: 9pt; }
   `;
 

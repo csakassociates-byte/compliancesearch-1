@@ -14,31 +14,39 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
 
   const dir1 = data.signatoryDirectors.director1;
   const dir2 = data.signatoryDirectors.director2;
+  const dir3 = data.signatoryDirectors.director3;
 
   // Build the designated persons string for the resolution body
-  let designatedPersons = dir1.name || "________________";
-  if (dir2?.name) designatedPersons += ` AND ${dir2.name}`;
+  const designatedNames = [dir1.name, dir2?.name, dir3?.name].filter(Boolean);
+  const designatedPersons = designatedNames.length > 0
+    ? designatedNames.join(" AND ")
+    : "________________";
+  const personWord = designatedNames.length > 1 ? "Persons" : "Person";
+  const directorWord = designatedNames.length > 1 ? "Directors" : "Director";
 
-  // Signature block
-  const sig1 = `
+  // Meeting venue title line — smart formatting
+  const isDefaultVenue = !data.mgt7MeetingVenue ||
+    data.mgt7MeetingVenue.toLowerCase().includes("registered office");
+  const venueTitleLine = isDefaultVenue
+    ? `AT THE REGISTERED OFFICE OF THE COMPANY SITUATED AT ${data.regAddress}`
+    : `AT ${meetingVenue.toUpperCase()}`;
+
+  // Signature builder helper
+  function buildSig(dir: { name: string; designation: string; din: string; signatureBase64?: string }) {
+    return `
     <div class="sig-col">
-      ${dir1.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir1.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
-      <div class="sig-line"${dir1.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
-        <strong>${dir1.name || "________________"}</strong><br>
-        ${dir1.designation || "Director"}<br>
-        DIN: ${dir1.din || "________________"}
+      ${dir.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
+      <div class="sig-line"${dir.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
+        <strong>${dir.name || "________________"}</strong><br>
+        ${dir.designation || "Director"}<br>
+        DIN: ${dir.din || "________________"}
       </div>
     </div>`;
+  }
 
-  const sig2 = dir2?.name ? `
-    <div class="sig-col">
-      ${dir2.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir2.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
-      <div class="sig-line"${dir2.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
-        <strong>${dir2.name}</strong><br>
-        ${dir2.designation || "Director"}<br>
-        DIN: ${dir2.din || "________________"}
-      </div>
-    </div>` : "";
+  const sig1 = buildSig(dir1);
+  const sig2 = dir2?.name ? buildSig(dir2) : "";
+  const sig3 = dir3?.name ? buildSig(dir3) : "";
 
   const bodyHtml = `
 
@@ -55,33 +63,30 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
 <!-- ══════════════ RESOLUTION TITLE ══════════════ -->
 <p class="res-title bold center">
   EXTRACT OF RESOLUTION PASSED IN THE BOARD MEETING OF ${data.companyName.toUpperCase()}
-  HELD ON ${meetingDate} AT ${meetingTime} AT THE ${meetingVenue.toUpperCase()} OF THE
-  COMPANY AT ${data.regAddress}
+  HELD ON ${meetingDate} AT ${meetingTime} ${venueTitleLine}
 </p>
 
 <hr>
 
 <!-- ══════════════ SUBJECT ══════════════ -->
 <p class="bold mt-8">
-  Appointment of Designated Person to furnish information to Registrar of Companies with
+  Appointment of Designated ${personWord} to furnish information to Registrar of Companies with
   respect to Beneficial Interests in the Shares of the Company pursuant to Rule 9 of the
-  Companies (Management and Administration) Rules, 2013.
+  Companies (Management and Administration) Rules, 2014.
 </p>
 
 <!-- ══════════════ RESOLUTION ══════════════ -->
 <p class="mt-8 justified">
   "RESOLVED THAT pursuant to Rule 9 of the Companies (Management and Administration) Rules,
-  2013 read with the provisions of Section 89 and 90 of the Companies Act, 2013; the Companies
-  (Management and Administration) Rules, 2014 and such other applicable provisions of the
-  Companies Act, 2013 and Rules made thereunder;
+  2014 read with the provisions of Section 89 and 90 of the Companies Act, 2013 and such
+  other applicable provisions of the Companies Act, 2013 and Rules made thereunder;
 </p>
 
 <p class="justified">
   The Board of Directors does hereby appoint <strong>${designatedPersons}</strong> as
-  ${dir2?.name ? "Directors" : "Director"} of the Company as the Designated
-  ${dir2?.name ? "Persons" : "Person"} for furnishing information to the Registrar of
-  Companies or any such other Authority with respect to beneficial interests in the shares
-  of the Company."
+  ${directorWord} of the Company as the Designated ${personWord} for furnishing information
+  to the Registrar of Companies or any such other Authority with respect to beneficial
+  interests in the shares of the Company."
 </p>
 
 <!-- ══════════════ AUTHORITY LINE ══════════════ -->
@@ -95,6 +100,7 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
   <div class="sig-row">
     ${sig1}
     ${sig2}
+    ${sig3}
   </div>
   <p class="mt-16">
     Date: ${fmtDate(data.dateOfReport) || "________________"}&nbsp;&nbsp;&nbsp;&nbsp;
@@ -114,8 +120,8 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
     .mt-8  { margin-top: 8pt; }
     .mt-16 { margin-top: 16pt; }
     .sig-block { margin-top: 20pt; }
-    .sig-row { display: flex; justify-content: space-between; margin-top: 30pt; }
-    .sig-col { width: 45%; }
+    .sig-row { display: flex; justify-content: space-between; gap: 12pt; margin-top: 30pt; }
+    .sig-col { flex: 1; }
     .sig-col .sig-line { border-top: 1px solid #000; padding-top: 4pt; margin-top: 30pt; }
   `;
 

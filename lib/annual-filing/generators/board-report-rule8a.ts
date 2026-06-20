@@ -478,7 +478,7 @@ ${data.significantOrders && data.significantOrdersDetails
   <div class="sig-row">
     ${sigCol(sig1)}
     ${sig2?.name ? sigCol(sig2) : ""}
-    ${sig3?.name ? sigCol(sig3, { width: "30%" }) : ""}
+    ${sig3?.name ? sigCol(sig3) : ""}
   </div>
 
   <p class="mt-16">

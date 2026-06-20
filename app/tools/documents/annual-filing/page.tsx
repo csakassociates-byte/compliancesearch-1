@@ -2297,6 +2297,7 @@ function AnnualFilingTool() {
                     ["Reserves & Surplus (₹)", "reservesSurplus", "0"],
                     ["Total Assets (₹)", "totalAssets", "0"],
                     ["Total Liabilities (₹)", "totalLiabilities", "0"],
+                    ["Investments (₹)", "investments", "0"],
                     ["Turnover (₹)", "turnover", "0"],
                     ["PBT (₹)", "profitBeforeTax", "0"],
                     ["Provision for Tax (₹)", "provisionForTax", "0"],
@@ -2326,6 +2327,25 @@ function AnnualFilingTool() {
                       <option value="joint_venture">Joint Venture</option>
                     </select>
                   </div>
+                  {(s.type === "associate" || s.type === "joint_venture") && (
+                    <>
+                      {[
+                        ["Net Worth Attributable to Shareholding (₹)", "netWorthAttributable", "0"],
+                        ["Profit / Loss Considered in Consolidation (₹)", "profitConsideredInConsolidation", "0"],
+                      ].map(([label, key, ph]) => (
+                        <div key={key}>
+                          <label className="text-xs text-slate-400 block mb-0.5">{label}</label>
+                          <input type="text" value={(s as unknown as Record<string, string>)[key] || ""} placeholder={ph}
+                            onChange={e => {
+                              const subs = [...data.subsidiaries!];
+                              (subs[i] as unknown as Record<string, string>)[key] = e.target.value;
+                              patch({ subsidiaries: subs });
+                            }}
+                            className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -2374,6 +2394,28 @@ function AnnualFilingTool() {
                         className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
                     </div>
                   ))}
+                  <div className="col-span-2">
+                    <label className="text-xs text-slate-400 block mb-0.5">Board Approval Date</label>
+                    <input type="date" value={t.boardApprovalDate || t.approvalDate || ""}
+                      onChange={e => {
+                        const txns = [...data.relatedPartyTransactions!];
+                        txns[i] = { ...txns[i], approvalDate: e.target.value, boardApprovalDate: e.target.value };
+                        patch({ relatedPartyTransactions: txns });
+                      }}
+                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                  </div>
+                  {!t.isArmLength && (
+                    <div className="col-span-2">
+                      <label className="text-xs text-slate-400 block mb-0.5">Justification (for non-arm&apos;s length)</label>
+                      <input type="text" value={t.justification || ""} placeholder="Reason for entering into this transaction"
+                        onChange={e => {
+                          const txns = [...data.relatedPartyTransactions!];
+                          txns[i] = { ...txns[i], justification: e.target.value };
+                          patch({ relatedPartyTransactions: txns });
+                        }}
+                        className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                    </div>
+                  )}
                   <div className="flex gap-4 items-center col-span-2">
                     <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                       <input type="checkbox" checked={t.isArmLength} onChange={e => {

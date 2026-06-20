@@ -161,6 +161,9 @@ export interface SubsidiaryRecord {
   percentShareholding: string;
   reportingPeriod?: string;  // if different from holding company
   type: "subsidiary" | "associate" | "joint_venture";
+  // Part B (Associates / JVs) — AOC-1 specific
+  netWorthAttributable?: string;           // Net worth attributable to % shareholding
+  profitConsideredInConsolidation?: string; // Profit/loss considered in consolidation
 }
 
 // ── Related Party Transaction (for AOC-2) ─────────────────────────────────────
