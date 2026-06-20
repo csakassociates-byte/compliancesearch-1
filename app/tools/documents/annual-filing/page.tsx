@@ -224,6 +224,8 @@ function AnnualFilingTool() {
   const [savedCAs, setSavedCAs]     = useState<SavedCA[]>([]);
   const [savingCA, setSavingCA]     = useState(false);
   const [showCAManager, setShowCAManager] = useState(false);
+  const [companyId, setCompanyId]   = useState<string | null>(null);
+  const [loadingPersons, setLoadingPersons] = useState(false);
 
   // ── Load saved draft via ?load=<id> ──────────────────────────────────
   useEffect(() => {
@@ -276,10 +278,11 @@ function AnnualFilingTool() {
     setData(prev => ({ ...prev, financials: { ...prev.financials, ...partial } }));
   }, []);
 
-  // ── Company fill from Excel ────────────────────────────────────────────
+  // ── Company fill from Excel / Search ──────────────────────────────────
   function handleCompanyFill(co: CompanyData) {
     const companyType = detectCompanyType(co.entityType || "", co.smallCompany);
     const derivedState = stateFromCIN(co.cin || "");
+    if (co.id) setCompanyId(co.id);
     patch({
       companyName:           co.companyName || "",
       cin:                   co.cin || "",
@@ -303,6 +306,71 @@ function AnnualFilingTool() {
     patchFin({
       authorisedCapital: co.authorisedCapital || "",
       paidUpCapital:     co.paidUpCapital     || "",
+    });
+  }
+
+  // ── Load director KYC from Person Records ─────────────────────────────
+  async function handleLoadPersons() {
+    if (!companyId || !session?.user) return;
+    setLoadingPersons(true);
+    try {
+      const res = await fetch(`/api/persons?companyId=${companyId}&type=director`);
+      const json = await res.json() as { persons?: Array<{
+        id: string | null; din?: string; name: string;
+        fatherName?: string | null; dateOfBirth?: string | null;
+        email?: string | null; nationality?: string | null;
+        occupation?: string | null; presentAddress?: string | null;
+        panNo?: string | null;
+      }> };
+      const persons = json.persons || [];
+      if (!persons.length) return;
+      // Merge KYC data into existing directors by DIN then by name
+      const dirs = [...(data.directors || [])];
+      for (const p of persons) {
+        const idx = dirs.findIndex(d =>
+          (p.din && d.din && p.din === d.din) ||
+          d.name.trim().toLowerCase() === p.name.trim().toLowerCase()
+        );
+        if (idx !== -1) {
+          dirs[idx] = {
+            ...dirs[idx],
+            fatherName:  p.fatherName  || dirs[idx].fatherName,
+            dateOfBirth: p.dateOfBirth ? toDateInput(p.dateOfBirth) : dirs[idx].dateOfBirth,
+            email:       p.email       || dirs[idx].email,
+            nationality: p.nationality || dirs[idx].nationality,
+            occupation:  p.occupation  || dirs[idx].occupation,
+            address:     p.presentAddress || dirs[idx].address,
+            pan:         p.panNo       || dirs[idx].pan,
+            _personId:   p.id,
+          };
+        }
+      }
+      patch({ directors: dirs });
+    } finally {
+      setLoadingPersons(false);
+    }
+  }
+
+  // ── Save director KYC back to csi_persons ─────────────────────────────
+  async function saveDirectorKYC(d: DirectorRecord) {
+    if (!companyId || !session?.user || !d.name.trim()) return;
+    await fetch("/api/persons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id:              d._personId || undefined,
+        companyId,
+        name:            d.name,
+        din:             d.din || undefined,
+        fatherName:      d.fatherName  || undefined,
+        dateOfBirth:     d.dateOfBirth || undefined,
+        email:           d.email       || undefined,
+        nationality:     d.nationality || undefined,
+        occupation:      d.occupation  || undefined,
+        presentAddress:  d.address     || undefined,
+        panNo:           d.pan         || undefined,
+        isDirector:      true,
+      }),
     });
   }
 
@@ -952,14 +1020,29 @@ function AnnualFilingTool() {
       patch({ directors: data.directors.filter((_, i) => i !== idx) });
     }
 
+    const inp = "border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full";
+
     return (
       <>
         <SectionCard title="Directors as on 31st March 2025" color="emerald">
-          <p className="text-xs text-slate-500 mb-4">Directors are pre-filled from Excel import. Review and update as needed.</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-slate-500">Directors are pre-filled from company data. Add KYC details for the full Director List document.</p>
+            {companyId && (
+              <button
+                onClick={handleLoadPersons}
+                disabled={loadingPersons}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex-shrink-0 ml-3"
+              >
+                {loadingPersons ? "Loading…" : "Load from Person Records"}
+              </button>
+            )}
+          </div>
           {(data.directors || []).map((d, i) => (
             <div key={i} className="p-4 bg-white border border-slate-200 rounded-xl mb-3">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-slate-500">Director {i + 1}</span>
+                <span className="text-xs font-bold text-slate-500">
+                  Director {i + 1}{d._personId && <span className="ml-2 text-emerald-600">● KYC linked</span>}
+                </span>
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-1 text-xs text-slate-600">
                     <input type="checkbox" checked={d.isActive} onChange={e => updateDir(i, { isActive: e.target.checked })} className="rounded" />
@@ -974,40 +1057,102 @@ function AnnualFilingTool() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <input type="text" value={d.name} onChange={e => updateDir(i, { name: e.target.value })} placeholder="Full Name" className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
-                <input type="text" value={d.din} onChange={e => updateDir(i, { din: e.target.value })} placeholder="DIN" className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
-                <select value={d.designation} onChange={e => updateDir(i, { designation: e.target.value })} className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white">
-                  <option>Managing Director</option>
-                  <option>Whole Time Director</option>
-                  <option>Director</option>
-                  <option>Independent Director</option>
-                  <option>Nominee Director</option>
-                  <option>Chairman</option>
-                </select>
-                <select value={d.category} onChange={e => updateDir(i, { category: e.target.value })} className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white">
-                  <option>Executive</option>
-                  <option>Non-Executive</option>
-                  <option>Independent</option>
-                  <option>Nominee</option>
-                </select>
+
+              {/* Row 1: Basic fields */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">Full Name *</label>
+                  <input type="text" value={d.name} onChange={e => updateDir(i, { name: e.target.value })} placeholder="Full Name" className={inp} />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">DIN</label>
+                  <input type="text" value={d.din} onChange={e => updateDir(i, { din: e.target.value })} placeholder="DIN" className={inp} />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">Designation</label>
+                  <select value={d.designation} onChange={e => updateDir(i, { designation: e.target.value })} className={inp + " bg-white"}>
+                    <option>Managing Director</option>
+                    <option>Whole Time Director</option>
+                    <option>Director</option>
+                    <option>Independent Director</option>
+                    <option>Nominee Director</option>
+                    <option>Chairman</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">Category</label>
+                  <select value={d.category} onChange={e => updateDir(i, { category: e.target.value })} className={inp + " bg-white"}>
+                    <option>Executive</option>
+                    <option>Non-Executive</option>
+                    <option>Independent</option>
+                    <option>Nominee</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: KYC fields */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">Father&apos;s Name</label>
+                  <input type="text" value={d.fatherName || ""} onChange={e => updateDir(i, { fatherName: e.target.value })} placeholder="Father's Full Name" className={inp}
+                    onBlur={() => companyId && saveDirectorKYC({ ...d, fatherName: d.fatherName })} />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">Date of Birth</label>
+                  <input type="date" value={d.dateOfBirth || ""} onChange={e => updateDir(i, { dateOfBirth: e.target.value })} className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">Nationality</label>
+                  <input type="text" value={d.nationality || ""} onChange={e => updateDir(i, { nationality: e.target.value })} placeholder="e.g. Indian" className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">Occupation</label>
+                  <input type="text" value={d.occupation || ""} onChange={e => updateDir(i, { occupation: e.target.value })} placeholder="e.g. Business" className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                </div>
+              </div>
+
+              {/* Row 3: Contact + Shares */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">Email-Id</label>
+                  <input type="email" value={d.email || ""} onChange={e => updateDir(i, { email: e.target.value })} placeholder="email@example.com" className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">No. of Equity Shares Held</label>
+                  <input type="number" min="0" value={d.sharesHeld ?? ""} onChange={e => updateDir(i, { sharesHeld: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="0" className={inp} />
+                </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Date of Appointment</label>
-                  <input type="date" value={d.dateOfAppointment} onChange={e => updateDir(i, { dateOfAppointment: e.target.value })} className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                  <input type="date" value={d.dateOfAppointment} onChange={e => updateDir(i, { dateOfAppointment: e.target.value })} className={inp} />
                 </div>
-                {(d.changedDuringYear && !d.isActive) && (
+                {(d.changedDuringYear && !d.isActive) ? (
                   <div>
                     <label className="text-xs text-slate-400 block mb-0.5">Date of Cessation</label>
-                    <input type="date" value={d.dateOfCessation || ""} onChange={e => updateDir(i, { dateOfCessation: e.target.value })} className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                    <input type="date" value={d.dateOfCessation || ""} onChange={e => updateDir(i, { dateOfCessation: e.target.value })} className={inp} />
                   </div>
+                ) : (
+                  d.changedDuringYear ? (
+                    <div>
+                      <label className="text-xs text-slate-400 block mb-0.5">Change Type</label>
+                      <select value={d.changeType || "appointed"} onChange={e => updateDir(i, { changeType: e.target.value as "appointed" | "resigned" | "ceased" })} className={inp + " bg-white"}>
+                        <option value="appointed">Appointed</option>
+                        <option value="resigned">Resigned</option>
+                        <option value="ceased">Ceased</option>
+                      </select>
+                    </div>
+                  ) : null
                 )}
-                {d.changedDuringYear && (
-                  <select value={d.changeType || "appointed"} onChange={e => updateDir(i, { changeType: e.target.value as "appointed" | "resigned" | "ceased" })} className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white">
-                    <option value="appointed">Appointed</option>
-                    <option value="resigned">Resigned</option>
-                    <option value="ceased">Ceased</option>
-                  </select>
-                )}
+              </div>
+
+              {/* Row 4: Address (full width) */}
+              <div>
+                <label className="text-xs text-slate-400 block mb-0.5">Residential Address</label>
+                <input type="text" value={d.address || ""} onChange={e => updateDir(i, { address: e.target.value })} placeholder="Full residential address" className={inp}
+                  onBlur={() => companyId && saveDirectorKYC(d)} />
               </div>
             </div>
           ))}

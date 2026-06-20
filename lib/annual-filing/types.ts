@@ -81,6 +81,15 @@ export interface DirectorRecord {
   isActive: boolean;
   changedDuringYear: boolean;
   changeType?: "appointed" | "resigned" | "ceased";
+  // Extended KYC fields (from csi_persons)
+  nationality?: string;
+  fatherName?: string;
+  dateOfBirth?: string;
+  occupation?: string;
+  email?: string;
+  sharesHeld?: number;
+  address?: string;
+  _personId?: string | null;  // csi_persons.id — null means not yet saved
 }
 
 // ── Shareholder ───────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import type { CompanyData, DirectorData, ChargeData } from "@/lib/types/company"
 
 function dbToCompanyData(c: Record<string, unknown>): CompanyData {
   return {
+    id:                 (c.id as string) || undefined,
     cin:                String(c.cin         || ""),
     companyName:        String(c.companyName || ""),
     regAddress:         (c.regAddress         as string)  || undefined,

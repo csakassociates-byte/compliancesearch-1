@@ -25,6 +25,7 @@ export interface ChargeData {
 
 export interface CompanyData {
   // ── Identifiers ──────────────────────────────────────────
+  id?: string;              // csi_companies.id (UUID) — available when loaded from DB
   cin: string;
   companyName: string;
   registrationNumber?: string;
