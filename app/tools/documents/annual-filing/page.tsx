@@ -894,8 +894,32 @@ function AnnualFilingTool() {
   // STEP 4 — Board & Compliance
   // ══════════════════════════════════════════════════════════════════════
   function renderStep4() {
+    // ── FY boundary calculations ──────────────────────────────────────
+    const fyStartYear = data.financialYear.split("-")[0];           // "2024"
+    const fyEndFull   = "20" + data.financialYear.split("-")[1];    // "2025"
+    const fyStart     = `${fyStartYear}-04-01`;                     // "2024-04-01"
+    const fyEnd       = `${fyEndFull}-03-31`;                       // "2025-03-31"
+
+    // 15-month first-year exception (Sec. 2(41)):
+    // If incorporated on/after Jan 1 of FY start year → it's first FY, allow from incorporation date
+    const incDate    = data.incorporationDate || "";
+    const isFirstYear = incDate >= `${fyStartYear}-01-01` && incDate <= fyEnd;
+    // Effective min date for meeting input
+    const effectiveMin = isFirstYear && incDate ? incDate : fyStart;
+
     // ── Board Meeting Helpers ──────────────────────────────────────────
-    // Directors eligible for a given meeting date (appointed before/on that date, not yet ceased)
+    function addDays(dateStr: string, days: number): string {
+      const d = new Date(dateStr + "T00:00:00");
+      d.setDate(d.getDate() + days);
+      return d.toISOString().split("T")[0];
+    }
+
+    function clampDate(date: string, min: string, max: string): string {
+      if (date < min) return min;
+      if (date > max) return max;
+      return date;
+    }
+
     function getEligible(meetingDate: string): DirectorRecord[] {
       if (!data.directors?.length) return [];
       if (!meetingDate) return data.directors;
@@ -911,84 +935,147 @@ function AnnualFilingTool() {
       return Math.round((new Date(d2).getTime() - new Date(d1).getTime()) / 86400000);
     }
 
-    // Min quorum = max(ceil(eligible/3), 2) per Sec. 174
-    function quorumRequired(totalEligible: number): number {
-      return Math.max(Math.ceil(totalEligible / 3), 2);
+    function quorumRequired(n: number): number {
+      return Math.max(Math.ceil(n / 3), 2);
     }
 
     function removeMeeting(idx: number) {
-      const meetings = (data.boardMeetings || []).filter((_, i) => i !== idx)
-        .map((m, i) => ({ ...m, serialNo: i + 1 }));
-      patch({ boardMeetings: meetings });
+      patch({ boardMeetings: (data.boardMeetings || []).filter((_, i) => i !== idx).map((m, i) => ({ ...m, serialNo: i + 1 })) });
     }
 
     function updateMeetingDate(idx: number, date: string) {
-      const meetings = [...(data.boardMeetings || [])];
-      const eligible  = getEligible(date);
-      // Re-filter existing present list to only keep still-eligible directors
-      const prevPresent = meetings[idx].directorsPresent;
-      const eligibleNames = new Set(eligible.map(d => d.name));
-      const stillPresent = prevPresent.filter(n => eligibleNames.has(n));
-      // Add newly eligible directors that weren't in old list (they should default to present)
-      const newlyEligible = eligible.filter(d => !prevPresent.includes(d.name) && !meetings[idx].directorsPresent.includes(d.name));
-      meetings[idx] = { ...meetings[idx], date, directorsPresent: [...stillPresent, ...newlyEligible.map(d => d.name)] };
+      const meetings    = [...(data.boardMeetings || [])];
+      const eligible    = getEligible(date);
+      const eligibleSet = new Set(eligible.map(d => d.name));
+      const prev        = meetings[idx].directorsPresent;
+      const stillIn     = prev.filter(n => eligibleSet.has(n));
+      const newOnes     = eligible.filter(d => !prev.includes(d.name)).map(d => d.name);
+      meetings[idx] = { ...meetings[idx], date, directorsPresent: [...stillIn, ...newOnes] };
       patch({ boardMeetings: meetings });
     }
 
     function toggleDirector(meetingIdx: number, dirName: string, checked: boolean) {
       const meetings = [...(data.boardMeetings || [])];
       const m = meetings[meetingIdx];
-      meetings[meetingIdx] = {
-        ...m,
-        directorsPresent: checked
-          ? [...m.directorsPresent, dirName]
-          : m.directorsPresent.filter(n => n !== dirName),
-      };
+      meetings[meetingIdx] = { ...m, directorsPresent: checked ? [...m.directorsPresent, dirName] : m.directorsPresent.filter(n => n !== dirName) };
       patch({ boardMeetings: meetings });
     }
 
     function markAllPresent(meetingIdx: number) {
-      const m = data.boardMeetings[meetingIdx];
       const meetings = [...(data.boardMeetings || [])];
+      const m = meetings[meetingIdx];
       meetings[meetingIdx] = { ...m, directorsPresent: getEligible(m.date).map(d => d.name) };
       patch({ boardMeetings: meetings });
     }
 
     function addBlankMeeting() {
-      patch({
-        boardMeetings: [...(data.boardMeetings || []), {
-          serialNo: (data.boardMeetings?.length || 0) + 1,
-          date: "", directorsPresent: data.directors?.map(d => d.name) || [],
-        }],
-      });
+      patch({ boardMeetings: [...(data.boardMeetings || []), { serialNo: (data.boardMeetings?.length || 0) + 1, date: "", directorsPresent: [] }] });
     }
 
-    // Auto-suggest quarterly dates based on FY and company type
+    // Smart auto-suggest:
+    // – First year: start from effective incorporation date
+    // – Non-first year with prevFYLastMeetingDate: place first meeting within 120 days of that
+    // – Non-first year without prevFYLastMeetingDate: prompt user to fill it first
     function suggestMeetings() {
-      const fyStart    = data.financialYear.split("-")[0];       // "2024"
-      const fyEndFull  = "20" + data.financialYear.split("-")[1]; // "2025"
       const isOPCSmall = data.companyType === "opc" || data.companyType === "private_small";
-      const dates = isOPCSmall
-        ? [`${fyStart}-04-15`, `${fyStart}-10-15`]
-        : [`${fyStart}-04-15`, `${fyStart}-07-15`, `${fyStart}-10-15`, `${fyEndFull}-01-15`];
-      const newMeetings: BoardMeeting[] = dates.map((date, i) => ({
-        serialNo: i + 1,
-        date,
-        directorsPresent: getEligible(date).map(d => d.name),
-      }));
-      patch({ boardMeetings: newMeetings });
+      const minCount   = isOPCSmall ? 2 : 4;
+
+      // Compute start anchor
+      let anchor = isFirstYear ? effectiveMin : fyStart;
+
+      if (!isFirstYear && data.prevFYLastMeetingDate) {
+        // First meeting must be within 120 days of previous last meeting
+        const latest   = addDays(data.prevFYLastMeetingDate, 110); // 10-day buffer
+        const earliest = addDays(data.prevFYLastMeetingDate, 20);
+        anchor = clampDate(earliest, fyStart, latest < fyEnd ? latest : fyEnd);
+      } else if (!isFirstYear && !data.prevFYLastMeetingDate) {
+        // Can't compute smart dates without prev date — user should fill it
+        alert("Please enter the Last Board Meeting Date of the previous financial year first for smart date suggestion.");
+        return;
+      }
+
+      // Generate minimum required dates
+      let dates: string[] = [];
+      if (isOPCSmall) {
+        // One meeting per half of FY (H1: Apr–Sep, H2: Oct–Mar)
+        const h1Max = `${fyStartYear}-09-30`;
+        const h2Max = fyEnd;
+        const h1    = clampDate(anchor, effectiveMin, h1Max);
+        const h2    = clampDate(addDays(h1, 90), `${fyStartYear}-10-01`, h2Max);
+        dates = [h1, h2];
+      } else {
+        // 4 meetings at ~90-day intervals, all within FY
+        const step = Math.min(90, Math.floor(daysBetween(anchor, fyEnd) / (minCount - 1)));
+        let cur = anchor;
+        for (let i = 0; i < minCount; i++) {
+          dates.push(clampDate(cur, effectiveMin, fyEnd));
+          cur = addDays(cur, Math.max(step, 30));
+        }
+      }
+
+      patch({
+        boardMeetings: dates.map((date, i) => ({
+          serialNo: i + 1,
+          date,
+          directorsPresent: getEligible(date).map(d => d.name),
+        })),
+      });
     }
 
     const minMeetings  = (data.companyType === "opc" || data.companyType === "private_small") ? 2 : 4;
     const meetingCount = data.boardMeetings?.length || 0;
     const meetings     = data.boardMeetings || [];
-    // Sort by date for gap calculation display
     const sortedDates  = meetings.map(m => m.date).filter(Boolean).sort();
+
+    // Gap check: prevFY last meeting → first meeting of this FY
+    const prevToFirstGap = data.prevFYLastMeetingDate && sortedDates[0]
+      ? daysBetween(data.prevFYLastMeetingDate, sortedDates[0])
+      : null;
 
     return (
       <>
         <SectionCard title={`Board Meetings — FY ${data.financialYear}`} color="emerald">
-          {/* Header row: count badge + suggest button */}
+
+          {/* ── First-year banner ── */}
+          {isFirstYear && (
+            <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800">
+              <strong>First Financial Year detected</strong> (incorporated {incDate}).
+              {incDate < fyStart
+                ? ` 15-month FY applies (Sec. 2(41)) — meetings allowed from ${incDate}.`
+                : ` Normal first FY — meetings allowed from incorporation date (${incDate}).`}
+            </div>
+          )}
+
+          {/* ── Previous FY last meeting (non-first-year) ── */}
+          {!isFirstYear && (
+            <div className={`mb-4 p-3 rounded-lg border ${data.prevFYLastMeetingDate ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-300"}`}>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Last Board Meeting Date of Previous FY (FY {`${Number(fyStartYear)-1}-${fyStartYear.slice(2)}`})
+                <span className="text-red-500 ml-1">*</span>
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Required to verify the 120-day gap rule (Sec. 173) between last meeting of prev FY and first meeting of this FY, and for smart date auto-suggestion.
+              </p>
+              <input
+                type="date"
+                value={data.prevFYLastMeetingDate || ""}
+                onChange={e => patch({ prevFYLastMeetingDate: e.target.value })}
+                max={fyStart}
+                className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              {!data.prevFYLastMeetingDate && (
+                <p className="text-xs text-amber-700 mt-1 font-semibold">⚠ Fill this date for smart auto-suggestion and complete gap validation.</p>
+              )}
+              {/* Gap from prev FY last meeting to first meeting of this FY */}
+              {prevToFirstGap !== null && (
+                <p className={`text-xs mt-2 font-semibold ${prevToFirstGap <= 120 ? "text-emerald-700" : "text-red-700"}`}>
+                  Gap from prev FY last meeting → Meeting 1: {prevToFirstGap} days {prevToFirstGap <= 120 ? "✓" : "⚠ EXCEEDS 120 DAYS!"}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Header: count badge + suggest button ── */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
@@ -998,84 +1085,97 @@ function AnnualFilingTool() {
               </span>
               <span className="text-xs text-slate-400">
                 {data.companyType === "opc" || data.companyType === "private_small"
-                  ? "Min. 2 meetings/year (Sec. 173 — OPC/Small)"
+                  ? "Min. 2 meetings/year — one per half-year (Sec. 173)"
                   : "Min. 4 meetings/year, gap ≤ 120 days (Sec. 173)"}
               </span>
             </div>
             <button
               onClick={suggestMeetings}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-              title="Auto-fill suggested quarterly meeting dates based on FY"
             >
               ⚡ Auto-suggest Dates
             </button>
           </div>
 
-          {/* 120-day gap summary (shown when 2+ dated meetings) */}
+          {/* ── Inter-meeting gap summary ── */}
           {sortedDates.length >= 2 && (
             <div className="mb-4 flex flex-wrap gap-2">
               {sortedDates.slice(1).map((d, i) => {
-                const gap  = daysBetween(sortedDates[i], d);
-                const ok   = gap <= 120;
+                const gap = daysBetween(sortedDates[i], d);
+                const ok  = gap <= 120;
                 return (
-                  <span key={i} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                    ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                       : "bg-red-50 text-red-700 border border-red-300"
+                  <span key={i} className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                    ok ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                       : "bg-red-50 text-red-700 border-red-300"
                   }`}>
-                    Meeting {i + 1}→{i + 2}: {gap} days {ok ? "✓" : "⚠ >120!"}
+                    M{i + 1}→M{i + 2}: {gap}d {ok ? "✓" : "⚠ >120!"}
                   </span>
                 );
               })}
             </div>
           )}
 
-          {/* Meeting cards */}
+          {/* ── Meeting cards ── */}
           {meetings.map((m, i) => {
-            const eligible       = getEligible(m.date);
-            const presentCount   = m.directorsPresent.length;
-            const quorum         = quorumRequired(eligible.length);
-            const quorumMet      = presentCount >= quorum;
-            const hasDirectors   = data.directors?.length > 0;
+            const eligible     = getEligible(m.date);
+            const presentCount = m.directorsPresent.length;
+            const quorum       = quorumRequired(eligible.length);
+            const quorumMet    = presentCount >= quorum;
+            const hasDirectors = (data.directors?.length || 0) > 0;
+            // Date validation
+            const dateOk = m.date >= effectiveMin && m.date <= fyEnd;
+            const dateTooEarly = m.date && m.date < effectiveMin;
+            const dateTooLate  = m.date && m.date > fyEnd;
 
             return (
-              <div key={i} className="mb-4 bg-white border border-slate-200 rounded-xl overflow-hidden">
-                {/* Meeting header */}
+              <div key={i} className={`mb-4 bg-white rounded-xl overflow-hidden border ${dateOk || !m.date ? "border-slate-200" : "border-red-400"}`}>
+                {/* Card header */}
                 <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
                   <span className="text-xs font-bold text-slate-600">Meeting {i + 1}</span>
                   <div className="flex items-center gap-2">
                     {m.date && hasDirectors && (
                       <>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                          quorumMet ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                        }`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${quorumMet ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                           Quorum: {presentCount}/{quorum} {quorumMet ? "✓" : "✗"}
                         </span>
-                        <button
-                          onClick={() => markAllPresent(i)}
-                          className="text-xs text-emerald-600 font-semibold hover:text-emerald-800 border border-emerald-300 rounded px-2 py-0.5"
-                        >
+                        <button onClick={() => markAllPresent(i)} className="text-xs text-emerald-600 font-semibold hover:text-emerald-800 border border-emerald-300 rounded px-2 py-0.5">
                           All Present
                         </button>
                       </>
                     )}
                     <button onClick={() => removeMeeting(i)} className="text-red-400 hover:text-red-600 ml-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
                 </div>
 
-                {/* Meeting body */}
+                {/* Card body */}
                 <div className="px-4 py-3">
                   <div className="mb-3">
-                    <label className="text-xs text-slate-500 block mb-1">Meeting Date</label>
+                    <label className="text-xs text-slate-500 block mb-1">
+                      Meeting Date
+                      <span className="ml-2 text-slate-400 font-normal">
+                        (allowed: {effectiveMin} to {fyEnd})
+                      </span>
+                    </label>
                     <input
                       type="date"
                       value={m.date}
+                      min={effectiveMin}
+                      max={fyEnd}
                       onChange={e => updateMeetingDate(i, e.target.value)}
-                      className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      className={`border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                        m.date && !dateOk ? "border-red-400 bg-red-50" : "border-slate-300"
+                      }`}
                     />
+                    {dateTooEarly && (
+                      <p className="text-xs text-red-600 mt-1">
+                        ⚠ Date is before {isFirstYear ? "incorporation date" : "FY start"} ({effectiveMin}).
+                      </p>
+                    )}
+                    {dateTooLate && (
+                      <p className="text-xs text-red-600 mt-1">⚠ Date is after FY end ({fyEnd}).</p>
+                    )}
                   </div>
 
                   {/* Director checkboxes */}
@@ -1088,29 +1188,19 @@ function AnnualFilingTool() {
                             {eligible.map((d, di) => {
                               const isPresent = m.directorsPresent.includes(d.name);
                               return (
-                                <label
-                                  key={di}
-                                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border transition-colors ${
-                                    isPresent
-                                      ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                                      : "bg-slate-50 border-slate-200 text-slate-500"
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isPresent}
-                                    onChange={e => toggleDirector(i, d.name, e.target.checked)}
-                                    className="accent-emerald-600"
-                                  />
+                                <label key={di} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border transition-colors ${
+                                  isPresent ? "bg-emerald-50 border-emerald-300 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-500"
+                                }`}>
+                                  <input type="checkbox" checked={isPresent} onChange={e => toggleDirector(i, d.name, e.target.checked)} className="accent-emerald-600" />
                                   {d.name}
                                   <span className="text-slate-400">({d.designation})</span>
                                 </label>
                               );
                             })}
                           </div>
-                          {eligible.length < data.directors.length && (
+                          {eligible.length < (data.directors?.length || 0) && (
                             <p className="text-xs text-slate-400 mt-2 italic">
-                              {data.directors.length - eligible.length} director(s) not yet appointed on this date — not shown.
+                              {(data.directors?.length || 0) - eligible.length} director(s) not yet appointed on this date — excluded.
                             </p>
                           )}
                         </div>
@@ -1118,7 +1208,7 @@ function AnnualFilingTool() {
                         <p className="text-xs text-amber-600">No directors were appointed on or before this date.</p>
                       )
                     ) : (
-                      <p className="text-xs text-slate-400 italic">Select meeting date to see director checkboxes.</p>
+                      <p className="text-xs text-slate-400 italic">Select meeting date to see director attendance.</p>
                     )
                   ) : (
                     <p className="text-xs text-slate-400 italic">Add directors in Step 5 to enable attendance tracking.</p>

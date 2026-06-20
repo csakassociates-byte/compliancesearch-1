@@ -172,6 +172,7 @@ export interface AnnualFilingData {
   financials: FinancialFigures;
 
   // ── Step 4: Board & Compliance ──────────────
+  prevFYLastMeetingDate?: string;  // Last board meeting date of previous FY (for gap check)
   boardMeetings: BoardMeeting[];
   hasSubsidiaries: boolean;
   hasRPT: boolean;            // Related Party Transactions not at arm's length or material
