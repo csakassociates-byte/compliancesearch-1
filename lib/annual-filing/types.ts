@@ -66,6 +66,27 @@ export interface BoardMeeting {
   serialNo: number;
   date: string;          // YYYY-MM-DD
   directorsPresent: string[];
+  meetingType?: "regular" | "agm_board" | "extraordinary";
+  purpose?: string;      // e.g. "Approval of Fin. Statements & calling of AGM"
+}
+
+// ── Member Meetings (AGM / EGM) ───────────────────────────────────────────────
+
+export interface MemberMeeting {
+  id: string;
+  type: "agm" | "egm";
+  date: string;          // YYYY-MM-DD
+  venue?: string;
+  purpose?: string;      // For EGM: resolution purpose
+}
+
+// ── Committee Meetings ────────────────────────────────────────────────────────
+
+export interface CommitteeMeeting {
+  id: string;
+  committeeName: string; // "Audit Committee" | "NRC" | "SRC" | "CSR Committee" | "Other"
+  date: string;          // YYYY-MM-DD
+  membersPresent: string[];
 }
 
 // ── Director ─────────────────────────────────────────────────────────────────
@@ -174,6 +195,8 @@ export interface AnnualFilingData {
   // ── Step 4: Board & Compliance ──────────────
   prevFYLastMeetingDate?: string;  // Last board meeting date of previous FY (for gap check)
   boardMeetings: BoardMeeting[];
+  memberMeetings?: MemberMeeting[];
+  committeeMeetings?: CommitteeMeeting[];
   hasSubsidiaries: boolean;
   hasRPT: boolean;            // Related Party Transactions not at arm's length or material
   hasDeposits: boolean;       // Accepted deposits from public

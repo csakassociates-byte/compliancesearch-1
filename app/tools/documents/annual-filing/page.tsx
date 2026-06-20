@@ -1013,13 +1013,26 @@ function AnnualFilingTool() {
         }
       }
 
-      patch({
-        boardMeetings: dates.map((date, i) => ({
-          serialNo: i + 1,
-          date,
-          directorsPresent: getEligible(date).map(d => d.name),
-        })),
-      });
+      // Always add one mandatory Pre-AGM Board Meeting slot (separate from min count)
+      // This meeting approves fin. statements & calls AGM — must be before Sep 30
+      const agmBoardDate = clampDate(`${fyStartYear}-08-15`, effectiveMin, `${fyStartYear}-09-29`);
+
+      const regularMeetings: BoardMeeting[] = dates.map((date, i) => ({
+        serialNo:         i + 1,
+        date,
+        directorsPresent: getEligible(date).map(d => d.name),
+        meetingType:      "regular" as const,
+      }));
+
+      const agmBoardMeeting: BoardMeeting = {
+        serialNo:         regularMeetings.length + 1,
+        date:             agmBoardDate,
+        directorsPresent: getEligible(agmBoardDate).map(d => d.name),
+        meetingType:      "agm_board" as const,
+        purpose:          "Approval of Financial Statements, Directors' Report and Notice for Annual General Meeting",
+      };
+
+      patch({ boardMeetings: [...regularMeetings, agmBoardMeeting] });
     }
 
     const minMeetings  = (data.companyType === "opc" || data.companyType === "private_small") ? 2 : 4;
@@ -1122,16 +1135,43 @@ function AnnualFilingTool() {
             const quorum       = quorumRequired(eligible.length);
             const quorumMet    = presentCount >= quorum;
             const hasDirectors = (data.directors?.length || 0) > 0;
-            // Date validation
-            const dateOk = m.date >= effectiveMin && m.date <= fyEnd;
+            const isAGMBoard   = m.meetingType === "agm_board";
+            const dateOk       = !m.date || (m.date >= effectiveMin && m.date <= fyEnd);
             const dateTooEarly = m.date && m.date < effectiveMin;
             const dateTooLate  = m.date && m.date > fyEnd;
 
+            const updateType = (t: BoardMeeting["meetingType"]) => {
+              const ms = [...meetings]; ms[i] = { ...ms[i], meetingType: t }; patch({ boardMeetings: ms });
+            };
+            const updatePurpose = (p: string) => {
+              const ms = [...meetings]; ms[i] = { ...ms[i], purpose: p }; patch({ boardMeetings: ms });
+            };
+
             return (
-              <div key={i} className={`mb-4 bg-white rounded-xl overflow-hidden border ${dateOk || !m.date ? "border-slate-200" : "border-red-400"}`}>
+              <div key={i} className={`mb-4 bg-white rounded-xl overflow-hidden border ${
+                isAGMBoard ? "border-amber-400" : dateOk ? "border-slate-200" : "border-red-400"
+              }`}>
                 {/* Card header */}
-                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                  <span className="text-xs font-bold text-slate-600">Meeting {i + 1}</span>
+                <div className={`flex items-center justify-between px-4 py-2.5 border-b ${
+                  isAGMBoard ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200"
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">Meeting {i + 1}</span>
+                    {isAGMBoard && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 font-semibold">
+                        Pre-AGM Board Meeting ★
+                      </span>
+                    )}
+                    <select
+                      value={m.meetingType || "regular"}
+                      onChange={e => updateType(e.target.value as BoardMeeting["meetingType"])}
+                      className="text-xs border border-slate-200 rounded px-1.5 py-0.5 bg-white text-slate-600 focus:outline-none"
+                    >
+                      <option value="regular">Regular</option>
+                      <option value="agm_board">Pre-AGM Board Meeting</option>
+                      <option value="extraordinary">Extraordinary</option>
+                    </select>
+                  </div>
                   <div className="flex items-center gap-2">
                     {m.date && hasDirectors && (
                       <>
@@ -1151,31 +1191,40 @@ function AnnualFilingTool() {
 
                 {/* Card body */}
                 <div className="px-4 py-3">
-                  <div className="mb-3">
-                    <label className="text-xs text-slate-500 block mb-1">
-                      Meeting Date
-                      <span className="ml-2 text-slate-400 font-normal">
-                        (allowed: {effectiveMin} to {fyEnd})
-                      </span>
-                    </label>
-                    <input
-                      type="date"
-                      value={m.date}
-                      min={effectiveMin}
-                      max={fyEnd}
-                      onChange={e => updateMeetingDate(i, e.target.value)}
-                      className={`border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                        m.date && !dateOk ? "border-red-400 bg-red-50" : "border-slate-300"
-                      }`}
-                    />
-                    {dateTooEarly && (
-                      <p className="text-xs text-red-600 mt-1">
-                        ⚠ Date is before {isFirstYear ? "incorporation date" : "FY start"} ({effectiveMin}).
-                      </p>
-                    )}
-                    {dateTooLate && (
-                      <p className="text-xs text-red-600 mt-1">⚠ Date is after FY end ({fyEnd}).</p>
-                    )}
+                  {isAGMBoard && (
+                    <div className="mb-3 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                      This meeting must be held before the AGM to approve Financial Statements, Directors&apos; Report and issue AGM Notice. Must be held before 30 September {fyStartYear}.
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="text-xs text-slate-500 block mb-1">
+                        Meeting Date <span className="text-slate-400">(allowed: {effectiveMin} → {fyEnd})</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={m.date}
+                        min={effectiveMin}
+                        max={isAGMBoard ? `${fyStartYear}-09-29` : fyEnd}
+                        onChange={e => updateMeetingDate(i, e.target.value)}
+                        className={`border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full ${
+                          m.date && !dateOk ? "border-red-400 bg-red-50" : "border-slate-300"
+                        }`}
+                      />
+                      {dateTooEarly && <p className="text-xs text-red-600 mt-1">⚠ Before {isFirstYear ? "incorporation" : "FY start"} ({effectiveMin}).</p>}
+                      {dateTooLate  && <p className="text-xs text-red-600 mt-1">⚠ After FY end ({fyEnd}).</p>}
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 block mb-1">Purpose / Agenda (optional)</label>
+                      <input
+                        type="text"
+                        value={m.purpose || ""}
+                        onChange={e => updatePurpose(e.target.value)}
+                        placeholder={isAGMBoard ? "Approval of Fin. Statements & Notice for AGM" : "e.g. Business review, policy approvals"}
+                        className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 w-full"
+                      />
+                    </div>
                   </div>
 
                   {/* Director checkboxes */}
@@ -1199,20 +1248,12 @@ function AnnualFilingTool() {
                             })}
                           </div>
                           {eligible.length < (data.directors?.length || 0) && (
-                            <p className="text-xs text-slate-400 mt-2 italic">
-                              {(data.directors?.length || 0) - eligible.length} director(s) not yet appointed on this date — excluded.
-                            </p>
+                            <p className="text-xs text-slate-400 mt-2 italic">{(data.directors?.length || 0) - eligible.length} director(s) not yet appointed on this date — excluded.</p>
                           )}
                         </div>
-                      ) : (
-                        <p className="text-xs text-amber-600">No directors were appointed on or before this date.</p>
-                      )
-                    ) : (
-                      <p className="text-xs text-slate-400 italic">Select meeting date to see director attendance.</p>
-                    )
-                  ) : (
-                    <p className="text-xs text-slate-400 italic">Add directors in Step 5 to enable attendance tracking.</p>
-                  )}
+                      ) : <p className="text-xs text-amber-600">No directors appointed on or before this date.</p>
+                    ) : <p className="text-xs text-slate-400 italic">Select meeting date to see director attendance.</p>
+                  ) : <p className="text-xs text-slate-400 italic">Add directors in Step 5 to enable attendance tracking.</p>}
                 </div>
               </div>
             );
@@ -1220,6 +1261,163 @@ function AnnualFilingTool() {
 
           <button onClick={addBlankMeeting} className="text-sm text-emerald-700 font-semibold flex items-center gap-1 hover:text-emerald-900">
             <span className="text-lg leading-none">+</span> Add Board Meeting
+          </button>
+        </SectionCard>
+
+        {/* ══════════════ MEMBER MEETINGS (AGM / EGM) ══════════════ */}
+        <SectionCard title="Member Meetings — AGM / EGM" color="blue">
+          <p className="text-xs text-slate-500 mb-4">
+            AGM must be held within 6 months of FY end i.e. by 30 September {fyStartYear} (Sec. 96).
+            OPC is exempt from AGM (Sec. 96(1) proviso). EGM can be held any time.
+          </p>
+          {(data.memberMeetings || []).map((mm, i) => (
+            <div key={mm.id} className="mb-3 p-4 bg-white border border-blue-200 rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${mm.type === "agm" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"}`}>
+                    {mm.type === "agm" ? "AGM" : "EGM"}
+                  </span>
+                  <select
+                    value={mm.type}
+                    onChange={e => {
+                      const ms = [...(data.memberMeetings || [])]; ms[i] = { ...ms[i], type: e.target.value as "agm" | "egm" }; patch({ memberMeetings: ms });
+                    }}
+                    className="text-xs border border-slate-200 rounded px-1.5 py-0.5 bg-white text-slate-600 focus:outline-none"
+                  >
+                    <option value="agm">AGM — Annual General Meeting</option>
+                    <option value="egm">EGM — Extraordinary General Meeting</option>
+                  </select>
+                </div>
+                <button onClick={() => patch({ memberMeetings: (data.memberMeetings || []).filter((_, j) => j !== i) })} className="text-red-400 hover:text-red-600">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">
+                    {mm.type === "agm" ? `AGM Date (must be ≤ 30 Sep ${fyStartYear})` : "EGM Date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={mm.date}
+                    max={mm.type === "agm" ? `${fyStartYear}-09-30` : undefined}
+                    onChange={e => { const ms = [...(data.memberMeetings || [])]; ms[i] = { ...ms[i], date: e.target.value }; patch({ memberMeetings: ms }); }}
+                    className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                  />
+                  {mm.type === "agm" && mm.date > `${fyStartYear}-09-30` && (
+                    <p className="text-xs text-red-600 mt-1">⚠ AGM must be held by 30 Sep {fyStartYear}.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Venue</label>
+                  <input
+                    type="text"
+                    value={mm.venue || ""}
+                    onChange={e => { const ms = [...(data.memberMeetings || [])]; ms[i] = { ...ms[i], venue: e.target.value }; patch({ memberMeetings: ms }); }}
+                    placeholder="Registered Office / Virtual"
+                    className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                  />
+                </div>
+                {mm.type === "egm" && (
+                  <div className="sm:col-span-2">
+                    <label className="text-xs text-slate-500 block mb-1">Purpose / Business Transacted</label>
+                    <input
+                      type="text"
+                      value={mm.purpose || ""}
+                      onChange={e => { const ms = [...(data.memberMeetings || [])]; ms[i] = { ...ms[i], purpose: e.target.value }; patch({ memberMeetings: ms }); }}
+                      placeholder="e.g. Approval of related party transaction, Issue of shares"
+                      className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          <button
+            onClick={() => patch({ memberMeetings: [...(data.memberMeetings || []), { id: crypto.randomUUID(), type: "agm", date: "", venue: "" }] })}
+            className="text-sm text-blue-700 font-semibold flex items-center gap-1 hover:text-blue-900"
+          >
+            <span className="text-lg leading-none">+</span> Add AGM / EGM
+          </button>
+        </SectionCard>
+
+        {/* ══════════════ COMMITTEE MEETINGS ══════════════ */}
+        <SectionCard title="Committee Meetings" color="slate">
+          <p className="text-xs text-slate-500 mb-4">Add meetings of Board Committees (Audit, NRC, SRC, CSR etc.) held during FY {data.financialYear}.</p>
+          {(data.committeeMeetings || []).map((cm, i) => {
+            const eligible = getEligible(cm.date);
+            return (
+              <div key={cm.id} className="mb-3 p-4 bg-white border border-slate-200 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-600">Committee Meeting {i + 1}</span>
+                  <button onClick={() => patch({ committeeMeetings: (data.committeeMeetings || []).filter((_, j) => j !== i) })} className="text-red-400 hover:text-red-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">Committee Name</label>
+                    <select
+                      value={cm.committeeName}
+                      onChange={e => { const cs = [...(data.committeeMeetings || [])]; cs[i] = { ...cs[i], committeeName: e.target.value }; patch({ committeeMeetings: cs }); }}
+                      className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-500 bg-white w-full"
+                    >
+                      <option value="Audit Committee">Audit Committee</option>
+                      <option value="Nomination & Remuneration Committee">Nomination &amp; Remuneration Committee (NRC)</option>
+                      <option value="Stakeholders Relationship Committee">Stakeholders Relationship Committee (SRC)</option>
+                      <option value="CSR Committee">CSR Committee</option>
+                      <option value="Risk Management Committee">Risk Management Committee</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">Meeting Date</label>
+                    <input
+                      type="date"
+                      value={cm.date}
+                      min={effectiveMin}
+                      max={fyEnd}
+                      onChange={e => { const cs = [...(data.committeeMeetings || [])]; cs[i] = { ...cs[i], date: e.target.value }; patch({ committeeMeetings: cs }); }}
+                      className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-500 w-full"
+                    />
+                  </div>
+                </div>
+                {/* Committee member checkboxes */}
+                {cm.date && eligible.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 mb-2">Members Present ({cm.membersPresent.length}/{eligible.length}):</p>
+                    <div className="flex flex-wrap gap-2">
+                      {eligible.map((d, di) => {
+                        const isPresent = cm.membersPresent.includes(d.name);
+                        return (
+                          <label key={di} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border transition-colors ${
+                            isPresent ? "bg-slate-100 border-slate-400 text-slate-800" : "bg-white border-slate-200 text-slate-400"
+                          }`}>
+                            <input
+                              type="checkbox"
+                              checked={isPresent}
+                              onChange={e => {
+                                const cs = [...(data.committeeMeetings || [])];
+                                cs[i] = { ...cs[i], membersPresent: e.target.checked ? [...cm.membersPresent, d.name] : cm.membersPresent.filter(n => n !== d.name) };
+                                patch({ committeeMeetings: cs });
+                              }}
+                            />
+                            {d.name} <span className="text-slate-400">({d.designation})</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {!cm.date && <p className="text-xs text-slate-400 italic">Select meeting date to see member checkboxes.</p>}
+              </div>
+            );
+          })}
+          <button
+            onClick={() => patch({ committeeMeetings: [...(data.committeeMeetings || []), { id: crypto.randomUUID(), committeeName: "Audit Committee", date: "", membersPresent: [] }] })}
+            className="text-sm text-slate-700 font-semibold flex items-center gap-1 hover:text-slate-900"
+          >
+            <span className="text-lg leading-none">+</span> Add Committee Meeting
           </button>
         </SectionCard>
 
