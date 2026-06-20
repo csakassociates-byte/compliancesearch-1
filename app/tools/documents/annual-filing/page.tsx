@@ -223,6 +223,7 @@ function AnnualFilingTool() {
   const [saving, setSaving]         = useState(false);
   const [loadMsg, setLoadMsg]       = useState("");
   const [saveId, setSaveId]         = useState<string | null>(null);
+  const [savedMsg, setSavedMsg]     = useState<{ ok: boolean; text: string } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated]   = useState<Record<string, string>>({});
   const [savedCAs, setSavedCAs]     = useState<SavedCA[]>([]);
@@ -230,6 +231,11 @@ function AnnualFilingTool() {
   const [showCAManager, setShowCAManager] = useState(false);
   const [companyId, setCompanyId]   = useState<string | null>(null);
   const [loadingPersons, setLoadingPersons] = useState(false);
+  const [foundDraft, setFoundDraft] = useState<{
+    id: string; companyName: string | null; financialYear: string | null;
+    updatedAt: string; formDataJson: string;
+  } | null>(null);
+  const [resetting, setResetting]   = useState(false);
 
   // ── Load saved draft via ?load=<id> ──────────────────────────────────
   useEffect(() => {
@@ -330,6 +336,17 @@ function AnnualFilingTool() {
       }));
       void loadPersonsForCompany(co.id, newDirs);
     }
+    // Check if a saved draft exists for this CIN
+    if (co.cin && session?.user) {
+      setFoundDraft(null);
+      setSaveId(null);
+      fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}`)
+        .then(r => r.json())
+        .then((json: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string } | null }) => {
+          if (json.filing) setFoundDraft(json.filing);
+        })
+        .catch(() => {});
+    }
   }
 
   // ── Core KYC load: fetch persons and merge into given dirs array ──────
@@ -412,23 +429,68 @@ function AnnualFilingTool() {
   // ── DB Save ───────────────────────────────────────────────────────────
   async function handleSave() {
     if (!session?.user) return;
+    if (saveId) {
+      const ok = confirm("This will replace the previously saved draft for this company. Continue?");
+      if (!ok) return;
+    }
     setSaving(true);
+    setSavedMsg(null);
     try {
       const res = await fetch("/api/annual-filing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id:           saveId || undefined,
-          companyName:  data.companyName,
-          cin:          data.cin,
+          id:            saveId || undefined,
+          companyName:   data.companyName,
+          cin:           data.cin,
           financialYear: data.financialYear,
-          formDataJson: JSON.stringify({ data, auditOpts }),
+          formDataJson:  JSON.stringify({ data, auditOpts }),
         }),
       });
-      const json = await res.json() as { id?: string };
-      if (json.id) setSaveId(json.id);
+      const json = await res.json() as { id?: string; error?: string };
+      if (json.id) {
+        setSaveId(json.id);
+        setFoundDraft(null);
+        setSavedMsg({ ok: true, text: "Draft saved successfully" });
+        setTimeout(() => setSavedMsg(null), 5000);
+      } else {
+        setSavedMsg({ ok: false, text: json.error || "Save failed — please try again" });
+      }
+    } catch {
+      setSavedMsg({ ok: false, text: "Network error — save failed" });
     } finally {
       setSaving(false);
+    }
+  }
+
+  // ── Reset ─────────────────────────────────────────────────────────────
+  async function handleReset() {
+    const first = confirm("Are you sure you want to reset all data?");
+    if (!first) return;
+    const second = confirm("All entered data will be cleared and the saved draft deleted permanently. This cannot be undone. Are you absolutely sure?");
+    if (!second) return;
+    setResetting(true);
+    try {
+      if (saveId) {
+        await fetch(`/api/documents/${saveId}`, { method: "DELETE" });
+      }
+      setData({ ...INITIAL_FILING_DATA });
+      setAuditOpts({
+        opinionType: "unmodified",
+        cashFlowIncluded: false,
+        emphasisOfMatter: "",
+        qualificationDetails: "",
+        auditTrailCompliant: false,
+        auditTrailSoftware: "",
+      });
+      setSaveId(null);
+      setGenerated({});
+      setFoundDraft(null);
+      setSavedMsg(null);
+      setCompanyId(null);
+      setStep(1);
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -2675,6 +2737,30 @@ function AnnualFilingTool() {
               <b>Print / PDF</b> — opens in new tab, use <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs">Ctrl+P</kbd> → Save as PDF.&nbsp;
               <b>Save PDF</b> — auto-opens print dialog directly.
             </p>
+
+            {session?.user && (
+              <div className="mt-5 pt-4 border-t border-blue-100 flex items-center justify-between gap-3">
+                <div className="text-xs text-slate-500">
+                  {saveId
+                    ? <span>Draft already saved. Update it with latest data?</span>
+                    : <span>Save all form data to your account — reload and re-download anytime without re-entering.</span>
+                  }
+                  {savedMsg && (
+                    <span className={`ml-2 font-semibold ${savedMsg.ok ? "text-emerald-600" : "text-red-500"}`}>
+                      {savedMsg.ok ? "✓" : "✗"} {savedMsg.text}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !data.companyName}
+                  className="flex-shrink-0 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                  {saving ? "Saving…" : saveId ? "Update Saved Draft" : "Save Draft"}
+                </button>
+              </div>
+            )}
           </SectionCard>
         )}
       </>
@@ -2697,22 +2783,83 @@ function AnnualFilingTool() {
           </div>
 
           {/* Save / login bar */}
-          <div className="flex items-center justify-between mt-4 p-3 bg-white border border-slate-200 rounded-xl">
-            <div className="text-xs text-slate-500">
-              {loadMsg
-                ? <span className="text-blue-600 animate-pulse">{loadMsg}</span>
-                : data.companyName ? <span className="font-semibold text-slate-700">{data.companyName}</span> : <span>No company selected</span>
-              }
-              {saveId && !loadMsg && <span className="ml-2 text-green-600">• Saved</span>}
+          <div className="mt-4 p-3 bg-white border border-slate-200 rounded-xl">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-500 flex items-center gap-2 min-w-0">
+                {loadMsg
+                  ? <span className="text-blue-600 animate-pulse">{loadMsg}</span>
+                  : data.companyName
+                    ? <span className="font-semibold text-slate-700 truncate">{data.companyName}</span>
+                    : <span>No company selected</span>
+                }
+                {saveId && !loadMsg && <span className="text-emerald-600 flex-shrink-0">• Draft saved</span>}
+              </div>
+              {session?.user ? (
+                <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                  {(saveId || data.companyName) && (
+                    <button
+                      onClick={handleReset}
+                      disabled={resetting}
+                      className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 text-xs font-semibold rounded-lg transition-colors"
+                    >
+                      {resetting ? "Resetting…" : "Reset"}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !data.companyName}
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    {saving ? "Saving…" : saveId ? "Update Draft" : "Save Draft"}
+                  </button>
+                </div>
+              ) : (
+                <a href="/auth/login" className="text-xs text-blue-600 hover:underline font-semibold flex-shrink-0 ml-3">Sign in to save drafts</a>
+              )}
             </div>
-            {session?.user ? (
-              <button onClick={handleSave} disabled={saving || !data.companyName} className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-semibold rounded-lg transition-colors">
-                {saving ? "Saving…" : saveId ? "Update Save" : "Save Draft"}
-              </button>
-            ) : (
-              <a href="/auth/login" className="text-xs text-blue-600 hover:underline font-semibold">Sign in to save drafts</a>
+            {savedMsg && (
+              <p className={`mt-2 text-xs font-semibold ${savedMsg.ok ? "text-emerald-600" : "text-red-500"}`}>
+                {savedMsg.ok ? "✓" : "✗"} {savedMsg.text}
+              </p>
             )}
           </div>
+
+          {/* Found draft banner */}
+          {foundDraft && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-700 min-w-0">
+                <span className="font-bold text-blue-700">Saved draft found</span>
+                {" — "}{foundDraft.companyName} · FY {foundDraft.financialYear}
+                <span className="text-slate-400 ml-1">
+                  (last saved: {new Date(foundDraft.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                </span>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    try {
+                      const parsed = JSON.parse(foundDraft.formDataJson) as { data: AnnualFilingData; auditOpts: AuditReportOptions };
+                      setData(parsed.data);
+                      setAuditOpts(parsed.auditOpts);
+                      setSaveId(foundDraft.id);
+                      setFoundDraft(null);
+                      setSavedMsg({ ok: true, text: "Draft loaded successfully" });
+                      setTimeout(() => setSavedMsg(null), 4000);
+                    } catch { setFoundDraft(null); }
+                  }}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
+                >
+                  Load Draft
+                </button>
+                <button
+                  onClick={() => setFoundDraft(null)}
+                  className="px-3 py-1.5 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs font-semibold rounded-lg"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Step indicator */}

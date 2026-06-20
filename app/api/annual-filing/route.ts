@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const id  = url.searchParams.get("id");
+  const cin = url.searchParams.get("cin");
 
   if (id) {
     const rows = await prisma.$queryRawUnsafe<Array<{
@@ -72,6 +73,21 @@ export async function GET(req: NextRequest) {
     );
     if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ filing: rows[0] });
+  }
+
+  // Find latest draft by CIN (stored inside formDataJson)
+  if (cin) {
+    const rows = await prisma.$queryRawUnsafe<Array<{
+      id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
+    }>>(
+      `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
+       FROM csi_documents
+       WHERE "userId" = $1 AND type = 'annual_filing'
+         AND "formDataJson"::jsonb #>> '{data,cin}' = $2
+       ORDER BY "updatedAt" DESC LIMIT 1`,
+      userId, cin
+    );
+    return NextResponse.json({ filing: rows[0] ?? null });
   }
 
   // List all filings for this user
