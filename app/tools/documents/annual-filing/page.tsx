@@ -109,7 +109,7 @@ const COMPANY_TYPE_LABELS: Record<CompanyType, string> = {
   fpc:           "Farmer Producer Company (FPC)",
 };
 
-const FY_OPTIONS = ["2024-25"];
+const FY_OPTIONS = ["2025-26", "2024-25"];
 
 // ── Label + input helpers ──────────────────────────────────────────────────
 function Field({
@@ -222,6 +222,10 @@ function AnnualFilingTool() {
   });
   const [saving, setSaving]         = useState(false);
   const [loadMsg, setLoadMsg]       = useState("");
+  // Derived FY end year — e.g. "2025-26" → 2026, "2024-25" → 2025
+  const fyEndYr = data.financialYear
+    ? parseInt(data.financialYear.split("-")[0]) + 1
+    : 2025;
   const [saveId, setSaveId]         = useState<string | null>(null);
   const [savedMsg, setSavedMsg]     = useState<{ ok: boolean; text: string } | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -2148,7 +2152,7 @@ function AnnualFilingTool() {
           )}
           <Toggle label="Material Changes After Financial Year End" value={data.materialChangesAfterFY} onChange={v => patch({ materialChangesAfterFY: v })} />
           {data.materialChangesAfterFY && (
-            <Field label="Material Changes Details" value={data.materialChangesDetails || ""} onChange={v => patch({ materialChangesDetails: v })} placeholder="Details of material changes after 31 March 2025..." />
+            <Field label="Material Changes Details" value={data.materialChangesDetails || ""} onChange={v => patch({ materialChangesDetails: v })} placeholder={`Details of material changes after 31 March ${fyEndYr}...`} />
           )}
           <Toggle label="Significant Orders by Regulators / Courts / Tribunals" value={data.significantOrders} onChange={v => patch({ significantOrders: v })} />
           {data.significantOrders && (
@@ -2308,7 +2312,7 @@ function AnnualFilingTool() {
 
     return (
       <>
-        <SectionCard title="Directors as on 31st March 2025" color="emerald">
+        <SectionCard title={`Directors as on 31st March ${fyEndYr}`} color="emerald">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs text-slate-500">Directors are pre-filled from company data. Add KYC details for the full Director List document.</p>
             {companyId && (
@@ -2638,7 +2642,7 @@ function AnnualFilingTool() {
         </SectionCard>
 
         <SectionCard title="Shareholders / Member Register" color="emerald">
-          <p className="text-xs text-slate-500 mb-4">Add all shareholders as on 31st March 2025. Required for MGT-7A/MGT-7 filing.</p>
+          <p className="text-xs text-slate-500 mb-4">Add all shareholders as on 31st March {fyEndYr}. Required for MGT-7A/MGT-7 filing.</p>
           {(data.shareholders || []).map((s, i) => (
             <div key={i} className="p-3 bg-white border border-slate-200 rounded-lg mb-3">
               <div className="flex items-center justify-between mb-2">
@@ -2693,7 +2697,7 @@ function AnnualFilingTool() {
 
         {data.hasSubsidiaries && (
           <SectionCard title="AOC-1 — Subsidiaries / Associates / JVs" color="blue">
-            <p className="text-xs text-slate-500 mb-4">Add subsidiaries, associate companies, and joint ventures as on 31st March 2025 [Sec. 129(3)].</p>
+            <p className="text-xs text-slate-500 mb-4">Add subsidiaries, associate companies, and joint ventures as on 31st March {fyEndYr} [Sec. 129(3)].</p>
             <button onClick={() => {
               const subs = [...(data.subsidiaries || []), {
                 name: "", cin: "", country: "India", currency: "INR", shareCapital: "", reservesSurplus: "",
@@ -2882,7 +2886,7 @@ function AnnualFilingTool() {
       { key: "board-report",      label: `Directors' Report (${isOPCOrSmall ? "Rule 8A — Abridged" : "Rule 8 — Full"})`, icon: "📄", always: true },
       { key: "notes-on-accounts", label: "Notes to Financial Statements",   icon: "📊", always: true },
       { key: "director-list",     label: "Details of Directors",            icon: "👥", always: true },
-      { key: "shareholder-list",  label: "List of Shareholders (31 March 2025)", icon: "🏛️", always: true },
+      { key: "shareholder-list",  label: `List of Shareholders (31 March ${fyEndYr})`, icon: "🏛️", always: true },
       { key: "mgt7-ctc",          label: "MGT-7/7A CTC — Extract of Board Resolution (Rule 9 / Sec. 89 & 90)", icon: "📝", always: true },
       { key: "aoc-1",             label: "Form AOC-1 — Subsidiaries Statement", icon: "🔗", always: false, condition: data.hasSubsidiaries },
       { key: "aoc-2",             label: "Form AOC-2 — Related Party Transactions", icon: "🤝", always: false, condition: data.hasRPT },

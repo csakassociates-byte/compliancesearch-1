@@ -1,6 +1,6 @@
 /**
  * Annual Filing Attachments Generator — Core Types
- * FY 2024-25 | Companies Act 2013
+ * FY 2025-26 | Companies Act 2013
  */
 
 // ── Company Type ──────────────────────────────────────────────────────────────
@@ -353,9 +353,9 @@ export const INITIAL_FILING_DATA: AnnualFilingData = {
   regAddress: "",
   entityType: "",
   companyType: "private_small",
-  financialYear: "2024-25",
-  fyStart: "01/04/2024",
-  fyEnd: "31/03/2025",
+  financialYear: "2025-26",
+  fyStart: "01/04/2025",
+  fyEnd: "31/03/2026",
   rocName: "",
   incorporationDate: "",
   stateOfIncorporation: "",
