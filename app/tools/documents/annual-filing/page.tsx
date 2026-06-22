@@ -226,6 +226,7 @@ function AnnualFilingTool() {
   const [savedMsg, setSavedMsg]     = useState<{ ok: boolean; text: string } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated]   = useState<Record<string, string>>({});
+  const [pdfLoading, setPdfLoading] = useState<Record<string, boolean>>({});
   const [savedCAs, setSavedCAs]     = useState<SavedCA[]>([]);
   const [savingCA, setSavingCA]     = useState(false);
   const [showCAManager, setShowCAManager] = useState(false);
@@ -568,6 +569,56 @@ function AnnualFilingTool() {
     const w = window.open(url, "_blank");
     if (w) { w.addEventListener("load", () => { w.focus(); w.print(); }); }
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  async function handleDownloadPdf(key: string, label: string) {
+    const html = generated[key];
+    if (!html) return;
+    setPdfLoading(prev => ({ ...prev, [key]: true }));
+    try {
+      const isAudit = key === "audit-report";
+      const isNotes = key === "notes-on-accounts";
+      const d1 = data.signatoryDirectors.director1;
+      const d2 = data.signatoryDirectors.director2;
+      const d3 = data.signatoryDirectors.director3;
+      const dirs = [
+        d1?.name ? { name: d1.name, designation: d1.designation, din: d1.din, signatureBase64: d1.signatureBase64 } : null,
+        d2?.name ? { name: d2.name, designation: d2.designation, din: d2.din, signatureBase64: d2.signatureBase64 } : null,
+        d3?.name ? { name: d3.name, designation: d3.designation, din: d3.din, signatureBase64: d3.signatureBase64 } : null,
+      ].filter(Boolean);
+      const auditor = (isAudit || isNotes) && data.auditor ? {
+        firmName: data.auditor.firmName || undefined,
+        frn:      data.auditor.frn      || undefined,
+        sealBase64: data.auditor.sealBase64 || undefined,
+      } : undefined;
+      const fy = data.financialYear || "";
+      const filename = `${key}_${data.companyName || "Company"}_FY${fy}`.replace(/[^a-zA-Z0-9_\-. ]/g, "_");
+
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename, docType: key, companyName: data.companyName || "", docTitle: label, dirs, auditor }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed" }));
+        throw new Error(err.error || "PDF generation failed");
+      }
+
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `${filename}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      alert(`PDF download failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setPdfLoading(prev => ({ ...prev, [key]: false }));
+    }
   }
 
   // ── Step navigation ───────────────────────────────────────────────────
@@ -2734,26 +2785,36 @@ function AnnualFilingTool() {
                   </div>
                   <button
                     onClick={() => openDoc(generated[a.key]!)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-all flex-shrink-0"
-                    title="Open in new tab → Ctrl+P to print or save as PDF"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
+                    title="Preview in browser tab"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Print / PDF
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    Preview
                   </button>
                   <button
-                    onClick={() => downloadDoc(generated[a.key]!)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
-                    title="Open and auto-trigger Save as PDF dialog"
+                    onClick={() => handleDownloadPdf(a.key, a.label)}
+                    disabled={pdfLoading[a.key]}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-wait text-white text-xs font-semibold rounded-lg transition-all flex-shrink-0"
+                    title="Generate and download PDF"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Save PDF
+                    {pdfLoading[a.key] ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                        Generating…
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Download PDF
+                      </>
+                    )}
                   </button>
                 </div>
               ))}
             </div>
             <p className="text-xs text-slate-500 mt-3 text-center">
-              <b>Print / PDF</b> — opens in new tab, use <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs">Ctrl+P</kbd> → Save as PDF.&nbsp;
-              <b>Save PDF</b> — auto-opens print dialog directly.
+              <b>Download PDF</b> — generates a properly formatted PDF with running header &amp; signatures on every page.&nbsp;
+              <b>Preview</b> — opens HTML in a new browser tab.
             </p>
 
             {session?.user && (
