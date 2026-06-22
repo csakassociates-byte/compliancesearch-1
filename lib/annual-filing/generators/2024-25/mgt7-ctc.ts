@@ -4,8 +4,8 @@
  * under Rule 9, Section 89 & 90 of Companies Act 2013
  */
 
-import type { AnnualFilingData } from "../types";
-import { buildPageSigFooter, fmtDate } from "../utils";
+import type { AnnualFilingData } from "../../types";
+import { buildPageSigFooter, fmtDate } from "../../utils";
 
 export function generateMGT7CTC(data: AnnualFilingData): string {
   const meetingDate  = fmtDate(data.dateOfReport) || "________________";

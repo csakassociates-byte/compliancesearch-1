@@ -12,8 +12,8 @@
  *   Key Audit Matters → NOT APPLICABLE (unlisted companies)
  */
 
-import type { AnnualFilingData } from "../types";
-import { buildPageSigFooter, fmtDate, fyEndYear, wrapPage } from "../utils";
+import type { AnnualFilingData } from "../../types";
+import { buildPageSigFooter, fmtDate, fyEndYear, wrapPage } from "../../utils";
 
 export type OpinionType = "unmodified" | "qualified" | "adverse" | "disclaimer";
 

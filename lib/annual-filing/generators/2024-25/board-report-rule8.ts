@@ -17,8 +17,8 @@
  * NOTE: MGT-9 abolished. Web link of Annual Return only.
  */
 
-import type { AnnualFilingData } from "../types";
-import { buildPageSigFooter, fmtDate, fmtRs, fyEndYear, fyStartYear, sigCol, wrapPage } from "../utils";
+import type { AnnualFilingData } from "../../types";
+import { buildPageSigFooter, fmtDate, fmtRs, fyEndYear, fyStartYear, sigCol, wrapPage } from "../../utils";
 
 function getMeetingRows(data: AnnualFilingData): string {
   if (!data.boardMeetings || data.boardMeetings.length === 0) {

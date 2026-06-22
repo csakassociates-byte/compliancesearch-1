@@ -4,8 +4,8 @@
  * 14-column format as per Companies Act 2013
  */
 
-import type { AnnualFilingData } from "../types";
-import { buildPageSigFooter, fmtDate, fyEndYear, parseIndian, sigCol } from "../utils";
+import type { AnnualFilingData } from "../../types";
+import { buildPageSigFooter, fmtDate, fyEndYear, parseIndian, sigCol } from "../../utils";
 
 export function generateDirectorList(data: AnnualFilingData): string {
   const fy    = data.financialYear;

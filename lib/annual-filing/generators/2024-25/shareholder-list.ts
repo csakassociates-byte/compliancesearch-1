@@ -5,8 +5,8 @@
  * Gender-wise breakdown required for MCA V3 (FY 2024-25 onwards)
  */
 
-import type { AnnualFilingData, ShareholderRecord } from "../types";
-import { buildPageSigFooter, fmtDate, fmtIndian, fyEndYear, sigCol, wrapPage } from "../utils";
+import type { AnnualFilingData, ShareholderRecord } from "../../types";
+import { buildPageSigFooter, fmtDate, fmtIndian, fyEndYear, sigCol, wrapPage } from "../../utils";
 
 const SHAREHOLDER_TYPE_LABELS: Record<string, string> = {
   resident_individual: "Resident Individual",

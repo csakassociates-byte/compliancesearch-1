@@ -12,7 +12,7 @@ import {
   type AnnualFilingData,
   type CompanyType,
 } from "@/lib/annual-filing/generators/index";
-import type { AuditReportOptions } from "@/lib/annual-filing/generators/audit-report";
+import type { AuditReportOptions } from "@/lib/annual-filing/generators/index";
 import type { AuditorDetails, BoardMeeting, DirectorRecord, ShareholderRecord } from "@/lib/annual-filing/types";
 import { stateFromCIN } from "@/lib/annual-filing/cin-state";
 

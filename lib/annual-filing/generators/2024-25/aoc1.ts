@@ -17,8 +17,8 @@
  *   needs AOC-1. For generation purposes, we allow all types.
  */
 
-import type { AnnualFilingData, SubsidiaryRecord } from "../types";
-import { buildPageSigFooter, fmtDate, fyEndYear, sigCol, wrapPage } from "../utils";
+import type { AnnualFilingData, SubsidiaryRecord } from "../../types";
+import { buildPageSigFooter, fmtDate, fyEndYear, sigCol, wrapPage } from "../../utils";
 
 function renderPartA(
   subsidiaries: SubsidiaryRecord[],

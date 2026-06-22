@@ -19,8 +19,8 @@
  *   If ALL RPTs are non-material + at arm's length + ordinary course → NIL AOC-2
  */
 
-import type { AnnualFilingData, RelatedPartyTransaction } from "../types";
-import { buildPageSigFooter, fmtDate, fyEndYear, sigCol, wrapPage } from "../utils";
+import type { AnnualFilingData, RelatedPartyTransaction } from "../../types";
+import { buildPageSigFooter, fmtDate, fyEndYear, sigCol, wrapPage } from "../../utils";
 
 function renderPartA(
   txns: RelatedPartyTransaction[],

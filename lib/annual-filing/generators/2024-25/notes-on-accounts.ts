@@ -5,8 +5,8 @@
  * Company-type variants: Private Limited, Section 8, OPC, Producer Company (FPC)
  */
 
-import type { AnnualFilingData } from "../types";
-import { buildPageSigFooter, fmtDate, fyEndYear, fyStartYear, sigCol, wrapPage } from "../utils";
+import type { AnnualFilingData } from "../../types";
+import { buildPageSigFooter, fmtDate, fyEndYear, fyStartYear, sigCol, wrapPage } from "../../utils";
 
 export function generateNotesOnAccounts(data: AnnualFilingData): string {
   const fy      = data.financialYear;
