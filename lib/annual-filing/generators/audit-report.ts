@@ -13,7 +13,7 @@
  */
 
 import type { AnnualFilingData } from "../types";
-import { fmtDate, fyEndYear, wrapPage } from "../utils";
+import { buildPageSigFooter, fmtDate, fyEndYear, wrapPage } from "../utils";
 
 export type OpinionType = "unmodified" | "qualified" | "adverse" | "disclaimer";
 
@@ -206,8 +206,16 @@ ${auditTrailPara}
 </div>
 `;
 
+  // CA firm seal on every page; last-page formal sig is inside bodyHtml
+  const pageFooter = buildPageSigFooter(
+    [],
+    { base64: aud.sealBase64 || undefined, firmName: aud.firmName ? `M/s. ${aud.firmName}` : undefined, frn: aud.frn || undefined },
+    "flex-end"
+  );
+
   return wrapPage(
     `Independent Auditor's Report — ${data.companyName} — FY ${fy}`,
-    bodyHtml
+    bodyHtml,
+    pageFooter || undefined
   );
 }

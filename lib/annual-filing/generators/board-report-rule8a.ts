@@ -19,7 +19,7 @@
  */
 
 import type { AnnualFilingData } from "../types";
-import { fmtDate, fmtRs, fyEndYear, fyStartYear, sigCol, wrapPage } from "../utils";
+import { buildPageSigFooter, fmtDate, fmtRs, fyEndYear, fyStartYear, sigCol, wrapPage } from "../utils";
 
 function getMeetingRows(data: AnnualFilingData): string {
   if (!data.boardMeetings || data.boardMeetings.length === 0) {
@@ -595,8 +595,16 @@ ${data.significantOrders && data.significantOrdersDetails
 
 `;
 
+  const pageSigs = [
+    { name: sig1?.name, designation: sig1?.designation, din: sig1?.din, signatureBase64: sig1?.signatureBase64 },
+    ...(sig2?.name ? [{ name: sig2.name, designation: sig2.designation, din: sig2.din, signatureBase64: sig2.signatureBase64 }] : []),
+    ...(sig3?.name ? [{ name: sig3.name, designation: sig3.designation, din: sig3.din, signatureBase64: sig3.signatureBase64 }] : []),
+  ];
+  const pageFooter = buildPageSigFooter(pageSigs);
+
   return wrapPage(
     `Directors' Report — ${data.companyName} — FY ${fy}`,
-    bodyHtml
+    bodyHtml,
+    pageFooter || undefined
   );
 }

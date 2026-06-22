@@ -6,7 +6,7 @@
  */
 
 import type { AnnualFilingData, ShareholderRecord } from "../types";
-import { fmtDate, fmtIndian, fyEndYear, sigCol, wrapPage } from "../utils";
+import { buildPageSigFooter, fmtDate, fmtIndian, fyEndYear, sigCol, wrapPage } from "../utils";
 
 const SHAREHOLDER_TYPE_LABELS: Record<string, string> = {
   resident_individual: "Resident Individual",
@@ -170,8 +170,19 @@ export function generateShareholderList(data: AnnualFilingData): string {
 
 `;
 
+  const d1 = data.signatoryDirectors.director1;
+  const d2 = data.signatoryDirectors.director2;
+  const d3 = data.signatoryDirectors.director3;
+  const pageSigs = [
+    { name: d1?.name, designation: d1?.designation, din: d1?.din, signatureBase64: d1?.signatureBase64 },
+    ...(d2?.name ? [{ name: d2.name, designation: d2.designation, din: d2.din, signatureBase64: d2.signatureBase64 }] : []),
+    ...(d3?.name ? [{ name: d3.name, designation: d3.designation, din: d3.din, signatureBase64: d3.signatureBase64 }] : []),
+  ];
+  const pageFooter = buildPageSigFooter(pageSigs);
+
   return wrapPage(
     `Shareholder List — ${data.companyName} — FY ${fy}`,
-    bodyHtml
+    bodyHtml,
+    pageFooter || undefined
   );
 }

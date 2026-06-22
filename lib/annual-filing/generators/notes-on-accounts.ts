@@ -6,7 +6,7 @@
  */
 
 import type { AnnualFilingData } from "../types";
-import { fmtDate, fyEndYear, fyStartYear, sigCol, wrapPage } from "../utils";
+import { buildPageSigFooter, fmtDate, fyEndYear, fyStartYear, sigCol, wrapPage } from "../utils";
 
 export function generateNotesOnAccounts(data: AnnualFilingData): string {
   const fy      = data.financialYear;
@@ -316,8 +316,19 @@ ${isSection8
 
 `;
 
+  const pageSigs = [
+    { name: dir1?.name, designation: dir1?.designation, din: dir1?.din, signatureBase64: dir1?.signatureBase64 },
+    ...(dir2?.name ? [{ name: dir2.name, designation: dir2.designation, din: dir2.din, signatureBase64: dir2.signatureBase64 }] : []),
+    ...(dir3?.name ? [{ name: dir3.name, designation: dir3.designation, din: dir3.din, signatureBase64: dir3.signatureBase64 }] : []),
+  ];
+  const pageFooter = buildPageSigFooter(
+    pageSigs,
+    { base64: aud.sealBase64 || undefined, firmName: aud.firmName ? `M/s. ${aud.firmName}` : undefined, frn: aud.frn || undefined }
+  );
+
   return wrapPage(
     `Notes to Financial Statements — ${data.companyName} — FY ${fy}`,
-    bodyHtml
+    bodyHtml,
+    pageFooter || undefined
   );
 }

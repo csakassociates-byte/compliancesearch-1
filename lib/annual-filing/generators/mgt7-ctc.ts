@@ -5,7 +5,7 @@
  */
 
 import type { AnnualFilingData } from "../types";
-import { fmtDate, wrapPage } from "../utils";
+import { buildPageSigFooter, fmtDate } from "../utils";
 
 export function generateMGT7CTC(data: AnnualFilingData): string {
   const meetingDate  = fmtDate(data.dateOfReport) || "________________";
@@ -123,7 +123,26 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
     .sig-row { display: flex; justify-content: space-between; gap: 12pt; margin-top: 30pt; }
     .sig-col { flex: 1; }
     .sig-col .sig-line { border-top: 1px solid #000; padding-top: 4pt; margin-top: 30pt; }
+
+    @media screen { .page-sig-footer { margin-top: 40pt; } }
+    @media print {
+      .page-sig-footer { position: fixed; bottom: 0; left: 0; right: 0; height: 20mm; padding: 4pt 0 2pt; margin: 0; z-index: 9999; }
+      .has-page-footer { padding-bottom: 24mm; }
+    }
+    .page-sig-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 6pt; background: white; border-top: 0.5pt solid #666; }
+    .psf-slot { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; padding-top: 4pt; }
+    .psf-sig-img { max-height: 26pt; max-width: 86pt; object-fit: contain; display: block; }
+    .psf-name { font-size: 7pt; font-weight: bold; text-align: center; margin-top: 2pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .psf-sub  { font-size: 6pt; color: #333; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   `;
+
+  const pageSigs = [
+    { name: dir1?.name, designation: dir1?.designation, din: dir1?.din, signatureBase64: dir1?.signatureBase64 },
+    ...(dir2?.name ? [{ name: dir2.name, designation: dir2.designation, din: dir2.din, signatureBase64: dir2.signatureBase64 }] : []),
+    ...(dir3?.name ? [{ name: dir3.name, designation: dir3.designation, din: dir3.din, signatureBase64: dir3.signatureBase64 }] : []),
+  ];
+  const pageFooter = buildPageSigFooter(pageSigs);
+  const bodyAttr = pageFooter ? ' class="has-page-footer"' : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -155,8 +174,9 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
   ${extraCSS}
 </style>
 </head>
-<body>
+<body${bodyAttr}>
 ${bodyHtml}
+${pageFooter}
 </body>
 </html>`;
 }

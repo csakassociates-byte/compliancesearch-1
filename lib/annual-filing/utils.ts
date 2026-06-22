@@ -181,7 +181,114 @@ export function commonPrintCSS(): string {
 
     .indent      { margin-left: 20pt; }
     .section-num { font-weight: bold; }
+
+    /* ── Page-repeating signature / seal footer ── */
+
+    /* Screen: shown once at the bottom of the document flow */
+    @media screen {
+      .page-sig-footer { margin-top: 40pt; }
+    }
+
+    /* Print: fixed at bottom of EVERY page */
+    @media print {
+      .page-sig-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 20mm;
+        padding: 4pt 0 2pt;
+        margin: 0;
+        z-index: 9999;
+      }
+      /* Push all content up so nothing flows under the footer */
+      .has-page-footer { padding-bottom: 24mm; }
+    }
+
+    .page-sig-footer {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 6pt;
+      background: white;
+      border-top: 0.5pt solid #666;
+    }
+
+    .psf-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+      padding-top: 4pt;
+    }
+
+    .psf-sig-img {
+      max-height: 26pt;
+      max-width: 86pt;
+      object-fit: contain;
+      display: block;
+    }
+
+    .psf-seal-img {
+      max-height: 30pt;
+      max-width: 64pt;
+      object-fit: contain;
+      display: block;
+    }
+
+    .psf-name {
+      font-size: 7pt;
+      font-weight: bold;
+      text-align: center;
+      margin-top: 2pt;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+
+    .psf-sub {
+      font-size: 6pt;
+      color: #333;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
   `;
+}
+
+/** Build the repeating per-page footer strip (director sigs and/or CA seal) */
+export function buildPageSigFooter(
+  sigs: Array<{ name?: string; designation?: string; din?: string; signatureBase64?: string }>,
+  seal?: { base64?: string; firmName?: string; frn?: string },
+  align: "space-between" | "flex-end" = "space-between"
+): string {
+  if (!sigs.length && !seal) return "";
+
+  const sigSlots = sigs
+    .filter(s => s.name || s.signatureBase64)
+    .map(s => `<div class="psf-slot">
+  ${s.signatureBase64
+    ? `<img class="psf-sig-img" src="data:image/jpeg;base64,${s.signatureBase64}" alt="Sig">`
+    : `<div style="height:26pt;"></div>`}
+  <div class="psf-name">${s.name || "________________"}</div>
+  ${s.designation ? `<div class="psf-sub">${s.designation}</div>` : ""}
+  ${s.din         ? `<div class="psf-sub">DIN: ${s.din}</div>`    : ""}
+</div>`).join("");
+
+  const sealSlot = seal ? `<div class="psf-slot">
+  ${seal.base64
+    ? `<img class="psf-seal-img" src="data:image/jpeg;base64,${seal.base64}" alt="Seal">`
+    : `<div style="height:30pt;"></div>`}
+  ${seal.firmName ? `<div class="psf-name">${seal.firmName}</div>` : ""}
+  ${seal.frn      ? `<div class="psf-sub">FRN: ${seal.frn}</div>` : ""}
+</div>` : "";
+
+  const style = align !== "space-between" ? ` style="justify-content:${align}"` : "";
+  return `<div class="page-sig-footer"${style}>${sigSlots}${sealSlot}</div>`;
 }
 
 /** Generate a single signature column div (with optional embedded signature image) */
@@ -201,8 +308,10 @@ export function sigCol(sig: { name?: string; din?: string; designation?: string;
 </div>`;
 }
 
-/** Wrap HTML content in a full printable page */
-export function wrapPage(title: string, bodyHtml: string): string {
+/** Wrap HTML content in a full printable page.
+ *  Pass footerHtml (from buildPageSigFooter) to repeat signatures on every printed page. */
+export function wrapPage(title: string, bodyHtml: string, footerHtml?: string): string {
+  const bodyAttr = footerHtml ? ' class="has-page-footer"' : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -210,8 +319,9 @@ export function wrapPage(title: string, bodyHtml: string): string {
 <title>${title}</title>
 <style>${commonPrintCSS()}</style>
 </head>
-<body>
+<body${bodyAttr}>
 ${bodyHtml}
+${footerHtml ?? ""}
 </body>
 </html>`;
 }

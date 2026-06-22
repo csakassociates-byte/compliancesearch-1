@@ -5,7 +5,7 @@
  */
 
 import type { AnnualFilingData } from "../types";
-import { fmtDate, fyEndYear, parseIndian, sigCol, wrapPage } from "../utils";
+import { buildPageSigFooter, fmtDate, fyEndYear, parseIndian, sigCol } from "../utils";
 
 export function generateDirectorList(data: AnnualFilingData): string {
   const fy    = data.financialYear;
@@ -170,7 +170,29 @@ export function generateDirectorList(data: AnnualFilingData): string {
     .sig-row { display: flex; justify-content: space-between; gap: 16pt; margin-top: 24pt; }
     .sig-col { flex: 1; min-width: 0; }
     .sig-col .sig-line { border-top: 1px solid #000; padding-top: 3pt; margin-top: 24pt; font-size: 9pt; }
+
+    @media screen { .page-sig-footer { margin-top: 40pt; } }
+    @media print {
+      .page-sig-footer { position: fixed; bottom: 0; left: 0; right: 0; height: 20mm; padding: 4pt 0 2pt; margin: 0; z-index: 9999; }
+      .has-page-footer { padding-bottom: 24mm; }
+    }
+    .page-sig-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 6pt; background: white; border-top: 0.5pt solid #666; }
+    .psf-slot { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; padding-top: 4pt; }
+    .psf-sig-img { max-height: 26pt; max-width: 86pt; object-fit: contain; display: block; }
+    .psf-name { font-size: 7pt; font-weight: bold; text-align: center; margin-top: 2pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .psf-sub  { font-size: 6pt; color: #333; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   `;
+
+  const d1 = data.signatoryDirectors.director1;
+  const d2 = data.signatoryDirectors.director2;
+  const d3 = data.signatoryDirectors.director3;
+  const pageSigs = [
+    { name: d1?.name, designation: d1?.designation, din: d1?.din, signatureBase64: d1?.signatureBase64 },
+    ...(d2?.name ? [{ name: d2.name, designation: d2.designation, din: d2.din, signatureBase64: d2.signatureBase64 }] : []),
+    ...(d3?.name ? [{ name: d3.name, designation: d3.designation, din: d3.din, signatureBase64: d3.signatureBase64 }] : []),
+  ];
+  const pageFooter = buildPageSigFooter(pageSigs);
+  const bodyAttr = pageFooter ? ' class="has-page-footer"' : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -179,8 +201,9 @@ export function generateDirectorList(data: AnnualFilingData): string {
 <title>Details of Directors — ${data.companyName} — FY ${fy}</title>
 <style>${landscapeCSS}</style>
 </head>
-<body>
+<body${bodyAttr}>
 ${bodyHtml}
+${pageFooter}
 </body>
 </html>`;
 }

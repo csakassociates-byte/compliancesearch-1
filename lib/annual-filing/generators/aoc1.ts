@@ -18,7 +18,7 @@
  */
 
 import type { AnnualFilingData, SubsidiaryRecord } from "../types";
-import { fmtDate, fyEndYear, sigCol, wrapPage } from "../utils";
+import { buildPageSigFooter, fmtDate, fyEndYear, sigCol, wrapPage } from "../utils";
 
 function renderPartA(
   subsidiaries: SubsidiaryRecord[],
@@ -187,8 +187,16 @@ ${renderPartB(subsidiaries, fyEnd)}
 
 `;
 
+  const pageSigs = [
+    { name: sig1?.name, designation: sig1?.designation, din: sig1?.din, signatureBase64: sig1?.signatureBase64 },
+    ...(sig2?.name ? [{ name: sig2.name, designation: sig2.designation, din: sig2.din, signatureBase64: sig2.signatureBase64 }] : []),
+    ...(sig3?.name ? [{ name: sig3.name, designation: sig3.designation, din: sig3.din, signatureBase64: sig3.signatureBase64 }] : []),
+  ];
+  const pageFooter = buildPageSigFooter(pageSigs);
+
   return wrapPage(
     `Form AOC-1 — ${data.companyName} — FY ${fy}`,
-    bodyHtml
+    bodyHtml,
+    pageFooter || undefined
   );
 }
