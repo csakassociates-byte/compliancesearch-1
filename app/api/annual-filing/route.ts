@@ -110,16 +110,29 @@ export async function GET(req: NextRequest) {
     }
 
     if (cin) {
-      const rows = await prisma.$queryRawUnsafe<Array<{
-        id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
-      }>>(
-        `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
-         FROM csi_documents
-         WHERE "userId" = $1 AND type = 'annual_filing'
-           AND "formDataJson"::jsonb #>> '{data,cin}' = $2
-         ORDER BY "updatedAt" DESC LIMIT 1`,
-        userId, cin
-      );
+      const fy = url.searchParams.get("fy");
+      const rows = fy
+        ? await prisma.$queryRawUnsafe<Array<{
+            id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
+          }>>(
+            `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
+             FROM csi_documents
+             WHERE "userId" = $1 AND type = 'annual_filing'
+               AND "financialYear" = $2
+               AND "formDataJson"::jsonb #>> '{data,cin}' = $3
+             ORDER BY "updatedAt" DESC LIMIT 1`,
+            userId, fy, cin
+          )
+        : await prisma.$queryRawUnsafe<Array<{
+            id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
+          }>>(
+            `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
+             FROM csi_documents
+             WHERE "userId" = $1 AND type = 'annual_filing'
+               AND "formDataJson"::jsonb #>> '{data,cin}' = $2
+             ORDER BY "updatedAt" DESC LIMIT 1`,
+            userId, cin
+          );
       return NextResponse.json({ filing: rows[0] ?? null });
     }
 

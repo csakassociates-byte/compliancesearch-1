@@ -11,6 +11,7 @@ import {
   INITIAL_FILING_DATA,
   type AnnualFilingData,
   type CompanyType,
+  type FinancialYear,
 } from "@/lib/annual-filing/generators/index";
 import type { AuditReportOptions } from "@/lib/annual-filing/generators/index";
 import type { AuditorDetails, BoardMeeting, DirectorRecord, ShareholderRecord } from "@/lib/annual-filing/types";
@@ -227,6 +228,7 @@ function AnnualFilingTool() {
     ? parseInt(data.financialYear.split("-")[0]) + 1
     : 2025;
   const [saveId, setSaveId]         = useState<string | null>(null);
+  const [saveIdFY, setSaveIdFY]     = useState<string | null>(null);
   const [savedMsg, setSavedMsg]     = useState<{ ok: boolean; text: string } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated]   = useState<Record<string, string>>({});
@@ -258,6 +260,7 @@ function AnnualFilingTool() {
           setData(parsed.data);
           setAuditOpts(parsed.auditOpts);
           setSaveId(json.filing.id);
+          setSaveIdFY(parsed.data.financialYear);
         }
       })
       .catch(() => {})
@@ -341,11 +344,12 @@ function AnnualFilingTool() {
       }));
       void loadPersonsForCompany(co.id, newDirs);
     }
-    // Check if a saved draft exists for this CIN
+    // Check if a saved draft exists for this CIN + current FY
     if (co.cin && session?.user) {
       setFoundDraft(null);
       setSaveId(null);
-      fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}`)
+      setSaveIdFY(null);
+      fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}&fy=${encodeURIComponent(data.financialYear)}`)
         .then(r => r.json())
         .then((json: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string } | null }) => {
           if (json.filing) setFoundDraft(json.filing);
@@ -452,8 +456,10 @@ function AnnualFilingTool() {
   // ── DB Save ───────────────────────────────────────────────────────────
   async function handleSave() {
     if (!session?.user) return;
-    if (saveId) {
-      const ok = confirm("This will replace the previously saved draft for this company. Continue?");
+    // Only reuse the existing saveId if it belongs to the same FY
+    const existingId = (saveId && saveIdFY === data.financialYear) ? saveId : null;
+    if (existingId) {
+      const ok = confirm(`This will update the FY ${data.financialYear} draft for ${data.companyName}. Continue?`);
       if (!ok) return;
     }
     setSaving(true);
@@ -463,7 +469,7 @@ function AnnualFilingTool() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id:            saveId || undefined,
+          id:            existingId || undefined,
           companyName:   data.companyName,
           cin:           data.cin,
           financialYear: data.financialYear,
@@ -473,6 +479,7 @@ function AnnualFilingTool() {
       const json = await res.json() as { id?: string; error?: string };
       if (json.id) {
         setSaveId(json.id);
+        setSaveIdFY(data.financialYear);
         setFoundDraft(null);
         setSavedMsg({ ok: true, text: "Draft saved successfully" });
         setTimeout(() => setSavedMsg(null), 5000);
@@ -507,6 +514,7 @@ function AnnualFilingTool() {
         auditTrailSoftware: "",
       });
       setSaveId(null);
+      setSaveIdFY(null);
       setGenerated({});
       setFoundDraft(null);
       setSavedMsg(null);
@@ -946,7 +954,24 @@ function AnnualFilingTool() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
             <Select
               label="Financial Year" value={data.financialYear}
-              onChange={v => patch({ financialYear: v as "2024-25" })}
+              onChange={v => {
+                const newFY = v as FinancialYear;
+                patch({ financialYear: newFY });
+                // Re-search draft for new FY if a company is already loaded
+                if (data.cin && session?.user) {
+                  setFoundDraft(null);
+                  if (saveIdFY && saveIdFY !== newFY) {
+                    setSaveId(null);
+                    setSaveIdFY(null);
+                  }
+                  fetch(`/api/annual-filing?cin=${encodeURIComponent(data.cin)}&fy=${encodeURIComponent(newFY)}`)
+                    .then(r => r.json())
+                    .then((json: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string } | null }) => {
+                      if (json.filing) setFoundDraft(json.filing);
+                    })
+                    .catch(() => {});
+                }
+              }}
               options={FY_OPTIONS.map(f => ({ value: f, label: f }))}
               required
             />
@@ -3081,6 +3106,7 @@ function AnnualFilingTool() {
                       setData(parsed.data);
                       setAuditOpts(parsed.auditOpts);
                       setSaveId(foundDraft.id);
+                      setSaveIdFY(foundDraft.financialYear ?? null);
                       setFoundDraft(null);
                       setSavedMsg({ ok: true, text: "Draft loaded successfully" });
                       setTimeout(() => setSavedMsg(null), 4000);
