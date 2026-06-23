@@ -30,7 +30,12 @@ export default function DocumentViewClient({ docId }: { docId: string }) {
 
   function handleReOpen() {
     if (!doc) return;
-    // Store form data + doc ID so the tool can UPDATE instead of create
+    // Annual filing uses ?load=<id> — no sessionStorage needed
+    if (doc.type === 'annual_filing') {
+      router.push(`/tools/documents/annual-filing?load=${doc.id}`);
+      return;
+    }
+    // Other tools restore via sessionStorage
     sessionStorage.setItem('csi_restore_doc', doc.formDataJson);
     sessionStorage.setItem('csi_restore_doc_id', doc.id);
     const path = doc.type === 'agm_minutes'
@@ -45,8 +50,8 @@ export default function DocumentViewClient({ docId }: { docId: string }) {
     router.push(`${path}?restore=1`);
   }
 
-  const typeLabel: Record<string, string> = { agm_minutes: "AGM Minutes", board_minutes: "Board Minutes" };
-  const typeIcon: Record<string, string> = { agm_minutes: "🏛️", board_minutes: "📋" };
+  const typeLabel: Record<string, string> = { agm_minutes: "AGM Minutes", board_minutes: "Board Minutes", annual_filing: "Annual Filing" };
+  const typeIcon: Record<string, string> = { agm_minutes: "🏛️", board_minutes: "📋", annual_filing: "📑" };
 
   if (loading) return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -90,7 +95,8 @@ export default function DocumentViewClient({ docId }: { docId: string }) {
 
           <div className="p-6">
             <p className="text-sm text-slate-500 mb-5">
-              Click <strong>Re-open in Tool</strong> to load this document back into the minutes generator — all fields will be pre-filled. You can then edit and re-print.
+              Click <strong>Re-open in Tool</strong> to load this document back into the{" "}
+              {doc.type === 'annual_filing' ? 'Annual Filing tool' : 'document generator'} — all fields will be pre-filled. You can then edit and regenerate.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <button onClick={handleReOpen}
