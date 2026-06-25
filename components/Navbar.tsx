@@ -207,6 +207,12 @@ export default function Navbar() {
                       </Link>
                     ))}
                   </div>
+                  <div className="mt-2 pt-2 border-t border-slate-100">
+                    <Link href="/tools" onClick={() => setToolsOpen(false)}
+                      className="flex items-center justify-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 py-2 rounded-xl hover:bg-blue-50 transition-colors">
+                      View All Tools →
+                    </Link>
+                  </div>
                 </div>
               )}
             </div>
@@ -311,6 +317,10 @@ export default function Navbar() {
                       {t.badge && <span className="ml-auto text-[10px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{t.badge}</span>}
                     </Link>
                   ))}
+                  <Link href="/tools" onClick={() => { setMenuOpen(false); setMobileTools(false); }}
+                    className="flex items-center gap-3 py-2 px-3 rounded-lg bg-blue-50 text-blue-700 font-semibold text-sm transition">
+                    🔗 View All Tools →
+                  </Link>
                 </div>
               )}
             </div>
