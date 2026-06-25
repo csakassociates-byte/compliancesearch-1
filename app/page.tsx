@@ -1,10 +1,12 @@
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import AnnualFilingSplash from "@/components/AnnualFilingSplash";
 
 export default function HomePage() {
   return (
     <main className="min-h-screen flex flex-col bg-white">
       <Navbar />
+      <AnnualFilingSplash />
 
       {/* ══ HERO ══ */}
       <section style={{ background: "linear-gradient(160deg,#eff6ff 0%,#f5f3ff 40%,#fafafa 100%)" }} className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center relative overflow-hidden">
@@ -129,6 +131,76 @@ export default function HomePage() {
               <div className="text-slate-500 text-xs font-medium">{s.label}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ══ ANNUAL FILING SPOTLIGHT ══ */}
+      <section className="px-4 py-10" style={{ background: "linear-gradient(135deg,#f0fdf4 0%,#dcfce7 50%,#f0fdf4 100%)" }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-white rounded-3xl border-2 border-emerald-100 shadow-xl overflow-hidden flex flex-col md:flex-row">
+
+            {/* Left — copy */}
+            <div className="flex-1 p-8 md:p-10 flex flex-col justify-center">
+              <div className="inline-flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full mb-4 self-start"
+                style={{ background: "#dcfce7", color: "#065f46", border: "1px solid #a7f3d0" }}>
+                📑 NEW FOR FY 2025-26
+              </div>
+
+              <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight mb-3">
+                Spending hours on annual<br />
+                <span style={{ background: "linear-gradient(90deg,#059669,#047857)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  filing attachments?
+                </span>
+              </h2>
+
+              <p className="text-slate-500 text-sm md:text-base leading-relaxed mb-6">
+                Generate AOC-4 &amp; MGT-7 in <strong className="text-emerald-700">minutes — not hours.</strong> All
+                attachments in one go. Auto-formatted. Zero clerical mistakes.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-7">
+                {[
+                  "All AOC-4 & MGT-7/7A attachments at once",
+                  "Saves 1–2 hours per filing",
+                  "Zero clerical mistakes",
+                  "FY 2025-26 compliance ready",
+                ].map(pt => (
+                  <div key={pt} className="flex items-start gap-2 text-sm text-slate-700">
+                    <span className="text-emerald-500 font-bold mt-0.5 flex-shrink-0">✓</span>
+                    {pt}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link href="/tools/documents/annual-filing"
+                  className="inline-flex items-center justify-center gap-2 font-bold text-white text-sm px-7 py-3.5 rounded-2xl transition-all hover:scale-105 shadow-lg"
+                  style={{ background: "linear-gradient(135deg,#059669,#047857)", boxShadow: "0 10px 28px rgba(5,150,105,0.30)" }}>
+                  Generate My Filing Attachments →
+                </Link>
+                <span className="flex items-center justify-center text-xs text-slate-400 gap-1">
+                  <span className="text-emerald-500">✓</span> Free &nbsp;·&nbsp;
+                  <span className="text-emerald-500">✓</span> No login required
+                </span>
+              </div>
+            </div>
+
+            {/* Right — visual stats */}
+            <div className="md:w-64 flex-shrink-0 flex flex-col justify-center gap-4 px-8 py-8 md:py-10"
+              style={{ background: "linear-gradient(160deg,#059669,#047857)" }}>
+              {[
+                { n: "2 min",  label: "Per Company",      sub: "vs 1–2 hrs manually" },
+                { n: "9+",     label: "Attachments",      sub: "Generated at once" },
+                { n: "0",      label: "Clerical Errors",  sub: "Auto-formatted output" },
+              ].map(s => (
+                <div key={s.label} className="text-center">
+                  <div className="text-3xl font-extrabold text-white">{s.n}</div>
+                  <div className="text-emerald-100 text-xs font-bold mt-0.5">{s.label}</div>
+                  <div className="text-emerald-200 text-xs mt-0.5">{s.sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
