@@ -100,6 +100,23 @@ export default function DashboardClient({ userName }: { userName: string }) {
           )}
         </section>
 
+        {/* Team */}
+        <section className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Team</h2>
+            <Link href="/dashboard/team" className="text-xs text-blue-600 hover:underline font-semibold">Manage Team →</Link>
+          </div>
+          <Link href="/dashboard/team"
+            className="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-md hover:border-blue-300 transition-all group">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-xl flex-shrink-0">👥</div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm group-hover:text-blue-700 transition-colors">Team Management</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Add team members — share companies &amp; documents with your team</p>
+            </div>
+            <svg className="w-4 h-4 text-slate-300 ml-auto group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="m9 18 6-6-6-6"/></svg>
+          </Link>
+        </section>
+
         {/* Recent Documents */}
         <section>
           <div className="flex items-center justify-between mb-4">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyOtp } from "@/lib/auth-helpers";
+import { getOrCreateTeam } from "@/lib/team";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -27,6 +28,9 @@ export async function POST(req: NextRequest) {
       `INSERT INTO csi_users (id, name, email, "passwordHash", "emailVerified", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6)`,
       id, name.trim(), emailLower, passwordHash, now, now
     );
+
+    // Auto-create a solo team for this new user
+    await getOrCreateTeam(id);
 
     return NextResponse.json({ success: true, message: "Account created! Please login." });
   } catch (e: unknown) {

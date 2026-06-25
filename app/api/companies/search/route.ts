@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberIds } from "@/lib/team";
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim() || "";
@@ -16,19 +17,20 @@ export async function GET(req: NextRequest) {
       charges:   { orderBy: { createdAt: "asc" as const } },
     };
 
-    // ── Logged-in: search only THIS user's uploaded companies ──
+    // ── Logged-in: search companies visible to the whole team ──
     if (userId) {
+      const memberIds = await getTeamMemberIds(userId);
       const [byName, byCin] = await Promise.all([
         prisma.companyProfile.findMany({
           where: {
-            uploadedBy: userId,
+            uploadedBy: { in: memberIds },
             companyName: { contains: q, mode: "insensitive" },
           },
           take: 8, include,
         }),
         prisma.companyProfile.findMany({
           where: {
-            uploadedBy: userId,
+            uploadedBy: { in: memberIds },
             cin: { contains: q, mode: "insensitive" },
           },
           take: 5, include,

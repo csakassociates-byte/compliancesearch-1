@@ -2,21 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberIds } from "@/lib/team";
 import crypto from "crypto";
 
-// GET /api/documents — list user's documents
+// GET /api/documents — list team's documents
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
+
+  const memberIds = await getTeamMemberIds(userId);
 
   const docs = await prisma.$queryRawUnsafe<Array<{
     id: string; type: string; title: string; companyName: string | null;
     financialYear: string | null; meetingDate: string | null; createdAt: Date;
   }>>(
     `SELECT id, type, title, "companyName", "financialYear", "meetingDate", "createdAt"
-     FROM csi_documents WHERE "userId" = $1 ORDER BY "createdAt" DESC`,
-    userId
+     FROM csi_documents WHERE "userId" = ANY($1::text[]) ORDER BY "createdAt" DESC`,
+    memberIds
   );
 
   return NextResponse.json({ documents: docs });

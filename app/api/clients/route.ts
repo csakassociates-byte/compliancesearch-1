@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberIds } from "@/lib/team";
 import crypto from "crypto";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
+
+  const memberIds = await getTeamMemberIds(userId);
 
   const companies = await prisma.$queryRawUnsafe<Array<{
     id: string; cin: string | null; companyName: string;
@@ -18,10 +21,10 @@ export async function GET() {
     `SELECT c.*, COUNT(d.id) as "docCount"
      FROM csi_companies c
      LEFT JOIN csi_documents d ON d."companyId" = c.id
-     WHERE c."userId" = $1
+     WHERE c."userId" = ANY($1::text[])
      GROUP BY c.id
      ORDER BY c."createdAt" DESC`,
-    userId
+    memberIds
   );
 
   return NextResponse.json({

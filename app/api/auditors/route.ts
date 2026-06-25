@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberIds } from "@/lib/team";
 import crypto from "crypto";
 
 async function ensureTable() {
@@ -31,14 +32,16 @@ export async function GET() {
 
   await ensureTable();
 
+  const memberIds = await getTeamMemberIds(userId);
+
   const rows = await prisma.$queryRawUnsafe<Array<{
     id: string; firmName: string; frn: string;
     partnerName: string; membershipNo: string; place: string | null;
     signatureBase64: string | null; sealBase64: string | null;
   }>>(
     `SELECT id, "firmName", frn, "partnerName", "membershipNo", place, "signatureBase64", "sealBase64"
-     FROM csi_auditors WHERE "userId" = $1 ORDER BY "createdAt" DESC`,
-    userId
+     FROM csi_auditors WHERE "userId" = ANY($1::text[]) ORDER BY "createdAt" DESC`,
+    memberIds
   );
 
   return NextResponse.json({ auditors: rows });

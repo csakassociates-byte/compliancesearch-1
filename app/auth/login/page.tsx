@@ -44,7 +44,14 @@ function LoginForm() {
           }
         } catch { /* silent */ }
       }
-      router.push(callbackUrl);
+      // Check if user must change their temporary password
+      const sessionRes = await fetch("/api/auth/session");
+      const sessionData = await sessionRes.json() as { user?: { mustChangePassword?: boolean } };
+      if (sessionData?.user?.mustChangePassword) {
+        router.push("/auth/set-password");
+      } else {
+        router.push(callbackUrl);
+      }
     }
   }
 

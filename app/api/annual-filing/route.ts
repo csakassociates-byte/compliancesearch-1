@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberIds } from "@/lib/team";
 
 // Ensure csi_documents has all columns needed for annual filing
 async function ensureColumns() {
@@ -96,14 +97,15 @@ export async function GET(req: NextRequest) {
     const cin = url.searchParams.get("cin");
 
     await ensureColumns();
+    const memberIds = await getTeamMemberIds(userId);
 
     if (id) {
       const rows = await prisma.$queryRawUnsafe<Array<{
         id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
       }>>(
         `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
-         FROM csi_documents WHERE id = $1 AND "userId" = $2 AND type = 'annual_filing'`,
-        id, userId
+         FROM csi_documents WHERE id = $1 AND "userId" = ANY($2::text[]) AND type = 'annual_filing'`,
+        id, memberIds
       );
       if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
       return NextResponse.json({ filing: rows[0] });
@@ -117,21 +119,21 @@ export async function GET(req: NextRequest) {
           }>>(
             `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
              FROM csi_documents
-             WHERE "userId" = $1 AND type = 'annual_filing'
+             WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
                AND "financialYear" = $2
                AND "formDataJson"::jsonb #>> '{data,cin}' = $3
              ORDER BY "updatedAt" DESC LIMIT 1`,
-            userId, fy, cin
+            memberIds, fy, cin
           )
         : await prisma.$queryRawUnsafe<Array<{
             id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
           }>>(
             `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
              FROM csi_documents
-             WHERE "userId" = $1 AND type = 'annual_filing'
+             WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
                AND "formDataJson"::jsonb #>> '{data,cin}' = $2
              ORDER BY "updatedAt" DESC LIMIT 1`,
-            userId, cin
+            memberIds, cin
           );
       return NextResponse.json({ filing: rows[0] ?? null });
     }
@@ -140,9 +142,9 @@ export async function GET(req: NextRequest) {
       id: string; companyName: string | null; financialYear: string | null; updatedAt: Date;
     }>>(
       `SELECT id, "companyName", "financialYear", "updatedAt"
-       FROM csi_documents WHERE "userId" = $1 AND type = 'annual_filing'
+       FROM csi_documents WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
        ORDER BY "updatedAt" DESC LIMIT 50`,
-      userId
+      memberIds
     );
     return NextResponse.json({ filings: rows });
   } catch (err) {

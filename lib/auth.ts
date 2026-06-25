@@ -8,7 +8,7 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        email:    { label: "Email",    type: "email"    },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
@@ -18,8 +18,11 @@ export const authOptions: NextAuthOptions = {
         const rows = await prisma.$queryRawUnsafe<Array<{
           id: string; name: string | null; email: string;
           passwordHash: string | null; plan: string;
+          mustChangePassword: boolean | null;
         }>>(
-          `SELECT id, name, email, "passwordHash", plan FROM csi_users WHERE email = $1`, email
+          `SELECT id, name, email, "passwordHash", plan, "mustChangePassword"
+           FROM csi_users WHERE email = $1`,
+          email
         );
 
         if (!rows.length) return null;
@@ -29,7 +32,13 @@ export const authOptions: NextAuthOptions = {
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
 
-        return { id: user.id, name: user.name, email: user.email, plan: user.plan };
+        return {
+          id:                user.id,
+          name:              user.name,
+          email:             user.email,
+          plan:              user.plan,
+          mustChangePassword: !!user.mustChangePassword,
+        };
       },
     }),
   ],
@@ -37,22 +46,25 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.plan = (user as { plan?: string }).plan ?? "free";
+        token.id                = user.id;
+        token.plan              = (user as { plan?: string }).plan ?? "free";
+        token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword ?? false;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { id?: string }).id = token.id as string;
-        (session.user as { plan?: string }).plan = token.plan as string;
+        (session.user as { id?: string }).id                    = token.id as string;
+        (session.user as { plan?: string }).plan                = token.plan as string;
+        (session.user as { mustChangePassword?: boolean }).mustChangePassword
+          = token.mustChangePassword as boolean ?? false;
       }
       return session;
     },
   },
   pages: {
     signIn: "/auth/login",
-    error: "/auth/login",
+    error:  "/auth/login",
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
