@@ -204,6 +204,131 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ══ POPULAR SEARCHES ══ */}
+      <section className="bg-white border-t border-slate-100 py-12 px-4">
+        <div className="max-w-5xl mx-auto">
+          <p className="text-center text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">Trending on ComplianceSearch</p>
+          <h2 className="text-center text-2xl font-extrabold text-slate-900 mb-8">Most Searched by CAs &amp; CSs</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+            {/* Card 1 — AOC-4 MGT-7 */}
+            <Link href="/aoc-4-mgt-7-annual-filing-attachments"
+              className="group flex flex-col gap-3 bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg,#059669,#047857)" }}>📊</div>
+                <div>
+                  <p className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-emerald-700 transition">AOC-4 &amp; MGT-7 Attachments</p>
+                  <p className="text-xs text-emerald-600 font-semibold mt-0.5">FY 2025-26 · Free Generator</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Generate all annual filing attachments — Board Report, Audit Report, Notes on Accounts, Director List — in 2 minutes.
+              </p>
+              <span className="text-xs font-bold text-emerald-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                Learn more &amp; Generate →
+              </span>
+            </Link>
+
+            {/* Card 2 — Board Resolution */}
+            <Link href="/board-resolution-generator"
+              className="group flex flex-col gap-3 bg-gradient-to-br from-slate-50 to-slate-100 border-2 border-slate-200 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg,#334155,#1e293b)" }}>⚖️</div>
+                <div>
+                  <p className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-slate-700 transition">Board Resolution Generator</p>
+                  <p className="text-xs text-slate-500 font-semibold mt-0.5">10+ Types · Companies Act 2013</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Bank account opening, director appointment, loan approval, share allotment — all board resolutions free.
+              </p>
+              <span className="text-xs font-bold text-slate-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                See all resolution types →
+              </span>
+            </Link>
+
+            {/* Card 3 — Business Valuation */}
+            <Link href="/business-valuation-india"
+              className="group flex flex-col gap-3 bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg,#0369a1,#0c4a6e)" }}>📈</div>
+                <div>
+                  <p className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-sky-700 transition">Business Valuation India</p>
+                  <p className="text-xs text-sky-600 font-semibold mt-0.5">DCF · NAV · Rule 11UA · FEMA</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                6 valuation methods — DCF, NAV (Rule 11UA), EBITDA, Revenue multiple, P/E, and Berkus. India-specific WACC benchmarks.
+              </p>
+              <span className="text-xs font-bold text-sky-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                Calculate valuation →
+              </span>
+            </Link>
+
+            {/* Card 4 — Compliance Checker */}
+            <Link href="/compliance-checker-india"
+              className="group flex flex-col gap-3 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg,#16a34a,#14532d)" }}>✅</div>
+                <div>
+                  <p className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-green-700 transition">Business Compliance Checker</p>
+                  <p className="text-xs text-green-600 font-semibold mt-0.5">77+ Rules · 11 Categories · Free</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                GST, PF, ESIC, FSSAI, Factories Act, MCA — find every compliance your business needs. Personalised in 2 minutes.
+              </p>
+              <span className="text-xs font-bold text-green-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                Check my compliance →
+              </span>
+            </Link>
+
+            {/* Card 5 — All Tools */}
+            <Link href="/tools"
+              className="group flex flex-col gap-3 bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg,#4f46e5,#3730a3)" }}>🔧</div>
+                <div>
+                  <p className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-indigo-700 transition">All Free Compliance Tools</p>
+                  <p className="text-xs text-indigo-600 font-semibold mt-0.5">10 Tools · One Place</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Share Certificate, Share Transfer, Meeting Minutes, MCA Penalty Calculator and more — all tools in one place.
+              </p>
+              <span className="text-xs font-bold text-indigo-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                Browse all tools →
+              </span>
+            </Link>
+
+            {/* Card 6 — MCA Penalty */}
+            <Link href="/tools/penalty-calculator"
+              className="group flex flex-col gap-3 bg-gradient-to-br from-red-50 to-rose-50 border-2 border-red-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg,#dc2626,#991b1b)" }}>🧮</div>
+                <div>
+                  <p className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-red-700 transition">MCA Penalty Calculator</p>
+                  <p className="text-xs text-red-500 font-semibold mt-0.5">AOC-4 · MGT-7 · DIR-3 KYC</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Calculate additional fees for late filing of all MCA forms. Slab-wise breakdown as per Companies Act 2013.
+              </p>
+              <span className="text-xs font-bold text-red-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                Calculate penalty →
+              </span>
+            </Link>
+
+          </div>
+        </div>
+      </section>
+
       {/* ══ FEATURES STRIP ══ */}
       <section className="bg-slate-50 border-t border-slate-200 py-12 px-4">
         <div className="max-w-5xl mx-auto">
@@ -317,8 +442,15 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="flex flex-col md:flex-row items-center gap-4">
             <span className="text-slate-400 text-xs">© 2025 ComplianceSearch.in — For guidance only. Consult a CA / CS.</span>
-            <div className="flex items-center gap-3">
-              {[["Home","/"],["About","/about"],["Contact","/contact"],["Check","/check"]].map(([l,h]) => (
+            <div className="flex flex-wrap items-center gap-3">
+              {[
+                ["Home","/"],
+                ["Tools","/tools"],
+                ["Annual Filing","/aoc-4-mgt-7-annual-filing-attachments"],
+                ["Compliance Check","/compliance-checker-india"],
+                ["About","/about"],
+                ["Contact","/contact"],
+              ].map(([l,h]) => (
                 <Link key={h} href={h} className="text-slate-400 hover:text-slate-700 text-xs transition">{l}</Link>
               ))}
             </div>
