@@ -61,25 +61,33 @@ function maxReportDate(fy: string): string {
 // ── Financial row configs — MUST be outside render to avoid React remount ──
 // Defining these as module-level constants prevents FinRow from being a new
 // component type on every render (which causes input focus loss on keystroke).
-const PL_ROWS = [
+type FinRowConfig = {
+  label: string;
+  fKey: string;
+  prevKey: string;
+  isComputed?: boolean;
+  formula?: string;
+};
+
+const PL_ROWS: FinRowConfig[] = [
   { label: "Revenue from Operations", fKey: "revenueFromOperations",  prevKey: "prevRevenueFromOperations"  },
   { label: "Other Income",            fKey: "otherIncome",            prevKey: "prevOtherIncome"            },
-  { label: "Total Income",            fKey: "totalIncome",            prevKey: "prevTotalIncome"            },
+  { label: "Total Income",            fKey: "totalIncome",            prevKey: "prevTotalIncome",            isComputed: true, formula: "Revenue from Operations + Other Income"    },
   { label: "Total Expenses",          fKey: "totalExpenses",          prevKey: "prevTotalExpenses"          },
-  { label: "Profit Before Tax (PBT)", fKey: "profitBeforeTax",        prevKey: "prevProfitBeforeTax"        },
+  { label: "Profit Before Tax (PBT)", fKey: "profitBeforeTax",        prevKey: "prevProfitBeforeTax",        isComputed: true, formula: "Total Income − Total Expenses"              },
   { label: "Current Tax",             fKey: "currentTax",             prevKey: "prevCurrentTax"             },
   { label: "Deferred Tax",            fKey: "deferredTax",            prevKey: "prevDeferredTax"            },
-  { label: "Profit After Tax (PAT)",  fKey: "profitAfterTax",         prevKey: "prevProfitAfterTax"         },
-] as const;
+  { label: "Profit After Tax (PAT)",  fKey: "profitAfterTax",         prevKey: "prevProfitAfterTax",         isComputed: true, formula: "PBT − Current Tax − Deferred Tax"           },
+];
 
-const BS_ROWS = [
+const BS_ROWS: FinRowConfig[] = [
   { label: "Authorised Share Capital", fKey: "authorisedCapital",  prevKey: "prevAuthorisedCapital"  },
   { label: "Paid-up Share Capital",    fKey: "paidUpCapital",      prevKey: "prevPaidUpCapital"      },
   { label: "Reserves & Surplus",       fKey: "reservesAndSurplus", prevKey: "prevReservesAndSurplus" },
   { label: "Total Assets",             fKey: "totalAssets",        prevKey: "prevTotalAssets"        },
   { label: "Total Liabilities",        fKey: "totalLiabilities",   prevKey: "prevTotalLiabilities"   },
-  { label: "Net Worth",                fKey: "netWorth",           prevKey: "prevNetWorth"           },
-] as const;
+  { label: "Net Worth",                fKey: "netWorth",           prevKey: "prevNetWorth",           isComputed: true, formula: "Paid-up Capital + Reserves & Surplus"       },
+];
 
 // ── Company type detection from entityType ─────────────────────────────────
 function detectCompanyType(entityType: string, smallCompany?: boolean): CompanyType {
@@ -295,6 +303,40 @@ function AnnualFilingTool() {
   const patchFin = useCallback((partial: Partial<AnnualFilingData["financials"]>) => {
     setData(prev => ({ ...prev, financials: { ...prev.financials, ...partial } }));
   }, []);
+
+  // ── Auto-calculate derived P&L and BS fields ──────────────────────────
+  useEffect(() => {
+    const f = data.financials;
+    const n = (v: string) => parseFloat(v) || 0;
+
+    const ti   = n(f.revenueFromOperations) + n(f.otherIncome);
+    const pbt  = ti - n(f.totalExpenses);
+    const pat  = pbt - n(f.currentTax) - n(f.deferredTax);
+    const nw   = n(f.paidUpCapital) + n(f.reservesAndSurplus);
+
+    const pti  = n(f.prevRevenueFromOperations) + n(f.prevOtherIncome);
+    const ppbt = pti - n(f.prevTotalExpenses);
+    const ppat = ppbt - n(f.prevCurrentTax) - n(f.prevDeferredTax);
+    const pnw  = n(f.prevPaidUpCapital) + n(f.prevReservesAndSurplus);
+
+    patchFin({
+      totalIncome:         String(ti),
+      profitBeforeTax:     String(pbt),
+      profitAfterTax:      String(pat),
+      netWorth:            String(nw),
+      prevTotalIncome:     String(pti),
+      prevProfitBeforeTax: String(ppbt),
+      prevProfitAfterTax:  String(ppat),
+      prevNetWorth:        String(pnw),
+    });
+  }, [ // eslint-disable-line react-hooks/exhaustive-deps
+    data.financials.revenueFromOperations, data.financials.otherIncome,
+    data.financials.totalExpenses, data.financials.currentTax, data.financials.deferredTax,
+    data.financials.paidUpCapital, data.financials.reservesAndSurplus,
+    data.financials.prevRevenueFromOperations, data.financials.prevOtherIncome,
+    data.financials.prevTotalExpenses, data.financials.prevCurrentTax, data.financials.prevDeferredTax,
+    data.financials.prevPaidUpCapital, data.financials.prevReservesAndSurplus,
+  ]);
 
   // ── Company fill from Excel / Search ──────────────────────────────────
   function handleCompanyFill(co: CompanyData) {
@@ -1434,27 +1476,47 @@ function AnnualFilingTool() {
               </tr>
             </thead>
             <tbody>
-              {PL_ROWS.map(row => (
-                <tr key={row.fKey}>
-                  <td className="py-2 pr-3 text-sm text-slate-700 font-medium">{row.label}</td>
-                  <td className="py-2 pr-2">
-                    <input
-                      type="text" value={fin[row.fKey]}
-                      onChange={e => patchFin({ [row.fKey]: e.target.value })}
-                      placeholder="0"
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    />
-                  </td>
-                  <td className="py-2">
-                    <input
-                      type="text" value={fin[row.prevKey]}
-                      onChange={e => patchFin({ [row.prevKey]: e.target.value })}
-                      placeholder="0"
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50"
-                    />
-                  </td>
-                </tr>
-              ))}
+              {PL_ROWS.map(row => {
+                const fmtVal = (v: string) => { const n = parseFloat(v); return isNaN(n) ? "0" : n.toLocaleString("en-IN"); };
+                return (
+                  <tr key={row.fKey} className={row.isComputed ? "bg-emerald-50/60" : ""}>
+                    <td className="py-2 pr-3">
+                      <span className={`text-sm font-medium ${row.isComputed ? "text-emerald-800" : "text-slate-700"}`}>{row.label}</span>
+                      {row.isComputed && row.formula && (
+                        <div className="text-[10px] text-emerald-600 mt-0.5">= {row.formula}</div>
+                      )}
+                    </td>
+                    <td className="py-2 pr-2">
+                      {row.isComputed ? (
+                        <div className="w-full bg-emerald-100 border border-emerald-300 rounded px-2 py-1.5 text-sm text-right font-semibold text-emerald-900">
+                          {fmtVal((fin as unknown as Record<string,string>)[row.fKey])}
+                        </div>
+                      ) : (
+                        <input
+                          type="text" value={(fin as unknown as Record<string,string>)[row.fKey]}
+                          onChange={e => patchFin({ [row.fKey]: e.target.value })}
+                          placeholder="0"
+                          className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      )}
+                    </td>
+                    <td className="py-2">
+                      {row.isComputed ? (
+                        <div className="w-full bg-emerald-50 border border-emerald-200 rounded px-2 py-1.5 text-sm text-right font-semibold text-emerald-700">
+                          {fmtVal((fin as unknown as Record<string,string>)[row.prevKey])}
+                        </div>
+                      ) : (
+                        <input
+                          type="text" value={(fin as unknown as Record<string,string>)[row.prevKey]}
+                          onChange={e => patchFin({ [row.prevKey]: e.target.value })}
+                          placeholder="0"
+                          className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50"
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </SectionCard>
@@ -1469,27 +1531,47 @@ function AnnualFilingTool() {
               </tr>
             </thead>
             <tbody>
-              {BS_ROWS.map(row => (
-                <tr key={row.fKey}>
-                  <td className="py-2 pr-3 text-sm text-slate-700 font-medium">{row.label}</td>
-                  <td className="py-2 pr-2">
-                    <input
-                      type="text" value={fin[row.fKey]}
-                      onChange={e => patchFin({ [row.fKey]: e.target.value })}
-                      placeholder="0"
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    />
-                  </td>
-                  <td className="py-2">
-                    <input
-                      type="text" value={fin[row.prevKey]}
-                      onChange={e => patchFin({ [row.prevKey]: e.target.value })}
-                      placeholder="0"
-                      className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50"
-                    />
-                  </td>
-                </tr>
-              ))}
+              {BS_ROWS.map(row => {
+                const fmtVal = (v: string) => { const n = parseFloat(v); return isNaN(n) ? "0" : n.toLocaleString("en-IN"); };
+                return (
+                  <tr key={row.fKey} className={row.isComputed ? "bg-blue-50/60" : ""}>
+                    <td className="py-2 pr-3">
+                      <span className={`text-sm font-medium ${row.isComputed ? "text-blue-800" : "text-slate-700"}`}>{row.label}</span>
+                      {row.isComputed && row.formula && (
+                        <div className="text-[10px] text-blue-600 mt-0.5">= {row.formula}</div>
+                      )}
+                    </td>
+                    <td className="py-2 pr-2">
+                      {row.isComputed ? (
+                        <div className="w-full bg-blue-100 border border-blue-300 rounded px-2 py-1.5 text-sm text-right font-semibold text-blue-900">
+                          {fmtVal((fin as unknown as Record<string,string>)[row.fKey])}
+                        </div>
+                      ) : (
+                        <input
+                          type="text" value={(fin as unknown as Record<string,string>)[row.fKey]}
+                          onChange={e => patchFin({ [row.fKey]: e.target.value })}
+                          placeholder="0"
+                          className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      )}
+                    </td>
+                    <td className="py-2">
+                      {row.isComputed ? (
+                        <div className="w-full bg-blue-50 border border-blue-200 rounded px-2 py-1.5 text-sm text-right font-semibold text-blue-700">
+                          {fmtVal((fin as unknown as Record<string,string>)[row.prevKey])}
+                        </div>
+                      ) : (
+                        <input
+                          type="text" value={(fin as unknown as Record<string,string>)[row.prevKey]}
+                          onChange={e => patchFin({ [row.prevKey]: e.target.value })}
+                          placeholder="0"
+                          className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-slate-50"
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </SectionCard>
