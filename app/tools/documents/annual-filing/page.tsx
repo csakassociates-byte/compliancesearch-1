@@ -3082,6 +3082,28 @@ function AnnualFilingTool() {
     function removeSh(idx: number) {
       patch({ shareholders: data.shareholders.filter((_, i) => i !== idx) });
     }
+    function importDirectorsAsShareholders() {
+      const activeDirs = (data.directors || []).filter(d => d.isActive && !d.dateOfCessation);
+      if (activeDirs.length === 0) return;
+      const existingNames = new Set((data.shareholders || []).map(s => s.name.trim().toLowerCase()));
+      const existingPANs  = new Set((data.shareholders || []).map(s => s.pan?.toUpperCase()).filter(Boolean) as string[]);
+      let baseIdx = data.shareholders?.length || 0;
+      const newEntries: ShareholderRecord[] = [];
+      for (const d of activeDirs) {
+        if (existingNames.has(d.name.trim().toLowerCase())) continue;
+        if (d.pan && existingPANs.has(d.pan.toUpperCase())) continue;
+        const sharesHeld = d.sharesHeld || 0;
+        const pct = data.totalShares > 0 && sharesHeld > 0
+          ? ((sharesHeld / data.totalShares) * 100).toFixed(2) : "0.00";
+        newEntries.push({
+          folioNo: `SH${String(baseIdx + newEntries.length + 1).padStart(4, "0")}`,
+          name: d.name, pan: d.pan || "", address: d.address || "",
+          type: "resident_individual", sharesHeld, percentHolding: pct, isPromoter: true,
+        });
+      }
+      if (newEntries.length === 0) return;
+      patch({ shareholders: [...(data.shareholders || []), ...newEntries] });
+    }
 
     const totalSharesHeld = (data.shareholders || []).reduce((s, sh) => s + (sh.sharesHeld || 0), 0);
 
@@ -3136,6 +3158,35 @@ function AnnualFilingTool() {
 
         <SectionCard title="Shareholders / Member Register" color="emerald">
           <p className="text-xs text-slate-500 mb-4">Add all shareholders as on 31st March {fyEndYr}. Required for MGT-7A/MGT-7 filing.</p>
+          {(() => {
+            const existingNames = new Set((data.shareholders || []).map(s => s.name.trim().toLowerCase()));
+            const existingPANs  = new Set((data.shareholders || []).map(s => s.pan?.toUpperCase()).filter(Boolean));
+            const importable = (data.directors || []).filter(d => {
+              if (!d.isActive || d.dateOfCessation) return false;
+              if (existingNames.has(d.name.trim().toLowerCase())) return false;
+              if (d.pan && existingPANs.has(d.pan.toUpperCase())) return false;
+              return true;
+            });
+            if (importable.length === 0) return null;
+            const isEmpty = (data.shareholders || []).length === 0;
+            return isEmpty ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-emerald-800">Directors found in Step 5</p>
+                  <p className="text-xs text-emerald-600 mt-0.5">In small companies, directors are typically also shareholders. Import them with one click — name, PAN, address &amp; shares auto-filled.</p>
+                </div>
+                <button onClick={importDirectorsAsShareholders} className="shrink-0 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Import {importable.length} Director{importable.length > 1 ? "s" : ""} as Shareholders
+                </button>
+              </div>
+            ) : (
+              <button onClick={importDirectorsAsShareholders} className="text-sm text-emerald-600 flex items-center gap-1 hover:text-emerald-800 mb-3">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                + Add {importable.length} director{importable.length > 1 ? "s" : ""} as shareholder{importable.length > 1 ? "s" : ""}
+              </button>
+            );
+          })()}
           {(data.shareholders || []).map((s, i) => (
             <div key={i} className="p-3 bg-white border border-slate-200 rounded-lg mb-3">
               <div className="flex items-center justify-between mb-2">
