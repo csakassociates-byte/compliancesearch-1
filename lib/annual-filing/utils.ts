@@ -74,7 +74,8 @@ export function fyStartYear(fy: string): string {
 /** Common print page CSS for all generated documents */
 export function commonPrintCSS(): string {
   return `
-    @page { size: A4 portrait; margin: 20mm; }
+    /* margin:0 removes browser-added date/time/URL print headers — visual margins come from body */
+    @page { size: A4 portrait; margin: 0; }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -98,9 +99,9 @@ export function commonPrintCSS(): string {
       html { background: #c8c8c8; }
       body { width: 170mm; margin: 20mm auto; }
     }
-    /* Print: 170mm body centered — @page margin:20mm handles all 4 sides every page */
+    /* Print: body 170mm centered on 210mm paper gives 20mm left/right margins naturally */
     @media print {
-      body { width: 170mm; margin: 0 auto; }
+      body { width: 170mm; margin: 0 auto; padding-top: 20mm; }
     }
 
     /* ── Typography ── */
@@ -189,20 +190,20 @@ export function commonPrintCSS(): string {
       .page-sig-footer { margin-top: 40pt; }
     }
 
-    /* Print: fixed at bottom of EVERY page */
+    /* Print: fixed at bottom of EVERY page — left/right/bottom offset 20mm to match body margins */
     @media print {
       .page-sig-footer {
         position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
+        bottom: 20mm;
+        left: 20mm;
+        right: 20mm;
         height: 20mm;
         padding: 4pt 0 2pt;
         margin: 0;
         z-index: 9999;
       }
-      /* Push all content up so nothing flows under the footer */
-      .has-page-footer { padding-bottom: 24mm; }
+      /* Push content up so nothing flows under the footer (40mm footer bottom + 4mm gap) */
+      .has-page-footer { padding-bottom: 44mm; }
     }
 
     .page-sig-footer {

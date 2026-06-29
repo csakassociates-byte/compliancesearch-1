@@ -112,13 +112,13 @@ export function generateDirectorList(data: AnnualFilingData): string {
 
   // Landscape page with smaller font for 14 columns
   const landscapeCSS = `
-    @page { size: A4 landscape; margin: 15mm; }
+    @page { size: A4 landscape; margin: 0; }
     @media screen {
       html { background: #c8c8c8; }
       body { width: 247mm; margin: 15mm auto; }
     }
     @media print {
-      body { width: 247mm; margin: 0 auto; }
+      body { width: 247mm; margin: 0 auto; padding-top: 15mm; }
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
