@@ -20,7 +20,7 @@ export async function sendOtpEmail(email: string, otp: string, purpose: "signup"
     : "Use the OTP below to reset your password:";
 
   await resend.emails.send({
-    from: "ComplianceSearch.in <onboarding@resend.dev>",
+    from: "ComplianceSearch.in <noreply@compliancesearch.in>",
     to: email,
     subject,
     html: `
