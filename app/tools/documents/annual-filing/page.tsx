@@ -304,6 +304,15 @@ function AnnualFilingTool() {
     setData(prev => ({ ...prev, financials: { ...prev.financials, ...partial } }));
   }, []);
 
+  // ── Auto-calculate Total Shares = Paid-up Capital / Nominal Value ───────
+  useEffect(() => {
+    const paidUp  = parseFloat(data.financials.paidUpCapital) || 0;
+    const nominal = parseFloat(data.nominalValuePerShare)     || 0;
+    if (paidUp > 0 && nominal > 0) {
+      patch({ totalShares: Math.round(paidUp / nominal) });
+    }
+  }, [data.financials.paidUpCapital, data.nominalValuePerShare]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Auto-calculate derived P&L and BS fields ──────────────────────────
   useEffect(() => {
     const f = data.financials;
@@ -2739,7 +2748,28 @@ function AnnualFilingTool() {
         <SectionCard title="Share Capital" color="blue">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Nominal Value per Share (₹)" value={data.nominalValuePerShare} onChange={v => patch({ nominalValuePerShare: v })} placeholder="10" required />
-            <Field label="Total Shares" value={String(data.totalShares || "")} onChange={v => patch({ totalShares: parseInt(v) || 0 })} placeholder="10000" required hint="Total issued & paid-up shares" />
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                Total Shares <span className="text-red-500 ml-1">*</span>
+              </label>
+              <p className="text-xs text-slate-500 mb-1">Total issued &amp; paid-up shares</p>
+              {data.totalShares > 0 ? (
+                <>
+                  <div className="w-full bg-emerald-100 border border-emerald-300 rounded-lg px-3 py-2 text-sm text-right font-semibold text-emerald-900">
+                    {data.totalShares.toLocaleString("en-IN")}
+                  </div>
+                  <p className="text-[10px] text-emerald-600 mt-1">= Paid-up Capital ÷ Nominal Value per Share</p>
+                </>
+              ) : (
+                <input
+                  type="text"
+                  value={String(data.totalShares || "")}
+                  onChange={e => patch({ totalShares: parseInt(e.target.value) || 0 })}
+                  placeholder="10000"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              )}
+            </div>
           </div>
           {totalSharesHeld > 0 && (
             <div className={`text-xs p-2 rounded mt-2 ${totalSharesHeld === data.totalShares ? "bg-green-50 text-green-700 border border-green-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
