@@ -310,8 +310,9 @@ function AnnualFilingTool() {
 
   // ── Auto-calculate Total Shares = Paid-up Capital / Nominal Value ───────
   useEffect(() => {
-    const paidUp  = parseFloat(data.financials.paidUpCapital) || 0;
-    const nominal = parseFloat(data.nominalValuePerShare)     || 0;
+    const clean   = (v: string) => parseFloat(v.replace(/,/g, "")) || 0;
+    const paidUp  = clean(data.financials.paidUpCapital);
+    const nominal = clean(data.nominalValuePerShare);
     if (paidUp > 0 && nominal > 0) {
       patch({ totalShares: Math.round(paidUp / nominal) });
     }
@@ -320,7 +321,7 @@ function AnnualFilingTool() {
   // ── Auto-calculate derived P&L and BS fields ──────────────────────────
   useEffect(() => {
     const f = data.financials;
-    const n = (v: string) => parseFloat(v) || 0;
+    const n = (v: string) => parseFloat(v.replace(/,/g, "")) || 0;
 
     const ti   = n(f.revenueFromOperations) + n(f.otherIncome);
     const pbt  = ti - n(f.totalExpenses);
