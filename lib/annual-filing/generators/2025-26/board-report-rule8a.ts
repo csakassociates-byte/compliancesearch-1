@@ -19,6 +19,7 @@
  */
 
 import type { AnnualFilingData } from "../../types";
+import { buildDividendText } from "../../types";
 import { buildPageSigFooter, fmtDate, fmtRs, fyEndYear, fyStartYear, sigCol, wrapPage } from "../../utils";
 
 function getMeetingRows(data: AnnualFilingData): string {
@@ -265,7 +266,7 @@ ${isOPC ? `<p>The Company is a One Person Company (OPC) within the meaning of Se
 <!-- ══════════════ 2. DIVIDEND [Sec. 134(3)(k)] ══════════════ -->
 <h2>2. Dividend</h2>
 ${data.dividendDeclared
-  ? `<p>Your Directors are pleased to report that the Company has declared and/or paid dividend of ${data.dividendDetails || "[details]"} on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd}. The dividend was paid in compliance with the provisions of Section 123 of the Companies Act, 2013. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
+  ? `<p>Your Directors are pleased to report that the Company has declared and/or paid dividend of ${buildDividendText(data)} on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd}. The dividend was paid in compliance with the provisions of Section 123 of the Companies Act, 2013. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
   : `<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd} in order to conserve resources for the future operations of the Company. No dividend was paid during the Financial Year ${fy}. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
 }
 

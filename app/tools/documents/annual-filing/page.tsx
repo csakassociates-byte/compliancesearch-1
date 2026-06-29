@@ -251,6 +251,10 @@ function AnnualFilingTool() {
     updatedAt: string; formDataJson: string;
   } | null>(null);
   const [resetting, setResetting]   = useState(false);
+  const [prevYearDraft, setPrevYearDraft] = useState<{
+    id: string; companyName: string | null; financialYear: string | null;
+    updatedAt: string; formDataJson: string;
+  } | null>(null);
 
   // ── Load saved draft via ?load=<id> ──────────────────────────────────
   useEffect(() => {
@@ -347,6 +351,11 @@ function AnnualFilingTool() {
     data.financials.prevPaidUpCapital, data.financials.prevReservesAndSurplus,
   ]);
 
+  // ── Scroll to top when step changes ──────────────────────────────────
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step]);
+
   // ── Company fill from Excel / Search ──────────────────────────────────
   function handleCompanyFill(co: CompanyData) {
     const companyType = detectCompanyType(co.entityType || "", co.smallCompany);
@@ -398,12 +407,26 @@ function AnnualFilingTool() {
     // Check if a saved draft exists for this CIN + current FY
     if (co.cin && session?.user) {
       setFoundDraft(null);
+      setPrevYearDraft(null);
       setSaveId(null);
       setSaveIdFY(null);
+      // Check current FY draft
       fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}&fy=${encodeURIComponent(data.financialYear)}`)
         .then(r => r.json())
         .then((json: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string } | null }) => {
-          if (json.filing) setFoundDraft(json.filing);
+          if (json.filing) {
+            setFoundDraft(json.filing);
+          } else {
+            // No current FY draft — look for previous FY draft to offer carry-forward
+            const fyStart   = parseInt(data.financialYear.split("-")[0]);
+            const prevFY    = `${fyStart - 1}-${String(fyStart).slice(2)}`;
+            fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}&fy=${encodeURIComponent(prevFY)}`)
+              .then(r2 => r2.json())
+              .then((j2: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string } | null }) => {
+                if (j2.filing) setPrevYearDraft(j2.filing);
+              })
+              .catch(() => {});
+          }
         })
         .catch(() => {});
     }
@@ -574,6 +597,70 @@ function AnnualFilingTool() {
     } finally {
       setResetting(false);
     }
+  }
+
+  // ── Carry forward static data from previous year's draft ─────────────
+  function handleCarryForward() {
+    if (!prevYearDraft) return;
+    try {
+      const parsed = JSON.parse(prevYearDraft.formDataJson) as { data: AnnualFilingData; auditOpts: AuditReportOptions };
+      const prev   = parsed.data;
+      // Copy only static/reference data — NOT financials, board meetings, member meetings, generated docs
+      patch({
+        // Company (already filled from MCA, but carry these overrides if set)
+        businessDescription:       prev.businessDescription || data.businessDescription,
+        principalActivity:         prev.principalActivity  || data.principalActivity,
+        companyEmail:              prev.companyEmail        || data.companyEmail,
+        companyPhone:              prev.companyPhone        || data.companyPhone,
+        gstin:                     prev.gstin               || data.gstin,
+        // Document preferences
+        useLetterHead:             prev.useLetterHead,
+        // Auditor (full carry forward — usually same CA)
+        auditor:                   { ...prev.auditor, udin: "", reportDate: "" },
+        // Directors with full KYC
+        directors:                 prev.directors.map(d => ({ ...d, changedDuringYear: false, dateOfCessation: undefined })),
+        signatoryDirectors:        prev.signatoryDirectors,
+        placeOfSigning:            prev.placeOfSigning,
+        // Shareholders
+        shareholders:              prev.shareholders,
+        totalShares:               prev.totalShares,
+        nominalValuePerShare:      prev.nominalValuePerShare,
+        // Accounting policies
+        depreciationMethod:        prev.depreciationMethod,
+        inventoryMethod:           prev.inventoryMethod,
+        hasUdyamRegistration:      prev.hasUdyamRegistration,
+        // Compliance flags (user should review, but carry as starting point)
+        hasSubsidiaries:           prev.hasSubsidiaries,
+        hasRPT:                    prev.hasRPT,
+        hasDeposits:               prev.hasDeposits,
+        hasLoansGiven:             prev.hasLoansGiven,
+      });
+      // Also carry auditor report options (minus opinion type — reset to unmodified)
+      setAuditOpts({ ...parsed.auditOpts, opinionType: "unmodified", qualificationDetails: "", emphasisOfMatter: "" });
+      setPrevYearDraft(null);
+      setSavedMsg({ ok: true, text: `Carried forward from FY ${prevYearDraft.financialYear} — review directors, shareholders and compliance flags` });
+      setTimeout(() => setSavedMsg(null), 8000);
+    } catch {
+      setPrevYearDraft(null);
+    }
+  }
+
+  // ── Silent auto-save on step navigation (no confirm dialog) ──────────
+  async function silentSave() {
+    if (!session?.user || !data.companyName || !saveId || saveIdFY !== data.financialYear) return;
+    try {
+      await fetch("/api/annual-filing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: saveId,
+          companyName: data.companyName,
+          cin: data.cin,
+          financialYear: data.financialYear,
+          formDataJson: JSON.stringify({ data: stripImagesForSave(data), auditOpts }),
+        }),
+      });
+    } catch { /* silent */ }
   }
 
   // ── Save a new CA to list ─────────────────────────────────────────────
@@ -845,32 +932,55 @@ function AnnualFilingTool() {
   const canPrev = step > 1;
 
   // ── Render helpers ────────────────────────────────────────────────────
+  function isStepComplete(sid: number): boolean {
+    switch (sid) {
+      case 1: return !!(data.companyName && data.cin && data.dateOfReport);
+      case 2: return !!(data.auditor.firmName && data.auditor.partnerName && data.auditor.membershipNo && data.auditor.reportDate);
+      case 3: return !!(data.financials.revenueFromOperations || data.financials.totalIncome);
+      case 4: return data.boardMeetings.length > 0;
+      case 5: return data.directors.length > 0 && !!data.signatoryDirectors.director1.name;
+      case 6: return data.shareholders.length > 0 || data.totalShares > 0;
+      case 7: return (!data.hasSubsidiaries || (data.subsidiaries || []).length > 0) && (!data.hasRPT || (data.relatedPartyTransactions || []).length > 0);
+      case 8: return Object.keys(generated).length > 0;
+      default: return false;
+    }
+  }
+
   function renderStepIndicator() {
     return (
       <div className="flex items-center gap-0 mb-8 overflow-x-auto pb-2">
-        {STEPS.map((s, i) => (
-          <div key={s.id} className="flex items-center flex-shrink-0">
-            <button
-              onClick={() => setStep(s.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                step === s.id
-                  ? "bg-emerald-600 text-white shadow-md"
-                  : step > s.id
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-              }`}
-            >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                step === s.id ? "bg-white text-emerald-600" :
-                step > s.id  ? "bg-emerald-500 text-white" : "bg-slate-300 text-slate-600"
-              }`}>{step > s.id ? "✓" : s.id}</span>
-              <span className="hidden sm:block">{s.label}</span>
-            </button>
-            {i < STEPS.length - 1 && (
-              <div className={`h-0.5 w-4 mx-0.5 flex-shrink-0 ${step > s.id ? "bg-emerald-400" : "bg-slate-200"}`} />
-            )}
-          </div>
-        ))}
+        {STEPS.map((s, i) => {
+          const complete = isStepComplete(s.id);
+          const isCurrent = step === s.id;
+          const isPast = step > s.id;
+          return (
+            <div key={s.id} className="flex items-center flex-shrink-0">
+              <button
+                onClick={() => { void silentSave(); setStep(s.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  isCurrent
+                    ? "bg-emerald-600 text-white shadow-md"
+                    : isPast
+                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                }`}
+                title={complete ? `Step ${s.id}: Complete` : `Step ${s.id}: Incomplete`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                  isCurrent ? "bg-white text-emerald-600" :
+                  complete   ? "bg-emerald-500 text-white" : "bg-slate-300 text-slate-600"
+                }`}>{complete && !isCurrent ? "✓" : s.id}</span>
+                <span className="hidden sm:block">{s.label}</span>
+                {!isCurrent && !complete && s.id < step && (
+                  <span className="hidden sm:block text-amber-500 font-bold ml-0.5" title="Incomplete">⚠</span>
+                )}
+              </button>
+              {i < STEPS.length - 1 && (
+                <div className={`h-0.5 w-4 mx-0.5 flex-shrink-0 ${complete && !isCurrent ? "bg-emerald-400" : "bg-slate-200"}`} />
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -1076,14 +1186,48 @@ function AnnualFilingTool() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">State of Affairs / Business Operations <span className="text-slate-400 font-normal">(for Board Report)</span></label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-semibold text-slate-700">State of Affairs / Business Operations <span className="text-slate-400 font-normal">(for Board Report)</span></label>
+              <button
+                type="button"
+                onClick={() => {
+                  const fy     = data.financialYear;
+                  const fyEnd  = parseInt(fy.split("-")[0]) + 1;
+                  const pat    = parseFloat(data.financials.profitAfterTax) || 0;
+                  const ti     = parseFloat(data.financials.totalIncome) || 0;
+                  const isLoss = pat < 0;
+                  const biz    = data.businessDescription || data.principalActivity || "its principal business activities";
+                  const fmtAmt = (n: number) => {
+                    const abs = Math.abs(n);
+                    if (abs >= 10000000) return `Rs.${(abs / 10000000).toFixed(2)} Crores`;
+                    if (abs >= 100000)   return `Rs.${(abs / 100000).toFixed(2)} Lakhs`;
+                    return `Rs.${abs.toLocaleString("en-IN")}`;
+                  };
+                  const draft = [
+                    `Your Company is engaged in ${biz}. During the Financial Year ${fy}, the Company continued its operations in a focused and diligent manner.`,
+                    ti > 0 ? `The total income of the Company for FY ${fy} stood at ${fmtAmt(ti)}.` : "",
+                    pat !== 0
+                      ? isLoss
+                        ? `The Company incurred a net loss of ${fmtAmt(pat)} for the year ended 31st March, ${fyEnd}, as compared to the previous financial year.`
+                        : `The Company earned a net profit of ${fmtAmt(pat)} for the year ended 31st March, ${fyEnd}, as compared to the previous financial year.`
+                      : "",
+                    `The Board of Directors remains committed to the long-term growth and sustainability of the Company. There has been no material change in the nature of the business of the Company during the year under review.`,
+                  ].filter(Boolean).join(" ");
+                  patch({ stateOfAffairs: draft });
+                }}
+                className="text-xs font-semibold text-violet-700 border border-violet-200 bg-violet-50 hover:bg-violet-100 px-3 py-1 rounded-lg transition-colors flex-shrink-0"
+              >
+                ✦ Generate Draft
+              </button>
+            </div>
             <textarea
               value={data.stateOfAffairs}
               onChange={e => patch({ stateOfAffairs: e.target.value })}
-              rows={3}
-              placeholder="Describe company's business operations and state of affairs for FY 2024-25..."
+              rows={4}
+              placeholder="Describe company's business operations and state of affairs... or click 'Generate Draft' above."
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
+            <p className="text-xs text-slate-400 mt-1">✦ Generate Draft creates a starting template — edit freely before finalizing.</p>
           </div>
         </SectionCard>
       </>
@@ -1165,7 +1309,15 @@ function AnnualFilingTool() {
             />
             <Field label="Partner / Proprietor Name" value={data.auditor.partnerName} onChange={v => patchAud({ partnerName: v })} required placeholder="CA Ramesh Kumar" />
             <Field label="ICAI Membership Number" value={data.auditor.membershipNo} onChange={v => patchAud({ membershipNo: v })} required placeholder="123456" />
-            <Field label="UDIN" value={data.auditor.udin} onChange={v => patchAud({ udin: v })} placeholder="24123456ABCDEF1234" hint="Generate on ICAI UDIN portal after signing" />
+            <div>
+              <Field label="UDIN" value={data.auditor.udin} onChange={v => patchAud({ udin: v })} placeholder="24123456ABCDEF1234" hint="Generate on ICAI UDIN portal after signing" />
+              {data.auditor.udin && data.auditor.udin.length !== 18 && (
+                <p className="text-xs text-red-500 mt-1">⚠ UDIN must be exactly 18 characters (currently {data.auditor.udin.length})</p>
+              )}
+              {data.auditor.udin && data.auditor.udin.length === 18 && (
+                <p className="text-xs text-emerald-600 mt-1">✓ UDIN format looks correct</p>
+              )}
+            </div>
             <Field label="Place of Signing" value={data.auditor.place} onChange={v => patchAud({ place: v })} placeholder="Mumbai" />
             <Field label="Date of Audit Report" value={data.auditor.reportDate} onChange={v => patchAud({ reportDate: v })} type="date" required
               hint={`Must be after ${minReportDate(data.financialYear).split("-").reverse().join("/")}`}
@@ -1343,6 +1495,19 @@ function AnnualFilingTool() {
                       ? `Holds office till: ${(() => { const end = (data.auditor.appointmentAGMNo || 0) + (data.auditor.tenureYears || 5); const v = end % 100; const sfx = (v >= 11 && v <= 13) ? "th" : [,"st","nd","rd"][end % 10] || "th"; return `${end}${sfx}`; })()} AGM`
                       : "Default: 5 years (max under Sec. 139)"}
                   </p>
+                  {data.auditor.appointmentYear && data.auditor.appointmentAGMNo && (() => {
+                    const fyYear = parseInt(data.financialYear.split("-")[0]) + 1;
+                    const currentYear = data.auditor.tenureYears
+                      ? Math.min(fyYear - data.auditor.appointmentYear + 1, data.auditor.tenureYears)
+                      : fyYear - data.auditor.appointmentYear + 1;
+                    const totalYears = data.auditor.tenureYears || 5;
+                    const isLastYear = currentYear >= totalYears;
+                    return (
+                      <div className={`mt-2 px-2 py-1 rounded text-xs font-semibold ${isLastYear ? "bg-red-50 text-red-700 border border-red-200" : "bg-blue-50 text-blue-700 border border-blue-200"}`}>
+                        {isLastYear ? `⚠ Year ${currentYear} of ${totalYears} — rotation due` : `Year ${Math.max(1, currentYear)} of ${totalYears}`}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -1469,11 +1634,61 @@ function AnnualFilingTool() {
     const fyStartYr = parseInt(fy.split("-")[0]);
     const prevFY = `${fyStartYr - 1}-${String(fyStartYr).slice(2)}`;
 
+    // Derived validation values
+    const pat        = parseFloat(fin.profitAfterTax) || 0;
+    const isLoss     = pat < 0;
+    const authCap    = parseFloat(fin.authorisedCapital) || 0;
+    const paidUpCap  = parseFloat(fin.paidUpCapital) || 0;
+    const totalAssets = parseFloat(fin.totalAssets) || 0;
+    const totalLiab   = parseFloat(fin.totalLiabilities) || 0;
+    const bsDiff      = Math.abs(totalAssets - totalLiab);
+    const bsImbalance = totalAssets > 0 && totalLiab > 0 && bsDiff > 1;
+    const authLtPaid  = authCap > 0 && paidUpCap > 0 && paidUpCap > authCap;
+
+    function copyCurrentToPrev() {
+      patchFin({
+        prevRevenueFromOperations: fin.revenueFromOperations,
+        prevOtherIncome:           fin.otherIncome,
+        prevTotalExpenses:         fin.totalExpenses,
+        prevCurrentTax:            fin.currentTax,
+        prevDeferredTax:           fin.deferredTax,
+        prevAuthorisedCapital:     fin.authorisedCapital,
+        prevPaidUpCapital:         fin.paidUpCapital,
+        prevReservesAndSurplus:    fin.reservesAndSurplus,
+        prevTotalAssets:           fin.totalAssets,
+        prevTotalLiabilities:      fin.totalLiabilities,
+      });
+    }
+
     return (
       <>
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
           Enter all amounts in <strong>absolute Rupees (₹)</strong> — no rounding, no lakhs/crores. MCA V3 requirement.
         </div>
+
+        {/* Validation alerts */}
+        {(isLoss || bsImbalance || authLtPaid) && (
+          <div className="mb-4 space-y-2">
+            {isLoss && (
+              <div className="flex items-start gap-2 p-3 bg-orange-50 border border-orange-300 rounded-lg text-xs text-orange-800">
+                <span className="text-base leading-none mt-0.5">⚠</span>
+                <div><strong>Loss Year Detected</strong> — PAT is negative (₹{Math.abs(pat).toLocaleString("en-IN")}). Documents will say &quot;net loss&quot; instead of &quot;profit&quot;. Verify figures are correct.</div>
+              </div>
+            )}
+            {authLtPaid && (
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-300 rounded-lg text-xs text-red-800">
+                <span className="text-base leading-none mt-0.5">✗</span>
+                <div><strong>Capital Error</strong> — Paid-up Capital (₹{paidUpCap.toLocaleString("en-IN")}) cannot exceed Authorised Capital (₹{authCap.toLocaleString("en-IN")}). Please correct.</div>
+              </div>
+            )}
+            {bsImbalance && (
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-300 rounded-lg text-xs text-red-800">
+                <span className="text-base leading-none mt-0.5">✗</span>
+                <div><strong>Balance Sheet Doesn&apos;t Balance</strong> — Total Assets ≠ Total Liabilities (difference: ₹{bsDiff.toLocaleString("en-IN")}). A company&apos;s Balance Sheet must tally.</div>
+              </div>
+            )}
+          </div>
+        )}
 
         <SectionCard title={`Profit & Loss — FY ${fy} vs FY ${prevFY}`} color="emerald">
           <table className="w-full">
@@ -1584,6 +1799,16 @@ function AnnualFilingTool() {
             </tbody>
           </table>
         </SectionCard>
+
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-slate-500">Next year filing? Use this button to copy current year figures into the &quot;Previous Year&quot; columns.</p>
+          <button
+            onClick={copyCurrentToPrev}
+            className="flex-shrink-0 ml-3 px-3 py-1.5 text-xs font-semibold text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+          >
+            Copy Current → Previous Year
+          </button>
+        </div>
 
         <SectionCard title="Capital Changes (if any)" color="slate">
           <Field
@@ -2094,6 +2319,65 @@ function AnnualFilingTool() {
           <button onClick={addBlankMeeting} className="text-sm text-emerald-700 font-semibold flex items-center gap-1 hover:text-emerald-900">
             <span className="text-lg leading-none">+</span> Add Board Meeting
           </button>
+
+          {/* ── Director Attendance Summary ── */}
+          {data.boardMeetings.length > 0 && data.directors.length > 0 && (() => {
+            const totalMeetings = data.boardMeetings.length;
+            const activeDirs    = data.directors.filter(d => d.isActive && d.name);
+            if (!activeDirs.length) return null;
+            const rows = activeDirs.map(d => {
+              const attended = data.boardMeetings.filter(m => m.directorsPresent.includes(d.name)).length;
+              const pct      = totalMeetings > 0 ? Math.round((attended / totalMeetings) * 100) : 0;
+              return { name: d.name, designation: d.designation, attended, pct };
+            });
+            return (
+              <div className="mt-5 pt-4 border-t border-emerald-200">
+                <p className="text-xs font-bold text-slate-700 mb-3">Director Attendance Summary — {totalMeetings} meeting{totalMeetings > 1 ? "s" : ""} held</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="text-left px-3 py-2 border border-slate-200 text-slate-600 font-semibold">Director</th>
+                        <th className="text-left px-3 py-2 border border-slate-200 text-slate-600 font-semibold">Designation</th>
+                        <th className="text-center px-3 py-2 border border-slate-200 text-slate-600 font-semibold">Attended</th>
+                        <th className="text-center px-3 py-2 border border-slate-200 text-slate-600 font-semibold">Held</th>
+                        <th className="text-center px-3 py-2 border border-slate-200 text-slate-600 font-semibold">%</th>
+                        <th className="text-left px-3 py-2 border border-slate-200 text-slate-600 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                          <td className="px-3 py-2 border border-slate-200 font-medium text-slate-800">{r.name}</td>
+                          <td className="px-3 py-2 border border-slate-200 text-slate-500">{r.designation}</td>
+                          <td className="px-3 py-2 border border-slate-200 text-center font-semibold">{r.attended}</td>
+                          <td className="px-3 py-2 border border-slate-200 text-center text-slate-500">{totalMeetings}</td>
+                          <td className="px-3 py-2 border border-slate-200 text-center">
+                            <span className={`font-bold ${r.pct >= 75 ? "text-emerald-700" : r.pct >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                              {r.pct}%
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 border border-slate-200">
+                            {r.pct >= 75
+                              ? <span className="text-emerald-700">✓ Regular</span>
+                              : r.pct >= 50
+                              ? <span className="text-amber-600">⚠ Below 75%</span>
+                              : <span className="text-red-600 font-semibold">✗ Low — disclose leave of absence</span>
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {rows.some(r => r.pct < 75) && (
+                  <p className="text-xs text-amber-700 mt-2 font-semibold">
+                    ⚠ Directors with attendance below 75% — Board Report should disclose they were granted leave of absence (Sec. 167).
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </SectionCard>
 
         {/* ══════════════ MEMBER MEETINGS (AGM / EGM) ══════════════ */}
@@ -2299,14 +2583,66 @@ function AnnualFilingTool() {
               </label>
             </div>
             {data.dividendDeclared && (
-              <input
-                value={data.dividendDetails || ""}
-                onChange={e => patch({ dividendDetails: e.target.value })}
-                placeholder="e.g. ₹2 per share (Final Dividend)"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Dividend Type</label>
+                  <select
+                    value={data.dividendType || "final"}
+                    onChange={e => patch({ dividendType: e.target.value as "interim" | "final" | "both" })}
+                    className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="final">Final Dividend</option>
+                    <option value="interim">Interim Dividend</option>
+                    <option value="both">Interim + Final</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Amount per Share (₹)</label>
+                  <input
+                    type="text"
+                    value={data.dividendAmountPerShare || ""}
+                    onChange={e => patch({ dividendAmountPerShare: e.target.value })}
+                    placeholder="e.g. 2"
+                    className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Record / Cut-off Date</label>
+                  <input
+                    type="date"
+                    value={data.dividendRecordDate || ""}
+                    onChange={e => patch({ dividendRecordDate: e.target.value })}
+                    className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Payment Date</label>
+                  <input
+                    type="date"
+                    value={data.dividendPaymentDate || ""}
+                    onChange={e => patch({ dividendPaymentDate: e.target.value })}
+                    className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="col-span-2 md:col-span-4">
+                  <label className="text-xs text-slate-500 block mb-1">Additional Notes (optional)</label>
+                  <input
+                    type="text"
+                    value={data.dividendDetails || ""}
+                    onChange={e => patch({ dividendDetails: e.target.value })}
+                    placeholder="Any additional details about the dividend declaration"
+                    className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                {data.dividendAmountPerShare && (
+                  <div className="col-span-2 md:col-span-4 p-2 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800">
+                    <strong>Preview:</strong> {data.dividendType === "both" ? "Interim and Final" : data.dividendType === "interim" ? "Interim" : "Final"} Dividend of ₹{data.dividendAmountPerShare} per equity share
+                    {data.dividendRecordDate ? ` (record date: ${new Date(data.dividendRecordDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})` : ""} declared and paid during the year.
+                  </div>
+                )}
+              </div>
             )}
-            <p className="text-xs text-slate-400 mt-1">This affects both the Board Report (Section 2) and the Audit Report (Rule 11(v)).</p>
+            <p className="text-xs text-slate-400 mt-2">Affects Board Report (Section 2) and Audit Report (Rule 11(v)).</p>
           </div>
         </SectionCard>
 
@@ -2520,11 +2856,16 @@ function AnnualFilingTool() {
                 </div>
               </div>
 
-              {/* Row 3: Contact + Shares */}
+              {/* Row 3: Contact + Shares + PAN */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Email-Id</label>
                   <input type="email" value={d.email || ""} onChange={e => updateDir(i, { email: e.target.value })} placeholder="email@example.com" className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 block mb-0.5">PAN</label>
+                  <input type="text" value={d.pan || ""} onChange={e => updateDir(i, { pan: e.target.value.toUpperCase() })} placeholder="ABCDE1234F" className={inp}
                     onBlur={() => companyId && saveDirectorKYC(d)} />
                 </div>
                 <div>
@@ -2776,6 +3117,20 @@ function AnnualFilingTool() {
               {totalSharesHeld === data.totalShares ? `✓ Shares tally: ${totalSharesHeld.toLocaleString("en-IN")} shares` : `⚠ Shares held (${totalSharesHeld.toLocaleString("en-IN")}) ≠ Total shares (${data.totalShares.toLocaleString("en-IN")})`}
             </div>
           )}
+          {(data.shareholders || []).some(s => s.isPromoter !== undefined) && (() => {
+            const promoterShares = (data.shareholders || []).filter(s => s.isPromoter).reduce((t, s) => t + (s.sharesHeld || 0), 0);
+            const publicShares   = (data.shareholders || []).filter(s => !s.isPromoter).reduce((t, s) => t + (s.sharesHeld || 0), 0);
+            return (
+              <div className="flex gap-4 mt-2 text-xs">
+                <div className="px-2 py-1 bg-emerald-50 border border-emerald-200 rounded text-emerald-800">
+                  Promoters: {data.totalShares > 0 ? ((promoterShares / data.totalShares) * 100).toFixed(2) : "0.00"}% ({promoterShares.toLocaleString("en-IN")} shares)
+                </div>
+                <div className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-slate-700">
+                  Public: {data.totalShares > 0 ? ((publicShares / data.totalShares) * 100).toFixed(2) : "0.00"}% ({publicShares.toLocaleString("en-IN")} shares)
+                </div>
+              </div>
+            );
+          })()}
         </SectionCard>
 
         <SectionCard title="Shareholders / Member Register" color="emerald">
@@ -2783,7 +3138,13 @@ function AnnualFilingTool() {
           {(data.shareholders || []).map((s, i) => (
             <div key={i} className="p-3 bg-white border border-slate-200 rounded-lg mb-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-500">Shareholder {i + 1} — Folio: {s.folioNo}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-slate-500">Shareholder {i + 1} — Folio: {s.folioNo}</span>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input type="checkbox" checked={!!s.isPromoter} onChange={e => updateSh(i, { isPromoter: e.target.checked })} className="rounded accent-emerald-600" />
+                    <span className={s.isPromoter ? "text-emerald-700 font-semibold" : "text-slate-400"}>Promoter</span>
+                  </label>
+                </div>
                 <button onClick={() => removeSh(i)} className="text-red-400 hover:text-red-600">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
@@ -2798,7 +3159,7 @@ function AnnualFilingTool() {
                   <option value="trust">Trust</option>
                   <option value="government">Government</option>
                 </select>
-                <input type="text" value={s.pan || ""} onChange={e => updateSh(i, { pan: e.target.value })} placeholder="PAN" className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                <input type="text" value={s.pan || ""} onChange={e => updateSh(i, { pan: e.target.value.toUpperCase() })} placeholder="PAN" className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Shares Held</label>
                   <input type="number" value={s.sharesHeld || ""} onChange={e => updateSh(i, { sharesHeld: parseInt(e.target.value) || 0 })} placeholder="0" className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
@@ -2808,6 +3169,7 @@ function AnnualFilingTool() {
                   <input type="text" value={s.percentHolding} onChange={e => updateSh(i, { percentHolding: e.target.value })} placeholder="100.00" className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 </div>
                 <input type="text" value={s.folioNo} onChange={e => updateSh(i, { folioNo: e.target.value })} placeholder="Folio No." className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                <input type="text" value={s.address || ""} onChange={e => updateSh(i, { address: e.target.value })} placeholder="Residential / Registered Address" className="col-span-2 border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
               </div>
             </div>
           ))}
@@ -3058,6 +3420,40 @@ function AnnualFilingTool() {
             ))}
           </div>
 
+          {/* Pre-generate validation checklist */}
+          {(() => {
+            const checks = [
+              { ok: !!data.companyName,                        label: "Company name filled" },
+              { ok: !!data.auditor.firmName,                   label: "Auditor firm name filled" },
+              { ok: !!data.auditor.partnerName,                label: "CA partner name filled" },
+              { ok: !!data.auditor.reportDate,                 label: "Audit report date filled" },
+              { ok: !!(data.financials.revenueFromOperations || data.financials.totalIncome), label: "Financial figures entered" },
+              { ok: data.boardMeetings.length > 0,             label: "At least one board meeting added" },
+              { ok: data.directors.length > 0,                 label: "Directors added" },
+              { ok: !!data.signatoryDirectors.director1.name,  label: "Signatory director selected" },
+              { ok: data.shareholders.length > 0,              label: "Shareholders added" },
+              { ok: !!data.dateOfReport,                       label: "Date of board report filled" },
+            ];
+            const failed = checks.filter(c => !c.ok);
+            if (failed.length === 0) return (
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 font-semibold">
+                ✓ All required fields filled — ready to generate
+              </div>
+            );
+            return (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-xs font-bold text-amber-800 mb-2">⚠ Please complete the following before generating:</p>
+                <ul className="space-y-1">
+                  {failed.map((c, i) => (
+                    <li key={i} className="text-xs text-amber-700 flex items-center gap-1.5">
+                      <span className="text-amber-400">✗</span> {c.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
+
           <button
             onClick={handleGenerate}
             disabled={generating || !data.companyName}
@@ -3080,6 +3476,18 @@ function AnnualFilingTool() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-slate-800 truncate">{a.label}</p>
                   </div>
+                  <button
+                    onClick={() => {
+                      const cashFlowIncluded = data.companyType === "section8" || data.companyType === "fpc";
+                      const opts = { ...auditOpts, cashFlowIncluded };
+                      const docs = generateAllAttachments(data, opts) as unknown as Record<string, string>;
+                      if (docs[a.key]) setGenerated(prev => ({ ...prev, [a.key]: docs[a.key] }));
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
+                    title="Regenerate this document"
+                  >
+                    ↺
+                  </button>
                   <button
                     onClick={() => openDoc(generated[a.key]!)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
@@ -3111,8 +3519,20 @@ function AnnualFilingTool() {
             </div>
             <p className="text-xs text-slate-500 mt-3 text-center">
               <b>Download PDF</b> — generates a properly formatted PDF with running header &amp; signatures on every page.&nbsp;
-              <b>Preview</b> — opens HTML in a new browser tab.
+              <b>Preview</b> — opens HTML in a new browser tab.&nbsp;
+              <b>Regenerate</b> — re-creates a single document after making changes without re-generating all.
             </p>
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="w-full mt-3 py-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-emerald-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              {generating ? (
+                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Regenerating...</>
+              ) : (
+                <><span>↺</span> Regenerate All (after changes)</>
+              )}
+            </button>
 
             {session?.user && (
               <div className="mt-5 pt-4 border-t border-blue-100 flex items-center justify-between gap-3">
@@ -3211,6 +3631,31 @@ function AnnualFilingTool() {
             )}
           </div>
 
+          {/* Carry forward from previous year banner */}
+          {prevYearDraft && !foundDraft && (
+            <div className="mt-3 p-3 bg-violet-50 border border-violet-200 rounded-xl flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-700 min-w-0">
+                <span className="font-bold text-violet-700">Previous year draft found</span>
+                {" — "}{prevYearDraft.companyName} · FY {prevYearDraft.financialYear}
+                <span className="text-slate-500 ml-1 block sm:inline">Carry forward directors, auditor, shareholders &amp; KYC — saves re-entry time.</span>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={handleCarryForward}
+                  className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg"
+                >
+                  Carry Forward ↗
+                </button>
+                <button
+                  onClick={() => setPrevYearDraft(null)}
+                  className="px-3 py-1.5 border border-violet-200 text-violet-600 hover:bg-violet-100 text-xs font-semibold rounded-lg"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Found draft banner */}
           {foundDraft && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3">
@@ -3284,7 +3729,7 @@ function AnnualFilingTool() {
         {/* Navigation */}
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
           <button
-            onClick={() => setStep(s => s - 1)}
+            onClick={() => { void silentSave(); setStep(s => s - 1); }}
             disabled={!canPrev}
             className="flex items-center gap-2 px-5 py-2.5 border border-slate-300 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
           >
@@ -3296,7 +3741,7 @@ function AnnualFilingTool() {
 
           {step < STEPS.length ? (
             <button
-              onClick={() => setStep(s => s + 1)}
+              onClick={() => { void silentSave(); setStep(s => s + 1); }}
               className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-colors text-sm"
             >
               Next

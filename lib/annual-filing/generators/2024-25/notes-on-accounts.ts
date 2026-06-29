@@ -6,6 +6,7 @@
  */
 
 import type { AnnualFilingData } from "../../types";
+import { buildDividendText } from "../../types";
 import { buildPageSigFooter, fmtDate, fyEndYear, fyStartYear, sigCol, wrapPage } from "../../utils";
 
 export function generateNotesOnAccounts(data: AnnualFilingData): string {
@@ -259,7 +260,7 @@ ${surplusNote}
 ${isSection8
   ? `<p>The Company being a Section 8 not-for-profit entity is prohibited from declaring or paying any dividend. Any surplus is applied solely towards the furtherance of the Company&rsquo;s objects.</p>`
   : data.dividendDeclared
-  ? `<p>The Board of Directors has declared / recommended a dividend of ${data.dividendDetails || "[details]"} on the Equity Shares of the Company for the Financial Year ${fy} in compliance with the provisions of Section 123 of the Companies Act, 2013.</p>`
+  ? `<p>The Board of Directors has declared / recommended a dividend of ${buildDividendText(data)} on the Equity Shares of the Company for the Financial Year ${fy} in compliance with the provisions of Section 123 of the Companies Act, 2013.</p>`
   : `<p>The Board of Directors has not recommended any dividend on the Equity Shares of the Company for the Financial Year ${fy}. No dividend was paid during the year. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
 }
 

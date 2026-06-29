@@ -18,6 +18,7 @@
  */
 
 import type { AnnualFilingData } from "../../types";
+import { buildDividendText } from "../../types";
 import { buildPageSigFooter, fmtDate, fmtRs, fyEndYear, fyStartYear, sigCol, wrapPage } from "../../utils";
 
 function getMeetingRows(data: AnnualFilingData): string {
@@ -285,10 +286,10 @@ ${isSection8
   ? `<p>The Company is incorporated under Section 8 of the Companies Act, 2013 as a not-for-profit entity. The Company is prohibited from declaring or paying any dividend to its Members. The surplus, if any, arising from the ${pandlLabel} is applied solely towards the furtherance of the Company's objects as stated in its Memorandum of Association.</p>`
   : isFPC
   ? (data.dividendDeclared
-      ? `<p>Your Directors are pleased to report that the Board has declared a Patronage Bonus / dividend of ${data.dividendDetails || "[details]"} for the Financial Year ${fy} in compliance with the applicable provisions of the Companies Act. The same was paid to the Producer Members during the year.</p>`
+      ? `<p>Your Directors are pleased to report that the Board has declared a Patronage Bonus / dividend of ${buildDividendText(data)} for the Financial Year ${fy} in compliance with the applicable provisions of the Companies Act. The same was paid to the Producer Members during the year.</p>`
       : `<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ${fy}. The Board may, subject to the provisions of Part IXA of the Companies Act, 1956, declare a Patronage Bonus from the surplus available after making required provisions. No Patronage Bonus has been declared for the Financial Year ${fy}.</p>`)
   : (data.dividendDeclared
-      ? `<p>Your Directors are pleased to report that the Company has declared and/or paid dividend of ${data.dividendDetails || "[details]"} on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd}. The dividend was paid in compliance with the provisions of Section 123 of the Companies Act, 2013. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
+      ? `<p>Your Directors are pleased to report that the Company has declared and/or paid dividend of ${buildDividendText(data)} on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd}. The dividend was paid in compliance with the provisions of Section 123 of the Companies Act, 2013. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`
       : `<p>Your Directors do not recommend any dividend on the Equity Shares of the Company for the Financial Year ended 31<sup>st</sup> March, ${fyEnd} in order to conserve resources for the future operations of the Company. No dividend was paid during the Financial Year ${fy}. There is no unpaid / unclaimed dividend pending for transfer to the Investor Education and Protection Fund (IEPF).</p>`)
 }
 

@@ -13,6 +13,7 @@
  */
 
 import type { AnnualFilingData } from "../../types";
+import { buildDividendText } from "../../types";
 import { buildPageSigFooter, fmtDate, fyEndYear, wrapPage } from "../../utils";
 
 export type OpinionType = "unmodified" | "qualified" | "adverse" | "disclaimer";
@@ -85,7 +86,7 @@ export function generateAuditReport(
 
   // Rule 11(v) — Dividend (read from data, shared with board reports)
   const dividendPara = data.dividendDeclared
-    ? `<p>v. The Company has declared and/or paid dividend of Rs.${data.dividendDetails || "[amount]"} during the year in compliance with the provisions of Section 123 of the Companies Act, 2013.</p>`
+    ? `<p>v. The Company has declared and/or paid dividend of ${buildDividendText(data)} during the year in compliance with the provisions of Section 123 of the Companies Act, 2013.</p>`
     : `<p>v. No dividend has been declared or paid during the year by the Company.</p>`;
 
   // Rule 11(vi) — Audit trail

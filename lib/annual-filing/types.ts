@@ -143,6 +143,7 @@ export interface ShareholderRecord {
   sharesHeld: number;
   percentHolding: string;
   pan?: string;
+  isPromoter?: boolean;    // true = promoter group; false/undefined = public
   changedDuringYear?: boolean;
 }
 
@@ -246,8 +247,12 @@ export interface AnnualFilingData {
   riskManagementDetails?: string;
 
   // ── Dividend [Sec. 134(3)(k)] ──────────────
-  dividendDeclared?: boolean;     // true if dividend declared/paid during year
-  dividendDetails?: string;       // e.g. "₹2 per share (Final Dividend)"
+  dividendDeclared?: boolean;
+  dividendType?: "interim" | "final" | "both";
+  dividendAmountPerShare?: string;  // e.g. "2"
+  dividendRecordDate?: string;      // YYYY-MM-DD
+  dividendPaymentDate?: string;     // YYYY-MM-DD
+  dividendDetails?: string;         // extra notes / override
 
   // ── Employee Count ──────────────────────────
   employeesMale?: number;
@@ -383,3 +388,20 @@ export const INITIAL_FILING_DATA: AnnualFilingData = {
   totalShares: 0,
   nominalValuePerShare: "10",
 };
+
+// ── Dividend text helper (used in all generators) ─────────────────────────────
+export function buildDividendText(data: AnnualFilingData): string {
+  if (!data.dividendDeclared) return "";
+  const typeStr = data.dividendType === "both"
+    ? "Interim and Final Dividend"
+    : data.dividendType === "interim"
+    ? "Interim Dividend"
+    : "Final Dividend";
+  const amtStr = data.dividendAmountPerShare
+    ? `Rs.${data.dividendAmountPerShare} per equity share`
+    : "";
+  const base = [amtStr, typeStr].filter(Boolean).join(" — ") || data.dividendDetails || "[dividend details]";
+  return data.dividendDetails && data.dividendDetails.trim()
+    ? `${base}${amtStr ? ` (${data.dividendDetails})` : ""}`
+    : base;
+}
