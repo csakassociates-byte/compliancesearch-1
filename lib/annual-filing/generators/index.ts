@@ -9,6 +9,10 @@ export type { AnnualFilingData, CompanyType, FinancialYear } from "../types";
 export { INITIAL_FILING_DATA } from "../types";
 
 import {
+  generateAllAttachments as gen2023_24,
+} from "./2023-24/index";
+
+import {
   generateAllAttachments as gen2024_25,
   type AuditReportOptions,
   type GeneratedDocuments,
@@ -27,6 +31,7 @@ export function generateAllAttachments(
 ): GeneratedDocuments {
   const fy = data.financialYear as FinancialYear;
 
+  if (fy === "2023-24") return gen2023_24(data, auditOpts);
   if (fy === "2024-25") return gen2024_25(data, auditOpts);
   if (fy === "2025-26") return gen2025_26(data, auditOpts);
 

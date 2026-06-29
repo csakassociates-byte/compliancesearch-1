@@ -118,7 +118,7 @@ const COMPANY_TYPE_LABELS: Record<CompanyType, string> = {
   fpc:           "Farmer Producer Company (FPC)",
 };
 
-const FY_OPTIONS = ["2025-26", "2024-25"];
+const FY_OPTIONS = ["2025-26", "2024-25", "2023-24"];
 
 // ── Label + input helpers ──────────────────────────────────────────────────
 function Field({

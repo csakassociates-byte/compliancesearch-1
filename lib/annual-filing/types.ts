@@ -7,7 +7,7 @@
 
 export type CompanyType = "opc" | "private_small" | "section8" | "fpc";
 
-export type FinancialYear = "2024-25" | "2025-26";
+export type FinancialYear = "2023-24" | "2024-25" | "2025-26";
 
 // ── Financial Data ────────────────────────────────────────────────────────────
 
