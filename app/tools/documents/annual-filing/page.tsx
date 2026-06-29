@@ -120,6 +120,17 @@ const COMPANY_TYPE_LABELS: Record<CompanyType, string> = {
 
 const FY_OPTIONS = ["2025-26", "2024-25", "2023-24"];
 
+/** Deduplicate directors by DIN (preferred) or lowercased name — keeps first occurrence */
+function deduplicateDirs(dirs: DirectorRecord[]): DirectorRecord[] {
+  const seen = new Set<string>();
+  return dirs.filter(d => {
+    const key = d.din?.trim() || d.name.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // ── Label + input helpers ──────────────────────────────────────────────────
 function Field({
   label, value, onChange, placeholder, type = "text", required, hint,
@@ -269,7 +280,7 @@ function AnnualFilingTool() {
             data: AnnualFilingData;
             auditOpts: AuditReportOptions;
           };
-          setData(parsed.data);
+          setData({ ...parsed.data, directors: deduplicateDirs(parsed.data.directors || []) });
           setAuditOpts(parsed.auditOpts);
           setSaveId(json.filing.id);
           setSaveIdFY(parsed.data.financialYear);
@@ -297,7 +308,11 @@ function AnnualFilingTool() {
 
   // ── Patch helper ──────────────────────────────────────────────────────
   const patch = useCallback((partial: Partial<AnnualFilingData>) => {
-    setData(prev => ({ ...prev, ...partial }));
+    setData(prev => ({
+      ...prev,
+      ...partial,
+      ...(partial.directors ? { directors: deduplicateDirs(partial.directors) } : {}),
+    }));
   }, []);
 
   const patchAud = useCallback((partial: Partial<AnnualFilingData["auditor"]>) => {
@@ -3723,7 +3738,7 @@ function AnnualFilingTool() {
                   onClick={() => {
                     try {
                       const parsed = JSON.parse(foundDraft.formDataJson) as { data: AnnualFilingData; auditOpts: AuditReportOptions };
-                      setData(parsed.data);
+                      setData({ ...parsed.data, directors: deduplicateDirs(parsed.data.directors || []) });
                       setAuditOpts(parsed.auditOpts);
                       setSaveId(foundDraft.id);
                       setSaveIdFY(foundDraft.financialYear ?? null);
