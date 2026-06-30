@@ -251,7 +251,8 @@ function AnnualFilingTool() {
   const [savedMsg, setSavedMsg]     = useState<{ ok: boolean; text: string } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated]   = useState<Record<string, string>>({});
-  const [pdfLoading, setPdfLoading] = useState<Record<string, boolean>>({});
+  const [pdfLoading, setPdfLoading]   = useState<Record<string, boolean>>({});
+  const [docxLoading, setDocxLoading] = useState<Record<string, boolean>>({});
   const [savedCAs, setSavedCAs]     = useState<SavedCA[]>([]);
   const [savingCA, setSavingCA]     = useState(false);
   const [showCAManager, setShowCAManager] = useState(false);
@@ -940,6 +941,53 @@ function AnnualFilingTool() {
       alert(`PDF generation failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setPdfLoading(prev => ({ ...prev, [key]: false }));
+    }
+  }
+
+  async function handleDownloadDocx(key: string, label: string) {
+    const html = generated[key];
+    if (!html) return;
+    setDocxLoading(prev => ({ ...prev, [key]: true }));
+    try {
+      const { default: HTMLtoDOCX } = await import("html-to-docx");
+
+      // Parse the full HTML and strip print-only artefacts
+      const parser = new DOMParser();
+      const docDom = parser.parseFromString(html, "text/html");
+      docDom.querySelectorAll(".page-sig-footer").forEach(el => el.remove());
+      docDom.body.classList.remove("has-page-footer");
+
+      const isLandscape = key === "director-list";
+
+      // A4 dimensions in twips (1 inch = 1440 twips, 1 mm ≈ 56.69 twips)
+      // A4 portrait: 210×297 mm → 11906×16838 twips
+      // A4 landscape: 297×210 mm → 16838×11906 twips
+      const pageSize = isLandscape
+        ? { width: 16838, height: 11906 }
+        : { width: 11906, height: 16838 };
+
+      const docxBlob = await HTMLtoDOCX(docDom.body.innerHTML, null, {
+        orientation: isLandscape ? "landscape" : "portrait",
+        pageSize,
+        margins: { top: 1134, right: 1134, bottom: 1134, left: 1134 },
+        font: "Times New Roman",
+        fontSize: 22,
+        title: `${label} — ${data.companyName || ""} — FY ${data.financialYear || ""}`,
+        creator: "ComplianceSearch.in",
+      });
+
+      const url = URL.createObjectURL(docxBlob as unknown as Blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      const filename = `${key}_${data.companyName || "Company"}_FY${data.financialYear || ""}`
+        .replace(/[^a-zA-Z0-9_\-. ]/g, "_");
+      anchor.download = `${filename}.docx`;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 120_000);
+    } catch (err) {
+      alert(`Word download failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDocxLoading(prev => ({ ...prev, [key]: false }));
     }
   }
 
@@ -3581,11 +3629,30 @@ function AnnualFilingTool() {
                       </>
                     )}
                   </button>
+                  <button
+                    onClick={() => handleDownloadDocx(a.key, a.label)}
+                    disabled={docxLoading[a.key]}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-wait text-white text-xs font-semibold rounded-lg transition-all flex-shrink-0"
+                    title="Download as Word document (.docx)"
+                  >
+                    {docxLoading[a.key] ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                        Generating…
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Word
+                      </>
+                    )}
+                  </button>
                 </div>
               ))}
             </div>
             <p className="text-xs text-slate-500 mt-3 text-center">
-              <b>Download PDF</b> — generates a properly formatted PDF with running header &amp; signatures on every page.&nbsp;
+              <b>Download PDF</b> — properly formatted PDF with running header &amp; signatures on every page.&nbsp;
+              <b>Word</b> — editable .docx file for Microsoft Word / Google Docs.&nbsp;
               <b>Preview</b> — opens HTML in a new browser tab.&nbsp;
               <b>Regenerate</b> — re-creates a single document after making changes without re-generating all.
             </p>
