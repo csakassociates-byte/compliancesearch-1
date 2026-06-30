@@ -949,34 +949,31 @@ function AnnualFilingTool() {
     if (!html) return;
     setDocxLoading(prev => ({ ...prev, [key]: true }));
     try {
-      const { default: HTMLtoDOCX } = await import("html-to-docx");
-
-      // Parse the full HTML and strip print-only artefacts
+      // Strip print-only artefacts before sending to server
       const parser = new DOMParser();
       const docDom = parser.parseFromString(html, "text/html");
       docDom.querySelectorAll(".page-sig-footer").forEach(el => el.remove());
       docDom.body.classList.remove("has-page-footer");
 
-      const isLandscape = key === "director-list";
-
-      // A4 dimensions in twips (1 inch = 1440 twips, 1 mm ≈ 56.69 twips)
-      // A4 portrait: 210×297 mm → 11906×16838 twips
-      // A4 landscape: 297×210 mm → 16838×11906 twips
-      const pageSize = isLandscape
-        ? { width: 16838, height: 11906 }
-        : { width: 11906, height: 16838 };
-
-      const docxBlob = await HTMLtoDOCX(docDom.body.innerHTML, null, {
-        orientation: isLandscape ? "landscape" : "portrait",
-        pageSize,
-        margins: { top: 1134, right: 1134, bottom: 1134, left: 1134 },
-        font: "Times New Roman",
-        fontSize: 22,
-        title: `${label} — ${data.companyName || ""} — FY ${data.financialYear || ""}`,
-        creator: "ComplianceSearch.in",
+      const res = await fetch("/api/annual-filing/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          html: docDom.body.innerHTML,
+          key,
+          label,
+          companyName: data.companyName,
+          financialYear: data.financialYear,
+        }),
       });
 
-      const url = URL.createObjectURL(docxBlob as unknown as Blob);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error || "Server error generating DOCX");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
       const filename = `${key}_${data.companyName || "Company"}_FY${data.financialYear || ""}`
