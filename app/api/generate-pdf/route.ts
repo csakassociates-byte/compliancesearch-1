@@ -9,24 +9,31 @@ import {
   type PdfAudSlot,
 } from "@/lib/annual-filing/pdf-templates";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 async function launchBrowser() {
   const puppeteer = (await import("puppeteer-core")).default;
-  if (process.env.VERCEL) {
-    const chromium = (await import("@sparticuz/chromium")).default;
+  if (process.env.NODE_ENV === "production") {
+    const chromium = (await import("@sparticuz/chromium-min")).default;
     return puppeteer.launch({
       args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      executablePath: await chromium.executablePath(
+        "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.tar"
+      ),
       headless: true,
       defaultViewport: { width: 1280, height: 800 },
     });
   }
   // Local development — requires Chrome installed
+  const fs = await import("fs");
+  const paths = [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    "/usr/bin/google-chrome",
+  ];
+  const executablePath = paths.find(p => fs.existsSync(p)) || paths[0];
   return puppeteer.launch({
-    executablePath:
-      process.env.CHROME_EXECUTABLE_PATH ||
-      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    executablePath,
     args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
     headless: true,
     defaultViewport: { width: 1280, height: 800 },

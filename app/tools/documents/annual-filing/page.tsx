@@ -839,19 +839,43 @@ function AnnualFilingTool() {
     if (!html) return;
     setPdfLoading(prev => ({ ...prev, [key]: true }));
     try {
-      const isLandscape = key === "director-list";
       const filename = `${key}_${data.companyName || "Company"}_FY${data.financialYear || ""}`
         .replace(/[^a-zA-Z0-9_\-. ]/g, "_");
 
-      const res = await fetch("/api/annual-filing/pdf", {
+      const isAudit = key === "audit-report";
+      const isNotes = key === "notes-on-accounts";
+
+      // Build director slots for footer (audit report has no director footer)
+      const dirs = isAudit ? [] : [
+        data.signatoryDirectors.director1,
+        data.signatoryDirectors.director2,
+        data.signatoryDirectors.director3,
+      ].filter((d): d is NonNullable<typeof d> => !!d?.name)
+        .map(d => ({
+          name: d.name,
+          designation: d.designation ?? undefined,
+          din: d.din ?? undefined,
+          signatureBase64: d.signatureBase64 ?? undefined,
+        }));
+
+      // CA seal for audit report and notes on accounts
+      const auditor = (isAudit || isNotes) ? {
+        firmName: data.auditor.firmName || undefined,
+        frn: data.auditor.frn || undefined,
+        sealBase64: data.auditor.sealBase64 || undefined,
+      } : undefined;
+
+      const res = await fetch("/api/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           html,
           filename,
-          isLandscape,
+          docType: key,
           companyName: data.companyName || "",
           docTitle: label.split("(")[0].trim(),
+          dirs,
+          auditor,
         }),
       });
 
