@@ -839,199 +839,34 @@ function AnnualFilingTool() {
     if (!html) return;
     setPdfLoading(prev => ({ ...prev, [key]: true }));
     try {
-      // Dynamic imports — loaded only when PDF is requested
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas"),
-        import("jspdf"),
-      ]);
-
       const isLandscape = key === "director-list";
-      const isAudit = key === "audit-report";
-      const isNotes = key === "notes-on-accounts";
-
-      // A4 dimensions in PDF points (1pt = 1/72 inch)
-      // Portrait: 595.28 × 841.89   Landscape: 841.89 × 595.28
-      const PAGE_W = isLandscape ? 841.89 : 595.28;
-      const PAGE_H = isLandscape ? 595.28 : 841.89;
-      const HEADER_H = 22;   // pt — top strip for company/title/page#
-      const FOOTER_H = 52;   // pt — bottom strip for director sigs + seal
-      const CONTENT_H = PAGE_H - HEADER_H - FOOTER_H;
-
-      // We'll capture at 794px width (portrait) or 1123px (landscape) = A4 at 96 dpi
-      const captureW = isLandscape ? 1123 : 794;
-
-      // Create a hidden iframe and write the HTML into it
-      const iframe = document.createElement("iframe");
-      iframe.style.cssText =
-        `position:fixed;left:-12000px;top:0;width:${captureW}px;height:4px;border:none;`;
-      document.body.appendChild(iframe);
-
-      const iDoc = iframe.contentDocument!;
-      iDoc.open();
-      iDoc.write(html);
-      iDoc.close();
-
-      // Override screen styles for pixel-perfect capture
-      const overrideStyle = iDoc.createElement("style");
-      overrideStyle.textContent = `
-        html { background: white !important; }
-        body {
-          width: ${captureW}px !important;
-          margin: 0 !important;
-          padding: 76px !important;
-          box-sizing: border-box !important;
-          background: white !important;
-        }
-        .page-sig-footer { display: none !important; }
-        .has-page-footer { padding-bottom: 0 !important; }
-      `;
-      iDoc.head.appendChild(overrideStyle);
-
-      // Wait for layout + base64 images to render
-      await new Promise(r => setTimeout(r, 900));
-
-      const fullH = Math.max(
-        iDoc.body.scrollHeight,
-        iDoc.documentElement.scrollHeight,
-        600
-      );
-      iframe.style.height = `${fullH}px`;
-      await new Promise(r => setTimeout(r, 300));
-
-      // Capture the full document as one tall canvas (scale 2 = ~192 dpi)
-      const fullCanvas = await html2canvas(iDoc.body, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        width: captureW,
-        height: fullH,
-        windowWidth: captureW,
-        windowHeight: fullH,
-        scrollX: 0,
-        scrollY: 0,
-      });
-      document.body.removeChild(iframe);
-
-      // Pixels per PDF point (canvas at scale 2, A4 at 96 dpi)
-      // Portrait: 794px → 595.28pt  so 1588px / 595.28pt ≈ 2.668 px/pt
-      // Landscape: 1123px → 841.89pt so 2246px / 841.89pt ≈ 2.668 px/pt
-      const PX_PER_PT = (captureW * 2) / PAGE_W;
-      const pageContentPx = Math.round(CONTENT_H * PX_PER_PT);
-      const numPages = Math.ceil(fullCanvas.height / pageContentPx);
-
-      // Director / seal data for footer
-      const d1 = data.signatoryDirectors.director1;
-      const d2 = data.signatoryDirectors.director2;
-      const d3 = data.signatoryDirectors.director3;
-      type DirSlot = { name: string; designation?: string; din?: string; signatureBase64?: string };
-      const sigDirs: DirSlot[] = isAudit ? [] : (
-        [d1, d2, d3]
-          .filter((d): d is NonNullable<typeof d> => !!d?.name)
-          .map(d => ({ name: d.name!, designation: d.designation ?? undefined, din: d.din ?? undefined, signatureBase64: d.signatureBase64 ?? undefined }))
-      );
-      const aud = (isAudit || isNotes) ? data.auditor : undefined;
-      const hasSeal = !!(aud?.firmName || aud?.sealBase64);
-      const totalFooterSlots = sigDirs.length + (hasSeal ? 1 : 0);
-      const slotW = totalFooterSlots > 0 ? (PAGE_W - 40) / totalFooterSlots : 0;
-
-      const pdf = new jsPDF({
-        unit: "pt",
-        format: "a4",
-        orientation: isLandscape ? "landscape" : "portrait",
-      });
-
-      for (let pg = 0; pg < numPages; pg++) {
-        if (pg > 0) pdf.addPage();
-
-        const srcY = pg * pageContentPx;
-        const srcH = Math.min(pageContentPx, fullCanvas.height - srcY);
-
-        // Slice the canvas for this page
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width  = fullCanvas.width;
-        sliceCanvas.height = pageContentPx;
-        const ctx = sliceCanvas.getContext("2d")!;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-        ctx.drawImage(
-          fullCanvas,
-          0, srcY, fullCanvas.width, srcH,
-          0, 0,   fullCanvas.width, srcH
-        );
-
-        // Add content image — positioned below header, stops above footer
-        pdf.addImage(
-          sliceCanvas.toDataURL("image/jpeg", 0.92),
-          "JPEG",
-          0, HEADER_H, PAGE_W, CONTENT_H
-        );
-
-        // ── Header strip ──────────────────────────────────────────────────
-        pdf.setDrawColor(170, 170, 170);
-        pdf.setLineWidth(0.5);
-        pdf.line(20, HEADER_H - 2, PAGE_W - 20, HEADER_H - 2);
-
-        pdf.setFontSize(8);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(0, 0, 0);
-        const coName = (data.companyName || "").slice(0, 45);
-        pdf.text(coName, 20, HEADER_H - 7);
-
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(80, 80, 80);
-        pdf.text(label.split("(")[0].trim(), PAGE_W / 2, HEADER_H - 7, { align: "center" });
-        pdf.text(`Page ${pg + 1} of ${numPages}`, PAGE_W - 20, HEADER_H - 7, { align: "right" });
-
-        // ── Footer strip ──────────────────────────────────────────────────
-        const footerTopY = PAGE_H - FOOTER_H;
-        pdf.setDrawColor(170, 170, 170);
-        pdf.line(20, footerTopY, PAGE_W - 20, footerTopY);
-
-        // Director signature slots
-        for (let s = 0; s < sigDirs.length; s++) {
-          const dir = sigDirs[s];
-          const cx = 20 + s * slotW + slotW / 2;
-          const sigImgY = footerTopY + 3;
-          if (dir.signatureBase64) {
-            try {
-              pdf.addImage(
-                `data:image/jpeg;base64,${dir.signatureBase64}`,
-                "JPEG", cx - 18, sigImgY, 36, 15
-              );
-            } catch { /* skip if image fails */ }
-          }
-          pdf.setFontSize(6.5); pdf.setFont("helvetica", "bold"); pdf.setTextColor(0, 0, 0);
-          pdf.text(dir.name, cx, footerTopY + 23, { align: "center", maxWidth: slotW - 4 });
-          pdf.setFontSize(5.5); pdf.setFont("helvetica", "normal"); pdf.setTextColor(80, 80, 80);
-          if (dir.designation) pdf.text(dir.designation, cx, footerTopY + 30, { align: "center", maxWidth: slotW - 4 });
-          if (dir.din) pdf.text(`DIN: ${dir.din}`, cx, footerTopY + 37, { align: "center" });
-        }
-
-        // CA seal slot (audit-report & notes-on-accounts)
-        if (hasSeal && aud) {
-          const sealIdx = sigDirs.length;
-          const cx = 20 + sealIdx * slotW + slotW / 2;
-          const sealImgY = footerTopY + 2;
-          if (aud.sealBase64) {
-            try {
-              pdf.addImage(
-                `data:image/jpeg;base64,${aud.sealBase64}`,
-                "JPEG", cx - 14, sealImgY, 28, 24
-              );
-            } catch { /* skip */ }
-          }
-          pdf.setFontSize(6.5); pdf.setFont("helvetica", "bold"); pdf.setTextColor(0, 0, 0);
-          if (aud.firmName) pdf.text(`M/s. ${aud.firmName}`, cx, footerTopY + 32, { align: "center", maxWidth: slotW - 4 });
-          pdf.setFontSize(5.5); pdf.setFont("helvetica", "normal"); pdf.setTextColor(80, 80, 80);
-          if (aud.frn) pdf.text(`FRN: ${aud.frn}`, cx, footerTopY + 39, { align: "center" });
-        }
-      }
-
       const filename = `${key}_${data.companyName || "Company"}_FY${data.financialYear || ""}`
         .replace(/[^a-zA-Z0-9_\-. ]/g, "_");
-      pdf.save(`${filename}.pdf`);
+
+      const res = await fetch("/api/annual-filing/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          html,
+          filename,
+          isLandscape,
+          companyName: data.companyName || "",
+          docTitle: label.split("(")[0].trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || "PDF generation failed");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
     } catch (err) {
       alert(`PDF generation failed: ${err instanceof Error ? err.message : String(err)}`);
