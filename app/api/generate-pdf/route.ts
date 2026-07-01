@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import {
   buildPuppeteerHeader,
   buildPuppeteerFooter,
@@ -14,12 +12,10 @@ export const maxDuration = 60;
 async function launchBrowser() {
   const puppeteer = (await import("puppeteer-core")).default;
   if (process.env.NODE_ENV === "production") {
-    const chromium = (await import("@sparticuz/chromium-min")).default;
+    const chromium = (await import("@sparticuz/chromium")).default;
     return puppeteer.launch({
       args: chromium.args,
-      executablePath: await chromium.executablePath(
-        "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.tar"
-      ),
+      executablePath: await chromium.executablePath(),
       headless: true,
       defaultViewport: { width: 1280, height: 800 },
     });
@@ -42,11 +38,6 @@ async function launchBrowser() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = (await req.json()) as {
       html: string;
       filename: string;
