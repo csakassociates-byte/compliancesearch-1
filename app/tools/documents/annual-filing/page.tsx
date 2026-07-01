@@ -253,6 +253,7 @@ function AnnualFilingTool() {
   const [generated, setGenerated]   = useState<Record<string, string>>({});
   const [pdfLoading, setPdfLoading]   = useState<Record<string, boolean>>({});
   const [docxLoading, setDocxLoading] = useState<Record<string, boolean>>({});
+  const [sigEnabled, setSigEnabled]   = useState<Record<string, boolean>>({});
   const [savedCAs, setSavedCAs]     = useState<SavedCA[]>([]);
   const [savingCA, setSavingCA]     = useState(false);
   const [showCAManager, setShowCAManager] = useState(false);
@@ -285,6 +286,12 @@ function AnnualFilingTool() {
           setAuditOpts(parsed.auditOpts);
           setSaveId(json.filing.id);
           setSaveIdFY(parsed.data.financialYear);
+          // Restore director signatures from csi_persons
+          if (parsed.data._companyId) {
+            setCompanyId(parsed.data._companyId);
+            void loadPersonsForCompany(parsed.data._companyId, parsed.data.directors || []);
+          }
+          // CA signature restored via the savedCAs useEffect below
         }
       })
       .catch(() => {})
@@ -299,6 +306,20 @@ function AnnualFilingTool() {
       .then((j: { auditors?: SavedCA[] }) => setSavedCAs(j.auditors || []))
       .catch(() => {});
   }, [session]);
+
+  // ── Restore CA signature from savedCAs after any draft load ────────────
+  useEffect(() => {
+    if (!data.auditor._savedCAId) return;
+    if (data.auditor.signatureBase64 || data.auditor.sealBase64) return; // already loaded
+    const ca = savedCAs.find(c => c.id === data.auditor._savedCAId);
+    if (!ca) return;
+    if (ca.signatureBase64 || ca.sealBase64) {
+      patchAud({
+        signatureBase64: ca.signatureBase64 ?? undefined,
+        sealBase64:      ca.sealBase64      ?? undefined,
+      });
+    }
+  }, [data.auditor._savedCAId, savedCAs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-fill audit report date from board report date ─────────────────
   useEffect(() => {
@@ -389,6 +410,7 @@ function AnnualFilingTool() {
       rocName:               co.rocName || "",
       incorporationDate:     toDateInput(co.incorporationDate || ""),
       stateOfIncorporation:  derivedState || "",
+      _companyId:            co.id || undefined,
       ...(co.email  && { companyEmail: co.email }),
       ...(co.mobile && { companyPhone: co.mobile }),
       ...(lastAgm   && { prevFYLastMeetingDate: lastAgm, prevFYLastMeetingDateConfirmed: false }),
@@ -487,7 +509,24 @@ function AnnualFilingTool() {
           };
         }
       }
-      patch({ directors: dirs });
+      // Update directors AND restore signatureBase64 in signatoryDirectors
+      setData(prev => {
+        const dedupedDirs = deduplicateDirs(dirs);
+        const slots = ["director1", "director2", "director3"] as const;
+        const sigs = { ...prev.signatoryDirectors };
+        for (const slot of slots) {
+          const s = sigs[slot];
+          if (!s?.name) continue;
+          const d = dedupedDirs.find(x =>
+            (s.din && x.din && s.din === x.din) ||
+            x.name.trim().toLowerCase() === s.name.trim().toLowerCase()
+          );
+          if (d?.signatureBase64) {
+            sigs[slot] = { ...s, signatureBase64: d.signatureBase64 } as typeof s;
+          }
+        }
+        return { ...prev, directors: dedupedDirs, signatoryDirectors: sigs };
+      });
     } finally {
       setLoadingPersons(false);
     }
@@ -541,6 +580,23 @@ function AnnualFilingTool() {
           : undefined,
       },
       directors: d.directors.map(dir => ({ ...dir, signatureBase64: undefined })),
+    };
+  }
+
+  // ── Strip only document signatures (for per-doc "no signature" option) ─
+  function stripDocSignatures(d: AnnualFilingData): AnnualFilingData {
+    return {
+      ...d,
+      auditor: { ...d.auditor, signatureBase64: undefined, sealBase64: undefined },
+      signatoryDirectors: {
+        director1: { ...d.signatoryDirectors.director1, signatureBase64: undefined },
+        director2: d.signatoryDirectors.director2
+          ? { ...d.signatoryDirectors.director2, signatureBase64: undefined }
+          : undefined,
+        director3: d.signatoryDirectors.director3
+          ? { ...d.signatoryDirectors.director3, signatureBase64: undefined }
+          : undefined,
+      },
     };
   }
 
@@ -678,6 +734,46 @@ function AnnualFilingTool() {
         }),
       });
     } catch { /* silent */ }
+  }
+
+  // ── Persist CA signature/seal to DB (PATCH existing or POST new record) ─
+  async function persistCAImage(field: "signatureBase64" | "sealBase64", b64: string) {
+    if (!session?.user) return;
+    const a = data.auditor;
+    if (a._savedCAId) {
+      // CA already saved — just update the one field
+      void fetch(`/api/auditors/${a._savedCAId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: b64 }),
+      });
+      setSavedCAs(prev => prev.map(c =>
+        c.id === a._savedCAId ? { ...c, [field]: b64 } : c
+      ));
+    } else if (a.firmName && a.frn && a.partnerName && a.membershipNo) {
+      // CA not yet saved — auto-save it now with the signature included
+      const payload = {
+        firmName: a.firmName, frn: a.frn,
+        partnerName: a.partnerName, membershipNo: a.membershipNo,
+        place: a.place || "",
+        signatureBase64: field === "signatureBase64" ? b64 : (a.signatureBase64 ?? null),
+        sealBase64:      field === "sealBase64"      ? b64 : (a.sealBase64      ?? null),
+      };
+      const res = await fetch("/api/auditors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json() as { id?: string };
+      if (json.id) {
+        patchAud({ _savedCAId: json.id });
+        const updated: SavedCA = { id: json.id, firmName: a.firmName, frn: a.frn, partnerName: a.partnerName, membershipNo: a.membershipNo, place: a.place, signatureBase64: payload.signatureBase64, sealBase64: payload.sealBase64 };
+        setSavedCAs(prev => {
+          const exists = prev.find(c => c.id === json.id);
+          return exists ? prev.map(c => c.id === json.id ? updated : c) : [updated, ...prev];
+        });
+      }
+    }
   }
 
   // ── Save a new CA to list ─────────────────────────────────────────────
@@ -1405,7 +1501,7 @@ function AnnualFilingTool() {
                           reader.onload = ev => {
                             const b64 = (ev.target?.result as string).split(",")[1];
                             patchAud({ signatureBase64: b64 });
-                            if (data.auditor._savedCAId) void fetch(`/api/auditors/${data.auditor._savedCAId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signatureBase64: b64 }) });
+                            void persistCAImage("signatureBase64", b64);
                           };
                           reader.readAsDataURL(file);
                         }} />
@@ -1423,7 +1519,7 @@ function AnnualFilingTool() {
                       reader.onload = ev => {
                         const b64 = (ev.target?.result as string).split(",")[1];
                         patchAud({ signatureBase64: b64 });
-                        if (data.auditor._savedCAId) void fetch(`/api/auditors/${data.auditor._savedCAId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signatureBase64: b64 }) });
+                        void persistCAImage("signatureBase64", b64);
                       };
                       reader.readAsDataURL(file);
                     }} />
@@ -1447,7 +1543,7 @@ function AnnualFilingTool() {
                           reader.onload = ev => {
                             const b64 = (ev.target?.result as string).split(",")[1];
                             patchAud({ sealBase64: b64 });
-                            if (data.auditor._savedCAId) void fetch(`/api/auditors/${data.auditor._savedCAId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sealBase64: b64 }) });
+                            void persistCAImage("sealBase64", b64);
                           };
                           reader.readAsDataURL(file);
                         }} />
@@ -1465,7 +1561,7 @@ function AnnualFilingTool() {
                       reader.onload = ev => {
                         const b64 = (ev.target?.result as string).split(",")[1];
                         patchAud({ sealBase64: b64 });
-                        if (data.auditor._savedCAId) void fetch(`/api/auditors/${data.auditor._savedCAId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sealBase64: b64 }) });
+                        void persistCAImage("sealBase64", b64);
                       };
                       reader.readAsDataURL(file);
                     }} />
@@ -3588,11 +3684,30 @@ function AnnualFilingTool() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-slate-800 truncate">{a.label}</p>
                   </div>
+                  {/* Use Signature toggle */}
+                  <label className="flex items-center gap-1 cursor-pointer flex-shrink-0" title="Toggle signatures on this document">
+                    <input
+                      type="checkbox"
+                      checked={sigEnabled[a.key] !== false}
+                      onChange={e => {
+                        const enabled = e.target.checked;
+                        setSigEnabled(prev => ({ ...prev, [a.key]: enabled }));
+                        const cashFlowIncluded = data.companyType === "section8" || data.companyType === "fpc";
+                        const opts = { ...auditOpts, cashFlowIncluded };
+                        const genData = enabled ? data : stripDocSignatures(data);
+                        const docs = generateAllAttachments(genData, opts) as unknown as Record<string, string>;
+                        if (docs[a.key]) setGenerated(prev => ({ ...prev, [a.key]: docs[a.key] }));
+                      }}
+                      className="w-3.5 h-3.5 accent-blue-600"
+                    />
+                    <span className="text-xs text-slate-500 font-medium">Sign</span>
+                  </label>
                   <button
                     onClick={() => {
                       const cashFlowIncluded = data.companyType === "section8" || data.companyType === "fpc";
                       const opts = { ...auditOpts, cashFlowIncluded };
-                      const docs = generateAllAttachments(data, opts) as unknown as Record<string, string>;
+                      const genData = sigEnabled[a.key] !== false ? data : stripDocSignatures(data);
+                      const docs = generateAllAttachments(genData, opts) as unknown as Record<string, string>;
                       if (docs[a.key]) setGenerated(prev => ({ ...prev, [a.key]: docs[a.key] }));
                     }}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
@@ -3648,10 +3763,11 @@ function AnnualFilingTool() {
               ))}
             </div>
             <p className="text-xs text-slate-500 mt-3 text-center">
+              <b>Sign ☑</b> — uncheck to remove signatures from that document.&nbsp;
               <b>Download PDF</b> — properly formatted PDF with running header &amp; signatures on every page.&nbsp;
               <b>Word</b> — editable .docx file for Microsoft Word / Google Docs.&nbsp;
-              <b>Preview</b> — opens HTML in a new browser tab.&nbsp;
-              <b>Regenerate</b> — re-creates a single document after making changes without re-generating all.
+              <b>Preview</b> — opens HTML in a new tab.&nbsp;
+              <b>↺</b> — re-creates a single document after making changes.
             </p>
             <button
               onClick={handleGenerate}

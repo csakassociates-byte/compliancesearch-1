@@ -305,6 +305,9 @@ export interface AnnualFilingData {
   // ── Step 7: Conditional ─────────────────────
   subsidiaries?: SubsidiaryRecord[];
   relatedPartyTransactions?: RelatedPartyTransaction[];
+
+  // ── Internal (not shown in UI) ───────────────
+  _companyId?: string;  // csi_companies.id — used to restore director signatures on draft reload
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
