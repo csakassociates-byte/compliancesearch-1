@@ -77,12 +77,18 @@ export async function POST(req: NextRequest) {
       const page = await browser.newPage();
       await page.setContent(body.html, { waitUntil: "domcontentloaded" });
 
-      // Hide the inline CSS footer — Puppeteer's native footer handles every page
+      // HTML generators set @page{margin:0} for old html2canvas rendering.
+      // Puppeteer displayHeaderFooter needs real @page margins so header/footer
+      // have space on every page (not just page 1 where body padding-top helps).
+      // Injecting AFTER setContent so it comes last in cascade and wins.
       await page.addStyleTag({
         content: [
+          `@page { margin: ${cfg.marginTop} ${cfg.marginSide} ${cfg.marginBottom} ${cfg.marginSide}; }`,
+          // body padding-top was for html2canvas page 1 offset — not needed with real margins
+          "body { padding-top: 0 !important; padding-bottom: 0 !important; }",
           ".page-sig-footer { display: none !important; }",
           ".has-page-footer { padding-bottom: 0 !important; }",
-        ].join(" "),
+        ].join("\n"),
       });
 
       const pdf = await page.pdf({
@@ -92,12 +98,7 @@ export async function POST(req: NextRequest) {
         displayHeaderFooter: true,
         headerTemplate,
         footerTemplate,
-        margin: {
-          top:    cfg.marginTop,
-          right:  cfg.marginSide,
-          bottom: cfg.marginBottom,
-          left:   cfg.marginSide,
-        },
+        // No margin here — @page CSS above controls margins to avoid conflict
       });
 
       const safeName = body.filename
