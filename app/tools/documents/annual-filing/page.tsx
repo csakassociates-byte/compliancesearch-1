@@ -483,6 +483,7 @@ function AnnualFilingTool() {
         email?: string | null; nationality?: string | null;
         occupation?: string | null; presentAddress?: string | null;
         panNo?: string | null; appointedAt?: string | null;
+        sharesHeld?: number | null;
         signatureBase64?: string | null;
       }> };
       const persons = json.persons || [];
@@ -504,6 +505,7 @@ function AnnualFilingTool() {
             occupation:       p.occupation       || dirs[idx].occupation,
             address:          p.presentAddress   || dirs[idx].address,
             pan:              p.panNo            || dirs[idx].pan,
+            sharesHeld:       p.sharesHeld       ?? dirs[idx].sharesHeld,
             signatureBase64:  p.signatureBase64  || dirs[idx].signatureBase64,
             _personId:        p.id,
           };
@@ -678,26 +680,38 @@ function AnnualFilingTool() {
     try {
       const parsed = JSON.parse(prevYearDraft.formDataJson) as { data: AnnualFilingData; auditOpts: AuditReportOptions };
       const prev   = parsed.data;
-      // Copy only static/reference data — NOT financials, board meetings, member meetings, generated docs
+
+      // Last board meeting of previous FY → becomes prevFYLastMeetingDate for current year
+      const prevLastBoardDate = prev.boardMeetings?.length
+        ? [...prev.boardMeetings].sort((a, b) => a.date.localeCompare(b.date)).at(-1)!.date
+        : undefined;
+
+      const carriedDirs = prev.directors.map(d => ({ ...d, changedDuringYear: false, dateOfCessation: undefined }));
+
       patch({
         // Company (already filled from MCA, but carry these overrides if set)
         businessDescription:       prev.businessDescription || data.businessDescription,
-        principalActivity:         prev.principalActivity  || data.principalActivity,
-        companyEmail:              prev.companyEmail        || data.companyEmail,
-        companyPhone:              prev.companyPhone        || data.companyPhone,
-        gstin:                     prev.gstin               || data.gstin,
+        principalActivity:         prev.principalActivity   || data.principalActivity,
+        companyEmail:              prev.companyEmail         || data.companyEmail,
+        companyPhone:              prev.companyPhone         || data.companyPhone,
+        gstin:                     prev.gstin                || data.gstin,
         // Document preferences
         useLetterHead:             prev.useLetterHead,
         // Auditor (full carry forward — usually same CA)
         auditor:                   { ...prev.auditor, udin: "", reportDate: "" },
-        // Directors with full KYC
-        directors:                 prev.directors.map(d => ({ ...d, changedDuringYear: false, dateOfCessation: undefined })),
+        // Directors with full KYC from prev year draft
+        directors:                 carriedDirs,
         signatoryDirectors:        prev.signatoryDirectors,
         placeOfSigning:            prev.placeOfSigning,
         // Shareholders
         shareholders:              prev.shareholders,
         totalShares:               prev.totalShares,
         nominalValuePerShare:      prev.nominalValuePerShare,
+        // Previous FY last board meeting date (required for 120-day gap check)
+        ...(prevLastBoardDate && {
+          prevFYLastMeetingDate:          prevLastBoardDate,
+          prevFYLastMeetingDateConfirmed: false,
+        }),
         // Accounting policies
         depreciationMethod:        prev.depreciationMethod,
         inventoryMethod:           prev.inventoryMethod,
@@ -710,6 +724,11 @@ function AnnualFilingTool() {
       });
       // Also carry auditor report options (minus opinion type — reset to unmodified)
       setAuditOpts({ ...parsed.auditOpts, opinionType: "unmodified", qualificationDetails: "", emphasisOfMatter: "" });
+
+      // Refresh KYC from csi_persons to get the latest saved data (signatures etc.)
+      const cId = prev._companyId || companyId;
+      if (cId) void loadPersonsForCompany(cId, carriedDirs);
+
       setPrevYearDraft(null);
       setSavedMsg({ ok: true, text: `Carried forward from FY ${prevYearDraft.financialYear} — review directors, shareholders and compliance flags` });
       setTimeout(() => setSavedMsg(null), 8000);
@@ -1653,10 +1672,11 @@ function AnnualFilingTool() {
     // Derived validation values
     const pat        = parseFloat(fin.profitAfterTax) || 0;
     const isLoss     = pat < 0;
-    const authCap    = parseFloat(fin.authorisedCapital) || 0;
-    const paidUpCap  = parseFloat(fin.paidUpCapital) || 0;
-    const totalAssets = parseFloat(fin.totalAssets) || 0;
-    const totalLiab   = parseFloat(fin.totalLiabilities) || 0;
+    const nc = (v: string) => parseFloat((v || "").replace(/,/g, "")) || 0;
+    const authCap    = nc(fin.authorisedCapital);
+    const paidUpCap  = nc(fin.paidUpCapital);
+    const totalAssets = nc(fin.totalAssets);
+    const totalLiab   = nc(fin.totalLiabilities);
     const bsDiff      = Math.abs(totalAssets - totalLiab);
     const bsImbalance = totalAssets > 0 && totalLiab > 0 && bsDiff > 1;
     const authLtPaid  = authCap > 0 && paidUpCap > 0 && paidUpCap > authCap;
