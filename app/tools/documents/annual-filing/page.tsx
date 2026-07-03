@@ -246,10 +246,190 @@ export default function AnnualFilingPage() {
   );
 }
 
+// ── Sidebar inner (shared between desktop collapse and mobile drawer) ──────────
+interface SidebarInnerProps {
+  data: { companyName: string; cin?: string; financialYear: string };
+  step: number;
+  collapsed: boolean;
+  session: { user?: unknown } | null;
+  saving: boolean;
+  saveId: string | null;
+  savedMsg: { ok: boolean; text: string } | null;
+  resetting: boolean;
+  onStepClick: (id: number) => void;
+  onSave: () => void;
+  onReset: () => void;
+  onToggle: () => void;
+  patch: (val: Partial<AnnualFilingData>) => void;
+}
+
+function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg, resetting, onStepClick, onSave, onReset, onToggle, patch }: SidebarInnerProps) {
+  function isStepComplete(id: number) {
+    if (id === 1) return !!(data.companyName && data.financialYear);
+    return false;
+  }
+
+  return (
+    <>
+      {/* Tool header */}
+      <div className={`flex-shrink-0 ${collapsed ? "p-3" : "p-4 pb-3"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-2.5 mb-3"}`}>
+          <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <BookOpen className="w-4 h-4 text-white" strokeWidth={2.5} />
+          </div>
+          {!collapsed && (
+            <div>
+              <div className="text-[13px] font-medium text-white leading-tight">Annual Filing</div>
+              <div className="text-[10px] text-white/35">AOC-4 &amp; MGT-7/7A</div>
+            </div>
+          )}
+        </div>
+        {!collapsed && (
+          <select
+            value={data.financialYear}
+            onChange={e => patch({ financialYear: e.target.value as FinancialYear })}
+            className="w-full rounded-lg px-3 py-2 text-[12px] font-medium text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+            style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
+          >
+            {FY_OPTIONS.map(fy => <option key={fy} value={fy} style={{ background: "#1e293b", color: "#fff" }}>{fy}</option>)}
+          </select>
+        )}
+      </div>
+
+      {/* Steps navigation */}
+      <nav className={`flex-1 ${collapsed ? "p-1.5" : "p-2"}`}>
+        {STEPS.slice(0, 7).map(s => {
+          const complete = isStepComplete(s.id);
+          const isCurrent = step === s.id;
+          const Icon = STEP_ICONS[s.id];
+          return (
+            <button
+              key={s.id}
+              onClick={() => onStepClick(s.id)}
+              title={collapsed ? s.label : undefined}
+              className={`w-full flex items-center ${collapsed ? "justify-center" : "gap-2.5"} px-2.5 py-2 rounded-lg mb-0.5 transition-colors ${
+                isCurrent ? "bg-emerald-500/20" : "hover:bg-white/5"
+              }`}
+            >
+              <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                isCurrent ? "bg-white text-emerald-600"
+                : complete  ? "bg-emerald-600 text-white"
+                : "bg-white/10 text-white/30"
+              }`}>
+                {complete && !isCurrent ? <FileCheck className="w-3 h-3" /> : (collapsed && Icon ? <Icon className="w-3 h-3" /> : s.id)}
+              </div>
+              {!collapsed && (
+                <span className={`text-[12px] font-medium leading-tight truncate ${
+                  isCurrent ? "text-white" : complete ? "text-white/65" : "text-white/32"
+                }`}>{s.label}</span>
+              )}
+            </button>
+          );
+        })}
+
+        <div className="my-2 mx-1" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }} />
+
+        {/* Step 8 */}
+        {(() => {
+          const s = STEPS[7];
+          const complete = isStepComplete(s.id);
+          const isCurrent = step === 8;
+          return (
+            <button
+              onClick={() => onStepClick(8)}
+              title={collapsed ? s.label : undefined}
+              className={`w-full flex items-center ${collapsed ? "justify-center" : "gap-2.5"} px-2.5 py-2 rounded-lg transition-colors ${
+                isCurrent ? "bg-blue-500/20" : "hover:bg-white/5"
+              }`}
+            >
+              <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                isCurrent ? "bg-white text-blue-600"
+                : complete  ? "bg-blue-600 text-white"
+                : "bg-white/10 text-white/30"
+              }`}>8</div>
+              {!collapsed && (
+                <span className={`text-[12px] font-medium truncate ${
+                  isCurrent ? "text-white" : complete ? "text-white/65" : "text-white/32"
+                }`}>{s.label}</span>
+              )}
+            </button>
+          );
+        })()}
+      </nav>
+
+      {/* Company badge + actions */}
+      {!collapsed && (
+        <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Company</div>
+          {data.companyName ? (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 bg-emerald-600 rounded-md flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
+                {data.companyName[0]}
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11.5px] font-medium text-white truncate leading-tight">{data.companyName}</div>
+                <div className="text-[10px] text-white/30 truncate">{data.cin || "No CIN entered"}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] text-white/25 italic mb-3">No company selected</div>
+          )}
+          {session?.user ? (
+            <>
+              <div className="flex gap-2">
+                <button
+                  onClick={onSave}
+                  disabled={saving || !data.companyName}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-emerald-300 hover:text-emerald-200 disabled:opacity-40 transition-colors"
+                  style={{ background: "rgba(5,150,105,0.18)", border: "1px solid rgba(5,150,105,0.3)" }}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                  {saving ? "Saving…" : saveId ? "Update" : "Save draft"}
+                </button>
+                {(saveId || data.companyName) && (
+                  <button
+                    onClick={onReset}
+                    disabled={resetting}
+                    className="px-2.5 py-1.5 rounded-lg text-red-400/60 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
+                    style={{ border: "1px solid rgba(239,68,68,0.2)" }}
+                    title="Reset all data"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0f 01-15.357-2m15.357 2H15" /></svg>
+                  </button>
+                )}
+              </div>
+              {saveId && !saving && <p className="mt-1.5 text-[10px] text-white/30 text-center">• Draft saved</p>}
+              {savedMsg && <p className={`mt-1.5 text-[10.5px] font-medium ${savedMsg.ok ? "text-emerald-400" : "text-red-400"}`}>{savedMsg.ok ? "✓" : "✗"} {savedMsg.text}</p>}
+            </>
+          ) : (
+            <a href="/auth/login" className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-blue-300/80 hover:text-blue-200 transition-colors" style={{ background: "rgba(37,99,235,0.12)", border: "1px solid rgba(37,99,235,0.2)" }}>
+              Sign in to save drafts
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Collapse toggle (desktop only) */}
+      <button
+        onClick={onToggle}
+        className="flex-shrink-0 flex items-center justify-center py-3 text-white/20 hover:text-white/50 transition-colors"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        <svg className={`w-4 h-4 transition-transform duration-200 ${collapsed ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M18 19l-7-7 7-7" />
+        </svg>
+      </button>
+    </>
+  );
+}
+
 function AnnualFilingTool() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [data, setData] = useState<AnnualFilingData>({ ...INITIAL_FILING_DATA });
   const [auditOpts, setAuditOpts] = useState<AuditReportOptions>({
     opinionType: "unmodified",
@@ -3715,151 +3895,38 @@ function AnnualFilingTool() {
     <div className="h-screen overflow-hidden bg-slate-50">
       <Navbar />
 
+      {/* ── Mobile sidebar overlay ──────────────────────────────────────── */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileSidebarOpen(false)} />
+          <aside className="relative w-[260px] bg-[#0f172a] flex flex-col overflow-y-auto z-10">
+            <SidebarInner
+              data={data} step={step} collapsed={false}
+              session={session} saving={saving} saveId={saveId} savedMsg={savedMsg} resetting={resetting}
+              onStepClick={(id) => { void silentSave(); setStep(id); setMobileSidebarOpen(false); }}
+              onSave={handleSave} onReset={handleReset}
+              onToggle={() => setMobileSidebarOpen(false)}
+              patch={patch}
+            />
+          </aside>
+        </div>
+      )}
+
       <div className="flex" style={{ height: "calc(100vh - 64px)" }}>
 
-        {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-        <aside className="w-[220px] bg-[#0f172a] flex-shrink-0 flex flex-col overflow-y-auto">
-
-          {/* Tool header */}
-          <div className="p-4 pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                <BookOpen className="w-4 h-4 text-white" strokeWidth={2.5} />
-              </div>
-              <div>
-                <div className="text-[13px] font-medium text-white leading-tight">Annual Filing</div>
-                <div className="text-[10px] text-white/35">AOC-4 &amp; MGT-7/7A</div>
-              </div>
-            </div>
-
-            {/* FY selector */}
-            <select
-              value={data.financialYear}
-              onChange={e => patch({ financialYear: e.target.value as FinancialYear })}
-              className="w-full rounded-lg px-3 py-2 text-[12px] font-medium text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-              style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
-            >
-              {FY_OPTIONS.map(fy => <option key={fy} value={fy} style={{ background: "#1e293b", color: "#fff" }}>{fy}</option>)}
-            </select>
-          </div>
-
-          {/* Steps navigation */}
-          <nav className="flex-1 p-2">
-            {STEPS.slice(0, 7).map(s => {
-              const complete = isStepComplete(s.id);
-              const isCurrent = step === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => { void silentSave(); setStep(s.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 text-left transition-colors ${
-                    isCurrent ? "bg-emerald-500/20" : "hover:bg-white/5"
-                  }`}
-                >
-                  <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                    isCurrent ? "bg-white text-emerald-600"
-                    : complete  ? "bg-emerald-600 text-white"
-                    : "bg-white/10 text-white/30"
-                  }`}>
-                    {complete && !isCurrent ? <FileCheck className="w-3 h-3" /> : s.id}
-                  </div>
-                  <span className={`text-[12px] font-medium leading-tight ${
-                    isCurrent ? "text-white"
-                    : complete  ? "text-white/65"
-                    : "text-white/32"
-                  }`}>{s.label}</span>
-                </button>
-              );
-            })}
-
-            {/* Divider before Generate All */}
-            <div className="my-2 mx-1" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }} />
-
-            {/* Step 8 — Generate All */}
-            {(() => {
-              const s = STEPS[7];
-              const complete = isStepComplete(s.id);
-              const isCurrent = step === 8;
-              return (
-                <button
-                  onClick={() => { void silentSave(); setStep(8); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
-                    isCurrent ? "bg-blue-500/20" : "hover:bg-white/5"
-                  }`}
-                >
-                  <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                    isCurrent ? "bg-white text-blue-600"
-                    : complete  ? "bg-blue-600 text-white"
-                    : "bg-white/10 text-white/30"
-                  }`}>8</div>
-                  <span className={`text-[12px] font-medium ${
-                    isCurrent ? "text-white" : complete ? "text-white/65" : "text-white/32"
-                  }`}>{s.label}</span>
-                </button>
-              );
-            })()}
-          </nav>
-
-          {/* Company badge + save / reset */}
-          <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-            <div className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Company</div>
-            {data.companyName ? (
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 bg-emerald-600 rounded-md flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
-                  {data.companyName[0]}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[11.5px] font-medium text-white truncate leading-tight">{data.companyName}</div>
-                  <div className="text-[10px] text-white/30 truncate">{data.cin || "No CIN entered"}</div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-[11px] text-white/25 italic mb-3">No company selected</div>
-            )}
-
-            {session?.user ? (
-              <>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !data.companyName}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-emerald-300 hover:text-emerald-200 disabled:opacity-40 transition-colors"
-                    style={{ background: "rgba(5,150,105,0.18)", border: "1px solid rgba(5,150,105,0.3)" }}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
-                    {saving ? "Saving…" : saveId ? "Update" : "Save draft"}
-                  </button>
-                  {(saveId || data.companyName) && (
-                    <button
-                      onClick={handleReset}
-                      disabled={resetting}
-                      className="px-2.5 py-1.5 rounded-lg text-red-400/60 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
-                      style={{ border: "1px solid rgba(239,68,68,0.2)" }}
-                      title="Reset all data"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    </button>
-                  )}
-                </div>
-                {saveId && !saving && (
-                  <p className="mt-1.5 text-[10px] text-white/30 text-center">• Draft saved</p>
-                )}
-                {savedMsg && (
-                  <p className={`mt-1.5 text-[10.5px] font-medium ${savedMsg.ok ? "text-emerald-400" : "text-red-400"}`}>
-                    {savedMsg.ok ? "✓" : "✗"} {savedMsg.text}
-                  </p>
-                )}
-              </>
-            ) : (
-              <a
-                href="/auth/login"
-                className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-blue-300/80 hover:text-blue-200 transition-colors"
-                style={{ background: "rgba(37,99,235,0.12)", border: "1px solid rgba(37,99,235,0.2)" }}
-              >
-                Sign in to save drafts
-              </a>
-            )}
-          </div>
+        {/* ── Sidebar (desktop) ────────────────────────────────────────── */}
+        <aside
+          className="hidden md:flex flex-col flex-shrink-0 bg-[#0f172a] overflow-y-auto"
+          style={{ width: sidebarCollapsed ? "64px" : "220px", transition: "width 0.2s ease" }}
+        >
+          <SidebarInner
+            data={data} step={step} collapsed={sidebarCollapsed}
+            session={session} saving={saving} saveId={saveId} savedMsg={savedMsg} resetting={resetting}
+            onStepClick={(id) => { void silentSave(); setStep(id); }}
+            onSave={handleSave} onReset={handleReset}
+            onToggle={() => setSidebarCollapsed(c => !c)}
+            patch={patch}
+          />
         </aside>
 
         {/* ── Main content ─────────────────────────────────────────────────── */}
@@ -3874,6 +3941,13 @@ function AnnualFilingTool() {
               return (
                 <>
                   <div className="flex items-start gap-3">
+                    {/* Mobile hamburger */}
+                    <button
+                      className="md:hidden flex-shrink-0 mt-1 p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"
+                      onClick={() => setMobileSidebarOpen(true)}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    </button>
                     <div className="w-9 h-9 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
                       <StepIcon className="w-[18px] h-[18px] text-emerald-600" strokeWidth={2} />
                     </div>
@@ -3966,8 +4040,8 @@ function AnnualFilingTool() {
           </div>
 
           {/* Step content */}
-          <div className="flex-1 px-6 py-6">
-            <div className="max-w-3xl">
+          <div className="flex-1 px-4 md:px-8 py-6">
+            <div className="max-w-3xl mx-auto">
               {step === 1 && renderStep1()}
               {step === 2 && renderStep2()}
               {step === 3 && renderStep3()}
