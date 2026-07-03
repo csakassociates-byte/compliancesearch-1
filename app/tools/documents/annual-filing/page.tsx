@@ -3712,13 +3712,13 @@ function AnnualFilingTool() {
 
   // ── Main render ───────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="h-screen overflow-hidden bg-slate-50">
       <Navbar />
 
-      <div className="flex" style={{ minHeight: "calc(100vh - 64px)" }}>
+      <div className="flex" style={{ height: "calc(100vh - 64px)" }}>
 
         {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-        <aside className="w-[220px] bg-[#0f172a] flex-shrink-0 flex flex-col">
+        <aside className="w-[220px] bg-[#0f172a] flex-shrink-0 flex flex-col overflow-y-auto">
 
           {/* Tool header */}
           <div className="p-4 pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -3863,7 +3863,7 @@ function AnnualFilingTool() {
         </aside>
 
         {/* ── Main content ─────────────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
 
           {/* Step header */}
           <div className="bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0">
