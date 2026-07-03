@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { BookOpen, FileCheck, FileText, BarChart3, Users, Building2, ScrollText, Link2, ArrowLeftRight } from "lucide-react";
+import { BookOpen, FileCheck, FileText, BarChart3, Users, Building2, ScrollText, Link2, ArrowLeftRight, PieChart, Download } from "lucide-react";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
 import CompanySearch from "@/components/CompanySearch";
 import type { CompanyData } from "@/lib/types/company";
@@ -123,6 +123,28 @@ const COMPANY_TYPE_LABELS: Record<CompanyType, string> = {
 
 const FY_OPTIONS = ["2025-26", "2024-25", "2023-24"];
 
+const STEP_ICONS: Record<number, React.ElementType> = {
+  1: Building2,
+  2: FileCheck,
+  3: BarChart3,
+  4: Users,
+  5: ScrollText,
+  6: PieChart,
+  7: Link2,
+  8: Download,
+};
+
+const STEP_DESCRIPTIONS: Record<number, string> = {
+  1: "Company details, CIN, financial year and document preferences",
+  2: "Statutory auditor information, signatures and appointment details",
+  3: "Profit & loss statement and balance sheet figures",
+  4: "Board meetings, resolutions, compliance and CSR details",
+  5: "Director details, DIN, KYC and signatory directors",
+  6: "Shareholding pattern and folio details",
+  7: "Subsidiaries (AOC-1) and related party transactions (AOC-2)",
+  8: "Generate, preview and download all filing attachments",
+};
+
 /** Deduplicate directors by DIN (preferred) or lowercased name — keeps first occurrence */
 function deduplicateDirs(dirs: DirectorRecord[]): DirectorRecord[] {
   const seen = new Set<string>();
@@ -202,16 +224,10 @@ function Toggle({
   );
 }
 
-function SectionCard({ title, color = "slate", children }: { title: string; color?: string; children: React.ReactNode }) {
-  const colors: Record<string, string> = {
-    slate:   "border-slate-200  bg-slate-50",
-    emerald: "border-emerald-200 bg-emerald-50",
-    blue:    "border-blue-200   bg-blue-50",
-    amber:   "border-amber-200  bg-amber-50",
-  };
+function SectionCard({ title, children }: { title: string; color?: string; children: React.ReactNode }) {
   return (
-    <div className={`border rounded-xl p-5 mb-6 ${colors[color] || colors.slate}`}>
-      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">{title}</h3>
+    <div className="bg-white border border-slate-200 rounded-xl p-5 mb-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-800 mb-4">{title}</h3>
       {children}
     </div>
   );
@@ -3696,197 +3712,300 @@ function AnnualFilingTool() {
 
   // ── Main render ───────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
-      <div className="max-w-4xl mx-auto px-4 py-8">
 
-        {/* Header */}
-        <div className="mb-6">
-          <Link href="/" className="text-sm text-slate-400 hover:text-slate-600 flex items-center gap-1 mb-5">← Home</Link>
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 bg-emerald-600 rounded-xl flex items-center justify-center shadow-md">
-                <BookOpen className="w-5 h-5 text-white" strokeWidth={2.5} />
+      <div className="flex" style={{ minHeight: "calc(100vh - 64px)" }}>
+
+        {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+        <aside className="w-[220px] bg-[#0f172a] flex-shrink-0 flex flex-col">
+
+          {/* Tool header */}
+          <div className="p-4 pb-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <BookOpen className="w-4 h-4 text-white" strokeWidth={2.5} />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">Annual Filing Attachments Generator</h1>
-                <p className="text-sm text-slate-500">AOC-4 &amp; MGT-7/7A | OPC, Private, Section 8, FPC</p>
+                <div className="text-[13px] font-medium text-white leading-tight">Annual Filing</div>
+                <div className="text-[10px] text-white/35">AOC-4 &amp; MGT-7/7A</div>
               </div>
             </div>
-            {session?.user && (
-              <a
-                href="/dashboard/annual-filings"
-                className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                My Filings
-              </a>
-            )}
+
+            {/* FY selector */}
+            <select
+              value={data.financialYear}
+              onChange={e => patch({ financialYear: e.target.value as FinancialYear })}
+              className="w-full rounded-lg px-3 py-2 text-[12px] font-medium text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+              style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
+            >
+              {FY_OPTIONS.map(fy => <option key={fy} value={fy} style={{ background: "#1e293b", color: "#fff" }}>{fy}</option>)}
+            </select>
           </div>
 
-          {/* Save / login bar */}
-          <div className="mt-4 p-3 bg-white border border-slate-200 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-500 flex items-center gap-2 min-w-0">
-                {loadMsg
-                  ? <span className="text-blue-600 animate-pulse">{loadMsg}</span>
-                  : data.companyName
-                    ? <span className="font-semibold text-slate-700 truncate">{data.companyName}</span>
-                    : <span>No company selected</span>
-                }
-                {saveId && !loadMsg && <span className="text-emerald-600 flex-shrink-0">• Draft saved</span>}
+          {/* Steps navigation */}
+          <nav className="flex-1 p-2">
+            {STEPS.slice(0, 7).map(s => {
+              const complete = isStepComplete(s.id);
+              const isCurrent = step === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => { void silentSave(); setStep(s.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 text-left transition-colors ${
+                    isCurrent ? "bg-emerald-500/20" : "hover:bg-white/5"
+                  }`}
+                >
+                  <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                    isCurrent ? "bg-white text-emerald-600"
+                    : complete  ? "bg-emerald-600 text-white"
+                    : "bg-white/10 text-white/30"
+                  }`}>
+                    {complete && !isCurrent ? <FileCheck className="w-3 h-3" /> : s.id}
+                  </div>
+                  <span className={`text-[12px] font-medium leading-tight ${
+                    isCurrent ? "text-white"
+                    : complete  ? "text-white/65"
+                    : "text-white/32"
+                  }`}>{s.label}</span>
+                </button>
+              );
+            })}
+
+            {/* Divider before Generate All */}
+            <div className="my-2 mx-1" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }} />
+
+            {/* Step 8 — Generate All */}
+            {(() => {
+              const s = STEPS[7];
+              const complete = isStepComplete(s.id);
+              const isCurrent = step === 8;
+              return (
+                <button
+                  onClick={() => { void silentSave(); setStep(8); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
+                    isCurrent ? "bg-blue-500/20" : "hover:bg-white/5"
+                  }`}
+                >
+                  <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                    isCurrent ? "bg-white text-blue-600"
+                    : complete  ? "bg-blue-600 text-white"
+                    : "bg-white/10 text-white/30"
+                  }`}>8</div>
+                  <span className={`text-[12px] font-medium ${
+                    isCurrent ? "text-white" : complete ? "text-white/65" : "text-white/32"
+                  }`}>{s.label}</span>
+                </button>
+              );
+            })()}
+          </nav>
+
+          {/* Company badge + save / reset */}
+          <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <div className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Company</div>
+            {data.companyName ? (
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 bg-emerald-600 rounded-md flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
+                  {data.companyName[0]}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11.5px] font-medium text-white truncate leading-tight">{data.companyName}</div>
+                  <div className="text-[10px] text-white/30 truncate">{data.cin || "No CIN entered"}</div>
+                </div>
               </div>
-              {session?.user ? (
-                <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+            ) : (
+              <div className="text-[11px] text-white/25 italic mb-3">No company selected</div>
+            )}
+
+            {session?.user ? (
+              <>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !data.companyName}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-emerald-300 hover:text-emerald-200 disabled:opacity-40 transition-colors"
+                    style={{ background: "rgba(5,150,105,0.18)", border: "1px solid rgba(5,150,105,0.3)" }}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                    {saving ? "Saving…" : saveId ? "Update" : "Save draft"}
+                  </button>
                   {(saveId || data.companyName) && (
                     <button
                       onClick={handleReset}
                       disabled={resetting}
-                      className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 text-xs font-semibold rounded-lg transition-colors"
+                      className="px-2.5 py-1.5 rounded-lg text-red-400/60 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-40 transition-colors"
+                      style={{ border: "1px solid rgba(239,68,68,0.2)" }}
+                      title="Reset all data"
                     >
-                      {resetting ? "Resetting…" : "Reset"}
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     </button>
                   )}
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !data.companyName}
-                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-semibold rounded-lg transition-colors"
-                  >
-                    {saving ? "Saving…" : saveId ? "Update Draft" : "Save Draft"}
-                  </button>
                 </div>
-              ) : (
-                <a href="/auth/login" className="text-xs text-blue-600 hover:underline font-semibold flex-shrink-0 ml-3">Sign in to save drafts</a>
-              )}
+                {saveId && !saving && (
+                  <p className="mt-1.5 text-[10px] text-white/30 text-center">• Draft saved</p>
+                )}
+                {savedMsg && (
+                  <p className={`mt-1.5 text-[10.5px] font-medium ${savedMsg.ok ? "text-emerald-400" : "text-red-400"}`}>
+                    {savedMsg.ok ? "✓" : "✗"} {savedMsg.text}
+                  </p>
+                )}
+              </>
+            ) : (
+              <a
+                href="/auth/login"
+                className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-blue-300/80 hover:text-blue-200 transition-colors"
+                style={{ background: "rgba(37,99,235,0.12)", border: "1px solid rgba(37,99,235,0.2)" }}
+              >
+                Sign in to save drafts
+              </a>
+            )}
+          </div>
+        </aside>
+
+        {/* ── Main content ─────────────────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col min-w-0">
+
+          {/* Step header */}
+          <div className="bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0">
+            {(() => {
+              const s = STEPS[step - 1];
+              const complete = isStepComplete(step);
+              const StepIcon = STEP_ICONS[step];
+              return (
+                <>
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <StepIcon className="w-[18px] h-[18px] text-emerald-600" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide">Step {step} of 8</span>
+                        {complete && (
+                          <span className="text-[10.5px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✓ Complete</span>
+                        )}
+                      </div>
+                      <h1 className="text-[15px] font-semibold text-slate-900 leading-tight">{s.label}</h1>
+                      <p className="text-[11.5px] text-slate-500 mt-0.5">{STEP_DESCRIPTIONS[step]}</p>
+                    </div>
+                    {session?.user && (
+                      <a
+                        href="/dashboard/annual-filings"
+                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        My Filings
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Loading message */}
+                  {loadMsg && (
+                    <div className="mt-3 text-xs text-blue-600 animate-pulse">{loadMsg}</div>
+                  )}
+
+                  {/* Carry forward banner */}
+                  {prevYearDraft && !foundDraft && (
+                    <div className="mt-3 p-3 bg-violet-50 border border-violet-200 rounded-xl flex items-center justify-between gap-3">
+                      <div className="text-xs text-slate-700 min-w-0">
+                        <span className="font-bold text-violet-700">Previous year draft found</span>
+                        {" — "}{prevYearDraft.companyName} · FY {prevYearDraft.financialYear}
+                        <span className="text-slate-500 ml-1 block sm:inline">Carry forward directors, auditor, shareholders &amp; KYC — saves re-entry time.</span>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={handleCarryForward} className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg">Carry Forward ↗</button>
+                        <button onClick={() => setPrevYearDraft(null)} className="px-3 py-1.5 border border-violet-200 text-violet-600 hover:bg-violet-100 text-xs font-semibold rounded-lg">Dismiss</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Found draft banner */}
+                  {foundDraft && (
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3">
+                      <div className="text-xs text-slate-700 min-w-0">
+                        <span className="font-bold text-blue-700">Saved draft found</span>
+                        {" — "}{foundDraft.companyName} · FY {foundDraft.financialYear}
+                        <span className="text-slate-400 ml-1">(last saved: {new Date(foundDraft.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})</span>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            try {
+                              const parsed = JSON.parse(foundDraft.formDataJson) as { data: AnnualFilingData; auditOpts: AuditReportOptions };
+                              setData({ ...parsed.data, directors: deduplicateDirs(parsed.data.directors || []) });
+                              setAuditOpts(parsed.auditOpts);
+                              setSaveId(foundDraft.id);
+                              setSaveIdFY(foundDraft.financialYear ?? null);
+                              setFoundDraft(null);
+                              setSavedMsg({ ok: true, text: "Draft loaded successfully" });
+                              setTimeout(() => setSavedMsg(null), 4000);
+                              if (companyId) void loadPersonsForCompany(companyId, parsed.data.directors);
+                              if (parsed.data.auditor._savedCAId) {
+                                const ca = savedCAs.find(c => c.id === parsed.data.auditor._savedCAId);
+                                if (ca) {
+                                  setData(prev => ({
+                                    ...prev,
+                                    auditor: {
+                                      ...prev.auditor,
+                                      signatureBase64: ca.signatureBase64 || undefined,
+                                      sealBase64: ca.sealBase64 || undefined,
+                                    },
+                                  }));
+                                }
+                              }
+                            } catch { setFoundDraft(null); }
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
+                        >Load Draft</button>
+                        <button onClick={() => setFoundDraft(null)} className="px-3 py-1.5 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs font-semibold rounded-lg">Dismiss</button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Step content */}
+          <div className="flex-1 px-6 py-6">
+            <div className="max-w-3xl">
+              {step === 1 && renderStep1()}
+              {step === 2 && renderStep2()}
+              {step === 3 && renderStep3()}
+              {step === 4 && renderStep4()}
+              {step === 5 && renderStep5()}
+              {step === 6 && renderStep6()}
+              {step === 7 && renderStep7()}
+              {step === 8 && renderStep8()}
             </div>
-            {savedMsg && (
-              <p className={`mt-2 text-xs font-semibold ${savedMsg.ok ? "text-emerald-600" : "text-red-500"}`}>
-                {savedMsg.ok ? "✓" : "✗"} {savedMsg.text}
-              </p>
+          </div>
+
+          {/* Navigation footer */}
+          <div className="bg-white border-t border-slate-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+            <button
+              onClick={() => { void silentSave(); setStep(s => s - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              disabled={!canPrev}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-35 disabled:cursor-not-allowed transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              Previous
+            </button>
+            <span className="text-xs text-slate-400">Step {step} of {STEPS.length}</span>
+            {step < STEPS.length ? (
+              <button
+                onClick={() => { void silentSave(); setStep(s => s + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors text-sm"
+              >
+                Next
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
+            ) : (
+              <div className="w-24" />
             )}
           </div>
 
-          {/* Carry forward from previous year banner */}
-          {prevYearDraft && !foundDraft && (
-            <div className="mt-3 p-3 bg-violet-50 border border-violet-200 rounded-xl flex items-center justify-between gap-3">
-              <div className="text-xs text-slate-700 min-w-0">
-                <span className="font-bold text-violet-700">Previous year draft found</span>
-                {" — "}{prevYearDraft.companyName} · FY {prevYearDraft.financialYear}
-                <span className="text-slate-500 ml-1 block sm:inline">Carry forward directors, auditor, shareholders &amp; KYC — saves re-entry time.</span>
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button
-                  onClick={handleCarryForward}
-                  className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg"
-                >
-                  Carry Forward ↗
-                </button>
-                <button
-                  onClick={() => setPrevYearDraft(null)}
-                  className="px-3 py-1.5 border border-violet-200 text-violet-600 hover:bg-violet-100 text-xs font-semibold rounded-lg"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Found draft banner */}
-          {foundDraft && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3">
-              <div className="text-xs text-slate-700 min-w-0">
-                <span className="font-bold text-blue-700">Saved draft found</span>
-                {" — "}{foundDraft.companyName} · FY {foundDraft.financialYear}
-                <span className="text-slate-400 ml-1">
-                  (last saved: {new Date(foundDraft.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
-                </span>
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button
-                  onClick={() => {
-                    try {
-                      const parsed = JSON.parse(foundDraft.formDataJson) as { data: AnnualFilingData; auditOpts: AuditReportOptions };
-                      setData({ ...parsed.data, directors: deduplicateDirs(parsed.data.directors || []) });
-                      setAuditOpts(parsed.auditOpts);
-                      setSaveId(foundDraft.id);
-                      setSaveIdFY(foundDraft.financialYear ?? null);
-                      setFoundDraft(null);
-                      setSavedMsg({ ok: true, text: "Draft loaded successfully" });
-                      setTimeout(() => setSavedMsg(null), 4000);
-                      // Re-load director signatures from csi_persons
-                      if (companyId) void loadPersonsForCompany(companyId, parsed.data.directors);
-                      // Re-load auditor signature from saved CA list (already in state)
-                      if (parsed.data.auditor._savedCAId) {
-                        const ca = savedCAs.find(c => c.id === parsed.data.auditor._savedCAId);
-                        if (ca) {
-                          setData(prev => ({
-                            ...prev,
-                            auditor: {
-                              ...prev.auditor,
-                              signatureBase64: ca.signatureBase64 || undefined,
-                              sealBase64: ca.sealBase64 || undefined,
-                            },
-                          }));
-                        }
-                      }
-                    } catch { setFoundDraft(null); }
-                  }}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
-                >
-                  Load Draft
-                </button>
-                <button
-                  onClick={() => setFoundDraft(null)}
-                  className="px-3 py-1.5 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs font-semibold rounded-lg"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Step indicator */}
-        {renderStepIndicator()}
-
-        {/* Step content */}
-        <div>
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-          {step === 4 && renderStep4()}
-          {step === 5 && renderStep5()}
-          {step === 6 && renderStep6()}
-          {step === 7 && renderStep7()}
-          {step === 8 && renderStep8()}
-        </div>
-
-        {/* Navigation */}
-        <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
-          <button
-            onClick={() => { void silentSave(); setStep(s => s - 1); }}
-            disabled={!canPrev}
-            className="flex items-center gap-2 px-5 py-2.5 border border-slate-300 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-            Previous
-          </button>
-
-          <span className="text-xs text-slate-400">Step {step} of {STEPS.length}</span>
-
-          {step < STEPS.length ? (
-            <button
-              onClick={() => { void silentSave(); setStep(s => s + 1); }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-colors text-sm"
-            >
-              Next
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-            </button>
-          ) : (
-            <div className="w-24" />
-          )}
         </div>
       </div>
     </div>
   );
 }
+
