@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { ArrowLeftRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CompanySearch from "@/components/CompanySearch";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -391,7 +392,9 @@ export default function ShareTransferPage() {
       {/* ── HERO ── */}
       <div className="py-10 px-4" style={{ background: "linear-gradient(135deg,#064e3b,#065f46)" }}>
         <div className="max-w-3xl mx-auto text-center text-white">
-          <div className="text-4xl mb-3">🔄</div>
+          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mx-auto mb-4">
+            <ArrowLeftRight className="w-7 h-7 text-white" strokeWidth={2} />
+          </div>
           <h1 className="text-3xl font-black tracking-tight mb-2">Share Transfer</h1>
           <p className="text-emerald-200 text-sm max-w-xl mx-auto">
             Generate Form SH-4 (Securities Transfer Form) under Section 56 of the Companies Act, 2013.
@@ -400,11 +403,11 @@ export default function ShareTransferPage() {
           <div className="flex items-center justify-center gap-3 mt-4">
             <Link href="/tools/documents/share-certificate"
               className="text-xs bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full transition-colors">
-              📜 Share Certificate
+              Share Certificate
             </Link>
             <Link href="/dashboard"
               className="text-xs bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full transition-colors">
-              📊 Dashboard
+              Dashboard
             </Link>
           </div>
         </div>
@@ -446,7 +449,7 @@ export default function ShareTransferPage() {
               <CompanyExcelUpload
                 onFill={data => { applyCompany(data); setCompanyQuery(data.companyName || ""); }}
                 accent="blue"
-                note="Upload MCA Master Data Sheet — company, directors & signatories auto-fill ho jayenge"
+                note="Upload MCA Master Data Sheet — company, directors & signatories will be auto-filled"
               />
 
               {/* ── OR label ── */}

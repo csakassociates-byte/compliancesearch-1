@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { Scale } from "lucide-react";
 import SearchModal from "./SearchModal";
 import { useSession, signOut } from "next-auth/react";
 
@@ -155,8 +156,10 @@ export default function Navbar() {
 
           {/* ── Logo ── */}
           <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
-              style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>⚖️</div>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
+              <Scale className="w-5 h-5 text-white" strokeWidth={2} />
+            </div>
             <span className="text-slate-900 font-bold text-lg tracking-tight">ComplianceSearch</span>
             <span className="font-bold text-lg" style={{ color: "#d97706" }}>.in</span>
           </Link>
@@ -265,12 +268,6 @@ export default function Navbar() {
               </Link>
             )}
 
-            {/* Gee Bharat */}
-            <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl border transition-all hover:scale-105"
-              style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}>
-              🌐 Gee Bharat
-            </a>
           </div>
 
           {/* ── Mobile: search + hamburger ── */}
@@ -333,10 +330,6 @@ export default function Navbar() {
               </Link>
             ))}
 
-            <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"
-              className="text-amber-700 font-semibold text-sm py-2.5 px-3 rounded-lg bg-amber-50 border border-amber-200 mt-1 transition">
-              🌐 Gee Bharat →
-            </a>
           </div>
         )}
       </nav>

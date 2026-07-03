@@ -3,6 +3,9 @@
 import { useState, useCallback, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import Navbar from "@/components/Navbar";
+import { BookOpen, FileCheck, FileText, BarChart3, Users, Building2, ScrollText, Link2, ArrowLeftRight } from "lucide-react";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
 import CompanySearch from "@/components/CompanySearch";
 import type { CompanyData } from "@/lib/types/company";
@@ -3468,14 +3471,14 @@ function AnnualFilingTool() {
     const isOPCOrSmall     = data.companyType === "opc" || data.companyType === "private_small";
 
     const attachments = [
-      { key: "audit-report",      label: "Independent Auditor's Report",    icon: "📋", always: true },
-      { key: "board-report",      label: `Directors' Report (${isOPCOrSmall ? "Rule 8A — Abridged" : "Rule 8 — Full"})`, icon: "📄", always: true },
-      { key: "notes-on-accounts", label: "Notes to Financial Statements",   icon: "📊", always: true },
-      { key: "director-list",     label: "Details of Directors",            icon: "👥", always: true },
-      { key: "shareholder-list",  label: `List of Shareholders (31 March ${fyEndYr})`, icon: "🏛️", always: true },
-      { key: "mgt7-ctc",          label: "MGT-7/7A CTC — Extract of Board Resolution (Rule 9 / Sec. 89 & 90)", icon: "📝", always: true },
-      { key: "aoc-1",             label: "Form AOC-1 — Subsidiaries Statement", icon: "🔗", always: false, condition: data.hasSubsidiaries },
-      { key: "aoc-2",             label: "Form AOC-2 — Related Party Transactions", icon: "🤝", always: false, condition: data.hasRPT },
+      { key: "audit-report",      label: "Independent Auditor's Report",    Icon: FileCheck,       always: true },
+      { key: "board-report",      label: `Directors' Report (${isOPCOrSmall ? "Rule 8A — Abridged" : "Rule 8 — Full"})`, Icon: FileText, always: true },
+      { key: "notes-on-accounts", label: "Notes to Financial Statements",   Icon: BarChart3,       always: true },
+      { key: "director-list",     label: "Details of Directors",            Icon: Users,           always: true },
+      { key: "shareholder-list",  label: `List of Shareholders (31 March ${fyEndYr})`, Icon: Building2, always: true },
+      { key: "mgt7-ctc",          label: "MGT-7/7A CTC — Extract of Board Resolution (Rule 9 / Sec. 89 & 90)", Icon: ScrollText, always: true },
+      { key: "aoc-1",             label: "Form AOC-1 — Subsidiaries Statement", Icon: Link2,       always: false, condition: data.hasSubsidiaries },
+      { key: "aoc-2",             label: "Form AOC-2 — Related Party Transactions", Icon: ArrowLeftRight, always: false, condition: data.hasRPT },
     ];
 
     const applicable = attachments.filter(a => a.always || a.condition);
@@ -3559,7 +3562,9 @@ function AnnualFilingTool() {
             <div className="grid grid-cols-1 gap-3">
               {applicable.filter(a => generated[a.key]).map(a => (
                 <div key={a.key} className="flex items-center gap-2 p-3 bg-white border-2 border-blue-200 rounded-xl">
-                  <span className="text-2xl flex-shrink-0">{a.icon}</span>
+                  <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                    <a.Icon className="w-5 h-5 text-emerald-600" />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-slate-800 truncate">{a.label}</p>
                   </div>
@@ -3692,13 +3697,17 @@ function AnnualFilingTool() {
   // ── Main render ───────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+      <Navbar />
       <div className="max-w-4xl mx-auto px-4 py-8">
 
         {/* Header */}
         <div className="mb-6">
+          <Link href="/" className="text-sm text-slate-400 hover:text-slate-600 flex items-center gap-1 mb-5">← Home</Link>
           <div className="flex items-center justify-between gap-3 mb-2">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">A</div>
+              <div className="w-11 h-11 bg-emerald-600 rounded-xl flex items-center justify-center shadow-md">
+                <BookOpen className="w-5 h-5 text-white" strokeWidth={2.5} />
+              </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">Annual Filing Attachments Generator</h1>
                 <p className="text-sm text-slate-500">AOC-4 &amp; MGT-7/7A | OPC, Private, Section 8, FPC</p>

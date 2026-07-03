@@ -423,45 +423,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══ POWERED BY STRIP ══ */}
-      <section className="bg-amber-50 border-t border-amber-100 py-6 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-3 text-center sm:text-left">
-          <p className="text-amber-800 text-sm font-medium">
-            A product of <strong>Gee Bharat</strong> — India's office management platform
-          </p>
-          <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm font-bold px-5 py-2 rounded-xl border transition hover:scale-105"
-            style={{ background: "#fffbeb", borderColor: "#fcd34d", color: "#92400e" }}>
-            🌐 Visit geebharat.com
-          </a>
-        </div>
-      </section>
-
-      {/* ══ FOOTER ══ */}
-      <footer className="bg-white border-t border-slate-200 px-5 py-5">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="flex flex-col md:flex-row items-center gap-4">
-            <span className="text-slate-400 text-xs">© 2025 ComplianceSearch.in — For guidance only. Consult a CA / CS.</span>
-            <div className="flex flex-wrap items-center gap-3">
-              {[
-                ["Home","/"],
-                ["Tools","/tools"],
-                ["Annual Filing","/aoc-4-mgt-7-annual-filing-attachments"],
-                ["Compliance Check","/compliance-checker-india"],
-                ["About","/about"],
-                ["Contact","/contact"],
-              ].map(([l,h]) => (
-                <Link key={h} href={h} className="text-slate-400 hover:text-slate-700 text-xs transition">{l}</Link>
-              ))}
-            </div>
-          </div>
-          <a href="https://geebharat.com" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-full border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 transition">
-            🌐 Powered by <span className="font-bold ml-0.5">Gee Bharat</span>
-          </a>
-        </div>
-      </footer>
-
     </main>
   );
 }

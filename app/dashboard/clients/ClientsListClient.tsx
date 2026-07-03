@@ -68,13 +68,13 @@ export default function ClientsListClient() {
             </div>
             <div>
               <h2 className="font-bold text-slate-800 text-sm">Add New Client via Excel</h2>
-              <p className="text-xs text-slate-400">MCA Master Data Sheet upload karein — company automatically My Clients mein add ho jayegi</p>
+              <p className="text-xs text-slate-400">Upload an MCA Master Data Sheet — the company will be automatically added to My Clients</p>
             </div>
           </div>
           <CompanyExcelUpload
             onFill={handleExcelFill}
             accent="blue"
-            note="Excel upload karte hi company My Clients mein save ho jayegi."
+            note="The company will be saved to My Clients as soon as you upload the Excel."
           />
         </div>
 
@@ -111,7 +111,7 @@ export default function ClientsListClient() {
             </h3>
             <p className="text-sm text-slate-400">
               {companies.length === 0
-                ? 'Upar se MCA Excel upload karein — company automatically add ho jayegi'
+                ? 'Upload an MCA Excel above — the company will be added automatically'
                 : 'Try a different search term'}
             </p>
           </div>

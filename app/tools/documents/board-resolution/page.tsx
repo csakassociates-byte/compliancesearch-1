@@ -283,8 +283,8 @@ export default function BoardResolutionPage() {
           {/* ════════ STEP 1 — CATEGORY ════════ */}
           {step === 1 && (
             <div>
-              <h2 className="text-lg font-black text-slate-700 mb-1">Kaunsi category ka resolution chahiye?</h2>
-              <p className="text-sm text-slate-400 mb-5">Category choose karein — resolution list dikhegi</p>
+              <h2 className="text-lg font-black text-slate-700 mb-1">Which category of resolution do you need?</h2>
+              <p className="text-sm text-slate-400 mb-5">Select a category to view the available resolutions</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {boardCategories.map(cat => {
                   const meta  = MASTER_CATEGORY_META[cat];
@@ -313,7 +313,7 @@ export default function BoardResolutionPage() {
                 <span className="text-2xl">{MASTER_CATEGORY_META[selectedCategory]?.icon}</span>
                 <h2 className="text-lg font-black text-slate-700">{MASTER_CATEGORY_META[selectedCategory]?.label}</h2>
               </div>
-              <p className="text-sm text-slate-400 mb-5">Konsa resolution banana hai?</p>
+              <p className="text-sm text-slate-400 mb-5">Which resolution would you like to draft?</p>
               <div className="space-y-3">
                 {templatesInCategory.map(t => (
                   <button key={t.id}
@@ -362,21 +362,21 @@ export default function BoardResolutionPage() {
                   </div>
                 </div>
               )}
-              <h2 className="text-lg font-black text-slate-700 mb-1">Company select karein</h2>
-              <p className="text-sm text-slate-400 mb-5">Excel upload karo ya naam/CIN se search karo</p>
+              <h2 className="text-lg font-black text-slate-700 mb-1">Select Company</h2>
+              <p className="text-sm text-slate-400 mb-5">Upload an Excel file or search by company name / CIN</p>
 
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
                 <CompanyExcelUpload onFill={applyCompany} />
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-slate-200" />
-                  <span className="text-xs text-slate-400 font-semibold">YA</span>
+                  <span className="text-xs text-slate-400 font-semibold">OR</span>
                   <div className="flex-1 h-px bg-slate-200" />
                 </div>
                 <CompanySearch
                   value={companyQuery}
                   onChange={setCompanyQuery}
                   onSelect={applyCompany}
-                  placeholder="Company naam ya CIN se search karein…"
+                  placeholder="Search by company name or CIN…"
                 />
               </div>
 
@@ -390,7 +390,7 @@ export default function BoardResolutionPage() {
                   <button onClick={() => setStep(4)}
                     className="px-5 py-2.5 rounded-xl font-bold text-white text-sm flex items-center gap-2 flex-shrink-0"
                     style={{ background: "linear-gradient(135deg,#4338ca,#6366f1)" }}>
-                    Aage Badhein →
+                    Continue →
                   </button>
                 </div>
               )}
@@ -398,7 +398,7 @@ export default function BoardResolutionPage() {
               {!company && (
                 <button onClick={() => setStep(4)}
                   className="mt-4 w-full py-3 rounded-xl text-sm font-semibold text-slate-500 border-2 border-dashed border-slate-300 hover:border-indigo-300 hover:text-indigo-600">
-                  Company ke bina continue karein (manually fill karenge)
+                  Continue without company (fill details manually)
                 </button>
               )}
             </div>
@@ -458,12 +458,12 @@ export default function BoardResolutionPage() {
                         <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 flex items-start gap-2">
                           <span className="text-base mt-0.5">⚠️</span>
                           <div>
-                            <div className="text-xs font-bold text-amber-700">Is date pe already ek meeting recorded hai!</div>
+                            <div className="text-xs font-bold text-amber-700">A meeting is already recorded on this date!</div>
                             <div className="text-xs text-amber-800 font-semibold mt-0.5">{dupMeeting.title}</div>
-                            <div className="text-xs text-slate-500 mt-1">Save karne pe yeh resolution <strong>us meeting mein auto-add</strong> hoga — alag meeting nahi banega.</div>
+                            <div className="text-xs text-slate-500 mt-1">On saving, this resolution will be <strong>auto-linked to that meeting</strong> — no duplicate meeting will be created.</div>
                             <button onClick={() => setSelectedMeetingId(dupMeeting.id)}
                               className="mt-1.5 text-xs font-bold text-amber-700 underline">
-                              → Us meeting se link karein
+                              → Link to this meeting
                             </button>
                           </div>
                         </div>
@@ -475,7 +475,7 @@ export default function BoardResolutionPage() {
                       }).slice(0, 3);
                       if (nearby.length > 0) return (
                         <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                          <div className="text-xs font-bold text-slate-500 mb-1.5">📋 Is company ke recent meetings (link kar sakte hain):</div>
+                          <div className="text-xs font-bold text-slate-500 mb-1.5">📋 Recent meetings for this company (click to link):</div>
                           <div className="space-y-1">
                             {nearby.map(m => (
                               <button key={m.id}
@@ -490,7 +490,7 @@ export default function BoardResolutionPage() {
                               </button>
                             ))}
                           </div>
-                          <div className="text-xs text-slate-400 mt-1.5">Click karein us meeting se link karne ke liye, ya naya meeting date rakho.</div>
+                          <div className="text-xs text-slate-400 mt-1.5">Click a meeting to link this resolution, or enter a new meeting date.</div>
                         </div>
                       );
                       return null;
@@ -499,7 +499,7 @@ export default function BoardResolutionPage() {
                     {/* No meetings at all for this company */}
                     {meetingDate && company && existingMeetings.length === 0 && (
                       <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                        ✅ Is company ka koi purana meeting record nahi mila — naya meeting create hoga.
+                        ✅ No prior meeting records found for this company — a new meeting will be created.
                       </div>
                     )}
                   </div>
@@ -527,14 +527,14 @@ export default function BoardResolutionPage() {
 
                 {existingMeetings.length > 0 && (
                   <div className="mt-3">
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">🔗 Board Meeting Minutes se Link</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">🔗 Link to Board Meeting Minutes</label>
                     <select value={selectedMeetingId} onChange={e => setSelectedMeetingId(e.target.value)} className={SEL}>
-                      <option value="">— Naya meeting banao / Auto-detect —</option>
+                      <option value="">— Create new / Auto-detect —</option>
                       {existingMeetings.map(m => (
                         <option key={m.id} value={m.id}>{m.title} · {m.meetingDate}</option>
                       ))}
                     </select>
-                    <p className="text-xs text-slate-400 mt-1">Agar yeh resolution kisi existing meeting ka hissa hai to wahan link karo</p>
+                    <p className="text-xs text-slate-400 mt-1">If this resolution belongs to an existing meeting, link it there</p>
                   </div>
                 )}
               </div>
@@ -543,7 +543,7 @@ export default function BoardResolutionPage() {
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
                 <h3 className="font-bold text-slate-700 text-sm mb-3">👥 Directors Present</h3>
                 {directors.length === 0 ? (
-                  <p className="text-xs text-slate-400 mb-2">Company select karein ya manually add karein</p>
+                  <p className="text-xs text-slate-400 mb-2">Select a company above or add directors manually</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     {directors.map((d, i) => (
@@ -597,7 +597,7 @@ export default function BoardResolutionPage() {
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
                 <h3 className="font-bold text-slate-700 text-sm mb-3">👁️ Resolution Preview</h3>
                 <div className="border-l-4 border-indigo-500 bg-indigo-50 rounded-r-2xl p-4 text-xs text-slate-700 leading-relaxed whitespace-pre-line font-serif">
-                  {previewResolution || <span className="text-slate-400 italic">Details fill karne par yahan preview dikhegi…</span>}
+                  {previewResolution || <span className="text-slate-400 italic">Fill in the details above to preview the resolution text…</span>}
                 </div>
               </div>
 
@@ -605,7 +605,7 @@ export default function BoardResolutionPage() {
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
                 <label className="flex items-center gap-2 mb-4 cursor-pointer">
                   <input type="checkbox" checked={onLetterhead} onChange={e => setOnLetterhead(e.target.checked)} className="w-4 h-4 accent-indigo-600" />
-                  <span className="text-sm font-semibold text-slate-600">Company letterhead par print karein</span>
+                  <span className="text-sm font-semibold text-slate-600">Print on company letterhead</span>
                 </label>
 
                 {error && <div className="mb-3 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-600 font-semibold">⚠️ {error}</div>}
@@ -623,7 +623,7 @@ export default function BoardResolutionPage() {
                     </button>
                   )}
                 </div>
-                {session && <p className="text-xs text-slate-400 mt-2 text-center">Save karne pe board meeting minutes mein auto-link hoga</p>}
+                {session && <p className="text-xs text-slate-400 mt-2 text-center">On save, this resolution will be auto-linked to the board meeting minutes</p>}
               </div>
             </div>
           )}

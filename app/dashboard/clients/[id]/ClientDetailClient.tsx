@@ -910,7 +910,7 @@ function ShareTransferModal({
       const d = await res.json().catch(() => ({}));
       const errData = d as { error?: string; needsSplit?: boolean };
       if (errData.needsSplit) {
-        setError('⚠️ Partial transfer ke liye pehle certificate split karna hoga. "✂️ Split" button use karein.');
+        setError('⚠️ For a partial transfer, you must first split the certificate using the "✂️ Split" button.');
       } else {
         setError(errData.error || 'Transfer failed');
       }

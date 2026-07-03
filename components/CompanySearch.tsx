@@ -211,20 +211,20 @@ export default function CompanySearch({
 
             <h2 className="text-xl font-bold text-slate-800 mb-2">Login to Search Companies</h2>
             <p className="text-sm text-slate-500 mb-6">
-              Company search sirf aapki apni uploaded companies dikhata hai.<br />
-              Login karke apni companies access karein.
+              Company search shows only your uploaded companies.<br />
+              Sign in to access your saved companies.
             </p>
 
             {/* Benefits */}
             <div className="bg-blue-50 rounded-2xl p-4 mb-6 text-left space-y-2">
               <p className="text-xs text-blue-700 font-semibold flex items-center gap-2">
-                <span>✅</span> Excel se company upload karein — permanently save
+                <span>✅</span> Upload companies via Excel — saved permanently
               </p>
               <p className="text-xs text-blue-700 font-semibold flex items-center gap-2">
-                <span>✅</span> Sabhi tools mein ek click mein company select
+                <span>✅</span> One-click company selection across all tools
               </p>
               <p className="text-xs text-blue-700 font-semibold flex items-center gap-2">
-                <span>✅</span> Documents save karein, download karein
+                <span>✅</span> Save and download documents anytime
               </p>
               <p className="text-xs text-blue-700 font-semibold flex items-center gap-2">
                 <span>✅</span> Client management dashboard

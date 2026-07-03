@@ -832,7 +832,7 @@ export default function BoardMinutesPage() {
   }
 
   function clearDraft() {
-    if (!confirm("Naya form shuru karein? Abhi ka draft delete ho jayega.")) return;
+    if (!confirm("Start a new form? Your current draft will be deleted.")) return;
     try { localStorage.removeItem(DRAFT_KEY); } catch {}
     setF({ ...DEFAULT, agendaItems: makeDefaultAgendaItems() });
     setStep(1);
@@ -1068,11 +1068,11 @@ export default function BoardMinutesPage() {
 
   function getAgendaWarning(templateId: string): string | undefined {
     if (templateId === "leave_of_absence" && allDirectorsPresent && totalDirs > 0)
-      return "Sabhi directors present hain — ye item is meeting mein needed nahi";
+      return "All directors are present — this item is not needed for this meeting";
     if (templateId === "action_taken_report" && isFirstMeeting)
-      return "Pehli meeting hai — koi previous decisions nahi hain; ye item skip kar sakte hain";
+      return "First meeting — no previous decisions exist; this item can be skipped";
     if (templateId === "prev_minutes" && isFirstMeeting)
-      return "Pehli meeting hai — koi previous minutes nahi hain; ye item skip kar sakte hain";
+      return "First meeting — no previous minutes exist; this item can be skipped";
     return undefined;
   }
 
@@ -1126,7 +1126,7 @@ export default function BoardMinutesPage() {
     items.push({
       label: "Board Meeting Notice ≥ 7 days in advance (SS-1 § 3.1)",
       status: "manual",
-      hint: "Confirm karo ki sabhi directors ko 7 din pehle notice mila tha",
+      hint: "Confirm that all directors received notice at least 7 days in advance",
     });
 
     // 2. Quorum
@@ -1142,7 +1142,7 @@ export default function BoardMinutesPage() {
     items.push({
       label: "Agenda circulated with Notice (SS-1 § 3.1)",
       status: f.agendaItems.length > 0 ? "ok" : "warn",
-      hint: f.agendaItems.length > 0 ? `${f.agendaItems.length} agenda items added` : "Step 4 mein agenda items add karo",
+      hint: f.agendaItems.length > 0 ? `${f.agendaItems.length} agenda items added` : "Add agenda items in Step 4",
     });
 
     // 4. Minutes signing deadline (30 days)
@@ -1154,9 +1154,9 @@ export default function BoardMinutesPage() {
       label: "Minutes to be signed within 30 days of meeting (SS-1 § 7.1)",
       status: !deadline ? "manual" : daysLeft! < 0 ? "fail" : daysLeft! <= 5 ? "warn" : "ok",
       hint: !deadline
-        ? "Meeting date select karo (Step 2)"
+        ? "Select a meeting date in Step 2"
         : daysLeft! < 0
-        ? `Deadline nikal gayi! (${Math.abs(daysLeft!)} days overdue)`
+        ? `Deadline passed! (${Math.abs(daysLeft!)} days overdue)`
         : `Sign by: ${deadline.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} — ${daysLeft} days remaining`,
     });
 
@@ -1164,7 +1164,7 @@ export default function BoardMinutesPage() {
     items.push({
       label: "Chairman name & DIN recorded (SS-1 § 2.1)",
       status: f.chairmanName && f.chairmanDin ? "ok" : "warn",
-      hint: !f.chairmanName ? "Step 2 mein Chairman ka naam fill karo" : !f.chairmanDin ? "Chairman ka DIN add karo" : `${f.chairmanName} (DIN: ${f.chairmanDin})`,
+      hint: !f.chairmanName ? "Fill in the Chairman's name in Step 2" : !f.chairmanDin ? "Add the Chairman's DIN" : `${f.chairmanName} (DIN: ${f.chairmanDin})`,
     });
 
     // 6. All DINs
@@ -1172,7 +1172,7 @@ export default function BoardMinutesPage() {
     items.push({
       label: "All present Directors' DINs recorded",
       status: f.directors.length === 0 ? "manual" : missDin > 0 ? "warn" : "ok",
-      hint: missDin > 0 ? `${missDin} director(s) ka DIN missing — Step 3 mein fill karo` : "Sab DINs filled hain ✓",
+      hint: missDin > 0 ? `${missDin} director(s) have missing DIN — fill in Step 3` : "All DINs filled ✓",
     });
 
     // 7. DIN validity
@@ -1180,14 +1180,14 @@ export default function BoardMinutesPage() {
     items.push({
       label: "All DINs are 8-digit valid numbers",
       status: invalidDin > 0 ? "fail" : f.directors.length === 0 ? "manual" : "ok",
-      hint: invalidDin > 0 ? `${invalidDin} director(s) ka DIN invalid format mein hai` : "Sab DINs valid format mein hain",
+      hint: invalidDin > 0 ? `${invalidDin} director(s) have invalid DIN format` : "All DINs are in valid format",
     });
 
     // 8. Venue
     items.push({
       label: "Venue / Place of Meeting recorded (SS-1 § 1.2)",
       status: f.venue ? "ok" : "warn",
-      hint: f.venue ? f.venue.slice(0, 60) : "Step 2 mein venue fill karo",
+      hint: f.venue ? f.venue.slice(0, 60) : "Fill in the venue in Step 2",
     });
 
     return items;
@@ -1306,11 +1306,11 @@ export default function BoardMinutesPage() {
                   </p>
                   {firstMeetingItemsAdded ? (
                     <p className="text-xs text-emerald-700 font-semibold mt-1">
-                      ✅ {`9 special agenda items auto-add ho gaye hain (Auditor, Bank Account, INC-20A, etc.)`}
+                      ✅ {`9 special agenda items auto-added (Auditor, Bank Account, INC-20A, etc.)`}
                     </p>
                   ) : (
                     <p className="text-xs text-amber-600 font-semibold mt-1">
-                      ⏳ First meeting agenda items add ho rahe hain…
+                      ⏳ Adding first meeting agenda items…
                     </p>
                   )}
                 </div>
@@ -1325,19 +1325,19 @@ export default function BoardMinutesPage() {
             <div className="mt-2 bg-amber-50 border border-amber-300 rounded-xl p-3 text-sm">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <p className="font-bold text-amber-700">⚠️ Is date pe already ek meeting hai!</p>
+                  <p className="font-bold text-amber-700">⚠️ A meeting already exists on this date!</p>
                   <p className="text-amber-600 text-xs mt-0.5 font-medium">{dupMeeting.title}</p>
                   <p className="text-slate-600 text-xs mt-1">
-                    Agar aapko naya agenda ya resolution add karna hai, to ussi meeting mein add karein — naya banane ki zaroorat nahi.
+                    To add new agenda items or resolutions, open the existing meeting — you don&apos;t need to create a new one.
                   </p>
                   <div className="flex gap-2 mt-2">
                     <a href={`/dashboard`}
                       className="text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700">
-                      📂 Existing meeting open karein →
+                      📂 Open existing meeting →
                     </a>
                     <button onClick={() => setDupDismissed(true)}
                       className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-100">
-                      Phir bhi naya banao
+                      Create new anyway
                     </button>
                   </div>
                 </div>
@@ -1449,7 +1449,7 @@ export default function BoardMinutesPage() {
           </p>
           {!quorumMet && totalDirs > 0 && (
             <p className="text-xs text-red-600 font-semibold mt-1">
-              ⛔ Quorum nahi hai — aage proceed nahi kar sakte. {qRequired - presentCount} aur director(s) ko present mark karo.
+              ⛔ Quorum not met — cannot proceed. Mark {qRequired - presentCount} more director(s) as present.
             </p>
           )}
         </div>
@@ -1487,10 +1487,10 @@ export default function BoardMinutesPage() {
               <span className="text-amber-500 text-lg shrink-0">⚠️</span>
               <div>
                 <p className="text-sm font-bold text-amber-800">
-                  {f.directors.filter(d => !d.name.trim()).length} director{f.directors.filter(d => !d.name.trim()).length > 1 ? "s" : ""} ka naam fill karna hai
+                  {f.directors.filter(d => !d.name.trim()).length} director{f.directors.filter(d => !d.name.trim()).length > 1 ? "s" : ""} need a name
                 </p>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Red border wale boxes mein director ka poora naam type karein. DIN dekh ke identify karein kaun sa director hai.
+                  Type the full name in the highlighted fields. Use the DIN to identify which director it is.
                 </p>
               </div>
             </div>
@@ -1853,7 +1853,7 @@ export default function BoardMinutesPage() {
   ════════════════════════════════════════════ */
   const s5 = (
     <div className="space-y-4">
-      <SHead n={5} title="Preview & Print" sub="SS-1 checklist verify karo, phir print karo" />
+      <SHead n={5} title="Preview & Print" sub="Verify the SS-1 checklist, then print" />
 
       {/* SS-1 Compliance Checklist */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2">
@@ -2164,7 +2164,7 @@ export default function BoardMinutesPage() {
           {step < 5 ? (
             <div className="flex flex-col items-end gap-1">
               {step === 3 && !quorumMet && totalDirs > 0 && (
-                <p className="text-xs text-red-500 font-medium">Quorum nahi hai — aage nahi ja sakte</p>
+                <p className="text-xs text-red-500 font-medium">Quorum not met — cannot proceed</p>
               )}
               <button onClick={() => setStep(s => Math.min(s + 1, 5) as typeof step)}
                 disabled={!canNext()}

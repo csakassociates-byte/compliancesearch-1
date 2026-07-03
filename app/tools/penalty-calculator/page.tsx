@@ -2,15 +2,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { BarChart3, CreditCard, FileText, Users, Calculator } from "lucide-react";
 
 type CalcType = "gst_filing" | "tds_deposit" | "itr_filing" | "pf_deposit";
 
 const CALC_OPTIONS = [
-  { key: "gst_filing",  label: "GST Late Filing",    icon: "📊", desc: "GSTR-1 / GSTR-3B late fee + interest" },
-  { key: "tds_deposit", label: "TDS Late Deposit",   icon: "💸", desc: "Interest for late TDS deduction / deposit" },
-  { key: "itr_filing",  label: "ITR Late Filing",    icon: "📋", desc: "Penalty u/s 234F + interest u/s 234A" },
-  { key: "pf_deposit",  label: "PF Late Deposit",    icon: "👷", desc: "EPF damage charges for late contribution" },
-] as const;
+  { key: "gst_filing"  as const, label: "GST Late Filing",   Icon: BarChart3,  desc: "GSTR-1 / GSTR-3B late fee + interest" },
+  { key: "tds_deposit" as const, label: "TDS Late Deposit",  Icon: CreditCard, desc: "Interest for late TDS deduction / deposit" },
+  { key: "itr_filing"  as const, label: "ITR Late Filing",   Icon: FileText,   desc: "Penalty u/s 234F + interest u/s 234A" },
+  { key: "pf_deposit"  as const, label: "PF Late Deposit",   Icon: Users,      desc: "EPF damage charges for late contribution" },
+];
 
 type GSTResult = { lateFee: number; interest: number; total: number; isNilReturn: boolean; capped: boolean };
 type TDSResult  = { interestAmt: number; rate: number; months: number };
@@ -106,7 +107,7 @@ export default function PenaltyCalculatorPage() {
         <div className="mb-8">
           <div className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-full mb-4 border"
             style={{ background:"#eff6ff", borderColor:"#bfdbfe", color:"#1d4ed8" }}>
-            🧮 Compliance Penalty Calculator
+            <Calculator className="w-4 h-4" /> Compliance Penalty Calculator
           </div>
           <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Calculate Your Penalty</h1>
           <p className="text-slate-500">Find out exactly how much penalty, interest, or damage charges you owe for late compliance.</p>
@@ -121,7 +122,9 @@ export default function PenaltyCalculatorPage() {
                   ? "border-blue-400 bg-blue-50 shadow"
                   : "border-slate-200 bg-white hover:border-slate-300"
               }`}>
-              <div className="text-2xl mb-1">{opt.icon}</div>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${activeCalc === opt.key ? "bg-blue-600" : "bg-slate-100"}`}>
+                <opt.Icon className={`w-5 h-5 ${activeCalc === opt.key ? "text-white" : "text-slate-500"}`} />
+              </div>
               <p className="font-bold text-slate-800 text-sm">{opt.label}</p>
               <p className="text-xs text-slate-400 mt-0.5">{opt.desc}</p>
             </button>
@@ -130,10 +133,17 @@ export default function PenaltyCalculatorPage() {
 
         {/* Input Form */}
         <div className="bg-slate-50 rounded-2xl border border-slate-200 p-6 mb-6">
-          <h2 className="font-bold text-slate-800 mb-5">
-            {CALC_OPTIONS.find(o => o.key === activeCalc)?.icon}{" "}
-            {CALC_OPTIONS.find(o => o.key === activeCalc)?.label}
-          </h2>
+          {(() => {
+            const activeOpt = CALC_OPTIONS.find(o => o.key === activeCalc);
+            if (!activeOpt) return null;
+            const ActiveIcon = activeOpt.Icon;
+            return (
+              <h2 className="font-bold text-slate-800 mb-5 flex items-center gap-2">
+                <ActiveIcon className="w-5 h-5 text-blue-600" />
+                {activeOpt.label}
+              </h2>
+            );
+          })()}
 
           {/* GST Filing */}
           {activeCalc === "gst_filing" && (

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Scale } from "lucide-react";
 import type { BusinessProfile, BusinessType, IndustrySector } from "@/lib/types";
 
 const INDIAN_STATES = [
@@ -148,10 +149,10 @@ export default function CheckPage() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <a href="/" className="inline-flex items-center gap-2 text-blue-800 font-bold text-xl mb-1">
-            <span>⚖️</span> ComplianceCheck India
+          <a href="/" className="inline-flex items-center gap-2 font-bold text-xl mb-1" style={{ color: "var(--cs-blue)" }}>
+            <Scale className="w-5 h-5" /> ComplianceSearch.in
           </a>
-          <p className="text-gray-500 text-sm">Fill in your business details to get a compliance checklist</p>
+          <p className="text-gray-500 text-sm">Fill in your business details to get a free compliance checklist</p>
         </div>
 
         {/* Progress bar */}
