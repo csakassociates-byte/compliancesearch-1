@@ -297,7 +297,7 @@ function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg
       </div>
 
       {/* Steps navigation */}
-      <nav className={`flex-1 ${collapsed ? "p-1.5" : "p-2"}`}>
+      <nav className={`flex-1 py-2 ${collapsed ? "px-1.5" : "px-1"}`}>
         {STEPS.slice(0, 7).map(s => {
           const complete = isStepComplete(s.id);
           const isCurrent = step === s.id;
@@ -307,29 +307,74 @@ function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg
               key={s.id}
               onClick={() => onStepClick(s.id)}
               title={collapsed ? s.label : undefined}
-              className={`w-full flex items-center ${collapsed ? "justify-center" : "gap-2.5"} px-2.5 py-2 rounded-lg mb-0.5 transition-colors ${
-                isCurrent ? "bg-emerald-500/20" : "hover:bg-white/5"
-              }`}
+              className="w-full group relative flex items-center mb-0.5 transition-all duration-150"
+              style={{
+                padding: collapsed ? "8px 6px" : "7px 10px",
+                borderRadius: "8px",
+                background: isCurrent
+                  ? "rgba(16,185,129,0.12)"
+                  : "transparent",
+                borderLeft: isCurrent
+                  ? "2px solid #10b981"
+                  : "2px solid transparent",
+              }}
+              onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+              onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
-              <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                isCurrent ? "bg-white text-emerald-600"
-                : complete  ? "bg-emerald-600 text-white"
-                : "bg-white/10 text-white/30"
-              }`}>
-                {complete && !isCurrent ? <FileCheck className="w-3 h-3" /> : (collapsed && Icon ? <Icon className="w-3 h-3" /> : s.id)}
+              {/* Step indicator */}
+              <div
+                className="flex-shrink-0 flex items-center justify-center font-bold"
+                style={{
+                  width: "22px", height: "22px", borderRadius: "50%",
+                  fontSize: "10px",
+                  marginRight: collapsed ? 0 : "10px",
+                  background: isCurrent
+                    ? "#10b981"
+                    : complete
+                    ? "rgba(16,185,129,0.15)"
+                    : "rgba(255,255,255,0.06)",
+                  color: isCurrent
+                    ? "#fff"
+                    : complete
+                    ? "#34d399"
+                    : "rgba(255,255,255,0.22)",
+                  boxShadow: isCurrent ? "0 0 8px rgba(16,185,129,0.4)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {complete && !isCurrent
+                  ? <FileCheck style={{ width: "11px", height: "11px" }} />
+                  : (collapsed && Icon ? <Icon style={{ width: "11px", height: "11px" }} /> : s.id)
+                }
               </div>
+
               {!collapsed && (
-                <span className={`text-[12px] font-medium leading-tight truncate ${
-                  isCurrent ? "text-white" : complete ? "text-white/65" : "text-white/32"
-                }`}>{s.label}</span>
+                <span style={{
+                  fontSize: "12.5px",
+                  fontWeight: isCurrent ? 600 : 400,
+                  color: isCurrent
+                    ? "#fff"
+                    : complete
+                    ? "rgba(255,255,255,0.55)"
+                    : "rgba(255,255,255,0.28)",
+                  letterSpacing: isCurrent ? "0.01em" : "normal",
+                  transition: "color 0.15s ease",
+                  lineHeight: 1.3,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {s.label}
+                </span>
               )}
             </button>
           );
         })}
 
-        <div className="my-2 mx-1" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }} />
+        {/* Divider */}
+        <div style={{ margin: "8px 4px", borderTop: "1px solid rgba(255,255,255,0.07)" }} />
 
-        {/* Step 8 */}
+        {/* Step 8 — Generate All */}
         {(() => {
           const s = STEPS[7];
           const complete = isStepComplete(s.id);
@@ -338,19 +383,43 @@ function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg
             <button
               onClick={() => onStepClick(8)}
               title={collapsed ? s.label : undefined}
-              className={`w-full flex items-center ${collapsed ? "justify-center" : "gap-2.5"} px-2.5 py-2 rounded-lg transition-colors ${
-                isCurrent ? "bg-blue-500/20" : "hover:bg-white/5"
-              }`}
+              className="w-full group flex items-center mb-0.5 transition-all duration-150"
+              style={{
+                padding: collapsed ? "8px 6px" : "7px 10px",
+                borderRadius: "8px",
+                background: isCurrent ? "rgba(59,130,246,0.13)" : "transparent",
+                borderLeft: isCurrent ? "2px solid #3b82f6" : "2px solid transparent",
+              }}
+              onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+              onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
-              <div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                isCurrent ? "bg-white text-blue-600"
-                : complete  ? "bg-blue-600 text-white"
-                : "bg-white/10 text-white/30"
-              }`}>8</div>
+              <div
+                className="flex-shrink-0 flex items-center justify-center font-bold"
+                style={{
+                  width: "22px", height: "22px", borderRadius: "50%",
+                  fontSize: "10px",
+                  marginRight: collapsed ? 0 : "10px",
+                  background: isCurrent
+                    ? "#3b82f6"
+                    : complete
+                    ? "rgba(59,130,246,0.15)"
+                    : "rgba(255,255,255,0.06)",
+                  color: isCurrent ? "#fff" : complete ? "#60a5fa" : "rgba(255,255,255,0.22)",
+                  boxShadow: isCurrent ? "0 0 8px rgba(59,130,246,0.4)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >8</div>
               {!collapsed && (
-                <span className={`text-[12px] font-medium truncate ${
-                  isCurrent ? "text-white" : complete ? "text-white/65" : "text-white/32"
-                }`}>{s.label}</span>
+                <span style={{
+                  fontSize: "12.5px",
+                  fontWeight: isCurrent ? 600 : 400,
+                  color: isCurrent ? "#fff" : complete ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.28)",
+                  letterSpacing: isCurrent ? "0.01em" : "normal",
+                  transition: "color 0.15s ease",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {s.label}
+                </span>
               )}
             </button>
           );
