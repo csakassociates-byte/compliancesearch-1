@@ -3933,7 +3933,7 @@ function AnnualFilingTool() {
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
 
           {/* Step header */}
-          <div className="bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0">
+          <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0">
             {(() => {
               const s = STEPS[step - 1];
               const complete = isStepComplete(step);
