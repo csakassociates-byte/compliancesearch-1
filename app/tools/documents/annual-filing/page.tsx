@@ -2990,13 +2990,48 @@ function AnnualFilingTool() {
         </SectionCard>
 
         <SectionCard title="Annual Return Web Link" color="slate">
-          <Field
-            label="Website link where Annual Return (MGT-7/7A) is placed (optional)"
-            value={data.annualReturnWebLink || ""}
-            onChange={v => patch({ annualReturnWebLink: v })}
-            placeholder="https://www.yourcompany.com/annual-return-2025"
-            hint="As required under Sec. 92(3). Leave blank if company does not maintain a website."
-          />
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-slate-700 mb-1">
+              Website link where Annual Return (MGT-7/7A) is placed <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <p className="text-xs text-slate-500 mb-1">As required under Sec. 92(3). Leave blank if company does not maintain a website.</p>
+            <input
+              type="text"
+              value={data.annualReturnWebLink || ""}
+              onChange={e => {
+                const v = e.target.value;
+                // Allow empty or valid https:// URL only
+                if (v === "" || v.startsWith("https://") || v.startsWith("http://")) {
+                  patch({ annualReturnWebLink: v });
+                } else {
+                  patch({ annualReturnWebLink: v }); // store it, show error below
+                }
+              }}
+              onBlur={e => {
+                const v = e.target.value.trim();
+                if (v && !v.startsWith("https://") && !v.startsWith("http://")) {
+                  patch({ annualReturnWebLink: "" }); // auto-clear invalid
+                }
+              }}
+              placeholder="https://www.yourcompany.com/annual-return-2025"
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                data.annualReturnWebLink && !data.annualReturnWebLink.startsWith("https://") && !data.annualReturnWebLink.startsWith("http://")
+                  ? "border-red-400 focus:ring-red-400 bg-red-50"
+                  : "border-slate-300 focus:ring-emerald-500"
+              }`}
+            />
+            {data.annualReturnWebLink && !data.annualReturnWebLink.startsWith("https://") && !data.annualReturnWebLink.startsWith("http://") && (
+              <div className="mt-2 flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+                <svg className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 4a8 8 0 100 16 8 8 0 000-16z" />
+                </svg>
+                <div>
+                  <p className="text-xs font-semibold text-red-700">Invalid URL — enter a proper website link</p>
+                  <p className="text-xs text-red-500 mt-0.5">Must start with <code className="bg-red-100 px-1 rounded">https://</code> — e.g. <span className="font-mono">https://www.yourcompany.com/annual-return</span>. If company has no website, leave this field blank.</p>
+                </div>
+              </div>
+            )}
+          </div>
         </SectionCard>
 
         {(data.companyType === "section8" || data.companyType === "fpc") && (
@@ -3023,13 +3058,21 @@ function AnnualFilingTool() {
         <SectionCard title="MGT-7/7A — CTC Board Resolution Details" color="slate">
           <p className="text-xs text-slate-500 mb-4">Details for the &quot;Extract of Resolution&quot; CTC document (Rule 9, Sec. 89 &amp; 90 — Appointment of Designated Person). Meeting date is taken from Date of Report (Step 1).</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <Field
-              label="Meeting Time"
-              value={data.mgt7MeetingTime || ""}
-              onChange={v => patch({ mgt7MeetingTime: v })}
-              placeholder="11.00 A.M."
-              hint="Time at which the board meeting was held"
-            />
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Meeting Time</label>
+              <p className="text-xs text-slate-500 mb-1">Time at which the board meeting was held</p>
+              <select
+                value={data.mgt7MeetingTime || ""}
+                onChange={e => patch({ mgt7MeetingTime: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              >
+                <option value="">— Select time —</option>
+                {["09.00 A.M.","09.30 A.M.","10.00 A.M.","10.30 A.M.","11.00 A.M.","11.30 A.M.",
+                  "12.00 Noon","12.30 P.M.","01.00 P.M.","01.30 P.M.","02.00 P.M.","02.30 P.M.",
+                  "03.00 P.M.","03.30 P.M.","04.00 P.M.","04.30 P.M.","05.00 P.M.","06.00 P.M."
+                ].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
             <Field
               label="Meeting Venue"
               value={data.mgt7MeetingVenue || ""}
