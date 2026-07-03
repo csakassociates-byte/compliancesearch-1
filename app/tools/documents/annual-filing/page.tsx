@@ -3519,7 +3519,7 @@ function AnnualFilingTool() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6">
             {applicable.map(a => (
               <div key={a.key} className="flex items-center gap-2 p-2 bg-white border border-emerald-200 rounded-lg text-xs text-slate-700">
-                <span>{a.icon}</span>
+                <a.Icon size={14} className="text-emerald-600 flex-shrink-0" />
                 <span>{a.label}</span>
                 <span className="ml-auto text-emerald-600 font-bold">✓</span>
               </div>
