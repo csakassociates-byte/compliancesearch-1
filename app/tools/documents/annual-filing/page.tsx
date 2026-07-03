@@ -279,8 +279,8 @@ function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg
           </div>
           {!collapsed && (
             <div>
-              <div className="text-[13px] font-medium text-white leading-tight">Annual Filing</div>
-              <div className="text-[10px] text-white/35">AOC-4 &amp; MGT-7/7A</div>
+              <div className="text-[14px] font-semibold text-white leading-tight">Annual Filing</div>
+              <div className="text-[11px] text-white/50">AOC-4 &amp; MGT-7/7A</div>
             </div>
           )}
         </div>
@@ -350,13 +350,13 @@ function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg
 
               {!collapsed && (
                 <span style={{
-                  fontSize: "12.5px",
+                  fontSize: "13.5px",
                   fontWeight: isCurrent ? 600 : 400,
                   color: isCurrent
                     ? "#fff"
                     : complete
-                    ? "rgba(255,255,255,0.55)"
-                    : "rgba(255,255,255,0.28)",
+                    ? "rgba(255,255,255,0.70)"
+                    : "rgba(255,255,255,0.45)",
                   letterSpacing: isCurrent ? "0.01em" : "normal",
                   transition: "color 0.15s ease",
                   lineHeight: 1.3,
@@ -411,9 +411,9 @@ function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg
               >8</div>
               {!collapsed && (
                 <span style={{
-                  fontSize: "12.5px",
+                  fontSize: "13.5px",
                   fontWeight: isCurrent ? 600 : 400,
-                  color: isCurrent ? "#fff" : complete ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.28)",
+                  color: isCurrent ? "#fff" : complete ? "rgba(255,255,255,0.70)" : "rgba(255,255,255,0.45)",
                   letterSpacing: isCurrent ? "0.01em" : "normal",
                   transition: "color 0.15s ease",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -3968,7 +3968,7 @@ function AnnualFilingTool() {
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileSidebarOpen(false)} />
-          <aside className="relative w-[260px] bg-[#0f172a] flex flex-col overflow-y-auto z-10">
+          <aside className="relative w-[260px] bg-[#162032] flex flex-col overflow-y-auto z-10">
             <SidebarInner
               data={data} step={step} collapsed={false}
               session={session} saving={saving} saveId={saveId} savedMsg={savedMsg} resetting={resetting}
@@ -3985,7 +3985,7 @@ function AnnualFilingTool() {
 
         {/* ── Sidebar (desktop) ────────────────────────────────────────── */}
         <aside
-          className="hidden md:flex flex-col flex-shrink-0 bg-[#0f172a] overflow-y-auto"
+          className="hidden md:flex flex-col flex-shrink-0 bg-[#162032] overflow-y-auto"
           style={{ width: sidebarCollapsed ? "64px" : "220px", transition: "width 0.2s ease" }}
         >
           <SidebarInner
