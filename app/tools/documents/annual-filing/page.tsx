@@ -3844,7 +3844,7 @@ function AnnualFilingTool() {
 
     const attachments = [
       { key: "audit-report",      label: "Independent Auditor's Report",    Icon: FileCheck,       always: true },
-      { key: isOPCOrSmall ? "board-report-rule8a" : "board-report-rule8", label: `Directors' Report (${isOPCOrSmall ? "Rule 8A — Abridged" : "Rule 8 — Full"})`, Icon: FileText, always: true },
+      { key: "board-report",      docxKey: isOPCOrSmall ? "board-report-rule8a" : "board-report-rule8", label: `Directors' Report (${isOPCOrSmall ? "Rule 8A — Abridged" : "Rule 8 — Full"})`, Icon: FileText, always: true },
       { key: "notes-on-accounts", label: "Notes to Financial Statements",   Icon: BarChart3,       always: true },
       { key: "director-list",     label: "Details of Directors",            Icon: Users,           always: true },
       { key: "shareholder-list",  label: `List of Shareholders (31 March ${fyEndYr})`, Icon: Building2, always: true },
@@ -3998,7 +3998,7 @@ function AnnualFilingTool() {
                     )}
                   </button>
                   <button
-                    onClick={() => handleDownloadDocx(a.key, a.label)}
+                    onClick={() => handleDownloadDocx((a as {docxKey?: string}).docxKey ?? a.key, a.label)}
                     disabled={docxLoading[a.key]}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-wait text-white text-xs font-semibold rounded-lg transition-all flex-shrink-0"
                     title="Download as Word document (.docx)"
