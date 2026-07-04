@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, Suspense } from "react";
+import { useState, useCallback, useEffect, useRef, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -523,6 +523,8 @@ function AnnualFilingTool() {
   const [pdfLoading, setPdfLoading]   = useState<Record<string, boolean>>({});
   const [docxLoading, setDocxLoading] = useState<Record<string, boolean>>({});
   const [sigEnabled, setSigEnabled]   = useState<Record<string, boolean>>({});
+  const [previewModal, setPreviewModal] = useState<{ label: string; blobUrl: string } | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [savedCAs, setSavedCAs]     = useState<SavedCA[]>([]);
   const [savingCA, setSavingCA]     = useState(false);
   const [showCAManager, setShowCAManager] = useState(false);
@@ -1164,6 +1166,17 @@ function AnnualFilingTool() {
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     window.open(url, "_blank");
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  function openPreviewModal(label: string, html: string) {
+    if (previewModal) URL.revokeObjectURL(previewModal.blobUrl);
+    const blobUrl = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    setPreviewModal({ label, blobUrl });
+  }
+
+  function closePreviewModal() {
+    if (previewModal) URL.revokeObjectURL(previewModal.blobUrl);
+    setPreviewModal(null);
   }
 
   function downloadDoc(html: string) {
@@ -3988,9 +4001,9 @@ function AnnualFilingTool() {
                     ↺
                   </button>
                   <button
-                    onClick={() => openDoc(generated[a.key]!)}
+                    onClick={() => openPreviewModal(a.label, generated[a.key]!)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
-                    title="Preview in browser tab"
+                    title="Preview document"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     Preview
@@ -4282,6 +4295,56 @@ function AnnualFilingTool() {
 
         </div>
       </div>
+
+      {/* ── Preview Modal ─────────────────────────────────────────────────── */}
+      {previewModal && (
+        <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 pt-10">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closePreviewModal} />
+
+          {/* Modal panel */}
+          <div className="relative z-10 flex flex-col w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden"
+            style={{ height: "calc(100vh - 80px)" }}>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="flex-1 text-sm font-bold text-slate-800 truncate min-w-0">{previewModal.label}</p>
+              <button
+                onClick={() => iframeRef.current?.contentWindow?.print()}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-semibold rounded-lg transition-colors flex-shrink-0"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print
+              </button>
+              <button
+                onClick={closePreviewModal}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+                title="Close preview"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* iframe */}
+            <iframe
+              ref={iframeRef}
+              src={previewModal.blobUrl}
+              className="flex-1 w-full border-0 bg-white"
+              title={previewModal.label}
+            />
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
