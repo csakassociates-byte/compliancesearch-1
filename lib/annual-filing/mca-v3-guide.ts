@@ -261,13 +261,14 @@ function subHdr(text: string): string {
   return `<div class="sub-hdr">${text}</div>`;
 }
 
+const COPY_BTN = `<button class="cpbtn" onclick="cpField(this)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>`;
+
 function fieldText(num: string, title: string, content: string): string {
   const len  = content.length;
   const warn = len > 3500 ? `<span class="warn">⚠ ${len} chars</span>` : `<span class="cc">${len} chars</span>`;
   return `<div class="field">
-    <div class="fhdr"><span class="fnum">${num}</span><span class="ftitle">${title}</span>${warn}</div>
-    <div class="fcontent copyable" onclick="cp(this)">${esc(content)}</div>
-    <div class="chint">Click to copy</div>
+    <div class="fhdr"><span class="fnum">${num}</span><span class="ftitle">${title}</span>${warn}${COPY_BTN}</div>
+    <div class="fcontent">${esc(content)}</div>
   </div>`;
 }
 
@@ -287,9 +288,8 @@ function fieldTable(num: string, title: string, inner: string): string {
 
 function fieldNum(num: string, title: string, value: number | string): string {
   return `<div class="field">
-    <div class="fhdr"><span class="fnum">${num}</span><span class="ftitle">${title}</span></div>
-    <div class="fval copyable" onclick="cp(this)">${value}</div>
-    <div class="chint">Click to copy</div>
+    <div class="fhdr"><span class="fnum">${num}</span><span class="ftitle">${title}</span>${COPY_BTN}</div>
+    <div class="fval">${value}</div>
   </div>`;
 }
 
@@ -444,15 +444,18 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1e293b;backgr
 .ftitle{font-weight:600;font-size:12px;flex:1}
 .cc{font-size:10px;color:#94a3b8}
 .warn{font-size:10px;color:#d97706;font-weight:600}
-.fcontent,.fval{padding:11px 13px;white-space:pre-wrap;line-height:1.65;font-size:12.5px;cursor:pointer;transition:background .15s}
-.fcontent:hover,.fval:hover{background:#f0f9ff}
-.fcontent.flash,.fval.flash{background:#dcfce7}
-.chint{text-align:right;padding:3px 13px 6px;font-size:10px;color:#cbd5e1}
+.fcontent,.fval{padding:11px 13px;white-space:pre-wrap;line-height:1.65;font-size:12.5px}
+.fval{font-size:20px;font-weight:700;color:#1e40af;text-align:center}
 .fyn{padding:11px 13px;font-size:14px}
+.cpbtn{margin-left:auto;background:#e0e7ff;color:#1e40af;border:none;border-radius:5px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;transition:background .15s,color .15s;flex-shrink:0}
+.cpbtn:hover{background:#c7d2fe}
+.cpbtn.ok{background:#dcfce7;color:#16a34a}
+.sec-b .cpbtn{background:#ede9fe;color:#6d28d9}
+.sec-b .cpbtn:hover{background:#ddd6fe}
+.sec-b .cpbtn.ok{background:#dcfce7;color:#16a34a}
 .y{color:#16a34a;font-weight:700}
 .n{color:#94a3b8;font-weight:700}
 .ftbl{padding:11px 13px;overflow-x:auto}
-.fval{font-size:20px;font-weight:700;color:#1e40af;text-align:center}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{background:#f1f5f9;font-weight:600;padding:6px 10px;text-align:left;border:1px solid #e2e8f0}
 td{padding:6px 10px;border:1px solid #e2e8f0}
@@ -465,7 +468,7 @@ tr:nth-child(even) td{background:#f8fafc}
 .small-note{font-size:11px;color:#64748b;font-style:italic;padding:6px 13px 10px}
 @media print{
   body{background:#fff}
-  .print-btn{display:none}
+  .print-btn,.cpbtn{display:none}
   .field{break-inside:avoid}
   .pg-hdr{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sec-hdr{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -483,7 +486,7 @@ tr:nth-child(even) td{background:#f8fafc}
 </div>
 
 <div class="notice">
-  ⚠️ <strong>Instructions:</strong> Click any field to copy its content → paste in MCA V3 portal. Verify all data before final submission. Character limits apply on portal — trim text if the portal shows an error.
+  ⚠️ <strong>Instructions:</strong> Click the <strong>Copy</strong> button on any field → paste in MCA V3 portal. Verify all data before final submission. Character limits apply on portal — trim text if the portal shows an error.
 </div>
 
 <div class="container">
@@ -650,10 +653,13 @@ ${fieldText("6(d)", "*Reporting on Internal Financial Controls", buildIFC(data))
 </div>
 
 <script>
-function cp(el) {
+function cpField(btn) {
+  const field = btn.closest('.field');
+  const el = field.querySelector('.fcontent') || field.querySelector('.fval');
+  if (!el) return;
   const txt = el.innerText;
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(txt).then(() => flash(el));
+    navigator.clipboard.writeText(txt).then(() => flashBtn(btn));
   } else {
     const r = document.createRange();
     r.selectNodeContents(el);
@@ -661,12 +667,14 @@ function cp(el) {
     s.removeAllRanges();
     s.addRange(r);
     document.execCommand('copy');
-    flash(el);
+    flashBtn(btn);
   }
 }
-function flash(el) {
-  el.classList.add('flash');
-  setTimeout(() => el.classList.remove('flash'), 900);
+function flashBtn(btn) {
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+  btn.classList.add('ok');
+  setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('ok'); }, 1800);
 }
 </script>
 </body>
