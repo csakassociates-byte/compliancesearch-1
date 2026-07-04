@@ -493,32 +493,104 @@ export function sigParagraphs(
   return paras;
 }
 
-// ── Footer with running director authorization (for board reports) ────────────
-export function buildFooterWithDirectors(
-  dirs: Array<{ name: string; designation: string; din: string }>,
-  companyName: string
-): Footer {
-  const dirText  = dirs.map(d => d.name).join("   |   ");
-  const desigText = dirs.map(d => d.designation).join("   |   ");
-  const dinText  = dirs.map(d => `DIN: ${d.din || "N/A"}`).join("   |   ");
+// ── Detect image type from base64 data URI ───────────────────────────────────
+function imgType(b64: string): "png" | "jpg" {
+  return b64.includes("image/png") ? "png" : "jpg";
+}
 
+// ── Footer for Audit Report: CA seal on every page ───────────────────────────
+export function buildAuditFooter(sealBase64?: string): Footer {
+  const imgs: (TextRun | ImageRun)[] = [];
+  if (sealBase64) {
+    try {
+      imgs.push(new ImageRun({ data: base64ToBuffer(sealBase64), transformation: { width: 55, height: 38 }, type: imgType(sealBase64) }));
+    } catch {}
+  }
   return new Footer({
     children: [
       new Paragraph({
-        children: [r(`For and on behalf of the Board of Directors of ${companyName}`, { size: SZ9 })],
+        children: imgs.length > 0 ? imgs : [r("", { size: SZ9 })],
         alignment: AlignmentType.LEFT,
         border: { top: { style: BorderStyle.SINGLE, size: 4, color: "888888" } },
         spacing: { before: 40, after: 20 },
       }),
       new Paragraph({
-        children: [r(dirText, { bold: true, size: SZ9 })],
+        children: [
+          r("Page ", { size: SZ9 }),
+          new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: SZ9 }),
+          r(" of ", { size: SZ9 }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], font: FONT, size: SZ9 }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 0 },
+      }),
+    ],
+  });
+}
+
+// ── Footer for Notes on Accounts: CA seal + director signatures ───────────────
+export function buildNotesFooter(
+  sealBase64?: string,
+  sigDirs?: Array<{ base64?: string }>
+): Footer {
+  const imgs: (TextRun | ImageRun)[] = [];
+  if (sealBase64) {
+    try {
+      imgs.push(new ImageRun({ data: base64ToBuffer(sealBase64), transformation: { width: 55, height: 38 }, type: imgType(sealBase64) }));
+      imgs.push(r("     ", { size: SZ9 }));
+    } catch {}
+  }
+  for (const dir of (sigDirs ?? [])) {
+    if (dir.base64) {
+      try {
+        imgs.push(new ImageRun({ data: base64ToBuffer(dir.base64), transformation: { width: 85, height: 32 }, type: imgType(dir.base64) }));
+        imgs.push(r("     ", { size: SZ9 }));
+      } catch {}
+    }
+  }
+  return new Footer({
+    children: [
+      new Paragraph({
+        children: imgs.length > 0 ? imgs : [r("", { size: SZ9 })],
         alignment: AlignmentType.LEFT,
-        spacing: { before: 0, after: 20 },
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: "888888" } },
+        spacing: { before: 40, after: 20 },
       }),
       new Paragraph({
-        children: [r(`${desigText}     ${dinText}`, { size: SZ9 })],
+        children: [
+          r("Page ", { size: SZ9 }),
+          new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: SZ9 }),
+          r(" of ", { size: SZ9 }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], font: FONT, size: SZ9 }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 0 },
+      }),
+    ],
+  });
+}
+
+// ── Footer for Board Reports: director signature images only ──────────────────
+export function buildFooterWithDirectors(
+  dirs: Array<{ name: string; designation: string; din: string; base64?: string }>,
+  _companyName: string
+): Footer {
+  const imgs: (TextRun | ImageRun)[] = [];
+  for (const dir of dirs) {
+    if (dir.base64) {
+      try {
+        imgs.push(new ImageRun({ data: base64ToBuffer(dir.base64), transformation: { width: 90, height: 33 }, type: imgType(dir.base64) }));
+        imgs.push(r("          ", { size: SZ9 }));
+      } catch {}
+    }
+  }
+  return new Footer({
+    children: [
+      new Paragraph({
+        children: imgs.length > 0 ? imgs : [r("", { size: SZ9 })],
         alignment: AlignmentType.LEFT,
-        spacing: { before: 0, after: 20 },
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: "888888" } },
+        spacing: { before: 40, after: 20 },
       }),
       new Paragraph({
         children: [

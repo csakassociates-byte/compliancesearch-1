@@ -9,7 +9,7 @@ import { fmtDate, fyEndYear, fyStartYear } from "../utils";
 import {
   FONT, MARGIN, NO_BORDER, PAGE_HEIGHT, PAGE_WIDTH,
   SZ10, SZ12, SZ9, USABLE_WIDTH,
-  base64ToBuffer, blankLine, buildFooter, buildHeader, buildTable,
+  base64ToBuffer, blankLine, buildNotesFooter, buildHeader, buildTable,
   h2, h3, p, pr, r, sigParagraphs, toDocxBuffer,
 } from "./utils";
 
@@ -59,6 +59,12 @@ export async function buildNotesOnAccountsDocx(data: AnnualFilingData): Promise<
   const dir1 = data.signatoryDirectors.director1;
   const dir2 = data.signatoryDirectors.director2;
   const dir3 = data.signatoryDirectors.director3;
+
+  const notesSigDirs = [
+    ...(dir1.name ? [{ base64: dir1.signatureBase64 }] : []),
+    ...(dir2?.name ? [{ base64: dir2.signatureBase64 }] : []),
+    ...(dir3?.name ? [{ base64: dir3.signatureBase64 }] : []),
+  ];
 
   const revenueText = isFPC
     ? "Revenue is recognized on accrual basis. Revenue from operations includes income from procurement, processing, storage and marketing of produce on behalf of producer members. Revenue from Services including applicable taxes is excluded while recording Revenue from Operations. Patronage bonus to members, if declared, is recognised as an expenditure."
@@ -297,7 +303,7 @@ export async function buildNotesOnAccountsDocx(data: AnnualFilingData): Promise<
         },
       },
       headers: { default: buildHeader(data.companyName, "Notes to Financial Statements") },
-      footers: { default: buildFooter() },
+      footers: { default: buildNotesFooter(data.auditor.sealBase64, notesSigDirs) },
       children,
     }],
   });
