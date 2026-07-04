@@ -27,7 +27,7 @@ export function getDocPdfConfig(docType: string): PdfDocConfig {
   if (docType === "director-list") {
     return { landscape: true, marginSide: "15mm", marginTop: "25mm", marginBottom: "25mm" };
   }
-  return { landscape: false, marginSide: "20mm", marginTop: "28mm", marginBottom: "28mm" };
+  return { landscape: false, marginSide: "20mm", marginTop: "28mm", marginBottom: "34mm" };
 }
 
 export function buildPuppeteerHeader(
@@ -57,35 +57,29 @@ export function buildPuppeteerFooter(
   justify: "space-between" | "flex-end" = "space-between",
   marginSide = "20mm"
 ): string {
+  // Only show signature images — no name/designation/DIN text in footer
   const dirSlots = dirs
-    .filter(d => d.name)
-    .map(d => `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;padding:0 2px;">
-      ${d.signatureBase64
-        ? `<img src="data:image/jpeg;base64,${d.signatureBase64}" style="max-height:20px;max-width:70px;object-fit:contain;display:block;">`
-        : `<div style="height:20px;"></div>`}
-      <div style="font-size:6.5px;font-weight:bold;font-family:serif;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;color:#000;">${escHtml(d.name!)}</div>
-      ${d.designation ? `<div style="font-size:5.5px;font-family:serif;color:#333;text-align:center;white-space:nowrap;">${escHtml(d.designation)}</div>` : ""}
-      ${d.din ? `<div style="font-size:5.5px;font-family:serif;color:#333;text-align:center;">DIN: ${escHtml(d.din)}</div>` : ""}
+    .filter(d => d.signatureBase64)
+    .map(d => `<div style="display:flex;align-items:flex-end;padding:0 6px;">
+      <img src="data:image/jpeg;base64,${d.signatureBase64}" style="max-height:40px;max-width:110px;object-fit:contain;display:block;">
     </div>`).join("");
 
-  const sealSlot = aud && (aud.firmName || aud.sealBase64)
-    ? `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;padding:0 2px;">
-      ${aud.sealBase64
-        ? `<img src="data:image/jpeg;base64,${aud.sealBase64}" style="max-height:24px;max-width:56px;object-fit:contain;display:block;">`
-        : `<div style="height:24px;"></div>`}
-      ${aud.firmName ? `<div style="font-size:6.5px;font-weight:bold;font-family:serif;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;color:#000;">M/s. ${escHtml(aud.firmName)}</div>` : ""}
-      ${aud.frn ? `<div style="font-size:5.5px;font-family:serif;color:#333;text-align:center;">FRN: ${escHtml(aud.frn)}</div>` : ""}
+  // Only show seal image — no firm name/FRN text in footer
+  const sealSlot = aud?.sealBase64
+    ? `<div style="display:flex;align-items:flex-end;padding:0 6px;">
+      <img src="data:image/jpeg;base64,${aud.sealBase64}" style="max-height:44px;max-width:76px;object-fit:contain;display:block;">
     </div>`
     : "";
 
-  if (!dirSlots && !sealSlot) return `<div style="font-size:0;"></div>`;
+  const content = dirSlots + sealSlot;
+  if (!content) return `<div style="font-size:0;"></div>`;
 
   return `<div style="width:100%;box-sizing:border-box;font-size:0;
     padding:2px ${marginSide} 0;
     border-top:0.5pt solid #aaa;
     display:flex;align-items:flex-end;justify-content:${justify};
     background:white;">
-    ${dirSlots}${sealSlot}
+    ${content}
   </div>`;
 }
 
