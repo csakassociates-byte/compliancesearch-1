@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTeamContext, logActivity, generateTempPassword } from "@/lib/team";
-import { sendTeamInviteEmail, sendTeamJoinNotificationEmail } from "@/lib/email";
+import { getTeamContext, logActivity, generateTempPassword, createTeamInvite } from "@/lib/team";
+import { sendTeamInviteEmail, sendTeamInviteRequestEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -66,16 +66,20 @@ export async function POST(req: NextRequest) {
   );
 
   if (existingUser.length) {
-    // User already has an account — just add to team
+    // Existing user — send invite request, do NOT add to team yet
     const targetUser = existingUser[0];
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO csi_team_members (id, "teamId", "userId", role, "addedBy") VALUES ($1,$2,$3,'member',$4)
-       ON CONFLICT ("teamId","userId") DO NOTHING`,
-      crypto.randomUUID(), ctx.teamId, targetUser.id, inviterId
-    );
-    await sendTeamJoinNotificationEmail({ to: emailLower, toName: targetUser.name || "", invitedByName: inviterName, teamName });
-    await logActivity({ teamId: ctx.teamId, userId: inviterId, userName: inviterName, action: `Added existing user ${emailLower} to team`, entityType: "user", entityId: targetUser.id, entityName: emailLower });
-    return NextResponse.json({ success: true, message: `${emailLower} has been added to the team.` });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://compliancesearch.in";
+    const token = await createTeamInvite({
+      teamId: ctx.teamId,
+      invitedBy: inviterId,
+      invitedEmail: emailLower,
+      invitedUserId: targetUser.id,
+    });
+    const acceptUrl  = `${appUrl}/team/accept?token=${token}&action=accept`;
+    const declineUrl = `${appUrl}/team/accept?token=${token}&action=decline`;
+    await sendTeamInviteRequestEmail({ to: emailLower, toName: targetUser.name || "", invitedByName: inviterName, teamName, acceptUrl, declineUrl });
+    await logActivity({ teamId: ctx.teamId, userId: inviterId, userName: inviterName, action: `Sent team invite to existing user ${emailLower}`, entityType: "user", entityId: targetUser.id, entityName: emailLower });
+    return NextResponse.json({ success: true, pending: true, message: `Invite sent to ${emailLower}. Waiting for their acceptance.` });
   }
 
   // New user — create account with temp password

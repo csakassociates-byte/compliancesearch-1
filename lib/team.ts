@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import crypto from "crypto";
+import crypto, { randomBytes } from "crypto";
 
 // ── Table setup ───────────────────────────────────────────────────────────────
 
@@ -25,6 +25,19 @@ export async function ensureTeamTables() {
     )
   `);
   await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS csi_team_invites (
+      id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+      "teamId"        TEXT NOT NULL,
+      "invitedBy"     TEXT NOT NULL,
+      "invitedEmail"  TEXT NOT NULL,
+      "invitedUserId" TEXT,
+      token           TEXT UNIQUE NOT NULL,
+      status          TEXT DEFAULT 'pending',
+      "expiresAt"     TIMESTAMPTZ NOT NULL,
+      "createdAt"     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS csi_activity_log (
       id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
       "teamId"      TEXT NOT NULL,
@@ -45,6 +58,12 @@ export async function ensureTeamTables() {
   );
   await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS idx_csi_activity_log_teamId ON csi_activity_log("teamId")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS idx_csi_team_invites_token ON csi_team_invites(token)`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS idx_csi_team_invites_teamId ON csi_team_invites("teamId")`
   );
 }
 
@@ -137,6 +156,115 @@ export async function logActivity(params: {
       params.entityName  ?? null
     );
   } catch { /* non-fatal */ }
+}
+
+// ── Invite helpers ────────────────────────────────────────────────────────────
+
+export interface TeamInviteRow {
+  id: string;
+  teamId: string;
+  invitedBy: string;
+  invitedEmail: string;
+  invitedUserId: string | null;
+  token: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+  inviterName?: string | null;
+  teamName?: string | null;
+}
+
+export async function createTeamInvite(params: {
+  teamId: string;
+  invitedBy: string;
+  invitedEmail: string;
+  invitedUserId?: string;
+}): Promise<string> {
+  await ensureTeamTables();
+  // Cancel any existing pending invite for same email in same team
+  await prisma.$executeRawUnsafe(
+    `UPDATE csi_team_invites SET status = 'cancelled'
+     WHERE "teamId" = $1 AND "invitedEmail" = $2 AND status = 'pending'`,
+    params.teamId, params.invitedEmail
+  );
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO csi_team_invites
+       (id, "teamId", "invitedBy", "invitedEmail", "invitedUserId", token, status, "expiresAt")
+     VALUES ($1,$2,$3,$4,$5,$6,'pending',$7)`,
+    crypto.randomUUID(),
+    params.teamId,
+    params.invitedBy,
+    params.invitedEmail,
+    params.invitedUserId ?? null,
+    token,
+    expiresAt
+  );
+  return token;
+}
+
+export async function getInviteByToken(token: string): Promise<(TeamInviteRow & {
+  inviterName: string | null; teamName: string | null;
+}) | null> {
+  await ensureTeamTables();
+  const rows = await prisma.$queryRawUnsafe<Array<TeamInviteRow & {
+    inviterName: string | null; teamName: string | null;
+  }>>(
+    `SELECT i.*, u.name AS "inviterName", t.name AS "teamName"
+     FROM csi_team_invites i
+     LEFT JOIN csi_users u ON u.id = i."invitedBy"
+     LEFT JOIN csi_teams  t ON t.id = i."teamId"
+     WHERE i.token = $1`,
+    token
+  );
+  return rows[0] ?? null;
+}
+
+export async function acceptTeamInvite(token: string, userId: string): Promise<void> {
+  const invite = await getInviteByToken(token);
+  if (!invite || invite.status !== "pending") throw new Error("Invalid invite");
+  if (new Date(invite.expiresAt) < new Date()) throw new Error("Expired");
+
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO csi_team_members (id,"teamId","userId",role,"addedBy")
+     VALUES ($1,$2,$3,'member',$4)
+     ON CONFLICT ("teamId","userId") DO NOTHING`,
+    crypto.randomUUID(), invite.teamId, userId, invite.invitedBy
+  );
+  await prisma.$executeRawUnsafe(
+    `UPDATE csi_team_invites SET status = 'accepted' WHERE token = $1`,
+    token
+  );
+}
+
+export async function declineTeamInvite(token: string): Promise<void> {
+  await ensureTeamTables();
+  await prisma.$executeRawUnsafe(
+    `UPDATE csi_team_invites SET status = 'declined' WHERE token = $1 AND status = 'pending'`,
+    token
+  );
+}
+
+export async function cancelTeamInvite(inviteId: string, teamId: string): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    `UPDATE csi_team_invites SET status = 'cancelled'
+     WHERE id = $1 AND "teamId" = $2 AND status = 'pending'`,
+    inviteId, teamId
+  );
+}
+
+export async function getPendingInvites(teamId: string): Promise<Array<{
+  id: string; invitedEmail: string; createdAt: string; expiresAt: string;
+}>> {
+  await ensureTeamTables();
+  return prisma.$queryRawUnsafe(
+    `SELECT id, "invitedEmail", "createdAt", "expiresAt"
+     FROM csi_team_invites
+     WHERE "teamId" = $1 AND status = 'pending'
+     ORDER BY "createdAt" DESC`,
+    teamId
+  );
 }
 
 // ── Temp password ─────────────────────────────────────────────────────────────

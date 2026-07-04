@@ -11,6 +11,13 @@ interface Member {
   email: string;
 }
 
+interface PendingInvite {
+  id: string;
+  invitedEmail: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 interface TeamData {
   teamId: string;
   teamName: string | null;
@@ -35,20 +42,23 @@ export default function TeamClient() {
 
   const [team, setTeam] = useState<TeamData | null>(null);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
-  const [inviteMsg, setInviteMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [inviteMsg, setInviteMsg] = useState<{ type: "success" | "error" | "pending"; text: string } | null>(null);
   const [teamNameEdit, setTeamNameEdit] = useState("");
   const [savingName, setSavingName] = useState(false);
   const [activeTab, setActiveTab] = useState<"members" | "activity">("members");
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [tRes, aRes] = await Promise.all([
+    const [tRes, aRes, iRes] = await Promise.all([
       fetch("/api/team"),
       fetch("/api/activity"),
+      fetch("/api/team/invites"),
     ]);
     if (tRes.ok) {
       const t = await tRes.json() as TeamData;
@@ -56,6 +66,10 @@ export default function TeamClient() {
       setTeamNameEdit(t.teamName || "");
     }
     if (aRes.ok) setActivity(await aRes.json() as ActivityEntry[]);
+    if (iRes.ok) {
+      const { invites } = await iRes.json() as { invites: PendingInvite[] };
+      setPendingInvites(invites);
+    }
     setLoading(false);
   }, []);
 
@@ -69,11 +83,26 @@ export default function TeamClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: inviteEmail }),
     });
-    const data = await res.json() as { success?: boolean; error?: string; message?: string };
+    const data = await res.json() as { success?: boolean; error?: string; message?: string; pending?: boolean };
     setInviting(false);
     if (!res.ok) { setInviteMsg({ type: "error", text: data.error || "Failed." }); return; }
-    setInviteMsg({ type: "success", text: data.message || "Member added!" });
+    setInviteMsg({
+      type: data.pending ? "pending" : "success",
+      text: data.message || "Member added!",
+    });
     setInviteEmail("");
+    loadData();
+  }
+
+  async function handleCancelInvite(inviteId: string) {
+    if (!confirm("Cancel this pending invite?")) return;
+    setCancellingId(inviteId);
+    await fetch("/api/team/invites", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inviteId }),
+    });
+    setCancellingId(null);
     loadData();
   }
 
@@ -139,8 +168,12 @@ export default function TeamClient() {
             Enter their email address. If they don&apos;t have an account, one will be created and a temporary password sent to them.
           </p>
           {inviteMsg && (
-            <div className={`px-4 py-2.5 rounded-xl text-sm mb-3 ${inviteMsg.type === "success" ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
-              {inviteMsg.text}
+            <div className={`px-4 py-2.5 rounded-xl text-sm mb-3 ${
+              inviteMsg.type === "success" ? "bg-green-50 border border-green-200 text-green-700" :
+              inviteMsg.type === "pending" ? "bg-amber-50 border border-amber-200 text-amber-700" :
+              "bg-red-50 border border-red-200 text-red-700"
+            }`}>
+              {inviteMsg.type === "pending" && "⏳ "}{inviteMsg.text}
             </div>
           )}
           <form onSubmit={handleInvite} className="flex gap-3">
@@ -157,6 +190,39 @@ export default function TeamClient() {
               {inviting ? "Adding…" : "+ Add Member"}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Pending Invites */}
+      {team?.isOwner && pendingInvites.length > 0 && (
+        <div className="bg-white rounded-2xl border border-amber-200 p-6 mb-6">
+          <h2 className="text-sm font-bold text-amber-700 mb-3 flex items-center gap-2">
+            <span>⏳</span> Pending Invites ({pendingInvites.length})
+          </h2>
+          <div className="divide-y divide-slate-50">
+            {pendingInvites.map(inv => (
+              <div key={inv.id} className="flex items-center gap-4 py-3">
+                <div className="w-8 h-8 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-sm font-bold text-amber-600 flex-shrink-0">
+                  {inv.invitedEmail.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-700 truncate">{inv.invitedEmail}</p>
+                  <p className="text-xs text-slate-400">
+                    Sent {new Date(inv.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    &nbsp;· Expires {new Date(inv.expiresAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </p>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 font-medium">Awaiting</span>
+                <button
+                  onClick={() => handleCancelInvite(inv.id)}
+                  disabled={cancellingId === inv.id}
+                  className="text-xs text-red-400 hover:text-red-600 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+                >
+                  {cancellingId === inv.id ? "…" : "Cancel"}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

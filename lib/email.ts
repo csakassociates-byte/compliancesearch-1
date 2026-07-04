@@ -21,7 +21,25 @@ export async function sendTeamInviteEmail(params: {
   });
 }
 
-// ── Existing user added to team ───────────────────────────────────────────────
+// ── Existing user — invite request (must accept) ──────────────────────────────
+
+export async function sendTeamInviteRequestEmail(params: {
+  to: string;
+  toName: string;
+  invitedByName: string;
+  teamName: string;
+  acceptUrl: string;
+  declineUrl: string;
+}) {
+  await resend.emails.send({
+    from: FROM,
+    to:   params.to,
+    subject: `${params.invitedByName} invited you to join their team on ComplianceSearch.in`,
+    html: inviteRequestHtml(params),
+  });
+}
+
+// ── Existing user added to team (kept for legacy / new-user flow) ─────────────
 
 export async function sendTeamJoinNotificationEmail(params: {
   to: string;
@@ -105,6 +123,31 @@ function inviteHtml(p: { to: string; toName: string; invitedByName: string; team
       </div>
       ${loginBtn()}
       <p style="color:#94a3b8;font-size:13px;text-align:center;margin:0;">For any issues, contact your team administrator.</p>
+    </div>`);
+}
+
+function inviteRequestHtml(p: { toName: string; invitedByName: string; teamName: string; acceptUrl: string; declineUrl: string }) {
+  return shell(`
+    <div style="padding:32px 40px;">
+      <h2 style="color:#1e293b;font-size:19px;margin:0 0 10px;">Team Invitation 🤝</h2>
+      <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 22px;">
+        Hi <strong>${p.toName || "there"}</strong>,<br><br>
+        <strong>${p.invitedByName}</strong> has invited you to join
+        <strong>${p.teamName}</strong> on ComplianceSearch.in.
+      </p>
+      <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 24px;background:#f8fafc;padding:14px 18px;border-radius:10px;border-left:3px solid #1e40af;">
+        If you accept, your companies and documents will be shared with this team.
+        You can decline if you do not wish to join.
+      </p>
+      <a href="${p.acceptUrl}" style="display:block;background:linear-gradient(135deg,#059669,#047857);color:#fff;text-align:center;padding:14px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;margin-bottom:12px;">
+        ✅ Accept Invitation
+      </a>
+      <a href="${p.declineUrl}" style="display:block;background:#f1f5f9;color:#64748b;text-align:center;padding:12px;border-radius:12px;font-weight:600;font-size:14px;text-decoration:none;margin-bottom:20px;border:1px solid #e2e8f0;">
+        ✗ Decline
+      </a>
+      <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0;">
+        This invitation expires in 7 days. If you didn't expect this, you can safely ignore or decline.
+      </p>
     </div>`);
 }
 
