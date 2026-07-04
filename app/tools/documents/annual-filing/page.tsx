@@ -591,7 +591,7 @@ function AnnualFilingTool() {
 
   // ── Auto-fill audit report date from board report date ─────────────────
   useEffect(() => {
-    if (data.dateOfReport && !data.auditor.reportDate) {
+    if (data.dateOfReport) {
       patchAud({ reportDate: data.dateOfReport });
     }
   }, [data.dateOfReport]); // eslint-disable-line react-hooks/exhaustive-deps
