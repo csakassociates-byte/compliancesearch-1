@@ -1238,23 +1238,18 @@ function AnnualFilingTool() {
   }
 
   async function handleDownloadDocx(key: string, label: string) {
-    const html = generated[key];
-    if (!html) return;
+    // Require generated HTML to exist (document must be previewed first)
+    if (!generated[key]) return;
     setDocxLoading(prev => ({ ...prev, [key]: true }));
     try {
-      // Strip print-only artefacts before sending to server
-      const parser = new DOMParser();
-      const docDom = parser.parseFromString(html, "text/html");
-      docDom.querySelectorAll(".page-sig-footer").forEach(el => el.remove());
-      docDom.body.classList.remove("has-page-footer");
-
       const res = await fetch("/api/annual-filing/docx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          html: docDom.body.innerHTML,
           key,
           label,
+          data,
+          auditOpts,
           companyName: data.companyName,
           financialYear: data.financialYear,
         }),

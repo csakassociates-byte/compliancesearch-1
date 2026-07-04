@@ -19,6 +19,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.20.0",
     "bcryptjs": "^3.0.3",
+    "docx": "^9.7.1",
     "dotenv": "^17.4.2",
     "html-to-docx": "^1.8.0",
     "html2canvas": "^1.4.1",

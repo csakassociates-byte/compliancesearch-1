@@ -1,33 +1,76 @@
 import { NextRequest, NextResponse } from "next/server";
-import HTMLtoDOCX from "html-to-docx";
+import {
+  buildAuditReportDocx,
+  buildBoardReportRule8aDocx,
+  buildBoardReportRule8Docx,
+  buildNotesOnAccountsDocx,
+  buildDirectorListDocx,
+  buildShareholderListDocx,
+  buildMGT7CTCDocx,
+  buildAOC2Docx,
+  buildAOC1Docx,
+} from "@/lib/annual-filing/docx-generators";
+import type { AnnualFilingData } from "@/lib/annual-filing/types";
+import type { AuditReportOptions } from "@/lib/annual-filing/generators/2025-26/audit-report";
 
 export async function POST(req: NextRequest) {
   try {
-    const { html, key, label, companyName, financialYear } = await req.json() as {
-      html: string; key: string; label: string;
-      companyName?: string; financialYear?: string;
+    const body = await req.json() as {
+      key: string;
+      data: AnnualFilingData;
+      auditOpts?: AuditReportOptions;
+      companyName?: string;
+      financialYear?: string;
+      label?: string;
     };
 
-    if (!html) return NextResponse.json({ error: "html required" }, { status: 400 });
+    const { key, data, auditOpts, companyName, financialYear, label } = body;
 
-    const isLandscape = key === "director-list";
+    if (!key || !data) {
+      return NextResponse.json({ error: "key and data are required" }, { status: 400 });
+    }
 
-    const docxBuffer = await HTMLtoDOCX(html, null, {
-      orientation: isLandscape ? "landscape" : "portrait",
-      pageSize: isLandscape
-        ? { width: 16838, height: 11906 }
-        : { width: 11906, height: 16838 },
-      margins: { top: 1134, right: 1134, bottom: 1134, left: 1134 },
-      font: "Times New Roman",
-      fontSize: 22,
-      title: `${label} — ${companyName || ""} — FY ${financialYear || ""}`,
-      creator: "ComplianceSearch.in",
-    });
+    let buffer: Buffer;
 
-    const filename = `${key}_${companyName || "Company"}_FY${financialYear || ""}`
+    switch (key) {
+      case "audit-report":
+        if (!auditOpts) {
+          return NextResponse.json({ error: "auditOpts required for audit-report" }, { status: 400 });
+        }
+        buffer = await buildAuditReportDocx(data, auditOpts);
+        break;
+      case "board-report-rule8a":
+        buffer = await buildBoardReportRule8aDocx(data);
+        break;
+      case "board-report-rule8":
+        buffer = await buildBoardReportRule8Docx(data);
+        break;
+      case "notes-on-accounts":
+        buffer = await buildNotesOnAccountsDocx(data);
+        break;
+      case "director-list":
+        buffer = await buildDirectorListDocx(data);
+        break;
+      case "shareholder-list":
+        buffer = await buildShareholderListDocx(data);
+        break;
+      case "mgt7-ctc":
+        buffer = await buildMGT7CTCDocx(data);
+        break;
+      case "aoc-2":
+        buffer = await buildAOC2Docx(data);
+        break;
+      case "aoc-1":
+        buffer = await buildAOC1Docx(data);
+        break;
+      default:
+        return NextResponse.json({ error: `Unknown document key: ${key}` }, { status: 400 });
+    }
+
+    const filename = `${key}_${companyName || data.companyName || "Company"}_FY${financialYear || data.financialYear || ""}`
       .replace(/[^a-zA-Z0-9_\-. ]/g, "_");
 
-    return new NextResponse(new Uint8Array(docxBuffer as Buffer), {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "Content-Disposition": `attachment; filename="${filename}.docx"`,
