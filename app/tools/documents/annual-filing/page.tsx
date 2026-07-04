@@ -19,6 +19,7 @@ import {
 import type { AuditReportOptions } from "@/lib/annual-filing/generators/index";
 import type { AuditorDetails, BoardMeeting, DirectorRecord, ShareholderRecord } from "@/lib/annual-filing/types";
 import { stateFromCIN } from "@/lib/annual-filing/cin-state";
+import { generateMcaV3GuideHtml } from "@/lib/annual-filing/mca-v3-guide";
 
 interface SavedCA {
   id: string;
@@ -4050,6 +4051,17 @@ function AnnualFilingTool() {
               ) : (
                 <><span>↺</span> Regenerate All (after changes)</>
               )}
+            </button>
+
+            <button
+              onClick={() => {
+                const html = generateMcaV3GuideHtml(data);
+                const blob = new Blob([html], { type: "text/html" });
+                window.open(URL.createObjectURL(blob), "_blank");
+              }}
+              className="w-full mt-3 py-2 border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              📋 Generate MCA V3 Filling Guide
             </button>
 
             {session?.user && (
