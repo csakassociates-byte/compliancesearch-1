@@ -1237,9 +1237,9 @@ function AnnualFilingTool() {
     }
   }
 
-  async function handleDownloadDocx(key: string, label: string) {
+  async function handleDownloadDocx(key: string, label: string, generatedKey?: string) {
     // Require generated HTML to exist (document must be previewed first)
-    if (!generated[key]) return;
+    if (!generated[generatedKey ?? key]) return;
     setDocxLoading(prev => ({ ...prev, [key]: true }));
     try {
       const res = await fetch("/api/annual-filing/docx", {
@@ -3998,7 +3998,7 @@ function AnnualFilingTool() {
                     )}
                   </button>
                   <button
-                    onClick={() => handleDownloadDocx((a as {docxKey?: string}).docxKey ?? a.key, a.label)}
+                    onClick={() => handleDownloadDocx((a as {docxKey?: string}).docxKey ?? a.key, a.label, a.key)}
                     disabled={docxLoading[a.key]}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-wait text-white text-xs font-semibold rounded-lg transition-all flex-shrink-0"
                     title="Download as Word document (.docx)"
