@@ -3844,7 +3844,7 @@ function AnnualFilingTool() {
 
     const attachments = [
       { key: "audit-report",      label: "Independent Auditor's Report",    Icon: FileCheck,       always: true },
-      { key: "board-report",      label: `Directors' Report (${isOPCOrSmall ? "Rule 8A — Abridged" : "Rule 8 — Full"})`, Icon: FileText, always: true },
+      { key: isOPCOrSmall ? "board-report-rule8a" : "board-report-rule8", label: `Directors' Report (${isOPCOrSmall ? "Rule 8A — Abridged" : "Rule 8 — Full"})`, Icon: FileText, always: true },
       { key: "notes-on-accounts", label: "Notes to Financial Statements",   Icon: BarChart3,       always: true },
       { key: "director-list",     label: "Details of Directors",            Icon: Users,           always: true },
       { key: "shareholder-list",  label: `List of Shareholders (31 March ${fyEndYr})`, Icon: Building2, always: true },

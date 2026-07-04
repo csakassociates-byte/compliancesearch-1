@@ -26,7 +26,7 @@ import {
   SZ9,
   USABLE_WIDTH,
   blankLine,
-  buildFooter,
+  buildFooterWithDirectors,
   buildHeader,
   buildTable,
   h2,
@@ -490,7 +490,7 @@ export async function buildBoardReportRule8Docx(data: AnnualFilingData): Promise
         },
       },
       headers: { default: buildHeader(data.companyName, "Directors' Report") },
-      footers: { default: buildFooter() },
+      footers: { default: buildFooterWithDirectors(sigDirs, data.companyName) },
       children,
     }],
   });

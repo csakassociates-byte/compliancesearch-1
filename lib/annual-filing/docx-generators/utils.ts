@@ -493,6 +493,80 @@ export function sigParagraphs(
   return paras;
 }
 
+// ── Footer with running director authorization (for board reports) ────────────
+export function buildFooterWithDirectors(
+  dirs: Array<{ name: string; designation: string; din: string }>,
+  companyName: string
+): Footer {
+  const dirText = dirs.map(d => d.name).join("   |   ");
+  const desigText = dirs.map(d => d.designation).join("   |   ");
+  const dinText = dirs.map(d => `DIN: ${d.din || "N/A"}`).join("   |   ");
+
+  const dirCol = new TableCell({
+    children: [
+      new Paragraph({
+        children: [r(`For and on behalf of the Board of Directors of ${companyName}`, { size: SZ9 })],
+        alignment: AlignmentType.LEFT,
+        spacing: { after: 30, before: 30 },
+      }),
+      new Paragraph({
+        children: [r(dirText, { bold: true, size: SZ9 })],
+        alignment: AlignmentType.LEFT,
+        spacing: { after: 20, before: 0 },
+      }),
+      new Paragraph({
+        children: [r(desigText, { size: SZ9 })],
+        alignment: AlignmentType.LEFT,
+        spacing: { after: 20, before: 0 },
+      }),
+      new Paragraph({
+        children: [r(dinText, { size: SZ9 })],
+        alignment: AlignmentType.LEFT,
+        spacing: { after: 0, before: 0 },
+      }),
+    ],
+    width: { size: USABLE_WIDTH - 1200, type: WidthType.DXA },
+    borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
+
+  const pageCol = new TableCell({
+    children: [
+      new Paragraph({
+        children: [
+          r("Page ", { size: SZ9 }),
+          new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: SZ9 }),
+          r(" of ", { size: SZ9 }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], font: FONT, size: SZ9 }),
+        ],
+        alignment: AlignmentType.RIGHT,
+        spacing: { after: 0, before: 30 },
+      }),
+    ],
+    width: { size: 1200, type: WidthType.DXA },
+    borders: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
+
+  const table = new Table({
+    rows: [new TableRow({ children: [dirCol, pageCol] })],
+    width: { size: USABLE_WIDTH, type: WidthType.DXA },
+    borders: {
+      top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER,
+      right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER,
+    },
+  });
+
+  return new Footer({
+    children: [
+      new Paragraph({
+        children: [r("", { size: SZ9 })],
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: "888888" } },
+        spacing: { before: 40, after: 40 },
+      }),
+      table,
+    ],
+  });
+}
+
 // ── Base64 to Buffer ──────────────────────────────────────────────────────────
 export function base64ToBuffer(b64: string): Buffer {
   // Strip data URI prefix if present
