@@ -3125,17 +3125,32 @@ function AnnualFilingTool() {
             <div className="mb-4">
               <label className="block text-sm font-semibold text-slate-700 mb-1">Meeting Time</label>
               <p className="text-xs text-slate-500 mb-1">Time at which the board meeting was held</p>
-              <select
-                value={data.mgt7MeetingTime || ""}
-                onChange={e => patch({ mgt7MeetingTime: e.target.value })}
+              <input
+                type="time"
+                value={(() => {
+                  const v = data.mgt7MeetingTime || "";
+                  const m = v.match(/^(\d{1,2})\.(\d{2})\s*(A\.M\.|P\.M\.|Noon)$/i);
+                  if (!m) return "";
+                  let h = parseInt(m[1]); const min = m[2]; const p = m[3].toUpperCase();
+                  if (p === "NOON") return `12:${min}`;
+                  if (p === "A.M.") { if (h === 12) h = 0; }
+                  else { if (h !== 12) h += 12; }
+                  return `${String(h).padStart(2,"0")}:${min}`;
+                })()}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (!v) { patch({ mgt7MeetingTime: "" }); return; }
+                  const [hh, mm] = v.split(":");
+                  const h = parseInt(hh); const min = mm || "00";
+                  let t: string;
+                  if (h === 0) t = `12.${min} A.M.`;
+                  else if (h === 12) t = `12.${min} P.M.`;
+                  else if (h < 12) t = `${String(h).padStart(2,"0")}.${min} A.M.`;
+                  else t = `${String(h-12).padStart(2,"0")}.${min} P.M.`;
+                  patch({ mgt7MeetingTime: t });
+                }}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-              >
-                <option value="">— Select time —</option>
-                {["09.00 A.M.","09.30 A.M.","10.00 A.M.","10.30 A.M.","11.00 A.M.","11.30 A.M.",
-                  "12.00 Noon","12.30 P.M.","01.00 P.M.","01.30 P.M.","02.00 P.M.","02.30 P.M.",
-                  "03.00 P.M.","03.30 P.M.","04.00 P.M.","04.30 P.M.","05.00 P.M.","06.00 P.M."
-                ].map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              />
             </div>
             <Field
               label="Meeting Venue"
