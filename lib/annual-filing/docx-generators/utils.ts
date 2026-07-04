@@ -503,7 +503,7 @@ export function buildAuditFooter(sealBase64?: string): Footer {
   const imgs: (TextRun | ImageRun)[] = [];
   if (sealBase64) {
     try {
-      imgs.push(new ImageRun({ data: base64ToBuffer(sealBase64), transformation: { width: 55, height: 38 }, type: imgType(sealBase64) }));
+      imgs.push(new ImageRun({ data: base64ToBuffer(sealBase64), transformation: { width: 80, height: 55 }, type: imgType(sealBase64) }));
     } catch {}
   }
   return new Footer({
@@ -536,14 +536,14 @@ export function buildNotesFooter(
   const imgs: (TextRun | ImageRun)[] = [];
   if (sealBase64) {
     try {
-      imgs.push(new ImageRun({ data: base64ToBuffer(sealBase64), transformation: { width: 55, height: 38 }, type: imgType(sealBase64) }));
+      imgs.push(new ImageRun({ data: base64ToBuffer(sealBase64), transformation: { width: 80, height: 55 }, type: imgType(sealBase64) }));
       imgs.push(r("     ", { size: SZ9 }));
     } catch {}
   }
   for (const dir of (sigDirs ?? [])) {
     if (dir.base64) {
       try {
-        imgs.push(new ImageRun({ data: base64ToBuffer(dir.base64), transformation: { width: 85, height: 32 }, type: imgType(dir.base64) }));
+        imgs.push(new ImageRun({ data: base64ToBuffer(dir.base64), transformation: { width: 130, height: 50 }, type: imgType(dir.base64) }));
         imgs.push(r("     ", { size: SZ9 }));
       } catch {}
     }
@@ -579,7 +579,7 @@ export function buildFooterWithDirectors(
   for (const dir of dirs) {
     if (dir.base64) {
       try {
-        imgs.push(new ImageRun({ data: base64ToBuffer(dir.base64), transformation: { width: 90, height: 33 }, type: imgType(dir.base64) }));
+        imgs.push(new ImageRun({ data: base64ToBuffer(dir.base64), transformation: { width: 130, height: 50 }, type: imgType(dir.base64) }));
         imgs.push(r("          ", { size: SZ9 }));
       } catch {}
     }
