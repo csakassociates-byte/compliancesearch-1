@@ -536,6 +536,8 @@ function AnnualFilingTool() {
     id: string; companyName: string | null; financialYear: string | null;
     updatedAt: string; formDataJson: string;
   } | null>(null);
+  const [prevFinFetching, setPrevFinFetching] = useState(false);
+  const [prevFinFetched,  setPrevFinFetched]  = useState(false);
 
   // ── Load saved draft via ?load=<id> ──────────────────────────────────
   useEffect(() => {
@@ -990,6 +992,23 @@ function AnnualFilingTool() {
         hasDeposits:               prev.hasDeposits,
         hasLoansGiven:             prev.hasLoansGiven,
       });
+      // Carry previous year's current financials → into prev year columns of this year
+      const pf = prev.financials;
+      if (pf) {
+        patchFin({
+          prevRevenueFromOperations: pf.revenueFromOperations || "",
+          prevOtherIncome:           pf.otherIncome           || "",
+          prevTotalExpenses:         pf.totalExpenses         || "",
+          prevCurrentTax:            pf.currentTax            || "",
+          prevDeferredTax:           pf.deferredTax           || "",
+          prevAuthorisedCapital:     pf.authorisedCapital     || "",
+          prevPaidUpCapital:         pf.paidUpCapital         || "",
+          prevReservesAndSurplus:    pf.reservesAndSurplus    || "",
+          prevTotalAssets:           pf.totalAssets           || "",
+          prevTotalLiabilities:      pf.totalLiabilities      || "",
+        });
+        setPrevFinFetched(true);
+      }
       // Also carry auditor report options (minus opinion type — reset to unmodified)
       setAuditOpts({ ...parsed.auditOpts, opinionType: "unmodified", qualificationDetails: "", emphasisOfMatter: "" });
 
@@ -1003,6 +1022,38 @@ function AnnualFilingTool() {
     } catch {
       setPrevYearDraft(null);
     }
+  }
+
+  // ── Fetch previous year financials from saved draft (for Step 3) ──────
+  async function fetchPrevYearFinancials() {
+    if (!data.cin || !session?.user) return;
+    const fyStart = parseInt(data.financialYear.split("-")[0]);
+    const prevFY  = `${fyStart - 1}-${String(fyStart).slice(2)}`;
+    setPrevFinFetching(true);
+    try {
+      const res  = await fetch(`/api/annual-filing?cin=${encodeURIComponent(data.cin)}&fy=${encodeURIComponent(prevFY)}`);
+      const json = await res.json() as { filing?: { formDataJson: string } | null };
+      if (json.filing?.formDataJson) {
+        const parsed = JSON.parse(json.filing.formDataJson) as { data: AnnualFilingData };
+        const pf = parsed.data?.financials;
+        if (pf) {
+          patchFin({
+            prevRevenueFromOperations: pf.revenueFromOperations || "",
+            prevOtherIncome:           pf.otherIncome           || "",
+            prevTotalExpenses:         pf.totalExpenses         || "",
+            prevCurrentTax:            pf.currentTax            || "",
+            prevDeferredTax:           pf.deferredTax           || "",
+            prevAuthorisedCapital:     pf.authorisedCapital     || "",
+            prevPaidUpCapital:         pf.paidUpCapital         || "",
+            prevReservesAndSurplus:    pf.reservesAndSurplus    || "",
+            prevTotalAssets:           pf.totalAssets           || "",
+            prevTotalLiabilities:      pf.totalLiabilities      || "",
+          });
+          setPrevFinFetched(true);
+        }
+      }
+    } catch { /* ignore */ }
+    setPrevFinFetching(false);
   }
 
   // ── Silent auto-save on step navigation (no confirm dialog) ──────────
@@ -2103,6 +2154,24 @@ function AnnualFilingTool() {
             </tbody>
           </table>
         </SectionCard>
+
+        {/* Fetch previous year financials from saved draft */}
+        {data.cin && session?.user && (
+          <div className="flex items-center justify-between mb-2 p-3 bg-violet-50 border border-violet-200 rounded-lg">
+            <p className="text-xs text-slate-700 min-w-0 mr-3">
+              {prevFinFetched
+                ? <><span className="font-semibold text-violet-700">✓ Previous year figures loaded</span> — FY {prevFY} figures auto-filled in the previous year columns.</>
+                : <><span className="font-semibold text-violet-700">Have a saved FY {prevFY} filing?</span> Auto-fill the previous year columns from your saved data.</>}
+            </p>
+            <button
+              onClick={fetchPrevYearFinancials}
+              disabled={prevFinFetching}
+              className="flex-shrink-0 px-3 py-1.5 text-xs font-semibold text-violet-700 border border-violet-300 bg-white hover:bg-violet-50 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {prevFinFetching ? "Fetching…" : prevFinFetched ? "Re-fetch →" : `Fetch FY ${prevFY} Figures →`}
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs text-slate-500">Next year filing? Use this button to copy current year figures into the &quot;Previous Year&quot; columns.</p>
