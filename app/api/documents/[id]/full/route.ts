@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberIds } from "@/lib/team";
 
 // Full update — title, date, FY, type AND formDataJson
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -10,15 +11,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const userId = (session.user as { id: string }).id;
   const { id } = await params;
 
+  const memberIds = await getTeamMemberIds(userId);
   const body = await req.json() as {
     title?: string; meetingDate?: string; financialYear?: string;
     type?: string; companyName?: string; formDataJson?: string;
   };
 
-  // Verify ownership
+  // Verify team access
   const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    `SELECT id FROM csi_documents WHERE id = $1 AND "userId" = $2`,
-    id, userId
+    `SELECT id FROM csi_documents WHERE id = $1 AND "userId" = ANY($2::text[])`,
+    id, memberIds
   );
   if (!existing.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -31,8 +33,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       "companyName"  = COALESCE($7, "companyName"),
       "formDataJson" = COALESCE($8, "formDataJson"),
       "updatedAt"    = NOW()
-     WHERE id = $1 AND "userId" = $2`,
-    id, userId,
+     WHERE id = $1 AND "userId" = ANY($2::text[])`,
+    id, memberIds,
     body.title        ?? null,
     body.meetingDate  ?? null,
     body.financialYear?? null,

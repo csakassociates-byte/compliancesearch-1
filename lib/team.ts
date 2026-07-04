@@ -52,8 +52,14 @@ export async function ensureTeamTables() {
 
 export async function getOrCreateTeam(userId: string): Promise<string> {
   await ensureTeamTables();
+  // Prefer a team where user is a 'member' (invited into someone else's team)
+  // over a team where user is 'owner' (their own solo team).
+  // This ensures invited users see the team leader's data, not their stale solo team.
   const existing = await prisma.$queryRawUnsafe<Array<{ teamId: string }>>(
-    `SELECT "teamId" FROM csi_team_members WHERE "userId" = $1 LIMIT 1`,
+    `SELECT "teamId" FROM csi_team_members
+     WHERE "userId" = $1
+     ORDER BY CASE WHEN role = 'owner' THEN 1 ELSE 0 END ASC, "addedAt" ASC
+     LIMIT 1`,
     userId
   );
   if (existing.length) return existing[0].teamId;

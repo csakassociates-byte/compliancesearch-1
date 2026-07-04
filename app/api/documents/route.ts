@@ -50,11 +50,12 @@ export async function POST(req: NextRequest) {
     body.meetingDate ?? null, body.formDataJson, now
   );
 
-  // Auto-link to company if companyName matches existing company
+  // Auto-link to company — search across all team members' companies
   if (body.companyName) {
+    const memberIds = await getTeamMemberIds(userId);
     const matchingCompany = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("companyName") = LOWER($2) LIMIT 1`,
-      userId, body.companyName
+      `SELECT id FROM csi_companies WHERE "userId" = ANY($1::text[]) AND LOWER("companyName") = LOWER($2) LIMIT 1`,
+      memberIds, body.companyName
     );
     if (matchingCompany.length) {
       await prisma.$executeRawUnsafe(
