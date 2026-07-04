@@ -9,7 +9,7 @@
  */
 
 import type { AnnualFilingData } from "./types";
-import { fmtDate, fyEndYear, fyStartYear, fmtIndian, parseIndian } from "./utils";
+import { fyEndYear, fmtIndian, parseIndian } from "./utils";
 
 // ── Small helpers ──────────────────────────────────────────────────────────────
 
@@ -17,9 +17,13 @@ function num(s: string | undefined): number {
   return parseIndian(s || "0");
 }
 
-function rs(s: string | undefined): string {
-  const n = num(s);
-  return n === 0 ? "₹NIL" : `₹${fmtIndian(Math.abs(n))}`;
+function fmtDateDMY(raw: string): string {
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  return raw;
 }
 
 function esc(s: string): string {
@@ -214,18 +218,25 @@ function buildRule11g(): string {
 }
 
 function buildSection143(data: AnnualFilingData): string {
-  const fyEnd = fyEndYear(data.financialYear);
-  const date  = `31st March, ${fyEnd}`;
-  const rev   = num(data.financials.revenueFromOperations);
-  const exempted = rev < 500000000; // < ₹50 crore
-  const ifcPart  = exempted
+  const fyEnd    = fyEndYear(data.financialYear);
+  const date     = `31st March, ${fyEnd}`;
+  const rev      = num(data.financials.revenueFromOperations);
+  const isOPC    = data.companyType === "opc";
+  const isSml    = data.companyType === "private_small";
+  // OPC and small companies are exempt from Cash Flow Statement (Schedule III amendment)
+  const hasCF    = !isOPC && !isSml;
+  // IFC reporting exemption: turnover < ₹50 crore (proxy; borrowings also considered by CA)
+  const ifcPart  = rev < 500000000
     ? `With respect to the adequacy of the internal financial controls over financial reporting of the Company: Since the Company's turnover as per last audited financial statements is less than Rs.50 Crores and its borrowings from banks and financial institutions at any time during the year is less than Rs.25 Crores, the Company is exempted from getting an audit opinion with respect to the adequacy of the internal financial controls over financial reporting of the company and the operating effectiveness of such controls vide notification dated June 13, 2017.`
     : `The Company has adequate internal financial controls system in place and the operating effectiveness of such controls.`;
+  const stmtList = hasCF
+    ? "the Balance Sheet, the Statement of Profit and Loss and the Cash Flow Statement"
+    : "the Balance Sheet and the Statement of Profit and Loss";
   return (
     `As required by Section 143(3) of the Act, we report that:\n\n` +
     `a) We have sought and obtained all the information and explanations which to the best of our knowledge and belief were necessary for the purposes of our audit.\n\n` +
     `b) In our opinion, proper books of account as required by law have been kept by the Company so far as it appears from our examination of those books.\n\n` +
-    `c) The Balance Sheet, the Statement of Profit and Loss and the Cash Flow Statement dealt with by this Report are in agreement with the books of account.\n\n` +
+    `c) ${stmtList} dealt with by this Report are in agreement with the books of account.\n\n` +
     `d) In our opinion, the aforesaid financial statements comply with the Accounting Standards specified under Section 133 of the Act and rules made thereunder.\n\n` +
     `e) On the basis of the written representations received from the directors as on ${date} taken on record by the Board of Directors, none of the directors is disqualified as on ${date} from being appointed as a director in terms of Section 164(2) of the Act.\n\n` +
     `f) ${ifcPart}\n\n` +
@@ -298,7 +309,6 @@ function fieldNum(num: string, title: string, value: number | string): string {
 export function generateMcaV3GuideHtml(data: AnnualFilingData): string {
   const fy      = data.financialYear;
   const fyEnd   = fyEndYear(fy);
-  const fyStart = fyStartYear(fy);
   const endDate = `31st March, ${fyEnd}`;
   const isOPC   = data.companyType === "opc";
   const isSml   = data.companyType === "private_small";
@@ -312,7 +322,7 @@ export function generateMcaV3GuideHtml(data: AnnualFilingData): string {
     const attended = m.directorsPresent.length;
     const total    = activeDirCount || attended;
     const pct      = total > 0 ? ((attended / total) * 100).toFixed(2) : "100.00";
-    return `<tr><td>${i + 1}</td><td>${fmtDate(m.date) || m.date}</td><td>${total}</td><td>${attended}</td><td>${pct}%</td></tr>`;
+    return `<tr><td>${i + 1}</td><td>${fmtDateDMY(m.date) || m.date}</td><td>${total}</td><td>${attended}</td><td>${pct}%</td></tr>`;
   }).join("");
 
   const bmTable = `<table>
@@ -340,9 +350,10 @@ export function generateMcaV3GuideHtml(data: AnnualFilingData): string {
     ? (data.auditQualificationExplanation || "The auditor has expressed a qualification/reservation. Board's explanation: [Add explanation here as per Section 134(3)(f)]")
     : "There are no qualifications, reservations, adverse remarks or disclaimers in the auditor's report.";
 
-  const sec186 = data.hasLoansGiven
-    ? "Details of loans, guarantees, investments and securities given by the Company under Section 186 are provided in the notes to financial statements."
-    : "This clause is Not applicable on this Company.";
+  // 9(d) = "why transaction is NOT reportable" — only shown when not reportable (hasLoansGiven=false)
+  const sec186NotReportable = data.hasLoansGiven
+    ? "N/A — Transaction is reportable. Details are provided in the notes to financial statements."
+    : "The Company has not given any loans, guarantees or investments under Section 186 during the financial year. Hence, there are no reportable transactions.";
 
   const materialChg = data.materialChangesAfterFY
     ? (data.materialChangesDetails || "There have been material changes and commitments affecting the financial position of the Company between the end of the financial year and the date of this Report. Details: [Add details]")
@@ -406,10 +417,8 @@ export function generateMcaV3GuideHtml(data: AnnualFilingData): string {
   const empF = data.employeesFemale ?? 0;
   const empO = data.employeesOther  ?? 0;
 
-  // ── Auditor details ──────────────────────────────────────────────────────────
-  const audFirm  = data.auditor.firmName
-    ? `M/s. ${data.auditor.firmName.replace(/^M\/s\.?\s*/i, "")}`
-    : "[Firm Name]";
+  // ── Committee meetings count ──────────────────────────────────────────────────
+  const committeeMeetingCount = data.committeeMeetings?.length ?? 0;
 
   // ── Build HTML ───────────────────────────────────────────────────────────────
   const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -503,7 +512,7 @@ ${fieldYN("2(a)", "Whether Company is an OPC or Small Company as at FY end date?
 
 ${fieldTable(`2(b)(i) — Number of meetings held: ${data.boardMeetings.length}`, "Board Meeting details with attendance", bmTable)}
 
-${fieldNum("2(c)(i)", "Number of Committee Meetings held", 0)}
+${fieldNum("2(c)(i)", "Number of Committee Meetings held", committeeMeetingCount)}
 
 ${subHdr("Important Disclosures")}
 
@@ -524,7 +533,7 @@ ${subHdr("Section 186 — Loans, Guarantees & Investments")}
 ${fieldYN("9(a)", "Whether any loan, guarantee given or securities of another body corporate purchased?", data.hasLoansGiven)}
 ${fieldYN("9(b)", "Whether Company falls under Section 186(11) exemption category?", false)}
 ${fieldYN("9(c)", "Are there any reportable transactions under Section 186?", data.hasLoansGiven)}
-${fieldText("9(d)", "Brief details as to why transaction is not reportable", sec186)}
+${fieldText("9(d)", "Brief details as to why transaction is not reportable (fill only if 9(c) = No)", sec186NotReportable)}
 
 ${subHdr("State of Affairs & Financial Disclosures")}
 
