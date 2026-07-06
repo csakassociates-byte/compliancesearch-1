@@ -2425,13 +2425,16 @@ function AnnualFilingTool() {
         purpose:          "Approval of Financial Statements, Directors' Report and Notice for Annual General Meeting",
       };
 
-      patch({ boardMeetings: [...regularMeetings, agmBoardMeeting] });
+      // First-year companies have no previous FY statements to approve within this FY —
+      // their first AGM happens after the FY ends, so no Pre-AGM meeting belongs here.
+      patch({ boardMeetings: isFirstYear ? regularMeetings : [...regularMeetings, agmBoardMeeting] });
     }
 
-    const minMeetings  = (data.companyType === "opc" || data.companyType === "private_small") ? 2 : 4;
-    const meetingCount = data.boardMeetings?.length || 0;
-    const meetings     = data.boardMeetings || [];
-    const sortedDates  = meetings.map(m => m.date).filter(Boolean).sort();
+    const minMeetings    = (data.companyType === "opc" || data.companyType === "private_small") ? 2 : 4;
+    const meetingCount   = data.boardMeetings?.length || 0;
+    const meetings       = data.boardMeetings || [];
+    const sortedMeetings = [...meetings].filter(m => m.date).sort((a, b) => a.date.localeCompare(b.date));
+    const sortedDates    = sortedMeetings.map(m => m.date);
 
     // Gap check: prevFY last meeting → first meeting of this FY
     const prevToFirstGap = data.prevFYLastMeetingDate && sortedDates[0]
@@ -2466,7 +2469,9 @@ function AnnualFilingTool() {
                 <span className="text-red-500 ml-1">*</span>
               </label>
               <p className="text-xs text-slate-500 mb-2">
-                Required to verify the 120-day gap rule (Sec. 173) between last meeting of prev FY and first meeting of this FY, and for smart date auto-suggestion.
+                {minMeetings === 2
+                  ? "Required for smart date auto-suggestion and to verify the 90-day minimum gap between the two required meetings (Sec. 173)."
+                  : "Required to verify the 120-day gap rule (Sec. 173) between last meeting of prev FY and first meeting of this FY, and for smart date auto-suggestion."}
               </p>
               <div className="flex items-center gap-2 flex-wrap">
                 <input
@@ -2500,8 +2505,15 @@ function AnnualFilingTool() {
               )}
               {/* Gap from prev FY last meeting to first meeting of this FY */}
               {prevToFirstGap !== null && (
-                <p className={`text-xs mt-2 font-semibold ${prevToFirstGap <= 120 ? "text-emerald-700" : "text-red-700"}`}>
-                  Gap from prev FY last meeting → Meeting 1: {prevToFirstGap} days {prevToFirstGap <= 120 ? "✓" : "⚠ EXCEEDS 120 DAYS!"}
+                <p className={`text-xs mt-2 font-semibold ${
+                  minMeetings === 2
+                    ? "text-slate-500"  // OPC/Small: no inter-year gap rule — informational only
+                    : prevToFirstGap <= 120 ? "text-emerald-700" : "text-red-700"
+                }`}>
+                  Gap from prev FY last meeting → Meeting 1: {prevToFirstGap} days{" "}
+                  {minMeetings === 2
+                    ? "ℹ"  // No statutory inter-year gap limit for OPC/Small
+                    : prevToFirstGap <= 120 ? "✓" : "⚠ Exceeds 120-day maximum (Sec. 173)!"}
                 </p>
               )}
             </div>
@@ -2533,14 +2545,21 @@ function AnnualFilingTool() {
           {sortedDates.length >= 2 && (
             <div className="mb-4 flex flex-wrap gap-2">
               {sortedDates.slice(1).map((d, i) => {
-                const gap = daysBetween(sortedDates[i], d);
-                const ok  = gap <= 120;
+                const gap            = daysBetween(sortedDates[i], d);
+                const isOPCSmallType = minMeetings === 2;
+                // OPC/Small 90-day min only applies between two *regular* meetings.
+                // Pre-AGM Board Meeting is additional — no gap rule applies to it.
+                const leftIsExtra  = sortedMeetings[i]?.meetingType === "agm_board";
+                const rightIsExtra = sortedMeetings[i + 1]?.meetingType === "agm_board";
+                const skipCheck    = isOPCSmallType && (leftIsExtra || rightIsExtra);
+                const ok           = skipCheck ? true : (isOPCSmallType ? gap >= 90 : gap <= 120);
+                const warnText     = isOPCSmallType ? "⚠ <90 days (Sec 173 min)" : "⚠ >120d (Sec 173 max)";
                 return (
                   <span key={i} className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
                     ok ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                        : "bg-red-50 text-red-700 border-red-300"
                   }`}>
-                    M{i + 1}→M{i + 2}: {gap}d {ok ? "✓" : "⚠ >120!"}
+                    M{i + 1}→M{i + 2}: {gap}d {ok ? "✓" : warnText}
                   </span>
                 );
               })}
