@@ -59,7 +59,10 @@ function minReportDate(fy: string): string {
 }
 function maxReportDate(fy: string): string {
   const endYear = parseInt("20" + fy.split("-")[1]);
-  return `${endYear + 1}-03-31`;
+  const fyMax = `${endYear + 1}-03-31`;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return today < fyMax ? today : fyMax;
 }
 
 // ── Financial row configs — MUST be outside render to avoid React remount ──
@@ -1674,10 +1677,10 @@ function AnnualFilingTool() {
             <Field label="ICAI Membership Number" value={data.auditor.membershipNo} onChange={v => patchAud({ membershipNo: v })} required placeholder="123456" />
             <div>
               <Field label="UDIN" value={data.auditor.udin} onChange={v => patchAud({ udin: v })} placeholder="24123456ABCDEF1234" hint="Generate on ICAI UDIN portal after signing" />
-              {data.auditor.udin && data.auditor.udin.length !== 18 && (
-                <p className="text-xs text-red-500 mt-1">⚠ UDIN must be exactly 18 characters (currently {data.auditor.udin.length})</p>
+              {data.auditor.udin && (data.auditor.udin.length !== 18 || !/^[A-Z0-9]{18}$/i.test(data.auditor.udin)) && (
+                <p className="text-xs text-red-500 mt-1">⚠ UDIN must be exactly 18 alphanumeric characters — no spaces or special characters (currently {data.auditor.udin.length} chars)</p>
               )}
-              {data.auditor.udin && data.auditor.udin.length === 18 && (
+              {data.auditor.udin && data.auditor.udin.length === 18 && /^[A-Z0-9]{18}$/i.test(data.auditor.udin) && (
                 <p className="text-xs text-emerald-600 mt-1">✓ UDIN format looks correct</p>
               )}
             </div>
@@ -1812,6 +1815,12 @@ function AnnualFilingTool() {
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="text-xs text-slate-400 mt-1">Date of board meeting where auditor was appointed</p>
+                  {data.auditor.boardAppointmentDate && data.incorporationDate && (() => {
+                    const gap = Math.round((new Date(data.auditor.boardAppointmentDate).getTime() - new Date(data.incorporationDate).getTime()) / 86400000);
+                    return gap > 30
+                      ? <p className="text-xs text-amber-600 mt-1">⚠ Section 139(6) requires first auditor appointment within 30 days of incorporation. This date is {gap} days after incorporation ({data.incorporationDate}).</p>
+                      : null;
+                  })()}
                 </div>
               )}
             </div>
@@ -3545,6 +3554,8 @@ function AnnualFilingTool() {
     }
 
     const totalSharesHeld = (data.shareholders || []).reduce((s, sh) => s + (sh.sharesHeld || 0), 0);
+    const allFolios = (data.shareholders || []).map(s => s.folioNo.trim()).filter(Boolean);
+    const duplicateFolios = new Set(allFolios.filter((f, i) => allFolios.indexOf(f) !== i));
 
     return (
       <>
@@ -3659,7 +3670,10 @@ function AnnualFilingTool() {
                   <label className="text-xs text-slate-400 block mb-0.5">% Holding</label>
                   <input type="text" value={s.percentHolding} onChange={e => updateSh(i, { percentHolding: e.target.value })} placeholder="100.00" className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 </div>
-                <input type="text" value={s.folioNo} onChange={e => updateSh(i, { folioNo: e.target.value })} placeholder="Folio No." className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                <div>
+                  <input type="text" value={s.folioNo} onChange={e => updateSh(i, { folioNo: e.target.value })} placeholder="Folio No." className={`w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 ${duplicateFolios.has(s.folioNo.trim()) ? "border-red-400 bg-red-50" : "border-slate-300"}`} />
+                  {duplicateFolios.has(s.folioNo.trim()) && <p className="text-xs text-red-500 mt-0.5">⚠ Duplicate folio number</p>}
+                </div>
                 <input type="text" value={s.address || ""} onChange={e => updateSh(i, { address: e.target.value })} placeholder="Residential / Registered Address" className="col-span-2 border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
               </div>
             </div>
@@ -3682,6 +3696,12 @@ function AnnualFilingTool() {
           <div className="p-6 bg-green-50 border border-green-200 rounded-xl text-center">
             <p className="text-green-800 font-semibold text-sm">No Conditional Attachments Required</p>
             <p className="text-green-700 text-xs mt-1">AOC-1 and AOC-2 are not applicable based on your selections in Step 4. Proceed to Generate All.</p>
+          </div>
+        )}
+
+        {data.hasRPT && (data.relatedPartyTransactions || []).length === 0 && (
+          <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+            ⚠ You have indicated that the company has Related Party Transactions (Step 4). Please add the transaction details below so AOC-2 is correctly populated. Generating without details will produce a blank AOC-2.
           </div>
         )}
 

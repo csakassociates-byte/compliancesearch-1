@@ -39,7 +39,7 @@ function getAttendanceRows(data: AnnualFilingData): string {
     .filter(d => d.isActive)
     .map(d => {
       const attended = data.boardMeetings?.filter(m =>
-        m.directorsPresent?.some(p => p.toLowerCase().includes(d.name.toLowerCase()))
+        m.directorsPresent?.some(p => p.toLowerCase().trim() === d.name.toLowerCase().trim())
       ).length ?? 0;
       const pct = total > 0 ? `${Math.round((attended / total) * 100)}%` : "—";
       return `<tr>
