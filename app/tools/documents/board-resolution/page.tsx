@@ -200,6 +200,32 @@ export default function BoardResolutionPage() {
     setResolutionNo(`BR-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`);
   }, [template, company]);
 
+  /* ── Add to Board Minutes ── */
+  function handleAddToMinutes() {
+    if (!template || !company) {
+      alert("Please select a resolution and company before adding to Minutes.");
+      return;
+    }
+    const payload = {
+      templateId:   template.id,
+      fieldValues,
+      meetingDate,
+      meetingSerial,
+      company: {
+        companyName: company.companyName,
+        cin:         company.cin         || "",
+        regAddress:  company.regAddress  || "",
+        entityType:  company.entityType  || "pvt_ltd",
+      },
+      directors: directors
+        .filter(d => d.present)
+        .map(d => ({ name: d.name, din: d.din || "", designation: "Director" })),
+      chairmanName,
+    };
+    try { sessionStorage.setItem("csi_br_to_minutes", JSON.stringify(payload)); } catch {}
+    window.location.href = "/tools/documents/minutes/board";
+  }
+
   /* ── Print ── */
   function handlePrint() {
     if (!template || !company) return;
@@ -623,6 +649,18 @@ export default function BoardResolutionPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Add to Board Meeting Minutes */}
+                <button
+                  onClick={handleAddToMinutes}
+                  className="mt-3 w-full py-3 rounded-xl font-bold text-sm border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center justify-center gap-2 transition-colors"
+                >
+                  📋 Add to Board Meeting Minutes →
+                </button>
+                <p className="text-xs text-slate-400 mt-1 text-center">
+                  Opens Minutes tool with this resolution pre-filled in the agenda
+                </p>
+
                 {session && <p className="text-xs text-slate-400 mt-2 text-center">On save, this resolution will be auto-linked to the board meeting minutes</p>}
               </div>
             </div>

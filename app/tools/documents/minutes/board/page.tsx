@@ -10,7 +10,7 @@ import CompanySearch from "@/components/CompanySearch";
 import type { CompanyData } from "@/lib/types/company";
 import { ALL_AGENDA_TEMPLATES, CATEGORY_ORDER as AGENDA_CATEGORY_ORDER, CATEGORY_META as AGENDA_CATEGORY_META, fillTemplate } from "@/lib/agenda-templates";
 import type { AgendaTemplate } from "@/lib/agenda-templates";
-import { ALL_MASTER_RESOLUTIONS, MASTER_CATEGORY_META } from "@/lib/master-resolutions";
+import { ALL_MASTER_RESOLUTIONS, MASTER_CATEGORY_META, fillMasterTemplate } from "@/lib/master-resolutions";
 import { generateCtcDocument, type CtcParams } from "@/lib/ctc-generator";
 
 /* ══════════════════════════════════════════════════════════════════
@@ -785,6 +785,92 @@ export default function BoardMinutesPage() {
   const [dupMeeting, setDupMeeting] = useState<{ id: string; title: string } | null>(null);
   const [dupChecked, setDupChecked] = useState('');   // last checked date
   const [dupDismissed, setDupDismissed] = useState(false);
+
+  // Banner shown when a resolution is imported from Board Resolution Builder
+  const [brImportBanner, setBrImportBanner] = useState<string | null>(null);
+
+  // ── Import resolution from Board Resolution Builder ──
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = sessionStorage.getItem("csi_br_to_minutes");
+    if (!raw) return;
+    try {
+      sessionStorage.removeItem("csi_br_to_minutes");
+      const data = JSON.parse(raw) as {
+        templateId:   string;
+        fieldValues:  Record<string, string>;
+        meetingDate:  string;
+        meetingSerial: string;
+        company: { companyName: string; cin: string; regAddress: string; entityType: string };
+        directors: Array<{ name: string; din: string; designation: string }>;
+        chairmanName: string;
+      };
+
+      const res = ALL_MASTER_RESOLUTIONS.find(r => r.id === data.templateId);
+      if (!res) return;
+
+      // Build the agenda item with pre-filled field values
+      const filledFields = { ...data.fieldValues };
+      const newItem: AgendaItemData = {
+        id:             `br-import-${data.templateId}-${Date.now()}`,
+        templateId:     data.templateId,
+        title:          res.agendaTitle || res.title,
+        discussion:     fillMasterTemplate(res.discussion,  filledFields),
+        resolution:     fillMasterTemplate(res.resolution,  filledFields),
+        resolutionType: res.kind === "special" ? "special" : res.kind === "none" ? "none" : "ordinary",
+        fields:         filledFields,
+      };
+
+      // Inline FY calculation (avoids stale-closure lint issue)
+      let importedFY = "";
+      if (data.meetingDate) {
+        const d = new Date(data.meetingDate);
+        const y = d.getFullYear(), m = d.getMonth() + 1;
+        importedFY = m >= 4 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`;
+      }
+
+      const dirs = data.directors.map(d => ({
+        name:         d.name,
+        designation:  d.designation || "Director",
+        din:          d.din || "",
+        isPresent:    true,
+        leaveGranted: false,
+      }));
+
+      setF(prev => {
+        // Insert before Any Other Business / Vote of Thanks
+        const existing = [...prev.agendaItems];
+        const insertAt = existing.findIndex(
+          a => a.templateId === "any_other_business" || a.templateId === "vote_of_thanks"
+        );
+        const newAgenda = [...existing];
+        if (insertAt >= 0) newAgenda.splice(insertAt, 0, newItem);
+        else               newAgenda.push(newItem);
+
+        return {
+          ...prev,
+          // Apply company only if current draft is empty
+          companyName:  prev.companyName  || data.company.companyName,
+          cin:          prev.cin          || data.company.cin,
+          regAddress:   prev.regAddress   || data.company.regAddress,
+          entityType:   prev.entityType   || data.company.entityType || "pvt_ltd",
+          // Apply meeting details only if not set
+          meetingDate:   prev.meetingDate   || data.meetingDate,
+          meetingSerial: prev.meetingSerial || data.meetingSerial,
+          financialYear: prev.financialYear || importedFY,
+          chairmanName:  prev.chairmanName  || data.chairmanName,
+          directors:     prev.directors.length > 0 ? prev.directors : dirs,
+          ctcSignatories: prev.directors.length > 0
+            ? prev.ctcSignatories
+            : dirs.slice(0, 4).map(d => ({ name: d.name, designation: d.designation, din: d.din })),
+          agendaItems: newAgenda,
+        };
+      });
+
+      setBrImportBanner(res.agendaTitle || res.title);
+      setStep(4); // Jump straight to agenda
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-save draft on every change
   useEffect(() => {
@@ -1592,6 +1678,23 @@ export default function BoardMinutesPage() {
   const s4 = (
     <div className="space-y-4">
       <SHead n={4} title="Agenda Builder" sub="Add agenda items — pre-built templates with auto-text" />
+
+      {/* Banner: resolution imported from Board Resolution Builder */}
+      {brImportBanner && (
+        <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3">
+          <span className="text-xl shrink-0">✅</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-emerald-800">Resolution imported from Board Resolution Builder</p>
+            <p className="text-xs text-emerald-700 mt-0.5 truncate">
+              &quot;{brImportBanner}&quot; has been added to your agenda with pre-filled details.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBrImportBanner(null)}
+            className="text-emerald-400 hover:text-emerald-600 text-lg leading-none shrink-0">✕</button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
         <p className="text-sm text-slate-600 font-medium">
