@@ -1275,7 +1275,7 @@ export default function BankResolutionPage() {
               <CompanyExcelUpload
                 onFill={handleExcelFill}
                 accent="blue"
-                note="Remaining fields (Bank details, Meeting date, Certification) fill karne honge manually."
+                note="Remaining fields (Bank details, Meeting date, Certification) can be filled manually below."
               />
             )}
 
