@@ -19,6 +19,15 @@ interface Director {
   isPresent: boolean;
 }
 
+type DesignationType =
+  | "additional_director"
+  | "alternate_director"
+  | "nominee_director"
+  | "managing_director"
+  | "whole_time_director"
+  | "independent_director"
+  | "director_gm";
+
 interface F {
   // Step 1 — Company
   companyName: string;
@@ -46,25 +55,44 @@ interface F {
   ndPincode: string;
   ndEmail: string;
   ndMobile: string;
-  ndDesignation: "additional_director" | "managing_director" | "whole_time_director" | "independent_director";
+  ndDesignation: DesignationType;
   ndNationality: string;
   ndOccupation: string;
   effectiveDate: string;
+  // Alternate Director
+  ndOriginalDirector: string;
+  ndOriginalDin: string;
+  // Nominee Director
+  ndNominatingBody: string;
+  // MD / WTD
+  ndTermYears: string;
 }
 
 const DESIGNATION_LABEL: Record<string, string> = {
-  additional_director: "Additional Director",
-  managing_director: "Managing Director",
-  whole_time_director: "Whole-time Director",
+  additional_director:  "Additional Director",
+  alternate_director:   "Alternate Director",
+  nominee_director:     "Nominee Director",
+  managing_director:    "Managing Director",
+  whole_time_director:  "Whole-time Director",
   independent_director: "Independent Director",
+  director_gm:          "Director (Appointed at General Meeting)",
 };
 
 const SECTION_REF: Record<string, string> = {
-  additional_director: "Section 161(1)",
-  managing_director: "Section 196 read with Schedule V",
-  whole_time_director: "Section 196",
-  independent_director: "Section 149(6) read with Schedule IV",
+  additional_director:  "Section 161(1)",
+  alternate_director:   "Section 161(2)",
+  nominee_director:     "Section 161(3)",
+  managing_director:    "Section 196 read with Schedule V",
+  whole_time_director:  "Section 196 read with Schedule V",
+  independent_director: "Section 149(4) & 149(6) read with Schedule IV",
+  director_gm:          "Section 152",
 };
+
+// Board-level appointment (generates Board Notice + Board Resolution)
+const IS_BOARD_APPOINTED = new Set([
+  "additional_director", "alternate_director", "nominee_director",
+  "managing_director", "whole_time_director", "independent_director",
+]);
 
 const DEFAULT: F = {
   companyName: "", cin: "", regAddress: "", entityType: "pvt_ltd",
@@ -77,6 +105,9 @@ const DEFAULT: F = {
   ndDesignation: "additional_director",
   ndNationality: "Indian", ndOccupation: "",
   effectiveDate: "",
+  ndOriginalDirector: "", ndOriginalDin: "",
+  ndNominatingBody: "",
+  ndTermYears: "5",
 };
 
 const DRAFT_KEY = "csi_cak_dir_appt_v1";
@@ -100,6 +131,11 @@ function fmtTime(t: string): string {
   const h12 = h % 12 || 12;
   return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 }
+function numWords(n: string): string {
+  const map: Record<string, string> = { "1": "One", "2": "Two", "3": "Three", "4": "Four", "5": "Five", "6": "Six", "7": "Seven", "8": "Eight", "9": "Nine", "10": "Ten" };
+  return map[n] || n;
+}
+
 function addDays(dateStr: string, days: number): string {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -169,6 +205,24 @@ function genBoardNotice(f: F): string {
     ? presentDirs.map(d => `<div class="addressee"><p>To,</p><p><strong>${d.name}</strong><br>${d.designation || "Director"}${d.din ? `<br>DIN: ${d.din}` : ""}</p></div>`).join("")
     : `<div class="addressee"><p>To,</p><p><strong>All Directors</strong><br>${f.companyName || "[Company Name]"}</p></div>`;
 
+  // Designation-specific agenda item wording
+  let agendaItem5 = "";
+  if (f.ndDesignation === "alternate_director") {
+    agendaItem5 = `To consider and, if thought fit, to pass a resolution for appointment of <strong>${f.ndName || "__________"}</strong> (DIN: ${f.ndDin || "________"}) as <strong>Alternate Director</strong> pursuant to <strong>Section 161(2)</strong> of the Companies Act, 2013, in place of <strong>${f.ndOriginalDirector || "[Original Director Name]"}</strong>${f.ndOriginalDin ? ` (DIN: ${f.ndOriginalDin})` : ""}, during the period of his/her absence from India (expected to be absent for not less than 3 months).`;
+  } else if (f.ndDesignation === "nominee_director") {
+    agendaItem5 = `To consider and, if thought fit, to pass a resolution for appointment of <strong>${f.ndName || "__________"}</strong> (DIN: ${f.ndDin || "________"}) as <strong>Nominee Director</strong> pursuant to <strong>Section 161(3)</strong> of the Companies Act, 2013 / Articles of Association, as nominated by <strong>${f.ndNominatingBody || "[Nominating Institution]"}</strong>.`;
+  } else if (f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director") {
+    agendaItem5 = `To consider and, if thought fit, to pass a resolution for appointment of <strong>${f.ndName || "__________"}</strong> (DIN: ${f.ndDin || "________"}) as <strong>${designation}</strong> of the Company pursuant to <strong>${section}</strong> of the Companies Act, 2013, for a term of <strong>${f.ndTermYears || "5"} (${numWords(f.ndTermYears || "5")}) years</strong> with effect from ${fmtDate(f.effectiveDate || f.meetingDate)}, subject to the approval of shareholders at the next General Meeting.`;
+  } else if (f.ndDesignation === "independent_director") {
+    agendaItem5 = `To consider and, if thought fit, to pass a resolution for appointment of <strong>${f.ndName || "__________"}</strong> (DIN: ${f.ndDin || "________"}) as <strong>Additional Independent Director</strong> pursuant to <strong>Section 161(1) read with Section 149(4) & (6)</strong> and Schedule IV of the Companies Act, 2013, who has submitted his/her Declaration of Independence under Section 149(7), to hold office until the conclusion of the next AGM or 3 months from appointment, whichever is earlier, subject to regularisation by shareholders.`;
+  } else {
+    agendaItem5 = `To consider and, if thought fit, to pass a resolution for appointment of <strong>${f.ndName || "__________"}</strong> (DIN: ${f.ndDin || "________"}) as <strong>${designation}</strong> of the Company pursuant to <strong>${section}</strong> of the Companies Act, 2013, with effect from ${fmtDate(f.effectiveDate || f.meetingDate)}.`;
+  }
+
+  const extraEnclosures = f.ndDesignation === "independent_director"
+    ? `<li>Form <strong>DIR-2</strong> — Consent to Act as Director [pursuant to Section 152(5) and Rule 8].</li><li>Form <strong>DIR-8</strong> — Declaration of Non-Disqualification [pursuant to Section 164(2) and Rule 14(1)].</li><li><strong>Declaration of Independence</strong> — pursuant to Section 149(7) of the Companies Act, 2013.</li>`
+    : `<li>Form <strong>DIR-2</strong> — Consent to Act as Director [pursuant to Section 152(5) and Rule 8].</li><li>Form <strong>DIR-8</strong> — Declaration of Non-Disqualification [pursuant to Section 164(2) and Rule 14(1)].</li>`;
+
   const body = `
     ${coHeader(f)}
     <p>Date: <strong>${fmtDate(noticeDate)}</strong></p><br>
@@ -182,14 +236,11 @@ function genBoardNotice(f: F): string {
       <li>Ascertainment of Quorum.</li>
       <li>Grant of Leave of Absence to Directors who have intimated their inability to attend the meeting.</li>
       <li>Noting of Attendance by Directors, Company Secretary (if any), and Invitees.</li>
-      <li>To consider and, if thought fit, to pass the following resolution for <strong>Appointment of ${f.ndName || "__________"}</strong> (DIN: ${f.ndDin || "________"}) as <strong>${designation}</strong> of the Company pursuant to <strong>${section}</strong> of the Companies Act, 2013.</li>
+      <li>${agendaItem5}</li>
       <li>Any Other Business with the permission of the Chairman.</li>
     </ol>
-    <p>Please find enclosed herewith the following documents received from ${f.ndName || "__________"} prior to this meeting:</p>
-    <ol>
-      <li>Form <strong>DIR-2</strong> — Consent to Act as Director of the Company [pursuant to Section 152(5) and Rule 8].</li>
-      <li>Form <strong>DIR-8</strong> — Declaration that he/she is not disqualified to become a Director [pursuant to Section 164(2) and Rule 14(1)].</li>
-    </ol>
+    <p>Please find enclosed herewith the following documents received from <strong>${f.ndName || "__________"}</strong> prior to this meeting:</p>
+    <ol>${extraEnclosures}</ol>
     <p>You are requested to make it convenient to attend the meeting at the scheduled date, time, and venue.</p>
     <div class="sign-block">
       <p>By Order of the Board<br>For <strong>${f.companyName || "[Company Name]"}</strong></p>
@@ -204,7 +255,36 @@ function genBoardResolution(f: F): string {
   const section = SECTION_REF[f.ndDesignation] || "Section 161(1)";
   const presentDirs = f.directors.filter(d => d.isPresent);
   const totalDirs = f.directors.length;
-  const isAdditional = f.ndDesignation === "additional_director";
+  const effDate = fmtDate(f.effectiveDate || f.meetingDate);
+
+  // Designation-specific operative clause for RESOLVED THAT
+  let resolvedThat = "";
+  if (f.ndDesignation === "additional_director") {
+    resolvedThat = `pursuant to the provisions of <strong>Section 161(1)</strong> and all other applicable provisions of the Companies Act, 2013, read with the Companies (Appointment and Qualification of Directors) Rules, 2014, and in accordance with the Articles of Association of the Company, <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>), who has submitted his/her Consent in Form DIR-2 and Declaration in Form DIR-8, and who in the opinion of the Board is a person of integrity and possesses relevant expertise and experience, be and is hereby appointed as <strong>Additional Director</strong> of the Company with effect from <strong>${effDate}</strong>, to hold office up to the date of the next Annual General Meeting of the Company, or the last date on which the Annual General Meeting should have been held, whichever is earlier, and shall be eligible for regularisation as a Director by the members at the said AGM.`;
+  } else if (f.ndDesignation === "alternate_director") {
+    resolvedThat = `pursuant to the provisions of <strong>Section 161(2)</strong> and all other applicable provisions of the Companies Act, 2013, and in accordance with the Articles of Association of the Company, <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>), who has submitted his/her Consent in Form DIR-2 and Declaration in Form DIR-8, be and is hereby appointed as <strong>Alternate Director</strong> of the Company in place of <strong>${f.ndOriginalDirector || "[Original Director]"}</strong>${f.ndOriginalDin ? ` (DIN: ${f.ndOriginalDin})` : ""}, during the period of his/her absence from India (expected to be absent for not less than 3 months), with effect from <strong>${effDate}</strong>. The said Alternate Director shall vacate office if and when the original Director returns to India, or if the original Director's term of office expires before such return, whichever is earlier.`;
+  } else if (f.ndDesignation === "nominee_director") {
+    resolvedThat = `pursuant to the provisions of <strong>Section 161(3)</strong> of the Companies Act, 2013 and the relevant provisions of the Articles of Association of the Company, <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>), as nominated by <strong>${f.ndNominatingBody || "[Nominating Institution]"}</strong>, who has submitted his/her Consent in Form DIR-2 and Declaration in Form DIR-8, be and is hereby appointed as <strong>Nominee Director</strong> of the Company representing the interests of ${f.ndNominatingBody || "[Nominating Institution]"}, with effect from <strong>${effDate}</strong>.`;
+  } else if (f.ndDesignation === "managing_director") {
+    resolvedThat = `pursuant to the provisions of <strong>Sections 196, 197, 203</strong> and all other applicable provisions of the Companies Act, 2013, read with Schedule V and the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014, and subject to the approval of the shareholders at the next General Meeting of the Company, <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>), who has submitted his/her Consent in Form DIR-2 and Declaration in Form DIR-8, be and is hereby appointed as <strong>Managing Director</strong> of the Company for a term of <strong>${f.ndTermYears || "5"} (${numWords(f.ndTermYears || "5")}) years</strong> with effect from <strong>${effDate}</strong>, on such terms and conditions including remuneration as may be mutually agreed and as set out in the service agreement to be entered into between the Company and the appointee, subject to compliance with Schedule V of the Companies Act, 2013.`;
+  } else if (f.ndDesignation === "whole_time_director") {
+    resolvedThat = `pursuant to the provisions of <strong>Sections 196, 197, 203</strong> and all other applicable provisions of the Companies Act, 2013, read with Schedule V and the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014, and subject to the approval of the shareholders at the next General Meeting of the Company, <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>), who has submitted his/her Consent in Form DIR-2 and Declaration in Form DIR-8, be and is hereby appointed as <strong>Whole-time Director</strong> of the Company for a term of <strong>${f.ndTermYears || "5"} (${numWords(f.ndTermYears || "5")}) years</strong> with effect from <strong>${effDate}</strong>, to devote his/her whole time and attention to the management of the affairs of the Company, on such terms and conditions including remuneration as may be determined and as set out in the service agreement to be entered into between the Company and the appointee, subject to compliance with Schedule V of the Companies Act, 2013.`;
+  } else if (f.ndDesignation === "independent_director") {
+    resolvedThat = `pursuant to the provisions of <strong>Section 161(1) read with Section 149(4) & (6)</strong> and Schedule IV of the Companies Act, 2013, and the Companies (Appointment and Qualification of Directors) Rules, 2014, <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>), who has submitted his/her Consent in Form DIR-2, Declaration in Form DIR-8, and Declaration of Independence under Section 149(7), and who in the opinion of the Board fulfils the conditions specified in the Act and Rules for appointment as an Independent Director and is independent of the management, be and is hereby appointed as <strong>Additional Independent Director</strong> of the Company with effect from <strong>${effDate}</strong>, to hold office until the conclusion of the next Annual General Meeting or 3 (three) months from the date of appointment, whichever is earlier, subject to regularisation/appointment as Independent Director by the shareholders.`;
+  } else {
+    resolvedThat = `pursuant to the provisions of <strong>${section}</strong> and all other applicable provisions of the Companies Act, 2013, read with the Companies (Appointment and Qualification of Directors) Rules, 2014, and in accordance with the Articles of Association of the Company, <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>), who has submitted his/her Consent in Form DIR-2 and Declaration in Form DIR-8, and who in the opinion of the Board is a person of integrity and possesses relevant expertise and experience, be and is hereby appointed as <strong>${designation}</strong> of the Company with effect from <strong>${effDate}</strong>.`;
+  }
+
+  const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
+  const filingClause = isMdWtd
+    ? `any Director or the Company Secretary (if any) of the Company be and is hereby severally authorised to file <strong>Form DIR-12</strong> with the Registrar of Companies within 30 (thirty) days, and <strong>Form MR-1</strong> within 60 (sixty) days of this appointment, along with the prescribed attachments, and to do all such acts, deeds, matters and things as may be necessary to give effect to the foregoing resolutions.`
+    : `any Director or the Company Secretary (if any) of the Company be and is hereby severally authorised to file <strong>Form DIR-12</strong> with the Registrar of Companies within 30 (thirty) days of this appointment, along with the prescribed attachments, and to do all such acts, deeds, matters and things as may be necessary to give effect to the foregoing resolutions.`;
+
+  const contextPara = f.ndDesignation === "alternate_director"
+    ? `<p>The Chairman informed the Board that <strong>${f.ndOriginalDirector || "[Original Director]"}</strong>${f.ndOriginalDin ? ` (DIN: ${f.ndOriginalDin})` : ""} is expected to be absent from India for a period of not less than 3 (three) months. The Board proposed the appointment of <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>) as Alternate Director during such absence. The Board noted the following documents received from ${f.ndName || "__________"}:</p>`
+    : f.ndDesignation === "nominee_director"
+    ? `<p>The Chairman informed the Board that <strong>${f.ndNominatingBody || "[Nominating Institution]"}</strong> has, pursuant to its right under the Articles of Association / Loan Agreement, nominated <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>) as its Nominee Director on the Board of the Company. The Board noted the following documents received:</p>`
+    : `<p>The Chairman informed the Board that the Company has received an intimation/application from <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>) expressing his/her willingness to be appointed as <strong>${designation}</strong> of the Company. The Board noted the following documents received from him/her prior to this meeting:</p>`;
 
   const body = `
     ${coHeader(f)}
@@ -218,16 +298,17 @@ function genBoardResolution(f: F): string {
       <tr><td style="font-weight:bold;padding:3px 0;">Directors Present:</td><td style="padding:3px 0;">${presentDirs.length || "__"} out of ${totalDirs || "__"} Directors</td></tr>
     </table>
     <p><strong>AGENDA ITEM: Appointment of ${designation}</strong></p>
-    <p>The Chairman informed the Board that the Company has received an intimation/application from <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>) expressing his/her willingness to be appointed as ${designation} of the Company. The Board noted that the following documents were duly received from him/her prior to this meeting:</p>
+    ${contextPara}
     <ol>
       <li>Form DIR-2 — Consent to Act as Director under Section 152(5) read with Rule 8.</li>
       <li>Form DIR-8 — Declaration under Section 164(2) read with Rule 14(1).</li>
+      ${f.ndDesignation === "independent_director" ? "<li>Declaration of Independence under Section 149(7).</li>" : ""}
     </ol>
-    <p>The Board noted that ${f.ndName || "__________"} satisfies the conditions specified in Section 164 and is not disqualified from being appointed as a Director of the Company. After discussion, the following resolution was proposed, seconded, and <strong>passed unanimously</strong>:</p>
+    <p>The Board noted that <strong>${f.ndName || "__________"}</strong> satisfies the conditions specified in Section 164 and is not disqualified from being appointed as a Director of the Company. After discussion, the following resolution was proposed, seconded, and <strong>passed unanimously</strong>:</p>
     <div class="res-box">
-      <p><strong>"RESOLVED THAT</strong> pursuant to the provisions of <strong>${section}</strong> and all other applicable provisions of the Companies Act, 2013, read with the Companies (Appointment and Qualification of Directors) Rules, 2014 (including any statutory modification(s) or re-enactment(s) thereof for the time being in force), and in accordance with the Articles of Association of the Company, <strong>${f.ndName || "__________"}</strong> (DIN: <strong>${f.ndDin || "________"}</strong>), who has submitted his/her Consent in Form DIR-2 and Declaration in Form DIR-8, and who in the opinion of the Board is a person of integrity and possesses relevant expertise and experience, be and is hereby appointed as <strong>${designation}</strong> of the Company with effect from <strong>${fmtDate(f.effectiveDate || f.meetingDate)}</strong>${isAdditional ? ", to hold office up to the date of the next Annual General Meeting of the Company, or the last date on which the Annual General Meeting should have been held, whichever is earlier, unless regularised before such date" : ""}.&rdquo;</p>
-      <p><strong>"RESOLVED FURTHER THAT</strong> pursuant to <strong>Section 170</strong> of the Companies Act, 2013, the Company Secretary (if any) or any Director of the Company be and is hereby authorised to make necessary entries in the Register of Directors and Key Managerial Personnel.&rdquo;</p>
-      <p><strong>"RESOLVED FURTHER THAT</strong> any Director or the Company Secretary (if any) of the Company be and is hereby severally authorised to file <strong>Form DIR-12</strong> with the Registrar of Companies within 30 (thirty) days of this appointment, along with the prescribed attachments, and to do all such acts, deeds, matters and things as may be necessary, proper or expedient to give effect to the foregoing resolutions.&rdquo;</p>
+      <p><strong>&ldquo;RESOLVED THAT</strong> ${resolvedThat}&rdquo;</p>
+      <p><strong>&ldquo;RESOLVED FURTHER THAT</strong> pursuant to <strong>Section 170</strong> of the Companies Act, 2013, the Company Secretary (if any) or any Director of the Company be and is hereby authorised to make necessary entries in the Register of Directors and Key Managerial Personnel.&rdquo;</p>
+      <p><strong>&ldquo;RESOLVED FURTHER THAT</strong> ${filingClause}&rdquo;</p>
     </div>
     <p>There being no other business to transact, the meeting was concluded with a vote of thanks to the Chair.</p>
     <div class="sign-block">
@@ -317,56 +398,118 @@ function genDIR8(f: F): string {
 /* ── 5. ROC Filing Guide ─────────────────────────────────────── */
 function genROCGuide(f: F): string {
   const { rocDeadline } = calcDates(f.meetingDate);
+  const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
   const isAdditional = f.ndDesignation === "additional_director";
+  const isAlternate = f.ndDesignation === "alternate_director";
+  const isNominee = f.ndDesignation === "nominee_director";
+  const isIndependent = f.ndDesignation === "independent_director";
+  const designation = DESIGNATION_LABEL[f.ndDesignation] || "Director";
   const body = `
     <div class="doc-title" style="text-decoration:none;font-size:15pt;">📋 ROC Filing Guide</div>
-    <p style="text-align:center;font-size:11pt;color:#555;">Director Appointment — ${f.companyName || "[Company Name]"}</p>
+    <p style="text-align:center;font-size:11pt;color:#555;">${designation} Appointment — ${f.companyName || "[Company Name]"}</p>
     <br>
+
     <table style="width:100%;border-collapse:collapse;border:1.5px solid #999;">
       <tr style="background:#f0f0f0;">
-        <td style="padding:10px;font-weight:bold;border:1px solid #999;font-size:13pt;" colspan="2">Form DIR-12 — e-Form to file with ROC</td>
+        <td style="padding:10px;font-weight:bold;border:1px solid #999;font-size:13pt;" colspan="2">Form DIR-12 — Mandatory ROC Filing</td>
       </tr>
       <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;width:200px;">Filed by:</td><td style="padding:8px 10px;border:1px solid #999;">Company (${f.companyName || "Company Name"})</td></tr>
       <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">Date of Appointment:</td><td style="padding:8px 10px;border:1px solid #999;">${fmtDate(f.effectiveDate || f.meetingDate)}</td></tr>
-      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">Filing Deadline:</td><td style="padding:8px 10px;border:1px solid #999;"><strong>30 days from appointment = ${fmtDate(rocDeadline)}</strong> ⚠️ Late filing incurs additional fees</td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DIR-12 Deadline:</td><td style="padding:8px 10px;border:1px solid #999;"><strong>30 days → ${fmtDate(rocDeadline)}</strong> ⚠️ Late filing incurs additional fees per Section 403</td></tr>
+      ${isMdWtd ? `<tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;color:#c00;">MR-1 Deadline:</td><td style="padding:8px 10px;border:1px solid #999;color:#c00;"><strong>60 days from appointment</strong> — Form MR-1 is additionally mandatory for MD/WTD. File within 60 days at MCA V3 → Company Forms → MR-1.</td></tr>` : ""}
       <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DSC Required:</td><td style="padding:8px 10px;border:1px solid #999;">DSC of any existing Director or Company Secretary</td></tr>
       <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">Filing Portal:</td><td style="padding:8px 10px;border:1px solid #999;">MCA V3 Portal — www.mca.gov.in → e-Filing → Company Forms → DIR-12</td></tr>
     </table>
     <br>
-    <p><strong>Attachments to be attached to DIR-12:</strong></p>
+
+    <p><strong>Attachments required for DIR-12:</strong></p>
     <ol>
-      <li>✅ <strong>Board Resolution</strong> — Extract of Minutes (Section 161) <em>[generated above]</em></li>
+      <li>✅ <strong>Board Resolution</strong> — Extract of Minutes <em>[generated above]</em></li>
       <li>✅ <strong>DIR-2</strong> — Consent to Act as Director <em>[generated above]</em></li>
       <li>✅ <strong>DIR-8</strong> — Declaration under Section 164(2) <em>[generated above]</em></li>
-      <li>⬜ <strong>DIN Proof</strong> — DIN allotment letter or DIN status screenshot from MCA portal <em>[get from MCA for ${f.ndDin ? `DIN ${f.ndDin}` : "new director's DIN"}]</em></li>
+      ${isIndependent ? `<li>⬜ <strong>Declaration of Independence</strong> — Section 149(7) declaration signed by the director</li>` : ""}
+      ${isIndependent ? `<li>⬜ <strong>Letter of Appointment</strong> — per Schedule IV (Code for Independent Directors), signed by both parties</li>` : ""}
+      ${isNominee ? `<li>⬜ <strong>Nomination Letter</strong> — from ${f.ndNominatingBody || "the nominating institution"}</li>` : ""}
+      <li>⬜ <strong>DIN Proof</strong> — DIN allotment letter or MCA portal screenshot for DIN ${f.ndDin || "________"}</li>
     </ol>
+    ${isMdWtd ? `
     <br>
-    <p><strong>Step-by-Step Filing Process:</strong></p>
+    <p><strong>Additional attachments for Form MR-1:</strong></p>
+    <ol>
+      <li>✅ <strong>Board Resolution</strong> approving the appointment</li>
+      <li>⬜ <strong>Service Agreement / Appointment Letter</strong> — setting out terms and remuneration</li>
+      <li>⬜ <strong>Schedule V compliance</strong> — remuneration certificate if company has adequate profits, OR CG approval if inadequate profits and remuneration exceeds limits</li>
+    </ol>` : ""}
+    <br>
+
+    <p><strong>Step-by-Step DIR-12 Filing:</strong></p>
     <ol>
       <li>Log in to MCA V3 portal at www.mca.gov.in with Company credentials.</li>
-      <li>Go to: <strong>e-Filing → Company Forms Submission → DIR-12</strong></li>
+      <li>Navigate to: <strong>e-Filing → Company Forms Submission → DIR-12</strong></li>
       <li>Enter Company CIN: <strong>${f.cin || "_______________"}</strong></li>
-      <li>Under "Director / Officer Details": enter DIN <strong>${f.ndDin || "________"}</strong>, date of appointment <strong>${fmtDate(f.effectiveDate || f.meetingDate)}</strong>, designation <strong>${DESIGNATION_LABEL[f.ndDesignation] || "Additional Director"}</strong></li>
-      <li>Upload all 4 attachments in PDF format.</li>
+      <li>Under "Director / Officer Details": enter DIN <strong>${f.ndDin || "________"}</strong>, date of appointment <strong>${fmtDate(f.effectiveDate || f.meetingDate)}</strong>, designation <strong>${designation}</strong></li>
+      <li>Upload all required attachments in PDF format.</li>
       <li>Affix DSC of authorised Director/CS and submit.</li>
-      <li>Note the SRN (Service Request Number) as acknowledgement. Keep it for records.</li>
+      <li>Note the SRN (Service Request Number) for records.</li>
     </ol>
     <br>
+
     ${isAdditional ? `
     <table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;">
-      <tr><td style="padding:12px;"><strong>⚠️ Important — Regularization at Next AGM</strong><br><br>
-      An Additional Director (Section 161) holds office only <strong>till the date of the next Annual General Meeting</strong> or the last date when AGM should have been held, whichever is earlier.<br><br>
-      To regularize ${f.ndName || "this director"} as a permanent Director, pass an <strong>Ordinary Resolution</strong> at the next AGM under Section 152, and file a fresh DIR-12 within 30 days of the AGM.
+      <tr><td style="padding:12px;">
+        <strong>⚠️ Regularization at Next AGM Required</strong><br><br>
+        An Additional Director (Section 161(1)) holds office only <strong>till the next AGM</strong> or the last date the AGM should have been held, whichever is earlier.<br><br>
+        To regularize <strong>${f.ndName || "this director"}</strong>: pass an <strong>Ordinary Resolution</strong> at the next AGM under Section 152(1), and file a fresh DIR-12 within 30 days of the AGM.
       </td></tr>
-    </table>
-    <br>` : ""}
+    </table><br>` : ""}
+
+    ${isAlternate ? `
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;">
+      <tr><td style="padding:12px;">
+        <strong>⚠️ Alternate Director — Key Conditions (Section 161(2))</strong><br><br>
+        <ul style="margin:8px 0;padding-left:20px;">
+          <li style="margin:6px 0;">The original director <strong>${f.ndOriginalDirector || "[Original Director]"}</strong> must be absent from India for <strong>not less than 3 months</strong>.</li>
+          <li style="margin:6px 0;">Alternate Director <strong>vacates office</strong> automatically when the original director returns to India.</li>
+          <li style="margin:6px 0;">Alternate Director cannot hold any other alternate directorship for any other director.</li>
+          <li style="margin:6px 0;">When original director returns, file DIR-12 for cessation of Alternate Director within 30 days.</li>
+        </ul>
+      </td></tr>
+    </table><br>` : ""}
+
+    ${isIndependent ? `
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;">
+      <tr><td style="padding:12px;">
+        <strong>⚠️ Independent Director — Regularization & Annual Compliance</strong><br><br>
+        <ul style="margin:8px 0;padding-left:20px;">
+          <li style="margin:6px 0;">Appointed now as <strong>Additional Independent Director</strong> — must be <strong>regularized at next AGM</strong> by Ordinary Resolution under Section 149 for a fixed term of 5 years.</li>
+          <li style="margin:6px 0;"><strong>Annual Declaration of Independence</strong> (Section 149(7)) must be given at the first Board meeting of every financial year.</li>
+          <li style="margin:6px 0;">Maximum 2 consecutive terms of 5 years each. After 2 terms: 3-year cooling-off before re-appointment.</li>
+          <li style="margin:6px 0;">Issue formal <strong>Letter of Appointment</strong> per Schedule IV (Code for Independent Directors) — must include role, duties, remuneration, and review process.</li>
+        </ul>
+      </td></tr>
+    </table><br>` : ""}
+
+    ${isMdWtd ? `
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;">
+      <tr><td style="padding:12px;">
+        <strong>⚠️ ${designation} — Shareholder Approval Required</strong><br><br>
+        <ul style="margin:8px 0;padding-left:20px;">
+          <li style="margin:6px 0;">Board has approved the appointment today — but <strong>shareholders must approve</strong> at next AGM/EGM within 3 months from Board meeting date (Section 196(4)).</li>
+          <li style="margin:6px 0;">File Form MR-1 within <strong>60 days</strong> of the Board approval date (${fmtDate(f.meetingDate)}).</li>
+          <li style="margin:6px 0;">If company does not have adequate profits, remuneration exceeding Schedule V limits requires <strong>Central Government (CG) approval</strong> via Form MR-2.</li>
+          <li style="margin:6px 0;">Maximum term: 5 years at a time. Re-appointment only within 1 year before expiry of current term.</li>
+        </ul>
+      </td></tr>
+    </table><br>` : ""}
+
     <table style="width:100%;border-collapse:collapse;border:1.5px solid #ccc;background:#f9f9f9;">
-      <tr><td style="padding:12px;"><strong>📌 Additional Compliance:</strong><br><br>
+      <tr><td style="padding:12px;"><strong>📌 Additional Compliance Checklist:</strong><br><br>
       <ul style="margin:8px 0;padding-left:20px;">
-        <li style="margin:6px 0;">Update <strong>Register of Directors (Form MBP-1)</strong> with new director's details — Section 170.</li>
-        <li style="margin:6px 0;">Intimate new director about appointment — send copy of Board Resolution and appointment letter.</li>
-        <li style="margin:6px 0;">If director does not yet have a DIN: apply via <strong>Form DIR-3</strong> on MCA V3 portal first. DIN is allotted in 1-2 working days.</li>
-        <li style="margin:6px 0;">Update <strong>company website</strong> (if applicable) with new director's details as required under LODR Regulations.</li>
+        <li style="margin:6px 0;">Update <strong>Register of Directors & KMP (MBP-1)</strong> — Section 170.</li>
+        <li style="margin:6px 0;">Send formal appointment letter to <strong>${f.ndName || "new director"}</strong> with copy of Board Resolution.</li>
+        <li style="margin:6px 0;">If no DIN yet: apply via <strong>Form DIR-3</strong> first (allotted in 1-2 working days).</li>
+        <li style="margin:6px 0;">For listed companies: intimate stock exchange via <strong>LODR Regulation 30</strong> within 24 hours.</li>
+        <li style="margin:6px 0;">Update company website with new director details (if applicable).</li>
       </ul>
       </td></tr>
     </table>`;
@@ -433,20 +576,26 @@ function NavButtons({ step, setStep, maxStep, canProceed, onGenerate }: {
 export default function DirectorAppointmentPage() {
   const { data: session } = useSession();
 
-  const [f, setF] = useState<F>(() => {
-    if (typeof window !== "undefined") {
-      try { const s = localStorage.getItem(DRAFT_KEY); if (s) return JSON.parse(s) as F; } catch {}
-    }
-    return { ...DEFAULT };
-  });
+  const [f, setF] = useState<F>({ ...DEFAULT });
+  const [hydrated, setHydrated] = useState(false);
+
+  // Load draft from localStorage after mount (avoids SSR hydration mismatch)
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(DRAFT_KEY);
+      if (s) setF(JSON.parse(s) as F);
+    } catch {}
+    setHydrated(true);
+  }, []);
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [activeDoc, setActiveDoc] = useState<"notice" | "resolution" | "dir2" | "dir8" | "roc">("notice");
   const [companySearchVal, setCompanySearchVal] = useState("");
 
-  // Auto-save draft
+  // Auto-save draft (only after client hydration to avoid overwriting stored draft)
   useEffect(() => {
+    if (!hydrated) return;
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(f)); } catch {}
-  }, [f]);
+  }, [f, hydrated]);
 
   // Sync effectiveDate with meetingDate if not manually set
   useEffect(() => {
@@ -518,8 +667,8 @@ export default function DirectorAppointmentPage() {
     <div className="space-y-5">
       <SHead n={1} title="Company Details" sub="Auto-fill from MCA Excel or search by company name / CIN" />
       <CompanyExcelUpload onFill={fillCompany} />
-      <div className="relative flex items-center gap-3 text-xs text-slate-400"><div className="flex-1 h-px bg-slate-200" /><span>OR search manually</span><div className="flex-1 h-px bg-slate-200" /></div>
-      <CompanySearch value={companySearchVal} onChange={setCompanySearchVal} onSelect={fillCompany} />
+      <div className="relative flex items-center gap-3 text-xs text-slate-400"><div className="flex-1 h-px bg-slate-200" /><span>or search your saved companies</span><div className="flex-1 h-px bg-slate-200" /></div>
+      <CompanySearch value={companySearchVal} onChange={setCompanySearchVal} onSelect={fillCompany} className={INPUT} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
         <Field label="Company Name" req><input value={f.companyName} onChange={up("companyName")} className={INPUT} placeholder="e.g. ABC Enterprises Private Limited" /></Field>
         <Field label="CIN"><input value={f.cin} onChange={up("cin")} className={INPUT} placeholder="e.g. U74999MH2020PTC123456" /></Field>
@@ -618,17 +767,64 @@ export default function DirectorAppointmentPage() {
     <div className="space-y-5">
       <SHead n={4} title="New Director Details" sub="Details of the director being appointed — used in DIR-2, DIR-8, and all documents" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Designation" req hint="Type of director being appointed">
+        <Field label="Type of Appointment" req hint="Select the designation — form changes accordingly">
           <select value={f.ndDesignation} onChange={up("ndDesignation")} className={SELECT}>
-            <option value="additional_director">Additional Director (Section 161)</option>
-            <option value="managing_director">Managing Director (Section 196)</option>
-            <option value="whole_time_director">Whole-time Director (Section 196)</option>
-            <option value="independent_director">Independent Director (Section 149)</option>
+            <optgroup label="— Board Appointed —">
+              <option value="additional_director">Additional Director — Section 161(1)</option>
+              <option value="alternate_director">Alternate Director — Section 161(2)</option>
+              <option value="nominee_director">Nominee Director — Section 161(3)</option>
+              <option value="managing_director">Managing Director — Section 196 + Schedule V</option>
+              <option value="whole_time_director">Whole-time Director — Section 196 + Schedule V</option>
+              <option value="independent_director">Independent Director — Section 149(4)(6) + Schedule IV</option>
+            </optgroup>
+            <optgroup label="— General Meeting Appointed —">
+              <option value="director_gm">Director (at General Meeting) — Section 152</option>
+            </optgroup>
           </select>
         </Field>
-        <Field label="Effective Date of Appointment" hint="Usually the date of board meeting">
+        <Field label="Effective Date of Appointment" hint="Usually the date of board/GM meeting">
           <input type="date" value={f.effectiveDate || f.meetingDate} onChange={up("effectiveDate")} className={INPUT} />
         </Field>
+
+        {/* GM director notice */}
+        {f.ndDesignation === "director_gm" && (
+          <div className="col-span-2 bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-800">
+            <strong>📋 Note — General Meeting Appointment:</strong> A Director under Section 152 is appointed only at a General Meeting (AGM/EGM) by Ordinary Resolution — not at a Board meeting. The documents generated here (Board Notice, Board Resolution) are for the <em>Board recommending</em> the appointment. You will additionally need: <strong>GM Notice (21 days)</strong>, <strong>Explanatory Statement (Section 102)</strong>, and <strong>Ordinary Resolution at GM</strong>. DIR-12 must be filed within 30 days of the GM date.
+          </div>
+        )}
+
+        {/* Alternate Director extra fields */}
+        {f.ndDesignation === "alternate_director" && (
+          <>
+            <Field label="Original Director's Name" req hint="Director in whose place the alternate is being appointed">
+              <input value={f.ndOriginalDirector} onChange={up("ndOriginalDirector")} className={INPUT} placeholder="Name of director who will be absent" />
+            </Field>
+            <Field label="Original Director's DIN" hint="DIN of the director being substituted">
+              <input value={f.ndOriginalDin} onChange={up("ndOriginalDin")} className={INPUT} placeholder="8-digit DIN" maxLength={8} />
+            </Field>
+          </>
+        )}
+
+        {/* Nominee Director extra field */}
+        {f.ndDesignation === "nominee_director" && (
+          <Field label="Nominating Institution / Body" req hint="Name of bank, FI, or body nominating this director">
+            <input value={f.ndNominatingBody} onChange={up("ndNominatingBody")} className={INPUT} placeholder="e.g. State Bank of India, XYZ Capital Partners" />
+          </Field>
+        )}
+
+        {/* MD / WTD term */}
+        {(f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director") && (
+          <Field label="Term of Appointment (years)" req hint="Max 5 years; reappointment allowed before expiry">
+            <select value={f.ndTermYears} onChange={up("ndTermYears")} className={SELECT}>
+              <option value="1">1 Year</option>
+              <option value="2">2 Years</option>
+              <option value="3">3 Years</option>
+              <option value="4">4 Years</option>
+              <option value="5">5 Years (Maximum)</option>
+            </select>
+          </Field>
+        )}
+
         <Field label="Full Name" req><input value={f.ndName} onChange={up("ndName")} className={INPUT} placeholder="As per PAN / DIN records" /></Field>
         <Field label="Father's / Husband's Name" req hint="Required for DIR-2 and DIR-8">
           <input value={f.ndFatherName} onChange={up("ndFatherName")} className={INPUT} placeholder="Father's or Husband's full name" />

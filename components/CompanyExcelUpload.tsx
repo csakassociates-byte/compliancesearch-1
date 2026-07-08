@@ -213,7 +213,7 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
         )}
       </div>
       <p className="text-xs text-slate-400 mt-1.5 text-center">
-        {note || "Remaining fields fill karne honge manually."}
+        {note || "Remaining fields can be filled manually below."}
       </p>
     </div>
   );
