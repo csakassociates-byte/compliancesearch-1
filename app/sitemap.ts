@@ -19,7 +19,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
     // SEO landing pages — highest priority for ranking
     { url: `${base}/aoc-4-mgt-7-annual-filing-attachments`, lastModified: now, changeFrequency: "weekly",  priority: 1.0 },
-    { url: `${base}/board-resolution-generator`,            lastModified: now, changeFrequency: "monthly", priority: 0.9 },
     { url: `${base}/business-valuation-india`,             lastModified: now, changeFrequency: "monthly", priority: 0.9 },
     { url: `${base}/compliance-checker-india`,             lastModified: now, changeFrequency: "monthly", priority: 0.9 },
 
@@ -28,7 +27,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
     // Individual tool pages
     { url: `${base}/tools/documents/annual-filing`,        lastModified: now, changeFrequency: "weekly",  priority: 0.9 },
-    { url: `${base}/tools/documents/board-resolution`,     lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/tools/documents/bank-resolution`,      lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/tools/documents/share-certificate`,    lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/tools/documents/share-transfer`,       lastModified: now, changeFrequency: "monthly", priority: 0.8 },

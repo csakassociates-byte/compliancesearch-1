@@ -230,25 +230,6 @@ export default function HomePage() {
               </span>
             </Link>
 
-            {/* Card 2 — Board Resolution */}
-            <Link href="/board-resolution-generator"
-              className="group flex flex-col gap-3 bg-gradient-to-br from-slate-50 to-slate-100 border-2 border-slate-200 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                  style={{ background: "linear-gradient(135deg,#334155,#1e293b)" }}>⚖️</div>
-                <div>
-                  <p className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-slate-700 transition">Board Resolution Generator</p>
-                  <p className="text-xs text-slate-500 font-semibold mt-0.5">10+ Types · Companies Act 2013</p>
-                </div>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Bank account opening, director appointment, loan approval, share allotment — all board resolutions free.
-              </p>
-              <span className="text-xs font-bold text-slate-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
-                See all resolution types →
-              </span>
-            </Link>
-
             {/* Card 3 — Business Valuation */}
             <Link href="/business-valuation-india"
               className="group flex flex-col gap-3 bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">

@@ -5,8 +5,7 @@ const TOOL_LINKS = [
   { href: "/check",                              label: "Know your compliance" },
   { href: "/tools/documents/annual-filing",      label: "Annual filing generator" },
   { href: "/tools/business-valuation",           label: "Business valuation" },
-  { href: "/tools/documents/board-resolution",   label: "Board resolution" },
-  { href: "/tools/documents/minutes",            label: "Meeting minutes" },
+{ href: "/tools/documents/minutes",            label: "Meeting minutes" },
   { href: "/tools/penalty-calculator",           label: "MCA penalty calculator" },
   { href: "/calendar",                           label: "Compliance calendar" },
 ];
