@@ -52,12 +52,19 @@ const TOOLS = [
     color: "text-blue-700 bg-blue-50",
   },
   {
+    href: "/tools/corporate-action-kit",
+    icon: "⚡",
+    label: "Corporate Action Kit",
+    desc: "Director appointment, resignation + full doc package",
+    color: "text-blue-700 bg-blue-50",
+    badge: "New",
+  },
+  {
     href: "/tools/documents/annual-filing",
     icon: "📑",
     label: "Annual Filing",
     desc: "AOC-4 & MGT-7/7A attachments — all at once",
     color: "text-emerald-700 bg-emerald-50",
-    badge: "New",
   },
   {
     href: "/tools/penalty-calculator",

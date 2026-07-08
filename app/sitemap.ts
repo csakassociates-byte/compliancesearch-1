@@ -33,6 +33,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/tools/documents/minutes`,              lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/tools/documents/minutes/agm`,          lastModified: now, changeFrequency: "monthly", priority: 0.9 },
     { url: `${base}/tools/documents/minutes/board`,        lastModified: now, changeFrequency: "monthly", priority: 0.9 },
+    { url: `${base}/tools/corporate-action-kit`,                        lastModified: now, changeFrequency: "monthly", priority: 0.9 },
+    { url: `${base}/tools/corporate-action-kit/director-appointment`,   lastModified: now, changeFrequency: "monthly", priority: 0.9 },
     { url: `${base}/tools/penalty-calculator`,             lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/tools/business-valuation`,             lastModified: now, changeFrequency: "monthly", priority: 0.9 },
 
