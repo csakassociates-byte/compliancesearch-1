@@ -151,6 +151,8 @@ export default function ShareTransferPage() {
   const [loadingSh, setLoadingSh] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [confirmPending, setConfirmPending] = useState(false);
+  const [availableDirectors, setAvailableDirectors] = useState<TransferSigner[]>([]);
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ newFolioNo: string; newCertNo: string; transferId: string } | null>(null);
 
@@ -200,6 +202,10 @@ export default function ShareTransferPage() {
       .map(d => ({ name: d.name, designation: d.designation || "Director", din: d.din || "" }));
     while (autoSigners.length < 2) autoSigners.push({ name: "", designation: "Director", din: "" });
 
+    setAvailableDirectors(
+      activeDirs.filter(d => d.name).map(d => ({ name: d.name, designation: d.designation || "Director", din: d.din || "" }))
+    );
+
     upd({
       companyName: c.companyName || "",
       cin:         c.cin         || "",
@@ -227,6 +233,7 @@ export default function ShareTransferPage() {
 
   /* Apply transferor from saved shareholder */
   function applyTransferor(sh: SavedShareholder) {
+    setConfirmPending(false);
     upd({
       transferorShareholderId: sh.id,
       transferorPersonId: sh.personId,
@@ -365,19 +372,74 @@ export default function ShareTransferPage() {
     setTimeout(() => URL.revokeObjectURL(url2), 120_000);
   }
 
-  /* Execute transfer */
-  async function handleExecute() {
-    if (!f.transferorShareholderId && isLoggedIn) { setError("Please select a transferor from records"); return; }
+  /* Toggle a director chip on/off in the signers list */
+  function toggleDirectorSigner(dir: TransferSigner) {
+    const alreadyIdx = f.signers.findIndex(s => s.name === dir.name && s.name !== "");
+    if (alreadyIdx >= 0) {
+      const next = f.signers.filter((_, i) => i !== alreadyIdx);
+      upd({ signers: next.length > 0 ? next : [{ name: "", designation: "Director", din: "" }] });
+    } else {
+      const emptyIdx = f.signers.findIndex(s => !s.name.trim());
+      if (emptyIdx >= 0) {
+        upd({ signers: f.signers.map((sg, i) => i === emptyIdx ? dir : sg) });
+      } else {
+        upd({ signers: [...f.signers, dir] });
+      }
+    }
+  }
+
+  /* Show confirm panel (or PDF-only for guest / manual-entry) */
+  function handleExecute() {
     if (!f.transfereeName.trim()) { setError("Transferee name is required"); return; }
     if (f.sharesToTransfer <= 0) { setError("Shares to transfer must be > 0"); return; }
+    setError("");
 
-    // Guest mode — just print
-    if (!isLoggedIn) {
-      printSH4();
+    // Guest OR logged-in without a DB-linked shareholder → PDF only (no DB save)
+    if (!isLoggedIn || !f.transferorShareholderId) {
+      void downloadSH4PDF();
       return;
     }
 
-    setSaving(true); setError("");
+    // Logged-in with DB record → show confirm before irreversible DB write
+    setConfirmPending(true);
+  }
+
+  /* Actual DB execute — called only after user confirms */
+  async function doExecute() {
+    setSaving(true); setError(""); setConfirmPending(false);
+
+    let activeSharId = f.transferorShareholderId;
+    let activeCertNo = f.transferorCertNo;
+
+    // Auto-split certificate when transferring fewer shares than cert holds
+    if (f.sharesToTransfer < f.transferorTotalShares) {
+      const splitRes = await fetch("/api/share-splits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: f.companyId,
+          originalShId: f.transferorShareholderId,
+          splitDate: f.transferDate,
+          parts: [
+            { shares: f.sharesToTransfer },
+            { shares: f.transferorTotalShares - f.sharesToTransfer },
+          ],
+          remarks: `Partial transfer to ${f.transfereeName}`,
+        }),
+      });
+      if (!splitRes.ok) {
+        const d = await splitRes.json().catch(() => ({}));
+        setError((d as { error?: string }).error || "Certificate split failed before transfer");
+        setSaving(false);
+        return;
+      }
+      const splitData = await splitRes.json() as {
+        newCertificates: Array<{ certNo: string; shId: string }>;
+      };
+      activeSharId = splitData.newCertificates[0].shId;
+      activeCertNo = splitData.newCertificates[0].certNo;
+    }
+
     const res = await fetch("/api/share-transfers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -386,8 +448,8 @@ export default function ShareTransferPage() {
         transferorPersonId: f.transferorPersonId || undefined,
         transferorName: f.transferorName,
         transferorFolio: f.transferorFolio || undefined,
-        transferorCertNo: f.transferorCertNo || undefined,
-        transferorShareholderId: f.transferorShareholderId,
+        transferorCertNo: activeCertNo || undefined,
+        transferorShareholderId: activeSharId,
         transfereeName: f.transfereeName.trim(),
         transfereeFatherName: f.transfereeFather || undefined,
         transfereeAddress: f.transfereeAddress || undefined,
@@ -525,7 +587,7 @@ export default function ShareTransferPage() {
                       {f.cin && <div className="text-xs text-emerald-600 mt-0.5">CIN: {f.cin}</div>}
                       {f.regAddress && <div className="text-xs text-slate-500 mt-0.5">{f.regAddress}</div>}
                     </div>
-                    <button onClick={() => { upd({ companyName:"", cin:"", regAddress:"", companyId:"" }); setCompanyQuery(""); setSavedShareholders([]); }}
+                    <button onClick={() => { upd({ companyName:"", cin:"", regAddress:"", companyId:"" }); setCompanyQuery(""); setSavedShareholders([]); setAvailableDirectors([]); setConfirmPending(false); }}
                       className="text-slate-400 hover:text-red-500 text-lg leading-none shrink-0">✕</button>
                   </div>
                   {isLoggedIn && f.companyId && (
@@ -616,10 +678,38 @@ export default function ShareTransferPage() {
                 <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
                   {isLoggedIn ? "Or fill manually" : "Transferor Details"}
                 </p>
-                <div>
+                <div className="relative">
                   <Lbl c="Full Name of Transferor *" />
                   <input className={INP} value={f.transferorName}
-                    onChange={e => upd({ transferorName: e.target.value })} placeholder="Full legal name" />
+                    onChange={e => upd({ transferorName: e.target.value, transferorShareholderId: "", transferorPersonId: "" })}
+                    placeholder={savedShareholders.length > 0 ? "Type to search shareholders..." : "Full legal name"} />
+                  {/* Autocomplete dropdown from loaded shareholders */}
+                  {f.transferorName.length >= 1 && !f.transferorShareholderId && (() => {
+                    const hits = savedShareholders.filter(sh =>
+                      (sh.personName || "").toLowerCase().includes(f.transferorName.toLowerCase())
+                    );
+                    if (!hits.length) return null;
+                    return (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                        {hits.slice(0, 6).map(sh => (
+                          <button key={sh.id} onMouseDown={() => applyTransferor(sh)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors">
+                            <div className="font-semibold text-slate-800 text-sm">{sh.personName}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              {(sh.numberOfShares || 0).toLocaleString("en-IN")} shares &middot; Folio {sh.folioNumber || "—"} &middot; Cert {sh.certificateNumber || "—"}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  {f.transferorShareholderId && (
+                    <div className="mt-1.5 text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                      ✅ Auto-filled from records
+                      <button onMouseDown={() => upd({ transferorName: "", transferorShareholderId: "", transferorPersonId: "" })}
+                        className="ml-auto text-slate-400 hover:text-red-500">✕ Clear</button>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -715,6 +805,12 @@ export default function ShareTransferPage() {
                         : `✅ Remaining with transferor: ${remaining.toLocaleString("en-IN")} shares`}
                     </div>
                   )}
+                  {/* Partial transfer auto-split notice */}
+                  {f.sharesToTransfer > 0 && f.sharesToTransfer < f.transferorTotalShares && f.transferorShareholderId && (
+                    <div className="mt-2 rounded-lg px-3 py-2 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                      🔀 Partial transfer — Certificate #{f.transferorCertNo} will be automatically split before execution
+                    </div>
+                  )}
                 </div>
 
                 {/* Distinctive numbers preview */}
@@ -808,6 +904,34 @@ export default function ShareTransferPage() {
               <SHead n={5} title="Authorised Signatories"
                 sub="Directors / authorised persons who will sign Form SH-4 and the new share certificate" />
               <div className="space-y-3">
+
+                {/* Director chips — click to toggle as signatory */}
+                {availableDirectors.length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                      Directors from Company Data — click to select
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {availableDirectors.map((dir, i) => {
+                        const isSelected = f.signers.some(s => s.name === dir.name && s.name !== "");
+                        return (
+                          <button key={i} onClick={() => toggleDirectorSigner(dir)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition-all ${
+                              isSelected
+                                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                : "border-slate-200 bg-white text-slate-500 hover:border-emerald-300 hover:text-slate-700"
+                            }`}>
+                            {isSelected && <span className="mr-1">✓</span>}
+                            {dir.name}
+                            {dir.din && <span className="ml-1 opacity-60">· {dir.din}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="h-px bg-slate-100 mt-4" />
+                  </div>
+                )}
+
                 {f.signers.map((s, i) => (
                   <div key={i} className="bg-slate-50 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
@@ -836,7 +960,7 @@ export default function ShareTransferPage() {
                 <button
                   onClick={() => upd({ signers: [...f.signers, { name: "", designation: "Director", din: "" }] })}
                   className="w-full py-2.5 rounded-xl border-2 border-dashed border-emerald-300 text-emerald-600 text-sm font-semibold hover:bg-emerald-50 transition-colors">
-                  + Add Signatory
+                  {availableDirectors.length > 0 ? "+ Add Other (non-director)" : "+ Add Signatory"}
                 </button>
 
                 {/* Summary box */}
@@ -865,6 +989,44 @@ export default function ShareTransferPage() {
                   style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
                   {pdfLoading ? "⏳ Generating PDF..." : "⬇️ Download PDF (SH-4)"}
                 </button>
+
+                {/* Confirm panel — shown when user clicks Execute Transfer */}
+                {confirmPending && (
+                  <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-4">
+                    <div className="font-bold text-amber-800 mb-3">⚠️ Confirm Transfer — Read Before Proceeding</div>
+                    <div className="text-xs space-y-2 mb-4">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-slate-600">
+                        <div><span className="font-semibold">Company:</span> {f.companyName}</div>
+                        <div><span className="font-semibold">Date:</span> {f.transferDate}</div>
+                        <div><span className="font-semibold">Transferor:</span> {f.transferorName}</div>
+                        <div><span className="font-semibold">Transferee:</span> {f.transfereeName}</div>
+                        <div><span className="font-semibold">Shares:</span> {f.sharesToTransfer.toLocaleString("en-IN")}</div>
+                        <div><span className="font-semibold">Certificate:</span> #{f.transferorCertNo}</div>
+                      </div>
+                      {f.sharesToTransfer < f.transferorTotalShares && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-700 font-semibold">
+                          🔀 Cert #{f.transferorCertNo} ({f.transferorTotalShares} shares) will be split:<br />
+                          Part A: {f.sharesToTransfer} shares → transferred to {f.transfereeName}<br />
+                          Part B: {f.transferorTotalShares - f.sharesToTransfer} shares → retained by {f.transferorName}
+                        </div>
+                      )}
+                      <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-700 font-semibold">
+                        ⚠️ Certificate #{f.transferorCertNo} will be permanently cancelled. This cannot be undone.
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <button onClick={() => setConfirmPending(false)}
+                        className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+                        ← Go Back
+                      </button>
+                      <button onClick={doExecute} disabled={saving}
+                        className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg,#b91c1c,#dc2626)" }}>
+                        {saving ? "⏳ Processing..." : "✅ Yes, Execute Transfer"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -919,7 +1081,7 @@ export default function ShareTransferPage() {
                   style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
                   📜 Print New Share Certificate
                 </button>
-                <button onClick={() => { setF(DEFAULT); setStep(1); setDone(null); setSavedShareholders([]); }}
+                <button onClick={() => { setF(DEFAULT); setStep(1); setDone(null); setSavedShareholders([]); setAvailableDirectors([]); setConfirmPending(false); }}
                   className="w-full py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
                   🔄 New Transfer
                 </button>
@@ -955,15 +1117,15 @@ export default function ShareTransferPage() {
                   style={{ background: "linear-gradient(135deg,#065f46,#047857)" }}>
                   Next →
                 </button>
-              ) : (
+              ) : confirmPending ? null : (
                 <button onClick={handleExecute} disabled={saving}
                   className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2"
                   style={{ background: "linear-gradient(135deg,#065f46,#047857)" }}>
                   {saving
                     ? "⏳ Processing..."
-                    : isLoggedIn
+                    : (isLoggedIn && f.transferorShareholderId)
                     ? "✅ Execute Transfer & Save"
-                    : "🖨️ Generate SH-4 (Preview)"}
+                    : "⬇️ Download SH-4 (PDF)"}
                 </button>
               )}
             </div>
