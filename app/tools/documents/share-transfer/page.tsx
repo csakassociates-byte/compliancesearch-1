@@ -66,6 +66,7 @@ interface F {
   transferorAddress: string;
   shareType: string;
   nominalValue: string;
+  calledUpValue: string;
   paidUpValue: string;
   // Step 3 — Transfer details
   sharesToTransfer: number;
@@ -95,7 +96,7 @@ const DEFAULT: F = {
   transferorFolio: "", transferorCertNo: "", transferorTotalShares: 0,
   transferorDistinctiveFrom: 1, transferorDistinctiveTo: 0,
   transferorPan: "", transferorAddress: "",
-  shareType: "Equity", nominalValue: "10", paidUpValue: "10",
+  shareType: "Equity", nominalValue: "10", calledUpValue: "10", paidUpValue: "10",
   sharesToTransfer: 0, transferDate: new Date().toISOString().slice(0, 10),
   considerationPerShare: "", stampDuty: "", issuePlace: "",
   transfereePersonId: "", transfereeName: "", transfereeFather: "",
@@ -172,6 +173,7 @@ export default function ShareTransferPage() {
   const [boardResVenue, setBoardResVenue] = useState("");
   const [boardResDoc, setBoardResDoc] = useState<{ meetingDocId: string; resolutionNo: string } | null>(null);
   const [savingBoardRes, setSavingBoardRes] = useState(false);
+  const [stampDutyManual, setStampDutyManual] = useState(false);
 
   const upd = (patch: Partial<F>) => setF(prev => ({ ...prev, ...patch }));
 
@@ -263,6 +265,7 @@ export default function ShareTransferPage() {
       transferorPan: sh.panNo || "",
       shareType: sh.shareType || "Equity",
       nominalValue: sh.nominalValue || "10",
+      calledUpValue: sh.paidUpValue || "10",
       paidUpValue: sh.paidUpValue || "10",
       sharesToTransfer: sh.numberOfShares || 0,
       // pre-fill signers from saved cert
@@ -272,7 +275,7 @@ export default function ShareTransferPage() {
     });
   }
 
-  function buildSH4Args(newFolioNo = "(Auto)", newCertNo = "(Auto)") {
+  function buildSH4Args(newFolioNo = "(Auto)", newCertNo = "(Auto)", transferorCertNoOverride?: string) {
     return {
       company: {
         companyName: f.companyName,
@@ -285,7 +288,7 @@ export default function ShareTransferPage() {
       transferor: {
         name: f.transferorName,
         folioNo: f.transferorFolio,
-        certNo: f.transferorCertNo,
+        certNo: transferorCertNoOverride ?? f.transferorCertNo,
         numberOfShares: f.sharesToTransfer,
         distinctiveFrom: transferDistFrom,
         distinctiveTo: transferDistTo,
@@ -319,8 +322,8 @@ export default function ShareTransferPage() {
   }
 
   /* Print SH-4 preview — opens in new browser tab */
-  function printSH4(newFolioNo = "(Auto)", newCertNo = "(Auto)") {
-    const a = buildSH4Args(newFolioNo, newCertNo);
+  function printSH4(newFolioNo = "(Auto)", newCertNo = "(Auto)", transferorCertNoOverride?: string) {
+    const a = buildSH4Args(newFolioNo, newCertNo, transferorCertNoOverride);
     const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers, a.witnesses, { autoPrint: true });
     const url1 = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const w1 = window.open(url1, "_blank");
@@ -329,10 +332,10 @@ export default function ShareTransferPage() {
   }
 
   /* Download SH-4 as PDF via Puppeteer API */
-  async function downloadSH4PDF(newFolioNo = "(Auto)", newCertNo = "(Auto)") {
+  async function downloadSH4PDF(newFolioNo = "(Auto)", newCertNo = "(Auto)", transferorCertNoOverride?: string) {
     setPdfLoading(true);
     try {
-      const a = buildSH4Args(newFolioNo, newCertNo);
+      const a = buildSH4Args(newFolioNo, newCertNo, transferorCertNoOverride);
       const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers, a.witnesses);
       const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
       const dateStr  = f.transferDate?.replace(/-/g, "") || "undated";
@@ -383,7 +386,7 @@ export default function ShareTransferPage() {
         issueDate: f.transferDate,
         issuePlace: f.issuePlace,
       },
-      [{ name: f.transfereeName, din: f.transfereePan || "", shares: f.sharesToTransfer }],
+      [{ name: f.transfereeName, pan: f.transfereePan || undefined, shares: f.sharesToTransfer }],
       [{ ...ranges[0], folioNo: newFolioNo, certNo: newCertNo }],
       f.signers.filter(s => s.name)
     );
@@ -528,6 +531,9 @@ export default function ShareTransferPage() {
         }),
       }),
     }).catch(() => {}); // fire-and-forget
+
+    // Auto-download the final SH-4 PDF with actual cert/folio numbers
+    void downloadSH4PDF(result.newFolioNo, result.newCertNo, activeCertNo);
 
     // Pre-fill board resolution defaults for Step 6
     setBoardResDate(f.transferDate || "");
@@ -896,11 +902,16 @@ export default function ShareTransferPage() {
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Lbl c="Nominal Value (₹/share)" />
                     <input className={INP} value={f.nominalValue}
                       onChange={e => upd({ nominalValue: e.target.value })} placeholder="10" />
+                  </div>
+                  <div>
+                    <Lbl c="Called-up Value (₹/share)" />
+                    <input className={INP} value={f.calledUpValue}
+                      onChange={e => upd({ calledUpValue: e.target.value })} placeholder="10" />
                   </div>
                   <div>
                     <Lbl c="Paid-up Value (₹/share)" />
@@ -933,7 +944,14 @@ export default function ShareTransferPage() {
                     h={`Max: ${f.transferorTotalShares.toLocaleString("en-IN")}`} />
                   <input type="number" className={INP} value={f.sharesToTransfer || ""}
                     min={1} max={f.transferorTotalShares}
-                    onChange={e => upd({ sharesToTransfer: parseInt(e.target.value) || 0 })} />
+                    onChange={e => {
+                      const val = parseInt(e.target.value) || 0;
+                      const patch: Partial<F> = { sharesToTransfer: val };
+                      if (!stampDutyManual && f.considerationPerShare && val > 0) {
+                        patch.stampDuty = (parseFloat(f.considerationPerShare) * val * 0.00015).toFixed(2);
+                      }
+                      upd(patch);
+                    }} />
                   {f.sharesToTransfer > 0 && (
                     <div className={`mt-2 rounded-lg px-3 py-2 text-xs font-semibold ${
                       remaining === 0
@@ -975,12 +993,39 @@ export default function ShareTransferPage() {
                   <div>
                     <Lbl c="Consideration (₹ per share)" h="Leave blank if not applicable" />
                     <input type="number" className={INP} value={f.considerationPerShare}
-                      onChange={e => upd({ considerationPerShare: e.target.value })} placeholder="e.g. 10" />
+                      onChange={e => {
+                        const val = e.target.value;
+                        const patch: Partial<F> = { considerationPerShare: val };
+                        if (!stampDutyManual && val && f.sharesToTransfer > 0) {
+                          patch.stampDuty = (parseFloat(val) * f.sharesToTransfer * 0.00015).toFixed(2);
+                        }
+                        upd(patch);
+                      }}
+                      placeholder="e.g. 10" />
                   </div>
                   <div>
-                    <Lbl c="Stamp Duty (₹)" h="Optional" />
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">
+                          Stamp Duty (₹)
+                          {!stampDutyManual && totalConsideration && (
+                            <span className="ml-2 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                              Auto · 0.015%
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      {stampDutyManual && (
+                        <button type="button"
+                          className="text-[10px] text-blue-500 hover:text-blue-700 font-semibold whitespace-nowrap"
+                          onClick={() => { setStampDutyManual(false); }}>
+                          ↩ Reset to auto
+                        </button>
+                      )}
+                    </div>
                     <input type="number" className={INP} value={f.stampDuty}
-                      onChange={e => upd({ stampDuty: e.target.value })} placeholder="optional" />
+                      onChange={e => { setStampDutyManual(true); upd({ stampDuty: e.target.value }); }}
+                      placeholder="optional" />
                   </div>
                 </div>
 

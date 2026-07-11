@@ -22,7 +22,8 @@ export interface CertCompany {
 
 export interface CertShareholder {
   name: string;
-  din: string;              // DIN for directors, PAN/ID for others
+  din?: string;             // DIN for directors
+  pan?: string;             // PAN for shareholders
   shares: number;
 }
 
@@ -248,8 +249,10 @@ function certPageHtml(
     : `<div class="sig-block"><div class="sig-line"></div><div class="sig-desig">Director</div></div>
        <div class="sig-block"><div class="sig-line"></div><div class="sig-desig">Director</div></div>`;
 
-  const dinHtml = sh.din
-    ? ` <span style="font-size:8.5pt;font-weight:normal;">(DIN/PAN: ${sh.din})</span>`
+  const dinHtml = sh.pan
+    ? ` <span style="font-size:8.5pt;font-weight:normal;">(PAN: ${sh.pan})</span>`
+    : sh.din
+    ? ` <span style="font-size:8.5pt;font-weight:normal;">(DIN: ${sh.din})</span>`
     : "";
 
   return `
