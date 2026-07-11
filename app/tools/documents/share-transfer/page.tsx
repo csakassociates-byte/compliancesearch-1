@@ -24,6 +24,7 @@ import {
   generateShareCertificateHTML,
   computeCertRanges,
 } from "@/lib/share-certificate-html";
+import { generateSPAHTML } from "@/lib/share-purchase-agreement-html";
 
 /* ══════════════════════════════════════════════════════════════════
    TYPES
@@ -68,15 +69,20 @@ interface F {
   nominalValue: string;
   calledUpValue: string;
   paidUpValue: string;
+  // SPA — Transferor relation
+  transferorRelation: string;
+  transferorFatherName: string;
   // Step 3 — Transfer details
   sharesToTransfer: number;
   transferDate: string;
   considerationPerShare: string;
   stampDuty: string;
   issuePlace: string;
+  paymentMode: string;
   // Step 4 — Transferee
   transfereePersonId: string;
   transfereeName: string;
+  transfereeRelation: string;
   transfereeFather: string;
   transfereeAddress: string;
   transfereePan: string;
@@ -97,9 +103,10 @@ const DEFAULT: F = {
   transferorDistinctiveFrom: 1, transferorDistinctiveTo: 0,
   transferorPan: "", transferorAddress: "",
   shareType: "Equity", nominalValue: "10", calledUpValue: "10", paidUpValue: "10",
+  transferorRelation: "S/O", transferorFatherName: "",
   sharesToTransfer: 0, transferDate: new Date().toISOString().slice(0, 10),
-  considerationPerShare: "", stampDuty: "", issuePlace: "",
-  transfereePersonId: "", transfereeName: "", transfereeFather: "",
+  considerationPerShare: "", stampDuty: "", issuePlace: "", paymentMode: "Bank Transfer",
+  transfereePersonId: "", transfereeName: "", transfereeRelation: "S/O", transfereeFather: "",
   transfereeAddress: "", transfereePan: "", transfereeOccupation: "",
   signers: [{ name: "", designation: "Director", din: "" }, { name: "", designation: "Director", din: "" }],
   witness1Name: "", witness1Address: "",
@@ -577,6 +584,89 @@ export default function ShareTransferPage() {
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 
+  /* Build SPA args from current form state */
+  function buildSPAArgs(certNoOverride?: string) {
+    return {
+      company: { companyName: f.companyName, cin: f.cin, regAddress: f.regAddress },
+      seller: {
+        name: f.transferorName,
+        relation: f.transferorRelation,
+        relativeName: f.transferorFatherName,
+        address: f.transferorAddress,
+        pan: f.transferorPan || undefined,
+      },
+      buyer: {
+        name: f.transfereeName || "_______________",
+        relation: f.transfereeRelation,
+        relativeName: f.transfereeFather,
+        address: f.transfereeAddress,
+        pan: f.transfereePan || undefined,
+      },
+      details: {
+        numberOfShares: f.sharesToTransfer,
+        shareType: f.shareType,
+        nominalValue: f.nominalValue,
+        folioNo: f.transferorFolio,
+        certNo: certNoOverride ?? f.transferorCertNo,
+        considerationPerShare: f.considerationPerShare || "—",
+        totalConsideration: totalConsideration || "0",
+        paymentMode: f.paymentMode || "Bank Transfer",
+        agreementDate: f.transferDate,
+        place: f.issuePlace || "—",
+      },
+      witnesses: [
+        { name: f.witness1Name, address: f.witness1Address },
+        { name: f.witness2Name, address: f.witness2Address },
+      ] as Array<{ name: string; address: string }>,
+    };
+  }
+
+  /* Print SPA — opens in new tab with auto-print */
+  function printSPA(certNoOverride?: string) {
+    const a = buildSPAArgs(certNoOverride);
+    const html = generateSPAHTML(a.company, a.seller, a.buyer, a.details, a.witnesses, { autoPrint: true });
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const w = window.open(url, "_blank");
+    if (!w) { alert("Pop-up blocked — please allow pop-ups"); URL.revokeObjectURL(url); return; }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  /* Download SPA as PDF via Puppeteer API */
+  async function downloadSPAPDF(certNoOverride?: string) {
+    setPdfLoading(true);
+    try {
+      const a = buildSPAArgs(certNoOverride);
+      const html = generateSPAHTML(a.company, a.seller, a.buyer, a.details, a.witnesses);
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const dateStr = f.transferDate?.replace(/-/g, "") || "undated";
+      const filename = `SPA_${safeName}_${dateStr}`;
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          html,
+          filename,
+          docType: "sh4",
+          companyName: f.companyName,
+          docTitle: "Share Purchase Agreement",
+          dirs: [],
+        }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${filename}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to download SPA PDF. Please use the Print option instead.");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   /* Save Board Resolution to DB + print */
   async function saveBoardResolution() {
     if (!done || !isLoggedIn) return;
@@ -861,6 +951,24 @@ export default function ShareTransferPage() {
                     </div>
                   )}
                 </div>
+                {/* Relation + Father/Husband Name (for SPA party description) */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Lbl c="Relation" h="For SPA document" />
+                    <select className={SEL} value={f.transferorRelation}
+                      onChange={e => upd({ transferorRelation: e.target.value })}>
+                      <option value="S/O">S/O (Son of)</option>
+                      <option value="W/O">W/O (Wife of)</option>
+                      <option value="D/O">D/O (Daughter of)</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <Lbl c="Father's / Husband's Name" h="For SPA document" />
+                    <input className={INP} value={f.transferorFatherName}
+                      onChange={e => upd({ transferorFatherName: e.target.value })}
+                      placeholder="e.g. Ramesh Kumar" />
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Lbl c="Folio Number" />
@@ -901,6 +1009,12 @@ export default function ShareTransferPage() {
                       <option>Preference</option>
                     </select>
                   </div>
+                </div>
+                <div>
+                  <Lbl c="Address" h="Transferor's residential/official address (for SPA)" />
+                  <textarea className={INP} rows={2} value={f.transferorAddress}
+                    onChange={e => upd({ transferorAddress: e.target.value })}
+                    placeholder="Full address" />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
@@ -1040,6 +1154,24 @@ export default function ShareTransferPage() {
                   <input className={INP} value={f.issuePlace}
                     onChange={e => upd({ issuePlace: e.target.value })} placeholder="e.g. Mumbai" />
                 </div>
+
+                {/* Payment Mode — required for SPA clause 2.2 */}
+                <div>
+                  <Lbl c="Mode of Payment" h="How purchase consideration will be paid — used in Share Purchase Agreement" />
+                  <div className="flex gap-3 flex-wrap mt-1">
+                    {(["Bank Transfer", "Cheque", "Cash"] as const).map(mode => (
+                      <button key={mode} type="button"
+                        onClick={() => upd({ paymentMode: mode })}
+                        className={`px-4 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${
+                          f.paymentMode === mode
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                            : "border-slate-200 text-slate-500 hover:border-emerald-300 hover:bg-emerald-50/40"
+                        }`}>
+                        {mode === "Bank Transfer" ? "🏦 Bank Transfer" : mode === "Cheque" ? "📝 Cheque" : "💵 Cash"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1089,10 +1221,21 @@ export default function ShareTransferPage() {
                     </div>
                   )}
                 </div>
-                <div>
-                  <Lbl c="Father's / Spouse's Name" />
-                  <input className={INP} value={f.transfereeFather}
-                    onChange={e => upd({ transfereeFather: e.target.value })} placeholder="optional" />
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Lbl c="Relation" />
+                    <select className={SEL} value={f.transfereeRelation}
+                      onChange={e => upd({ transfereeRelation: e.target.value })}>
+                      <option value="S/O">S/O (Son of)</option>
+                      <option value="W/O">W/O (Wife of)</option>
+                      <option value="D/O">D/O (Daughter of)</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <Lbl c="Father's / Husband's Name" />
+                    <input className={INP} value={f.transfereeFather}
+                      onChange={e => upd({ transfereeFather: e.target.value })} placeholder="optional" />
+                  </div>
                 </div>
                 <div>
                   <Lbl c="Address" />
@@ -1373,6 +1516,25 @@ export default function ShareTransferPage() {
                 )}
               </div>
 
+              {/* Share Purchase Agreement card */}
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-left mb-4">
+                <div className="font-bold text-amber-800 text-sm mb-1">📄 Share Purchase Agreement</div>
+                <p className="text-xs text-slate-500 mb-4">
+                  Legal contract between Seller and Buyer — executed alongside Form SH-4. Includes consideration, payment mode, reps & warranties.
+                </p>
+                <div className="flex gap-3">
+                  <button onClick={() => printSPA(done.newCertNo)}
+                    className="flex-1 py-2.5 rounded-xl border-2 border-amber-400 text-amber-700 font-bold text-sm hover:bg-amber-100 transition-colors">
+                    🖨️ Print SPA
+                  </button>
+                  <button onClick={() => downloadSPAPDF(done.newCertNo)} disabled={pdfLoading}
+                    className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 transition-all"
+                    style={{ background: "linear-gradient(135deg,#92400e,#b45309)" }}>
+                    {pdfLoading ? "⏳..." : "⬇️ Download SPA (PDF)"}
+                  </button>
+                </div>
+              </div>
+
               <div className="flex flex-col gap-3">
                 <button onClick={() => downloadSH4PDF(done.newFolioNo, done.newCertNo)} disabled={pdfLoading}
                   className="w-full py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2"
@@ -1389,7 +1551,7 @@ export default function ShareTransferPage() {
                   style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
                   📜 Print New Share Certificate
                 </button>
-                <button onClick={() => { setF(DEFAULT); setStep(1); setDone(null); setSavedShareholders([]); setAvailableDirectors([]); setConfirmPending(false); setBoardResDoc(null); setBoardResDate(""); setBoardResVenue(""); }}
+                <button onClick={() => { setF(DEFAULT); setStep(1); setDone(null); setSavedShareholders([]); setAvailableDirectors([]); setConfirmPending(false); setBoardResDoc(null); setBoardResDate(""); setBoardResVenue(""); setStampDutyManual(false); }}
                   className="w-full py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
                   🔄 New Transfer
                 </button>
