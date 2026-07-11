@@ -14,7 +14,12 @@ import {
   type Transferee,
   type TransferDetails,
   type TransferSigner,
+  type TransferWitness,
 } from "@/lib/share-transfer-html";
+import {
+  generateTransferBoardResolutionHTML,
+  buildTransferResolutionText,
+} from "@/lib/share-transfer-board-resolution";
 import {
   generateShareCertificateHTML,
   computeCertRanges,
@@ -77,6 +82,11 @@ interface F {
   transfereeOccupation: string;
   // Step 5 — Signatories
   signers: TransferSigner[];
+  // Step 5 — Witnesses
+  witness1Name: string;
+  witness1Address: string;
+  witness2Name: string;
+  witness2Address: string;
 }
 
 const DEFAULT: F = {
@@ -91,6 +101,8 @@ const DEFAULT: F = {
   transfereePersonId: "", transfereeName: "", transfereeFather: "",
   transfereeAddress: "", transfereePan: "", transfereeOccupation: "",
   signers: [{ name: "", designation: "Director", din: "" }, { name: "", designation: "Director", din: "" }],
+  witness1Name: "", witness1Address: "",
+  witness2Name: "", witness2Address: "",
 };
 
 /* ══════════════════════════════════════════════════════════════════
@@ -155,6 +167,11 @@ export default function ShareTransferPage() {
   const [availableDirectors, setAvailableDirectors] = useState<TransferSigner[]>([]);
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ newFolioNo: string; newCertNo: string; transferId: string } | null>(null);
+  // Board resolution state (Step 6)
+  const [boardResDate, setBoardResDate] = useState("");
+  const [boardResVenue, setBoardResVenue] = useState("");
+  const [boardResDoc, setBoardResDoc] = useState<{ meetingDocId: string; resolutionNo: string } | null>(null);
+  const [savingBoardRes, setSavingBoardRes] = useState(false);
 
   const upd = (patch: Partial<F>) => setF(prev => ({ ...prev, ...patch }));
 
@@ -294,13 +311,17 @@ export default function ShareTransferPage() {
         issuePlace: f.issuePlace || undefined,
       } as TransferDetails,
       signers: f.signers.filter(s => s.name) as TransferSigner[],
+      witnesses: [
+        { name: f.witness1Name, address: f.witness1Address },
+        { name: f.witness2Name, address: f.witness2Address },
+      ].filter(w => w.name.trim()) as TransferWitness[],
     };
   }
 
   /* Print SH-4 preview — opens in new browser tab */
   function printSH4(newFolioNo = "(Auto)", newCertNo = "(Auto)") {
     const a = buildSH4Args(newFolioNo, newCertNo);
-    const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers, undefined, { autoPrint: true });
+    const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers, a.witnesses, { autoPrint: true });
     const url1 = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const w1 = window.open(url1, "_blank");
     if (!w1) { alert("Pop-up blocked!"); URL.revokeObjectURL(url1); return; }
@@ -312,7 +333,7 @@ export default function ShareTransferPage() {
     setPdfLoading(true);
     try {
       const a = buildSH4Args(newFolioNo, newCertNo);
-      const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers);
+      const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers, a.witnesses);
       const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
       const dateStr  = f.transferDate?.replace(/-/g, "") || "undated";
       const filename = `SH4_${safeName}_${dateStr}`;
@@ -465,6 +486,11 @@ export default function ShareTransferPage() {
         nominalValue: f.nominalValue,
         paidUpValue: f.paidUpValue,
         signingDirectorsJson: JSON.stringify(f.signers.filter(s => s.name)),
+        // Witness fields
+        witness1Name: f.witness1Name || undefined,
+        witness1Address: f.witness1Address || undefined,
+        witness2Name: f.witness2Name || undefined,
+        witness2Address: f.witness2Address || undefined,
       }),
     });
     setSaving(false);
@@ -475,8 +501,126 @@ export default function ShareTransferPage() {
       return;
     }
     const result = await res.json() as { transferId: string; newFolioNo: string; newCertNo: string };
+
+    // Save SH-4 as a document record (non-blocking — DB rule: every logged-in action is recorded)
+    fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "share_transfer",
+        title: `Form SH-4: ${f.transferorName} → ${f.transfereeName} (${f.sharesToTransfer} shares, ${f.transferDate || "undated"})`,
+        companyName: f.companyName,
+        meetingDate: f.transferDate || null,
+        formDataJson: JSON.stringify({
+          transferId: result.transferId,
+          newFolioNo: result.newFolioNo,
+          newCertNo: result.newCertNo,
+          transferorName: f.transferorName,
+          transferorFolio: f.transferorFolio,
+          transferorCertNo: f.transferorCertNo,
+          transfereeName: f.transfereeName,
+          numberOfShares: f.sharesToTransfer,
+          shareType: f.shareType,
+          nominalValue: f.nominalValue,
+          transferDate: f.transferDate,
+          companyName: f.companyName,
+          cin: f.cin,
+        }),
+      }),
+    }).catch(() => {}); // fire-and-forget
+
+    // Pre-fill board resolution defaults for Step 6
+    setBoardResDate(f.transferDate || "");
+    setBoardResVenue(f.issuePlace || "Registered Office of the Company");
+    setBoardResDoc(null);
+
     setDone(result);
     setStep(6);
+  }
+
+  /* Print Board Resolution in a new tab */
+  function printBoardResolution(resolutionText: string) {
+    if (!done) return;
+    const signers = f.signers.filter(s => s.name);
+    const html = generateTransferBoardResolutionHTML(
+      { companyName: f.companyName, cin: f.cin, regAddress: f.regAddress },
+      {
+        transferorName: f.transferorName,
+        transferorFolio: f.transferorFolio,
+        transferorCertNo: f.transferorCertNo,
+        numberOfShares: f.sharesToTransfer,
+        shareType: f.shareType,
+        nominalValue: f.nominalValue,
+        transfereeName: f.transfereeName,
+        transferDate: f.transferDate,
+        newFolioNo: done.newFolioNo,
+        newCertNo: done.newCertNo,
+        transferId: done.transferId,
+      },
+      {
+        date: boardResDate || f.transferDate,
+        venue: boardResVenue || "Registered Office of the Company",
+        directors: signers.map(s => ({ name: s.name, din: s.din || "", designation: s.designation })),
+      },
+      signers,
+      resolutionText,
+    );
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const w = window.open(url, "_blank");
+    if (!w) { alert("Pop-up blocked — please allow pop-ups"); URL.revokeObjectURL(url); return; }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  /* Save Board Resolution to DB + print */
+  async function saveBoardResolution() {
+    if (!done || !isLoggedIn) return;
+    setSavingBoardRes(true);
+    const signers = f.signers.filter(s => s.name);
+    const resolutionText = buildTransferResolutionText(
+      {
+        transferorName: f.transferorName,
+        transferorFolio: f.transferorFolio,
+        transferorCertNo: f.transferorCertNo,
+        numberOfShares: f.sharesToTransfer,
+        shareType: f.shareType,
+        nominalValue: f.nominalValue,
+        transfereeName: f.transfereeName,
+        transferDate: f.transferDate,
+        newFolioNo: done.newFolioNo,
+        newCertNo: done.newCertNo,
+        transferId: done.transferId,
+      },
+      done.newFolioNo,
+      done.newCertNo,
+      signers[0]?.name
+    );
+
+    try {
+      const res = await fetch("/api/board-resolutions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: f.companyId,
+          companyName: f.companyName,
+          cin: f.cin,
+          regAddress: f.regAddress,
+          meetingDate: boardResDate || f.transferDate,
+          venue: boardResVenue || "Registered Office of the Company",
+          directors: signers.map(s => ({ name: s.name, din: s.din || "", designation: s.designation, present: true })),
+          resolutionText,
+          transferId: done.transferId,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      const data = await res.json() as { meetingDocId: string; resolutionNo: string };
+      setBoardResDoc(data);
+      printBoardResolution(resolutionText);
+    } catch {
+      alert("Could not save board resolution. You can still print it.");
+      printBoardResolution(resolutionText);
+    } finally {
+      setSavingBoardRes(false);
+    }
   }
 
   /* ── STEP VALIDATORS ── */
@@ -860,10 +1004,45 @@ export default function ShareTransferPage() {
             <div>
               <SHead n={4} title="Transferee Details" sub="Details of the person receiving the shares" />
               <div className="space-y-4">
-                <div>
+                <div className="relative">
                   <Lbl c="Full Name of Transferee *" />
                   <input className={INP} value={f.transfereeName}
-                    onChange={e => upd({ transfereeName: e.target.value })} placeholder="Full legal name" />
+                    onChange={e => upd({ transfereeName: e.target.value, transfereePersonId: "" })}
+                    placeholder={savedShareholders.length > 0 ? "Type to search existing persons..." : "Full legal name"} />
+                  {/* Autocomplete from loaded shareholders (existing persons in company) */}
+                  {f.transfereeName.length >= 1 && !f.transfereePersonId && (() => {
+                    const hits = savedShareholders.filter(sh =>
+                      sh.id !== f.transferorShareholderId &&
+                      (sh.personName || "").toLowerCase().includes(f.transfereeName.toLowerCase())
+                    );
+                    if (!hits.length) return null;
+                    return (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                        {hits.slice(0, 6).map(sh => (
+                          <button key={sh.id} onMouseDown={() => {
+                            upd({
+                              transfereeName: sh.personName || "",
+                              transfereePersonId: sh.personId || "",
+                              transfereePan: sh.panNo || f.transfereePan,
+                            });
+                          }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors">
+                            <div className="font-semibold text-slate-800 text-sm">{sh.personName}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              Existing shareholder &middot; PAN: {sh.panNo || "—"}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  {f.transfereePersonId && (
+                    <div className="mt-1.5 text-xs text-blue-600 font-semibold flex items-center gap-1">
+                      ✅ Existing person found in records
+                      <button onMouseDown={() => upd({ transfereeName: "", transfereePersonId: "" })}
+                        className="ml-auto text-slate-400 hover:text-red-500">✕ Clear</button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Lbl c="Father's / Spouse's Name" />
@@ -962,6 +1141,26 @@ export default function ShareTransferPage() {
                   className="w-full py-2.5 rounded-xl border-2 border-dashed border-emerald-300 text-emerald-600 text-sm font-semibold hover:bg-emerald-50 transition-colors">
                   {availableDirectors.length > 0 ? "+ Add Other (non-director)" : "+ Add Signatory"}
                 </button>
+
+                {/* Witness fields — required for SH-4 legal validity */}
+                <div className="border-t border-slate-100 pt-4 mt-2">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+                    👁️ Witnesses — Sign on Form SH-4 (Sec. 56)
+                  </p>
+                  {[1, 2].map(n => (
+                    <div key={n} className="bg-slate-50 rounded-xl p-4 space-y-3 mb-3">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Witness {n}</span>
+                      <input className={INP}
+                        value={n === 1 ? f.witness1Name : f.witness2Name}
+                        onChange={e => upd(n === 1 ? { witness1Name: e.target.value } : { witness2Name: e.target.value })}
+                        placeholder="Full name of witness" />
+                      <textarea className={INP} rows={2}
+                        value={n === 1 ? f.witness1Address : f.witness2Address}
+                        onChange={e => upd(n === 1 ? { witness1Address: e.target.value } : { witness2Address: e.target.value })}
+                        placeholder="Address of witness" />
+                    </div>
+                  ))}
+                </div>
 
                 {/* Summary box */}
                 <div className="mt-4 bg-slate-50 rounded-xl p-4 space-y-2 text-xs text-slate-500">
@@ -1065,6 +1264,70 @@ export default function ShareTransferPage() {
                   <span className="font-bold text-slate-700">{remaining.toLocaleString("en-IN")} shares</span>
                 </div>
               </div>
+              {/* Board Resolution card */}
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 text-left mb-4">
+                <div className="font-bold text-blue-800 text-sm mb-1">📜 Board Resolution (Section 56)</div>
+                <p className="text-xs text-slate-500 mb-4">
+                  Under Sec. 56, the Board must approve every share transfer. Generate and save the resolution.
+                </p>
+                {boardResDoc ? (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-emerald-700">✅ Board Resolution Saved</div>
+                      <div className="text-xs text-slate-500 mt-0.5">Resolution No: {boardResDoc.resolutionNo}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => printBoardResolution(buildTransferResolutionText(
+                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: f.transferorCertNo,
+                          numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                          transfereeName: f.transfereeName, transferDate: f.transferDate,
+                          newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                        done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                      ))} className="text-xs text-blue-700 font-semibold hover:underline">
+                        🖨️ Print
+                      </button>
+                      <Link href={`/tools/documents/minutes/board?load=${boardResDoc.meetingDocId}`}
+                        className="text-xs text-emerald-700 font-semibold hover:underline" target="_blank">
+                        Open →
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Lbl c="Board Meeting Date" />
+                        <input type="date" className={INP} value={boardResDate}
+                          onChange={e => setBoardResDate(e.target.value)} />
+                      </div>
+                      <div>
+                        <Lbl c="Venue" />
+                        <input className={INP} value={boardResVenue}
+                          onChange={e => setBoardResVenue(e.target.value)}
+                          placeholder="Registered Office" />
+                      </div>
+                    </div>
+                    {isLoggedIn && f.companyId ? (
+                      <button onClick={saveBoardResolution} disabled={savingBoardRes}
+                        className="w-full py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg,#1e40af,#3b82f6)" }}>
+                        {savingBoardRes ? "⏳ Saving..." : "📜 Save & Print Board Resolution"}
+                      </button>
+                    ) : (
+                      <button onClick={() => printBoardResolution(buildTransferResolutionText(
+                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: f.transferorCertNo,
+                          numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                          transfereeName: f.transfereeName, transferDate: f.transferDate,
+                          newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                        done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                      ))} className="w-full py-2.5 rounded-xl font-bold text-blue-700 text-sm border-2 border-blue-300 hover:bg-blue-50">
+                        🖨️ Print Board Resolution (Preview)
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="flex flex-col gap-3">
                 <button onClick={() => downloadSH4PDF(done.newFolioNo, done.newCertNo)} disabled={pdfLoading}
                   className="w-full py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2"
@@ -1081,7 +1344,7 @@ export default function ShareTransferPage() {
                   style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
                   📜 Print New Share Certificate
                 </button>
-                <button onClick={() => { setF(DEFAULT); setStep(1); setDone(null); setSavedShareholders([]); setAvailableDirectors([]); setConfirmPending(false); }}
+                <button onClick={() => { setF(DEFAULT); setStep(1); setDone(null); setSavedShareholders([]); setAvailableDirectors([]); setConfirmPending(false); setBoardResDoc(null); setBoardResDate(""); setBoardResVenue(""); }}
                   className="w-full py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
                   🔄 New Transfer
                 </button>
