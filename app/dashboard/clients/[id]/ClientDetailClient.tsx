@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PersonKYC, ShareholderRecord } from "@/lib/types/person";
@@ -770,6 +770,42 @@ function ShareTransferModal({
     return [{ name: '', designation: 'Director', din: '' }];
   });
 
+  // DB-backed autocomplete data
+  const [dbShareholders, setDbShareholders] = useState<Array<{ id: string; personName?: string; panNo?: string }>>([]);
+  const [dbDirectors, setDbDirectors] = useState<TransferSigner[]>([]);
+  const directorsApplied = useRef(false);
+
+  useEffect(() => {
+    // Load shareholders for transferee autocomplete
+    fetch(`/api/shareholders?companyId=${company.id}`)
+      .then(r => r.json())
+      .then((d: { shareholders?: Array<{ id: string; personName?: string; panNo?: string }> }) =>
+        setDbShareholders(d.shareholders || []))
+      .catch(() => {});
+
+    // Load directors for signatory autocomplete
+    fetch(`/api/persons?companyId=${company.id}&type=director`)
+      .then(r => r.json())
+      .then((d: { persons?: Array<{ name?: string; din?: string; designation?: string; isActive?: boolean }> }) => {
+        const dirs = (d.persons || [])
+          .filter(p => p.isActive !== false && p.name)
+          .map(p => ({ name: p.name!, designation: p.designation || 'Director', din: p.din || '' }));
+        setDbDirectors(dirs);
+      })
+      .catch(() => {});
+  }, [company.id]);
+
+  // Auto-populate signers from DB directors when all are blank
+  useEffect(() => {
+    if (dbDirectors.length > 0 && !directorsApplied.current) {
+      directorsApplied.current = true;
+      if (signers.every(s => !s.name.trim())) {
+        setSigners(dbDirectors.slice(0, 2).map(d => ({ ...d })));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbDirectors]);
+
   // This cert has all shares — full transfer only (partial = split first)
   const totalShares      = sh.numberOfShares || 0;
   const totalConsideration = consideration
@@ -1131,8 +1167,31 @@ function ShareTransferModal({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Full Name of Transferee *</label>
-                <input type="text" value={transfereeName} onChange={e => setTransfereeName(e.target.value)}
-                  placeholder="Full name" className={INP} />
+                <div className="relative">
+                  <input type="text" value={transfereeName} onChange={e => setTransfereeName(e.target.value)}
+                    placeholder="Full name" className={INP} autoComplete="off" />
+                  {(() => {
+                    const hits = dbShareholders.filter(s =>
+                      s.id !== sh.id &&
+                      s.personName &&
+                      transfereeName.trim().length >= 1 &&
+                      s.personName.toLowerCase().includes(transfereeName.toLowerCase()) &&
+                      s.personName !== transfereeName
+                    );
+                    return hits.length > 0 ? (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                        {hits.slice(0, 5).map(s => (
+                          <button key={s.id} type="button"
+                            onMouseDown={() => { setTransfereeName(s.personName!); if (s.panNo) setTransfereePan(s.panNo); }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 border-b border-slate-100 last:border-0">
+                            <div className="font-semibold text-slate-800 text-sm">{s.personName}</div>
+                            {s.panNo && <div className="text-xs text-slate-400">PAN: {s.panNo}</div>}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Father's / Spouse's Name</label>
@@ -1207,9 +1266,32 @@ function ShareTransferModal({
                       <button onClick={() => removeSigner(i)} className="text-xs text-red-400 hover:text-red-600">✕ Remove</button>
                     )}
                   </div>
-                  <input type="text" value={s.name} onChange={e => updateSigner(i, 'name', e.target.value)}
-                    placeholder="Full Name"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  <div className="relative">
+                    <input type="text" value={s.name} onChange={e => updateSigner(i, 'name', e.target.value)}
+                      placeholder="Full Name" autoComplete="off"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                    {(() => {
+                      const hits = dbDirectors.filter(d =>
+                        d.name && s.name.trim().length >= 1 &&
+                        d.name.toLowerCase().includes(s.name.toLowerCase()) &&
+                        d.name !== s.name
+                      );
+                      return hits.length > 0 ? (
+                        <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                          {hits.slice(0, 5).map(d => (
+                            <button key={d.name} type="button"
+                              onMouseDown={() => setSigners(prev => prev.map((sg, idx) =>
+                                idx === i ? { name: d.name, designation: d.designation, din: d.din } : sg
+                              ))}
+                              className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 border-b border-slate-100 last:border-0">
+                              <div className="font-semibold text-slate-800 text-sm">{d.name}</div>
+                              <div className="text-xs text-slate-400">{d.designation}{d.din ? ` · DIN: ${d.din}` : ''}</div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <input type="text" value={s.designation} onChange={e => updateSigner(i, 'designation', e.target.value)}
                       placeholder="Designation"

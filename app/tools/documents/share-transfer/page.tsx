@@ -241,13 +241,32 @@ export default function ShareTransferPage() {
       signers:     autoSigners,
     });
 
-    // Find companyId in our DB (logged-in users)
-    if (isLoggedIn && c.companyName) {
-      const r = await fetch(`/api/clients/find?name=${encodeURIComponent(c.companyName)}`);
+    // Find companyId in our DB — try CIN first (exact), then name
+    if (isLoggedIn && (c.companyName || c.cin)) {
+      const params = new URLSearchParams();
+      if (c.cin)         params.set("cin",  c.cin);
+      if (c.companyName) params.set("name", c.companyName);
+      const r = await fetch(`/api/clients/find?${params}`);
       const d = r.ok ? await r.json() : null;
-      if (d?.id) {
-        upd({ companyId: d.id });
-        loadShareholders(d.id);
+      if (d?.companyId) {
+        upd({ companyId: d.companyId });
+        loadShareholders(d.companyId);
+        // Also load directors from DB to enrich signatory chips
+        const pr = await fetch(`/api/persons?companyId=${d.companyId}&type=director`);
+        if (pr.ok) {
+          const pd = await pr.json() as { persons?: Array<{ name: string; din?: string; designation?: string; isActive?: boolean }> };
+          const dbDirs = (pd.persons || [])
+            .filter(p => p.isActive !== false && p.name)
+            .map(p => ({ name: p.name, designation: p.designation || "Director", din: p.din || "" }));
+          setAvailableDirectors(prev => {
+            const seen = new Set(prev.map(d => d.name.trim().toLowerCase()));
+            const merged = [...prev];
+            for (const d of dbDirs) {
+              if (!seen.has(d.name.trim().toLowerCase())) merged.push(d);
+            }
+            return merged;
+          });
+        }
       }
     }
   }
@@ -1299,7 +1318,13 @@ export default function ShareTransferPage() {
                   </div>
                 )}
 
-                {f.signers.map((s, i) => (
+                {f.signers.map((s, i) => {
+                  const sigHits = availableDirectors.filter(d =>
+                    d.name && s.name.trim().length >= 1 &&
+                    d.name.toLowerCase().includes(s.name.toLowerCase()) &&
+                    d.name !== s.name
+                  );
+                  return (
                   <div key={i} className="bg-slate-50 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Signatory {i + 1}</span>
@@ -1311,9 +1336,25 @@ export default function ShareTransferPage() {
                         </button>
                       )}
                     </div>
-                    <input className={INP} value={s.name}
-                      onChange={e => upd({ signers: f.signers.map((sg, idx) => idx === i ? { ...sg, name: e.target.value } : sg) })}
-                      placeholder="Full Name" />
+                    <div className="relative">
+                      <input className={INP} value={s.name}
+                        onChange={e => upd({ signers: f.signers.map((sg, idx) => idx === i ? { ...sg, name: e.target.value } : sg) })}
+                        placeholder="Full Name" autoComplete="off" />
+                      {sigHits.length > 0 && (
+                        <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                          {sigHits.slice(0, 5).map(d => (
+                            <button key={d.name} type="button"
+                              onMouseDown={() => upd({ signers: f.signers.map((sg, idx) => idx === i ? { name: d.name, designation: d.designation, din: d.din } : sg) })}
+                              className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 border-b border-slate-100 last:border-0 transition-colors">
+                              <div className="font-semibold text-slate-800 text-sm">{d.name}</div>
+                              <div className="text-xs text-slate-400 mt-0.5">
+                                {d.designation}{d.din ? ` · DIN: ${d.din}` : ""}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <input className={INP} value={s.designation}
                         onChange={e => upd({ signers: f.signers.map((sg, idx) => idx === i ? { ...sg, designation: e.target.value } : sg) })}
@@ -1323,7 +1364,8 @@ export default function ShareTransferPage() {
                         placeholder="DIN (optional)" />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 <button
                   onClick={() => upd({ signers: [...f.signers, { name: "", designation: "Director", din: "" }] })}
                   className="w-full py-2.5 rounded-xl border-2 border-dashed border-emerald-300 text-emerald-600 text-sm font-semibold hover:bg-emerald-50 transition-colors">

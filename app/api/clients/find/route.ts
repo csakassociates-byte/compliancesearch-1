@@ -10,13 +10,26 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const name = searchParams.get("name");
-  if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
+  const cin  = searchParams.get("cin");
+  if (!name && !cin) return NextResponse.json({ error: "name or cin required" }, { status: 400 });
 
-  const result = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("companyName") = LOWER($2) LIMIT 1`,
-    userId, name.trim()
-  );
+  // Try CIN first (exact, case-insensitive) — more reliable than name matching
+  if (cin) {
+    const bycin = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("cin") = LOWER($2) LIMIT 1`,
+      userId, cin.trim()
+    );
+    if (bycin.length) return NextResponse.json({ companyId: bycin[0].id, source: "cin" });
+  }
 
-  if (!result.length) return NextResponse.json({ companyId: null });
-  return NextResponse.json({ companyId: result[0].id });
+  // Fall back to exact name match
+  if (name) {
+    const byname = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("companyName") = LOWER($2) LIMIT 1`,
+      userId, name.trim()
+    );
+    if (byname.length) return NextResponse.json({ companyId: byname[0].id, source: "name" });
+  }
+
+  return NextResponse.json({ companyId: null });
 }
