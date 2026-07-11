@@ -150,6 +150,7 @@ export default function ShareTransferPage() {
   const [savedShareholders, setSavedShareholders] = useState<SavedShareholder[]>([]);
   const [loadingSh, setLoadingSh] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ newFolioNo: string; newCertNo: string; transferId: string } | null>(null);
 
@@ -247,10 +248,9 @@ export default function ShareTransferPage() {
     });
   }
 
-  /* Print SH-4 preview */
-  function printSH4() {
-    const html = generateSH4HTML(
-      {
+  function buildSH4Args(newFolioNo = "(Auto)", newCertNo = "(Auto)") {
+    return {
+      company: {
         companyName: f.companyName,
         cin: f.cin,
         regAddress: f.regAddress,
@@ -258,7 +258,7 @@ export default function ShareTransferPage() {
         nominalValue: f.nominalValue,
         paidUpValue: f.paidUpValue,
       } as TransferCompany,
-      {
+      transferor: {
         name: f.transferorName,
         folioNo: f.transferorFolio,
         certNo: f.transferorCertNo,
@@ -268,30 +268,74 @@ export default function ShareTransferPage() {
         pan: f.transferorPan || undefined,
         address: f.transferorAddress || undefined,
       } as Transferor,
-      {
+      transferee: {
         name: f.transfereeName || "_______________",
         fatherName: f.transfereeFather || undefined,
         address: f.transfereeAddress || undefined,
         pan: f.transfereePan || undefined,
         occupation: f.transfereeOccupation || undefined,
-        newFolioNo: "(Auto)",
-        newCertNo: "(Auto)",
+        newFolioNo,
+        newCertNo,
         newDistinctiveFrom: transferDistFrom,
         newDistinctiveTo: transferDistTo,
       } as Transferee,
-      {
+      details: {
         transferDate: f.transferDate,
         considerationPerShare: f.considerationPerShare || undefined,
         totalConsideration: totalConsideration || undefined,
         stampDuty: f.stampDuty || undefined,
         issuePlace: f.issuePlace || undefined,
       } as TransferDetails,
-      f.signers.filter(s => s.name) as TransferSigner[]
-    );
+      signers: f.signers.filter(s => s.name) as TransferSigner[],
+    };
+  }
+
+  /* Print SH-4 preview — opens in new browser tab */
+  function printSH4(newFolioNo = "(Auto)", newCertNo = "(Auto)") {
+    const a = buildSH4Args(newFolioNo, newCertNo);
+    const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers, undefined, { autoPrint: true });
     const url1 = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const w1 = window.open(url1, "_blank");
     if (!w1) { alert("Pop-up blocked!"); URL.revokeObjectURL(url1); return; }
     setTimeout(() => URL.revokeObjectURL(url1), 120_000);
+  }
+
+  /* Download SH-4 as PDF via Puppeteer API */
+  async function downloadSH4PDF(newFolioNo = "(Auto)", newCertNo = "(Auto)") {
+    setPdfLoading(true);
+    try {
+      const a = buildSH4Args(newFolioNo, newCertNo);
+      const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers);
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const dateStr  = f.transferDate?.replace(/-/g, "") || "undated";
+      const filename = `SH4_${safeName}_${dateStr}`;
+
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          html,
+          filename,
+          docType: "sh4",
+          companyName: f.companyName,
+          docTitle: "Form SH-4 — Securities Transfer Form",
+          dirs: a.signers.map(s => ({ name: s.name, designation: s.designation, din: s.din || "" })),
+        }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${filename}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to download PDF. Please use the Print option instead.");
+    } finally {
+      setPdfLoading(false);
+    }
   }
 
   /* Print new share certificate for transferee */
@@ -811,10 +855,15 @@ export default function ShareTransferPage() {
                   </div>
                 </div>
 
-                {/* Preview SH-4 */}
-                <button onClick={printSH4}
+                {/* Preview / Download SH-4 */}
+                <button onClick={() => printSH4()}
                   className="w-full py-3 rounded-xl border-2 border-emerald-600 text-emerald-700 font-bold text-sm hover:bg-emerald-50 flex items-center justify-center gap-2 transition-colors">
                   👁️ Preview Form SH-4
+                </button>
+                <button onClick={() => downloadSH4PDF()} disabled={pdfLoading}
+                  className="w-full py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                  style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
+                  {pdfLoading ? "⏳ Generating PDF..." : "⬇️ Download PDF (SH-4)"}
                 </button>
               </div>
             </div>
@@ -855,7 +904,12 @@ export default function ShareTransferPage() {
                 </div>
               </div>
               <div className="flex flex-col gap-3">
-                <button onClick={printSH4}
+                <button onClick={() => downloadSH4PDF(done.newFolioNo, done.newCertNo)} disabled={pdfLoading}
+                  className="w-full py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
+                  {pdfLoading ? "⏳ Generating PDF..." : "⬇️ Download Form SH-4 (PDF)"}
+                </button>
+                <button onClick={() => printSH4(done.newFolioNo, done.newCertNo)}
                   className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
                   style={{ background: "linear-gradient(135deg,#065f46,#047857)" }}>
                   🖨️ Print Form SH-4

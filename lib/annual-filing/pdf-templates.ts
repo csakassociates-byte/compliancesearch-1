@@ -21,11 +21,16 @@ export interface PdfDocConfig {
   marginSide: string;
   marginTop: string;
   marginBottom: string;
+  noHeaderFooter?: boolean;
 }
 
 export function getDocPdfConfig(docType: string): PdfDocConfig {
   if (docType === "director-list") {
     return { landscape: true, marginSide: "15mm", marginTop: "25mm", marginBottom: "25mm" };
+  }
+  if (docType === "sh4") {
+    // SH-4 is a prescribed form with its own border — no Puppeteer header/footer
+    return { landscape: false, marginSide: "0mm", marginTop: "0mm", marginBottom: "0mm", noHeaderFooter: true };
   }
   return { landscape: false, marginSide: "20mm", marginTop: "28mm", marginBottom: "34mm" };
 }

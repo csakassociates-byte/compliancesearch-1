@@ -95,9 +95,9 @@ export async function POST(req: NextRequest) {
         format: "A4",
         landscape: cfg.landscape,
         printBackground: true,
-        displayHeaderFooter: true,
-        headerTemplate,
-        footerTemplate,
+        displayHeaderFooter: !cfg.noHeaderFooter,
+        headerTemplate: cfg.noHeaderFooter ? "<span></span>" : headerTemplate,
+        footerTemplate: cfg.noHeaderFooter ? "<span></span>" : footerTemplate,
         // No margin here — @page CSS above controls margins to avoid conflict
       });
 
