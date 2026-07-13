@@ -2361,6 +2361,9 @@ interface ShareholderRow extends ShareholderRecord {
   holdingPercent?: string;
   companyId?: string;
   userId?: string;
+  fatherName?: string;
+  presentAddress?: string;
+  permanentAddress?: string;
   // Certificate metadata (saved when generating)
   nominalValue?: string;
   paidUpValue?: string;
@@ -2561,6 +2564,8 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
                         transferorDistinctiveFrom:  sh.distinctiveFrom || 1,
                         transferorDistinctiveTo:    sh.distinctiveTo || 0,
                         transferorPan:              sh.panNo || '',
+                        transferorFatherName:        sh.fatherName || '',
+                        transferorAddress:           sh.presentAddress || sh.permanentAddress || '',
                         shareType:                  sh.shareType || 'Equity',
                         nominalValue:               sh.nominalValue || '10',
                         calledUpValue:              sh.nominalValue || '10',

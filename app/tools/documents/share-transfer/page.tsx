@@ -93,6 +93,7 @@ interface F {
   transfereeAddress: string;
   transfereePan: string;
   transfereeOccupation: string;
+  transfereeExistingFolio: string; // folio if transferee already holds shares (M-5)
   // Step 5 — Signatories
   signers: TransferSigner[];
   // Step 5 — Witnesses
@@ -113,7 +114,7 @@ const DEFAULT: F = {
   sharesToTransfer: 0, transferDate: new Date().toISOString().slice(0, 10),
   considerationPerShare: "", stampDuty: "", issuePlace: "", paymentMode: "Bank Transfer",
   transfereePersonId: "", transfereeName: "", transfereeRelation: "S/O", transfereeFather: "",
-  transfereeAddress: "", transfereePan: "", transfereeOccupation: "",
+  transfereeAddress: "", transfereePan: "", transfereeOccupation: "", transfereeExistingFolio: "",
   signers: [{ name: "", designation: "Director", din: "" }, { name: "", designation: "Director", din: "" }],
   witness1Name: "", witness1Address: "",
   witness2Name: "", witness2Address: "",
@@ -411,6 +412,7 @@ export default function ShareTransferPage() {
         address: f.transfereeAddress || undefined,
         pan: f.transfereePan || undefined,
         occupation: f.transfereeOccupation || undefined,
+        existingFolioNo: f.transfereeExistingFolio || undefined,
         newFolioNo,
         newCertNo,
         newDistinctiveFrom: transferDistFrom,
@@ -1353,12 +1355,13 @@ export default function ShareTransferPage() {
                           <button key={sh.id} onMouseDown={() => {
                             const addr = sh.presentAddress || sh.permanentAddress || "";
                             upd({
-                              transfereeName:       sh.personName || "",
-                              transfereePersonId:   sh.personId || "",
-                              transfereePan:        sh.panNo || f.transfereePan,
-                              transfereeFather:     sh.fatherName || f.transfereeFather,
-                              transfereeAddress:    addr || f.transfereeAddress,
-                              transfereeOccupation: sh.occupation || f.transfereeOccupation,
+                              transfereeName:          sh.personName || "",
+                              transfereePersonId:      sh.personId || "",
+                              transfereePan:           sh.panNo || f.transfereePan,
+                              transfereeFather:        sh.fatherName || f.transfereeFather,
+                              transfereeAddress:       addr || f.transfereeAddress,
+                              transfereeOccupation:    sh.occupation || f.transfereeOccupation,
+                              transfereeExistingFolio: sh.folioNumber || "",
                             });
                           }}
                             className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors">
@@ -1374,7 +1377,7 @@ export default function ShareTransferPage() {
                   {f.transfereePersonId && (
                     <div className="mt-1.5 text-xs text-blue-600 font-semibold flex items-center gap-1">
                       ✅ Existing person found in records
-                      <button onMouseDown={() => upd({ transfereeName: "", transfereePersonId: "" })}
+                      <button onMouseDown={() => upd({ transfereeName: "", transfereePersonId: "", transfereeExistingFolio: "" })}
                         className="ml-auto text-slate-400 hover:text-red-500">✕ Clear</button>
                     </div>
                   )}

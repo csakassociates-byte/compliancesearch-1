@@ -23,6 +23,7 @@ async function ensureTables() {
       "transfereeFather"       TEXT,
       "transfereeAddress"      TEXT,
       "transfereePan"          TEXT,
+      "transfereeOccupation"   TEXT,
       "transfereeFolio"        TEXT,
       "transfereeCertNo"       TEXT,
       "transfereeShareholderId" TEXT,
@@ -65,9 +66,10 @@ async function ensureTables() {
       ADD COLUMN IF NOT EXISTS "transfereeAddress" TEXT,
       ADD COLUMN IF NOT EXISTS "transfereePan"     TEXT,
       ADD COLUMN IF NOT EXISTS "transfereeRelation"  TEXT,
-      ADD COLUMN IF NOT EXISTS "transferorRelation"  TEXT,
+      ADD COLUMN IF NOT EXISTS "transferorRelation"   TEXT,
       ADD COLUMN IF NOT EXISTS "transferorFatherName" TEXT,
-      ADD COLUMN IF NOT EXISTS "transferorAddress"    TEXT
+      ADD COLUMN IF NOT EXISTS "transferorAddress"    TEXT,
+      ADD COLUMN IF NOT EXISTS "transfereeOccupation" TEXT
   `).catch(() => {});
 
   await prisma.$executeRawUnsafe(`
@@ -331,7 +333,7 @@ export async function POST(req: NextRequest) {
        "transferorPersonId", "transferorName", "transferorFolio", "transferorCertNo", "transferorShareholderId",
        "transferorFatherName", "transferorAddress", "transferorRelation",
        "transfereePersonId", "transfereeName", "transfereeFather", "transfereeAddress", "transfereePan",
-       "transfereeRelation",
+       "transfereeOccupation", "transfereeRelation",
        "transfereeFolio", "transfereeCertNo", "transfereeShareholderId",
        "numberOfShares", "shareType", "distinctiveFrom", "distinctiveTo",
        "transferDate", "considerationPerShare", "totalConsideration", "stampDuty", "issuePlace",
@@ -343,13 +345,13 @@ export async function POST(req: NextRequest) {
        $4,$5,$6,$7,$8,
        $9,$10,$11,
        $12,$13,$14,$15,$16,
-       $17,
-       $18,$19,$20,
-       $21,$22,$23,$24,
-       $25,$26,$27,$28,$29,
-       $30,$31,$32,$33,
-       $34,$35,$36,
-       'approved',$37
+       $17,$18,
+       $19,$20,$21,
+       $22,$23,$24,$25,
+       $26,$27,$28,$29,$30,
+       $31,$32,$33,$34,
+       $35,$36,$37,
+       'approved',$38
      )`,
     transferId, userId, body.companyId,
     body.transferorPersonId || transferorSh.personId, body.transferorName,
@@ -359,7 +361,7 @@ export async function POST(req: NextRequest) {
     body.transferorFatherName || null, body.transferorAddress || null, body.transferorRelation || null,
     transfereePersonId || null, body.transfereeName,
     body.transfereeFatherName || null, body.transfereeAddress || null, body.transfereePan || null,
-    body.transfereeRelation || null,
+    body.transfereeOccupation || null, body.transfereeRelation || null,
     newFolioNo, newCertNo, newShId,
     body.numberOfShares, body.shareType || 'Equity', transferFrom, transferTo,
     body.transferDate || null,

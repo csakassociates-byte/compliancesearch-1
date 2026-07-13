@@ -34,6 +34,7 @@ export interface Transferee {
   email?: string;
   pan?: string;
   occupation?: string;
+  existingFolioNo?: string; // pre-existing folio if transferee already holds shares (M-5)
   newFolioNo: string;
   newCertNo: string;
   newDistinctiveFrom: number | string;
@@ -251,6 +252,7 @@ function buildPage1(
   const consInWords   = totalCons > 0 ? `${numberToWords(Math.round(totalCons))} Only` : '';
 
   const w1 = witnesses?.[0];
+  const w2 = witnesses?.[1];
 
   return `
   <div class="page">
@@ -398,6 +400,27 @@ function buildPage1(
         </div>
       </div>
 
+      <!-- Witness 2 -->
+      <div style="font-size:9pt;margin-top:3mm">
+        <div style="display:flex;gap:8mm;margin-bottom:1.5mm">
+          <div style="flex:1;border-bottom:1px solid #000;min-height:9mm;padding-bottom:1mm">
+            <span style="font-size:7.5pt;color:#444">Signature of Witness 2</span><br>
+            ${w2 ? `<strong>${w2.name}</strong>` : '&nbsp;'}
+          </div>
+          <div style="flex:1;border-bottom:1px solid #000;min-height:9mm;padding-bottom:1mm">
+            <span style="font-size:7.5pt;color:#444">Name of Witness 2</span><br>
+            ${w2?.name || '&nbsp;'}
+          </div>
+        </div>
+        <div style="border-bottom:1px solid #000;min-height:9mm;padding-bottom:1mm;margin-bottom:1.5mm">
+          <span style="font-size:7.5pt;color:#444">Address of Witness 2</span><br>
+          ${w2?.address || '&nbsp;'}
+        </div>
+        <div style="text-align:right;font-size:9pt">
+          Pincode:&nbsp;<span style="display:inline-block;border-bottom:1px solid #000;min-width:22mm;vertical-align:bottom;">&nbsp;</span>
+        </div>
+      </div>
+
     </div>
   </div>`;
 }
@@ -459,7 +482,7 @@ function buildPage2(
         </tr>
         <tr>
           <td style="min-height:10mm;padding:2px 4px">1.&nbsp;&nbsp;${transferee.occupation || '&nbsp;'}</td>
-          <td style="min-height:10mm;padding:2px 4px">&nbsp;</td>
+          <td style="min-height:10mm;padding:2px 4px">1.&nbsp;&nbsp;${transferee.existingFolioNo || '&nbsp;'}</td>
           <td style="min-height:10mm;padding:2px 4px;vertical-align:bottom;font-size:8pt;color:#666">1.</td>
         </tr>
         <tr>
