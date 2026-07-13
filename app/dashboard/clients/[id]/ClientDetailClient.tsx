@@ -2386,7 +2386,6 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
   const [syncing, setSyncing] = useState<string | null>(null);
   const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
   const [viewSh, setViewSh] = useState<ShareholderRow | null>(null);
-  const [transferSh, setTransferSh] = useState<ShareholderRow | null>(null);
   const [splitSh, setSplitSh]       = useState<ShareholderRow | null>(null);
 
   const load = useCallback(async () => {
@@ -2614,14 +2613,6 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
           company={company}
           onClose={() => setViewSh(null)}
           onPrint={() => { printShareCertificate(viewSh, company); setViewSh(null); }}
-        />
-      )}
-      {transferSh && (
-        <ShareTransferModal
-          sh={transferSh}
-          company={company}
-          onClose={() => setTransferSh(null)}
-          onDone={() => { setTransferSh(null); load(); }}
         />
       )}
       {splitSh && (

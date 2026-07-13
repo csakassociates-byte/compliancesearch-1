@@ -51,6 +51,7 @@ interface SavedShareholder {
   signingDirectorsJson?: string;
   holdingPercent?: string;
   transferStatus?: string;
+  certStatus?: string;
 }
 
 interface F {
@@ -249,7 +250,7 @@ export default function ShareTransferPage() {
   const [confirmPending, setConfirmPending] = useState(false);
   const [availableDirectors, setAvailableDirectors] = useState<TransferSigner[]>([]);
   const [error, setError] = useState("");
-  const [done, setDone] = useState<{ newFolioNo: string; newCertNo: string; transferId: string } | null>(null);
+  const [done, setDone] = useState<{ newFolioNo: string; newCertNo: string; transferId: string; activeCertNo: string } | null>(null);
   // Board resolution state (Step 6)
   const [boardResDate, setBoardResDate] = useState("");
   const [boardResVenue, setBoardResVenue] = useState("");
@@ -272,10 +273,13 @@ export default function ShareTransferPage() {
     setLoadingSh(true);
     const r = await fetch(`/api/shareholders?companyId=${companyId}`);
     const d = r.ok ? await r.json() : { shareholders: [] };
-    // Filter only active (not fully transferred)
+    // Filter only active certs (not transferred, split, or cancelled)
     setSavedShareholders(
       ((d.shareholders || []) as SavedShareholder[]).filter(
-        sh => sh.transferStatus !== "transferred" && (sh.numberOfShares || 0) > 0
+        sh => sh.transferStatus !== "transferred"
+          && sh.certStatus !== "split"
+          && sh.certStatus !== "cancelled"
+          && (sh.numberOfShares || 0) > 0
       )
     );
     setLoadingSh(false);
@@ -653,7 +657,7 @@ export default function ShareTransferPage() {
     setBoardResVenue(f.issuePlace || "Registered Office of the Company");
     setBoardResDoc(null);
 
-    setDone(result);
+    setDone({ ...result, activeCertNo });
     setStep(6);
   }
 
@@ -666,7 +670,7 @@ export default function ShareTransferPage() {
       {
         transferorName: f.transferorName,
         transferorFolio: f.transferorFolio,
-        transferorCertNo: f.transferorCertNo,
+        transferorCertNo: done.activeCertNo,
         numberOfShares: f.sharesToTransfer,
         shareType: f.shareType,
         nominalValue: f.nominalValue,
@@ -811,7 +815,7 @@ export default function ShareTransferPage() {
       {
         transferorName: f.transferorName,
         transferorFolio: f.transferorFolio,
-        transferorCertNo: f.transferorCertNo,
+        transferorCertNo: done.activeCertNo,
         numberOfShares: f.sharesToTransfer,
         shareType: f.shareType,
         nominalValue: f.nominalValue,
@@ -1642,7 +1646,7 @@ export default function ShareTransferPage() {
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => printBoardResolution(buildTransferResolutionText(
-                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: f.transferorCertNo,
+                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
                           numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
                           transfereeName: f.transfereeName, transferDate: f.transferDate,
                           newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
@@ -1679,7 +1683,7 @@ export default function ShareTransferPage() {
                       </button>
                     ) : (
                       <button onClick={() => printBoardResolution(buildTransferResolutionText(
-                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: f.transferorCertNo,
+                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
                           numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
                           transfereeName: f.transfereeName, transferDate: f.transferDate,
                           newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
