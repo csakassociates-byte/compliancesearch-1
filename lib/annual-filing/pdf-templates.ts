@@ -29,8 +29,20 @@ export function getDocPdfConfig(docType: string): PdfDocConfig {
     return { landscape: true, marginSide: "15mm", marginTop: "25mm", marginBottom: "25mm" };
   }
   if (docType === "sh4") {
-    // SH-4 is a prescribed form with its own border — no Puppeteer header/footer
+    // SH-4 is a prescribed form with its own border — no header/footer, zero margin
     return { landscape: false, marginSide: "0mm", marginTop: "0mm", marginBottom: "0mm", noHeaderFooter: true };
+  }
+  if (docType === "share-certificate") {
+    // Share certificate has its own full-page border/layout
+    return { landscape: false, marginSide: "0mm", marginTop: "0mm", marginBottom: "0mm", noHeaderFooter: true };
+  }
+  if (docType === "spa") {
+    // Share Purchase Agreement — content includes own header; no Puppeteer header/footer
+    return { landscape: false, marginSide: "15mm", marginTop: "15mm", marginBottom: "15mm", noHeaderFooter: true };
+  }
+  if (docType === "board-resolution") {
+    // Board Resolution — content includes own header/title; no Puppeteer header/footer
+    return { landscape: false, marginSide: "15mm", marginTop: "15mm", marginBottom: "15mm", noHeaderFooter: true };
   }
   return { landscape: false, marginSide: "20mm", marginTop: "28mm", marginBottom: "34mm" };
 }

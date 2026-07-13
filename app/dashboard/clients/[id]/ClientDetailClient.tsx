@@ -1498,7 +1498,6 @@ interface TransferRecord {
   signingDirectorsJson?: string;
   status?: string;
   createdAt: string;
-  /* SPA / KYC fields */
   transferorFatherName?: string;
   transferorAddress?: string;
   transferorRelation?: string;
@@ -1513,7 +1512,6 @@ interface TransferRecord {
   witness1Address?: string;
   witness2Name?: string;
   witness2Address?: string;
-  /* Board resolution fields */
   meetingDocId?: string;
   resolutionNo?: string;
   resolutionText?: string;
@@ -1525,12 +1523,45 @@ interface BrConflict {
   action: () => void;
 }
 
+/* Consistent 3-button row for one document */
+function DocActionRow({
+  label, onPrint, onPdf, onWord, busyKey, activeBusy,
+}: {
+  label: string;
+  onPrint: () => void;
+  onPdf: () => void;
+  onWord: () => void;
+  busyKey: string;
+  activeBusy: string | null;
+}) {
+  const isBusy = activeBusy === busyKey + '_pdf' || activeBusy === busyKey + '_word';
+  return (
+    <div className="flex items-center gap-2 py-1.5 border-b border-slate-100 last:border-0">
+      <span className="text-xs font-semibold text-slate-500 w-32 shrink-0">{label}</span>
+      <div className="flex gap-1.5 flex-wrap">
+        <button onClick={onPrint}
+          className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 whitespace-nowrap">
+          🖨️ Print
+        </button>
+        <button onClick={onPdf} disabled={isBusy}
+          className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 whitespace-nowrap">
+          {activeBusy === busyKey + '_pdf' ? '⏳' : '⬇️'} PDF
+        </button>
+        <button onClick={onWord} disabled={isBusy}
+          className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 disabled:opacity-50 whitespace-nowrap">
+          {activeBusy === busyKey + '_word' ? '⏳' : '📝'} Word
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TransfersTab({ companyId, company }: { companyId: string; company: Company }) {
-  const [transfers, setTransfers]     = useState<TransferRecord[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [viewT, setViewT]             = useState<TransferRecord | null>(null);
-  const [brConflict, setBrConflict]   = useState<BrConflict | null>(null);
-  const [brBusy, setBrBusy]           = useState(false);
+  const [transfers, setTransfers]   = useState<TransferRecord[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [viewT, setViewT]           = useState<TransferRecord | null>(null);
+  const [brConflict, setBrConflict] = useState<BrConflict | null>(null);
+  const [busyKey, setBusyKey]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1548,7 +1579,8 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
     catch { return []; }
   }
 
-  function openInNewTab(html: string) {
+  /* ── Print: open in new tab, auto-trigger print dialog ── */
+  function openPrint(html: string) {
     const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
     const w = window.open(url, '_blank');
     if (w) { w.addEventListener('load', () => { w.focus(); w.print(); }); }
@@ -1556,120 +1588,125 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 
-  async function downloadWord(html: string, filename: string, docTitle: string) {
-    const r = await fetch('/api/share-transfer/docx', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html, companyName: company.companyName, docTitle, filename }),
-    });
-    if (!r.ok) { alert('Word download failed. Please try again.'); return; }
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename + '.docx'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  /* ── PDF: Puppeteer via /api/generate-pdf ── */
+  async function downloadPDF(html: string, docType: string, filename: string, docTitle: string, key: string) {
+    setBusyKey(key + '_pdf');
+    try {
+      const res = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html, filename, docType, companyName: company.companyName, docTitle, dirs: [] }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({})) as { error?: string };
+        alert('PDF failed: ' + (e.error || res.statusText));
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename + '.pdf'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      alert('PDF generation failed: ' + String(err));
+    } finally {
+      setBusyKey(null);
+    }
   }
 
-  function printSH4(t: TransferRecord) {
-    import('@/lib/share-transfer-html').then(({ generateSH4HTML }) => {
-      const html = generateSH4HTML(
-        { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '', shareClass: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', paidUpValue: t.paidUpValue || '10' },
-        { name: t.transferorName, folioNo: t.transferorFolio || '', certNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, distinctiveFrom: t.distinctiveFrom || 1, distinctiveTo: t.distinctiveTo || 0 },
-        { name: t.transfereeName, newFolioNo: t.transfereeFolio || '—', newCertNo: t.transfereeCertNo || '—', newDistinctiveFrom: t.distinctiveFrom || 1, newDistinctiveTo: t.distinctiveTo || 0 },
-        { transferDate: t.transferDate || '', considerationPerShare: t.considerationPerShare || undefined, totalConsideration: t.totalConsideration || undefined, stampDuty: t.stampDuty || undefined, issuePlace: t.issuePlace || undefined },
-        getSigners(t)
-      );
-      openInNewTab(html);
-    });
+  /* ── Word: HTML → DOCX via /api/share-transfer/docx ── */
+  async function downloadWordDoc(html: string, filename: string, docTitle: string, key: string) {
+    setBusyKey(key + '_word');
+    try {
+      const res = await fetch('/api/share-transfer/docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html, companyName: company.companyName, docTitle, filename }),
+      });
+      if (!res.ok) { alert('Word download failed. Please try again.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename + '.docx'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (err) {
+      alert('Word download failed: ' + String(err));
+    } finally {
+      setBusyKey(null);
+    }
   }
 
-  function printNewCert(t: TransferRecord) {
-    import('@/lib/share-certificate-html').then(({ generateShareCertificateHTML, computeCertRanges }) => {
-      const ranges = computeCertRanges([{ shares: t.numberOfShares || 0 }], t.distinctiveFrom || 1);
-      const html = generateShareCertificateHTML(
-        { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '', shareClass: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', paidUpValue: t.paidUpValue || '10', issueDate: t.transferDate || '', issuePlace: t.issuePlace || '' },
-        [{ name: t.transfereeName, din: '', shares: t.numberOfShares || 0 }],
-        [{ ...ranges[0], folioNo: t.transfereeFolio || '01', certNo: t.transfereeCertNo || '01' }],
-        getSigners(t)
-      );
-      openInNewTab(html);
-    });
-  }
-
-  async function printSPA(t: TransferRecord) {
-    const { generateSPAHTML } = await import('@/lib/share-purchase-agreement-html');
-    const html = generateSPAHTML(
-      { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '' },
-      { name: t.transferorName, relation: t.transferorRelation || 'S/O', relativeName: t.transferorFatherName || '', address: t.transferorAddress || '', pan: t.transferorPan },
-      { name: t.transfereeName, relation: t.transfereeRelation || 'S/O', relativeName: t.transfereeFather || '', address: t.transfereeAddress || '', pan: t.transfereePan },
-      { numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', folioNo: t.transferorFolio || '', certNo: t.transferorCertNo || '', considerationPerShare: t.considerationPerShare || '', totalConsideration: t.totalConsideration || '', paymentMode: t.paymentMode || 'Bank Transfer', agreementDate: t.transferDate || '', place: t.issuePlace || '' },
-      [{ name: t.witness1Name || '', address: t.witness1Address || '' }, { name: t.witness2Name || '', address: t.witness2Address || '' }],
-      { autoPrint: true }
+  /* ── HTML builders (same HTML for print / PDF / Word) ── */
+  async function buildSH4Html(t: TransferRecord): Promise<string> {
+    const { generateSH4HTML } = await import('@/lib/share-transfer-html');
+    return generateSH4HTML(
+      { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '', shareClass: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', paidUpValue: t.paidUpValue || '10' },
+      { name: t.transferorName, folioNo: t.transferorFolio || '', certNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, distinctiveFrom: t.distinctiveFrom || 1, distinctiveTo: t.distinctiveTo || 0 },
+      { name: t.transfereeName, newFolioNo: t.transfereeFolio || '—', newCertNo: t.transfereeCertNo || '—', newDistinctiveFrom: t.distinctiveFrom || 1, newDistinctiveTo: t.distinctiveTo || 0 },
+      { transferDate: t.transferDate || '', considerationPerShare: t.considerationPerShare || undefined, totalConsideration: t.totalConsideration || undefined, stampDuty: t.stampDuty || undefined, issuePlace: t.issuePlace || undefined },
+      getSigners(t)
     );
-    openInNewTab(html);
   }
 
-  async function downloadSPAWord(t: TransferRecord) {
+  async function buildCertHtml(t: TransferRecord): Promise<string> {
+    const { generateShareCertificateHTML, computeCertRanges } = await import('@/lib/share-certificate-html');
+    const ranges = computeCertRanges([{ shares: t.numberOfShares || 0 }], t.distinctiveFrom || 1);
+    return generateShareCertificateHTML(
+      { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '', shareClass: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', paidUpValue: t.paidUpValue || '10', issueDate: t.transferDate || '', issuePlace: t.issuePlace || '' },
+      [{ name: t.transfereeName, din: '', shares: t.numberOfShares || 0 }],
+      [{ ...ranges[0], folioNo: t.transfereeFolio || '01', certNo: t.transfereeCertNo || '01' }],
+      getSigners(t)
+    );
+  }
+
+  async function buildSPAHtml(t: TransferRecord): Promise<string> {
     const { generateSPAHTML } = await import('@/lib/share-purchase-agreement-html');
-    const html = generateSPAHTML(
+    return generateSPAHTML(
       { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '' },
       { name: t.transferorName, relation: t.transferorRelation || 'S/O', relativeName: t.transferorFatherName || '', address: t.transferorAddress || '', pan: t.transferorPan },
       { name: t.transfereeName, relation: t.transfereeRelation || 'S/O', relativeName: t.transfereeFather || '', address: t.transfereeAddress || '', pan: t.transfereePan },
       { numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', folioNo: t.transferorFolio || '', certNo: t.transferorCertNo || '', considerationPerShare: t.considerationPerShare || '', totalConsideration: t.totalConsideration || '', paymentMode: t.paymentMode || 'Bank Transfer', agreementDate: t.transferDate || '', place: t.issuePlace || '' },
       [{ name: t.witness1Name || '', address: t.witness1Address || '' }, { name: t.witness2Name || '', address: t.witness2Address || '' }]
     );
-    await downloadWord(html, `SPA_${t.transferorName}_to_${t.transfereeName}`, 'Share Purchase Agreement');
   }
 
-  function buildBRHtml(t: TransferRecord, autoPrint = false) {
-    return import('@/lib/share-transfer-board-resolution').then(({ generateTransferBoardResolutionHTML, buildTransferResolutionText }) => {
-      const signers = getSigners(t);
-      const resolutionText = t.resolutionText || buildTransferResolutionText(
-        { transferorName: t.transferorName, transferorFolio: t.transferorFolio || '', transferorCertNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', distinctiveFrom: t.distinctiveFrom, distinctiveTo: t.distinctiveTo, transfereeName: t.transfereeName, transferDate: t.transferDate || '', newFolioNo: t.transfereeFolio, newCertNo: t.transfereeCertNo },
-        t.transfereeFolio, t.transfereeCertNo,
-        signers[0]?.name
-      );
-      return generateTransferBoardResolutionHTML(
-        { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '' },
-        { transferorName: t.transferorName, transferorFolio: t.transferorFolio || '', transferorCertNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', distinctiveFrom: t.distinctiveFrom, distinctiveTo: t.distinctiveTo, transfereeName: t.transfereeName, transferDate: t.transferDate || '', newFolioNo: t.transfereeFolio, newCertNo: t.transfereeCertNo, transferId: t.id },
-        { date: t.transferDate || '', venue: 'Registered Office of the Company', directors: signers.map(s => ({ name: s.name, din: s.din, designation: s.designation })) },
-        signers,
-        resolutionText,
-        { autoPrint }
-      );
-    });
+  async function buildBRHtml(t: TransferRecord): Promise<string> {
+    const { generateTransferBoardResolutionHTML, buildTransferResolutionText } = await import('@/lib/share-transfer-board-resolution');
+    const signers = getSigners(t);
+    const resolutionText = t.resolutionText || buildTransferResolutionText(
+      { transferorName: t.transferorName, transferorFolio: t.transferorFolio || '', transferorCertNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', distinctiveFrom: t.distinctiveFrom, distinctiveTo: t.distinctiveTo, transfereeName: t.transfereeName, transferDate: t.transferDate || '', newFolioNo: t.transfereeFolio, newCertNo: t.transfereeCertNo },
+      t.transfereeFolio, t.transfereeCertNo, signers[0]?.name
+    );
+    return generateTransferBoardResolutionHTML(
+      { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '' },
+      { transferorName: t.transferorName, transferorFolio: t.transferorFolio || '', transferorCertNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', distinctiveFrom: t.distinctiveFrom, distinctiveTo: t.distinctiveTo, transfereeName: t.transfereeName, transferDate: t.transferDate || '', newFolioNo: t.transfereeFolio, newCertNo: t.transfereeCertNo, transferId: t.id },
+      { date: t.transferDate || '', venue: 'Registered Office of the Company', directors: signers.map(s => ({ name: s.name, din: s.din, designation: s.designation })) },
+      signers, resolutionText
+    );
   }
 
+  /* ── Board Resolution conflict check ── */
   async function checkBrConflict(t: TransferRecord, action: () => void) {
     if (!t.transferDate) { action(); return; }
-    setBrBusy(true);
+    setBusyKey('br_check');
     try {
       const r = await fetch(`/api/board-resolutions?companyId=${companyId}&date=${t.transferDate}`);
       if (r.ok) {
         const d = await r.json();
         if (d.exactMatch) {
           setBrConflict({ transfer: t, meeting: d.exactMatch, action });
-          setBrBusy(false);
+          setBusyKey(null);
           return;
         }
       }
-    } catch { /* network error — proceed anyway */ }
-    setBrBusy(false);
+    } catch { /* network error — proceed */ }
+    setBusyKey(null);
     action();
   }
 
-  async function printBoardRes(t: TransferRecord) {
-    await checkBrConflict(t, async () => {
-      const html = await buildBRHtml(t, true);
-      openInNewTab(html);
-    });
-  }
-
-  async function downloadBRWord(t: TransferRecord) {
-    await checkBrConflict(t, async () => {
-      const html = await buildBRHtml(t, false);
-      await downloadWord(html, `BoardResolution_Transfer_${t.transferDate || t.id}`, 'Board Resolution — Share Transfer');
-    });
-  }
+  /* ── Filename helpers ── */
+  function sh4File(t: TransferRecord) { return `SH4_${t.transferorName}_to_${t.transfereeName}_${t.transferDate || t.id}`; }
+  function certFile(t: TransferRecord) { return `ShareCert_${t.transfereeName}_${t.transferDate || t.id}`; }
+  function spaFile(t: TransferRecord) { return `SPA_${t.transferorName}_to_${t.transfereeName}_${t.transferDate || t.id}`; }
+  function brFile(t: TransferRecord)  { return `BoardResolution_${t.transferDate || t.id}`; }
 
   if (loading) return <div className="text-sm text-slate-400 text-center py-12">Loading transfer history...</div>;
 
@@ -1702,9 +1739,9 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
         <div className="space-y-4">
           {transfers.map(t => (
             <div key={t.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
-              {/* Header row */}
+              {/* Summary row */}
               <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm flex-wrap">
                   <span className="font-bold text-slate-800">{t.transferorName}</span>
                   <span className="text-slate-400 font-bold">→</span>
                   <span className="font-bold text-emerald-700">{t.transfereeName}</span>
@@ -1715,80 +1752,60 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                 </div>
               </div>
 
-              {/* Details chips */}
-              <div className="flex flex-wrap gap-2 mb-3">
-                {t.transferDate && (
-                  <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">📅 {t.transferDate}</span>
-                )}
-                {t.transferorFolio && (
-                  <span className="text-xs bg-blue-50 text-blue-600 rounded-full px-2.5 py-1">
-                    Folio: {t.transferorFolio} → {t.transfereeFolio || '—'}
-                  </span>
-                )}
-                {t.transferorCertNo && (
-                  <span className="text-xs bg-amber-50 text-amber-600 rounded-full px-2.5 py-1">
-                    Cert: {t.transferorCertNo} → {t.transfereeCertNo || '—'}
-                  </span>
-                )}
-                {t.distinctiveFrom && t.distinctiveTo && (
-                  <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2.5 py-1 font-mono">
-                    {String(t.distinctiveFrom).padStart(5,'0')}–{t.distinctiveTo}
-                  </span>
-                )}
-                {t.totalConsideration && (
-                  <span className="text-xs bg-emerald-50 text-emerald-700 rounded-full px-2.5 py-1 font-semibold">
-                    ₹ {parseFloat(t.totalConsideration).toLocaleString('en-IN')}
-                  </span>
-                )}
+              {/* Detail chips */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {t.transferDate && <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">📅 {t.transferDate}</span>}
+                {t.transferorFolio && <span className="text-xs bg-blue-50 text-blue-600 rounded-full px-2.5 py-1">Folio: {t.transferorFolio} → {t.transfereeFolio || '—'}</span>}
+                {t.transferorCertNo && <span className="text-xs bg-amber-50 text-amber-600 rounded-full px-2.5 py-1">Cert: {t.transferorCertNo} → {t.transfereeCertNo || '—'}</span>}
+                {t.distinctiveFrom && t.distinctiveTo && <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2.5 py-1 font-mono">{String(t.distinctiveFrom).padStart(5,'0')}–{t.distinctiveTo}</span>}
+                {t.totalConsideration && <span className="text-xs bg-emerald-50 text-emerald-700 rounded-full px-2.5 py-1 font-semibold">₹ {parseFloat(t.totalConsideration).toLocaleString('en-IN')}</span>}
                 <span className={`text-xs rounded-full px-2.5 py-1 font-semibold ${t.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                   {t.status === 'approved' ? '✅ Approved' : '⏳ Pending'}
                 </span>
               </div>
 
-              {/* Action buttons — Row 1: core docs */}
-              <div className="flex flex-wrap gap-2 mb-2">
-                <button onClick={() => setViewT(t)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
-                  👁️ View Details
-                </button>
-                <button onClick={() => printSH4(t)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100">
-                  🖨️ Print SH-4
-                </button>
-                <button onClick={() => printNewCert(t)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">
-                  📜 New Certificate
-                </button>
+              {/* Document actions grid */}
+              <div className="bg-slate-50 rounded-xl px-4 py-2 space-y-0">
+                <DocActionRow
+                  label="Form SH-4"
+                  busyKey={`${t.id}_sh4`} activeBusy={busyKey}
+                  onPrint={async () => openPrint(await buildSH4Html(t))}
+                  onPdf={async () => downloadPDF(await buildSH4Html(t), 'sh4', sh4File(t), 'Form SH-4', `${t.id}_sh4`)}
+                  onWord={async () => downloadWordDoc(await buildSH4Html(t), sh4File(t), 'Form SH-4', `${t.id}_sh4`)}
+                />
+                <DocActionRow
+                  label="Share Certificate"
+                  busyKey={`${t.id}_cert`} activeBusy={busyKey}
+                  onPrint={async () => openPrint(await buildCertHtml(t))}
+                  onPdf={async () => downloadPDF(await buildCertHtml(t), 'share-certificate', certFile(t), 'Share Certificate', `${t.id}_cert`)}
+                  onWord={async () => downloadWordDoc(await buildCertHtml(t), certFile(t), 'Share Certificate', `${t.id}_cert`)}
+                />
+                <DocActionRow
+                  label="SPA"
+                  busyKey={`${t.id}_spa`} activeBusy={busyKey}
+                  onPrint={async () => openPrint(await buildSPAHtml(t))}
+                  onPdf={async () => downloadPDF(await buildSPAHtml(t), 'spa', spaFile(t), 'Share Purchase Agreement', `${t.id}_spa`)}
+                  onWord={async () => downloadWordDoc(await buildSPAHtml(t), spaFile(t), 'Share Purchase Agreement', `${t.id}_spa`)}
+                />
+                <DocActionRow
+                  label="Board Resolution"
+                  busyKey={`${t.id}_br`} activeBusy={busyKey}
+                  onPrint={() => checkBrConflict(t, async () => openPrint(await buildBRHtml(t)))}
+                  onPdf={() => checkBrConflict(t, async () => downloadPDF(await buildBRHtml(t), 'board-resolution', brFile(t), 'Board Resolution', `${t.id}_br`))}
+                  onWord={() => checkBrConflict(t, async () => downloadWordDoc(await buildBRHtml(t), brFile(t), 'Board Resolution — Share Transfer', `${t.id}_br`))}
+                />
               </div>
 
-              {/* Action buttons — Row 2: SPA + Board Resolution */}
-              <div className="flex flex-wrap gap-2">
-                <span className="text-xs text-slate-400 self-center mr-0.5">SPA:</span>
-                <button onClick={() => printSPA(t)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100">
-                  🖨️ Print
-                </button>
-                <button onClick={() => downloadSPAWord(t)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100">
-                  📝 Word
-                </button>
-                <span className="text-xs text-slate-300 self-center">|</span>
-                <span className="text-xs text-slate-400 self-center mr-0.5">Board Res:</span>
-                <button onClick={() => printBoardRes(t)} disabled={brBusy}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 disabled:opacity-50">
-                  {brBusy ? '⏳' : '🖨️'} Print
-                </button>
-                <button onClick={() => downloadBRWord(t)} disabled={brBusy}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 disabled:opacity-50">
-                  📝 Word
-                </button>
-              </div>
+              <button onClick={() => setViewT(t)}
+                className="mt-3 text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
+                👁️ View Full Details
+              </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* ── Board Meeting Conflict Warning Modal ── */}
+      {/* ── Board Meeting Conflict Warning ── */}
       {brConflict && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4"
           onClick={() => setBrConflict(null)}>
@@ -1798,26 +1815,21 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
               <div>
                 <h3 className="font-bold text-slate-800 text-sm">Board Meeting Already Exists</h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  A Board Meeting is already saved for <strong>{brConflict.meeting.meetingDate}</strong>:
-                  <br /><span className="font-semibold text-slate-700">"{brConflict.meeting.title}"</span>
+                  A Board Meeting is already saved for <strong>{brConflict.meeting.meetingDate}</strong>:<br />
+                  <span className="font-semibold text-slate-700">"{brConflict.meeting.title}"</span>
                 </p>
               </div>
             </div>
             <p className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
-              If this transfer was approved in that meeting, you may already have the board resolution there.
-              Generating a separate board resolution document here will not create a new meeting record — it is for printing/download only.
+              If this transfer was approved in that meeting, the resolution may already be saved there.
+              Generating here is for printing/download only — it will not create a duplicate meeting record.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setBrConflict(null)}
                 className="flex-1 py-2.5 rounded-xl font-semibold text-slate-700 text-sm border border-slate-200 hover:bg-slate-50">
                 Cancel
               </button>
-              <button
-                onClick={() => {
-                  const action = brConflict.action;
-                  setBrConflict(null);
-                  action();
-                }}
+              <button onClick={() => { const a = brConflict.action; setBrConflict(null); a(); }}
                 className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
                 style={{ background: 'linear-gradient(135deg,#0f766e,#0d9488)' }}>
                 Generate Anyway
@@ -1833,7 +1845,6 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
           onClick={() => setViewT(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div className="px-6 py-4 flex items-center justify-between rounded-t-2xl sticky top-0 z-10"
               style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
               <div>
@@ -1844,14 +1855,12 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Shares */}
               <div className="bg-emerald-50 rounded-xl p-4 text-center">
                 <div className="text-3xl font-black text-emerald-700">{(viewT.numberOfShares||0).toLocaleString('en-IN')}</div>
                 <div className="text-xs text-emerald-600 mt-1">{viewT.shareType || 'Equity'} Shares Transferred</div>
                 {viewT.transferDate && <div className="text-xs text-slate-500 mt-0.5">on {viewT.transferDate}</div>}
               </div>
 
-              {/* Transferor */}
               <div>
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📤 Transferor</p>
                 <div className="bg-slate-50 rounded-xl px-4 py-3 space-y-1 text-xs">
@@ -1863,7 +1872,6 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                 </div>
               </div>
 
-              {/* Transferee */}
               <div>
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📥 Transferee</p>
                 <div className="bg-emerald-50 rounded-xl px-4 py-3 space-y-1 text-xs">
@@ -1875,7 +1883,6 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                 </div>
               </div>
 
-              {/* Distinctive Nos */}
               {viewT.distinctiveFrom && viewT.distinctiveTo && (
                 <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs font-mono text-blue-700 text-center">
                   <span className="font-bold not-italic">Distinctive Nos:</span>&nbsp;
@@ -1883,7 +1890,6 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                 </div>
               )}
 
-              {/* Financials */}
               {(viewT.considerationPerShare || viewT.totalConsideration || viewT.stampDuty) && (
                 <div>
                   <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">💰 Financials</p>
@@ -1896,7 +1902,6 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                 </div>
               )}
 
-              {/* Signatories */}
               {viewT.signingDirectorsJson && (() => {
                 const sigs = getSigners(viewT);
                 if (!sigs.length) return null;
@@ -1905,7 +1910,7 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">✍️ Signatories</p>
                     <div className="space-y-1">
                       {sigs.map((s, i) => (
-                        <div key={i} className="text-xs flex gap-2">
+                        <div key={i} className="text-xs flex gap-2 flex-wrap">
                           <span className="font-semibold text-slate-700">{s.name}</span>
                           <span className="text-slate-400">{s.designation}</span>
                           {s.din && <span className="font-mono text-slate-400">DIN: {s.din}</span>}
@@ -1915,46 +1920,48 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                   </div>
                 );
               })()}
+
+              {/* Document actions in modal */}
+              <div>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">📄 Documents</p>
+                <div className="bg-slate-50 rounded-xl px-4 py-2 space-y-0">
+                  <DocActionRow
+                    label="Form SH-4"
+                    busyKey={`${viewT.id}_sh4`} activeBusy={busyKey}
+                    onPrint={async () => openPrint(await buildSH4Html(viewT))}
+                    onPdf={async () => downloadPDF(await buildSH4Html(viewT), 'sh4', sh4File(viewT), 'Form SH-4', `${viewT.id}_sh4`)}
+                    onWord={async () => downloadWordDoc(await buildSH4Html(viewT), sh4File(viewT), 'Form SH-4', `${viewT.id}_sh4`)}
+                  />
+                  <DocActionRow
+                    label="Share Certificate"
+                    busyKey={`${viewT.id}_cert`} activeBusy={busyKey}
+                    onPrint={async () => openPrint(await buildCertHtml(viewT))}
+                    onPdf={async () => downloadPDF(await buildCertHtml(viewT), 'share-certificate', certFile(viewT), 'Share Certificate', `${viewT.id}_cert`)}
+                    onWord={async () => downloadWordDoc(await buildCertHtml(viewT), certFile(viewT), 'Share Certificate', `${viewT.id}_cert`)}
+                  />
+                  <DocActionRow
+                    label="SPA"
+                    busyKey={`${viewT.id}_spa`} activeBusy={busyKey}
+                    onPrint={async () => openPrint(await buildSPAHtml(viewT))}
+                    onPdf={async () => downloadPDF(await buildSPAHtml(viewT), 'spa', spaFile(viewT), 'Share Purchase Agreement', `${viewT.id}_spa`)}
+                    onWord={async () => downloadWordDoc(await buildSPAHtml(viewT), spaFile(viewT), 'Share Purchase Agreement', `${viewT.id}_spa`)}
+                  />
+                  <DocActionRow
+                    label="Board Resolution"
+                    busyKey={`${viewT.id}_br`} activeBusy={busyKey}
+                    onPrint={() => checkBrConflict(viewT, async () => openPrint(await buildBRHtml(viewT)))}
+                    onPdf={() => checkBrConflict(viewT, async () => downloadPDF(await buildBRHtml(viewT), 'board-resolution', brFile(viewT), 'Board Resolution', `${viewT.id}_br`))}
+                    onWord={() => checkBrConflict(viewT, async () => downloadWordDoc(await buildBRHtml(viewT), brFile(viewT), 'Board Resolution — Share Transfer', `${viewT.id}_br`))}
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Footer buttons */}
-            <div className="px-5 pb-5 space-y-2">
-              <div className="flex gap-2">
-                <button onClick={() => printSH4(viewT)}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
-                  style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
-                  🖨️ Print SH-4
-                </button>
-                <button onClick={() => printNewCert(viewT)}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
-                  style={{ background: 'linear-gradient(135deg,#1e40af,#1d4ed8)' }}>
-                  📜 New Cert
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => printSPA(viewT)}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
-                  style={{ background: 'linear-gradient(135deg,#5b21b6,#7c3aed)' }}>
-                  📃 Print SPA
-                </button>
-                <button onClick={() => downloadSPAWord(viewT)}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
-                  style={{ background: 'linear-gradient(135deg,#6d28d9,#8b5cf6)' }}>
-                  📝 SPA Word
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => printBoardRes(viewT)} disabled={brBusy}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg,#0f766e,#0d9488)' }}>
-                  📋 Print Board Res
-                </button>
-                <button onClick={() => downloadBRWord(viewT)} disabled={brBusy}
-                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg,#0f766e,#0d9488)' }}>
-                  📝 BR Word
-                </button>
-              </div>
+            <div className="px-5 pb-5">
+              <button onClick={() => setViewT(null)}
+                className="w-full py-2.5 rounded-xl font-semibold text-slate-700 text-sm border border-slate-200 hover:bg-slate-50">
+                Close
+              </button>
             </div>
           </div>
         </div>
