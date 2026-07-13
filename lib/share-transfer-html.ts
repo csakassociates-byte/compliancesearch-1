@@ -92,14 +92,17 @@ export function padNum(n: number | string, len = 5): string {
 
 export function fmtDate(d: string): { day: string; month: string; year: string; full: string } {
   if (!d) return { day: '___', month: '___________', year: '_______', full: '___________' };
-  const dt = new Date(d);
+  // Parse as local date to avoid UTC-offset off-by-one errors
+  const parts = d.slice(0, 10).split('-').map(Number);
+  const [y, m, day] = parts.length === 3 ? parts : [0, 0, 0];
   const months = ['January','February','March','April','May','June',
                   'July','August','September','October','November','December'];
+  if (!y) return { day: '___', month: '___________', year: '_______', full: '___________' };
   return {
-    day:   String(dt.getDate()),
-    month: months[dt.getMonth()],
-    year:  String(dt.getFullYear()),
-    full:  `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`,
+    day:   String(day),
+    month: months[m - 1] ?? '___',
+    year:  String(y),
+    full:  `${day} ${months[m - 1] ?? '___'} ${y}`,
   };
 }
 

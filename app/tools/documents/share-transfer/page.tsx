@@ -258,6 +258,7 @@ export default function ShareTransferPage() {
   const [boardResDoc, setBoardResDoc] = useState<{ meetingDocId: string; resolutionNo: string } | null>(null);
   const [savingBoardRes, setSavingBoardRes] = useState(false);
   const [stampDutyManual, setStampDutyManual] = useState(false);
+  const [stampDutyRate, setStampDutyRate] = useState(0.00015); // 0.015% default (Finance Act 2020)
 
   const upd = (patch: Partial<F>) => setF(prev => ({ ...prev, ...patch }));
 
@@ -1218,7 +1219,7 @@ export default function ShareTransferPage() {
                       const val = parseInt(e.target.value) || 0;
                       const patch: Partial<F> = { sharesToTransfer: val };
                       if (!stampDutyManual && f.considerationPerShare && val > 0) {
-                        patch.stampDuty = (parseFloat(f.considerationPerShare) * val * 0.00015).toFixed(2);
+                        patch.stampDuty = (parseFloat(f.considerationPerShare) * val * stampDutyRate).toFixed(2);
                       }
                       upd(patch);
                     }} />
@@ -1267,7 +1268,7 @@ export default function ShareTransferPage() {
                         const val = e.target.value;
                         const patch: Partial<F> = { considerationPerShare: val };
                         if (!stampDutyManual && val && f.sharesToTransfer > 0) {
-                          patch.stampDuty = (parseFloat(val) * f.sharesToTransfer * 0.00015).toFixed(2);
+                          patch.stampDuty = (parseFloat(val) * f.sharesToTransfer * stampDutyRate).toFixed(2);
                         }
                         upd(patch);
                       }}
@@ -1276,13 +1277,28 @@ export default function ShareTransferPage() {
                   <div>
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold text-slate-700">
+                        <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 flex-wrap">
                           Stamp Duty (₹)
                           {!stampDutyManual && totalConsideration && (
-                            <span className="ml-2 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
-                              Auto · 0.015%
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                              Auto · {(stampDutyRate * 100).toFixed(4).replace(/\.?0+$/, '')}%
                             </span>
                           )}
+                          <select
+                            className="text-[10px] border border-slate-200 rounded px-1 py-0.5 text-slate-600 bg-white"
+                            value={stampDutyRate}
+                            onChange={e => {
+                              const rate = parseFloat(e.target.value);
+                              setStampDutyRate(rate);
+                              if (!stampDutyManual && f.considerationPerShare && f.sharesToTransfer > 0) {
+                                upd({ stampDuty: (parseFloat(f.considerationPerShare) * f.sharesToTransfer * rate).toFixed(2) });
+                              }
+                            }}>
+                            <option value={0.00015}>0.015% (Finance Act 2020)</option>
+                            <option value={0.0025}>0.25% (old rate)</option>
+                            <option value={0.005}>0.5%</option>
+                            <option value={0.01}>1%</option>
+                          </select>
                         </p>
                       </div>
                       {stampDutyManual && (

@@ -62,6 +62,10 @@ export async function DELETE(
   const userId = (session.user as { id: string }).id;
   const { id } = await params;
 
+  // Orphan cleanup — remove related shareholders before deleting the person
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM csi_shareholders WHERE "personId" = $1 AND "userId" = $2`, id, userId
+  );
   await prisma.$executeRawUnsafe(
     `DELETE FROM csi_persons WHERE id = $1 AND "userId" = $2`, id, userId
   );

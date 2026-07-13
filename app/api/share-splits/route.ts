@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
       certNo,
       distFrom, distTo,
       part.shares, orig.shareType || 'Equity',
-      orig.dateOfAcquisition || body.splitDate || null,
+      body.splitDate || orig.dateOfAcquisition || null,
       orig.nominalValue || '10', orig.paidUpValue || '10',
       orig.issuePlace || null,
       orig.signingDirectorsJson || '[]',
