@@ -199,19 +199,13 @@ export async function POST(req: NextRequest) {
   const transferFrom = transferorSh.distinctiveFrom;
   const transferTo   = transferorSh.distinctiveTo;
 
-  /* ── 3. Get next folio & cert numbers ── */
-  const [folioResult] = await prisma.$queryRawUnsafe<Array<{ maxFolio: string }>>(
-    `SELECT MAX(CAST(NULLIF(REGEXP_REPLACE("folioNumber", '[^0-9]', '', 'g'), '') AS INT)) as "maxFolio"
-     FROM csi_shareholders WHERE "companyId" = $1 AND "userId" = $2`,
-    body.companyId, userId
-  );
+  /* ── 3. Get next certificate number ── */
   const [certResult] = await prisma.$queryRawUnsafe<Array<{ maxCert: string }>>(
     `SELECT MAX(CAST(NULLIF(REGEXP_REPLACE("certificateNumber", '[^0-9]', '', 'g'), '') AS INT)) as "maxCert"
      FROM csi_shareholders WHERE "companyId" = $1 AND "userId" = $2`,
     body.companyId, userId
   );
-  const newFolioNo = String((parseInt(folioResult?.maxFolio || '0') || 0) + 1).padStart(2, '0');
-  const newCertNo  = String((parseInt(certResult?.maxCert  || '0') || 0) + 1).padStart(2, '0');
+  const newCertNo = String((parseInt(certResult?.maxCert || '0') || 0) + 1).padStart(2, '0');
 
   /* ── 4. Ensure transferee person exists + save/update KYC ── */
   let transfereePersonId = body.transfereePersonId;
@@ -264,6 +258,31 @@ export async function POST(req: NextRequest) {
       torPersonId, userId,
       body.transferorFatherName || '', body.transferorAddress || ''
     ).catch(() => {}); // non-fatal
+  }
+
+  /* ── 4c. Determine folio number for transferee ──
+     Folio number is permanent — once assigned it never changes.
+     If the transferee already holds shares in this company, reuse their existing folio.
+     Only mint a new folio number for a first-time shareholder. ── */
+  let newFolioNo: string;
+  const [folioResult] = await prisma.$queryRawUnsafe<Array<{ maxFolio: string }>>(
+    `SELECT MAX(CAST(NULLIF(REGEXP_REPLACE("folioNumber", '[^0-9]', '', 'g'), '') AS INT)) as "maxFolio"
+     FROM csi_shareholders WHERE "companyId" = $1 AND "userId" = $2`,
+    body.companyId, userId
+  );
+  const nextNewFolio = String((parseInt(folioResult?.maxFolio || '0') || 0) + 1).padStart(2, '0');
+
+  if (transfereePersonId) {
+    const [existingFolioRow] = await prisma.$queryRawUnsafe<Array<{ folioNumber: string }>>(
+      `SELECT "folioNumber" FROM csi_shareholders
+       WHERE "personId" = $1 AND "companyId" = $2 AND "userId" = $3
+         AND "folioNumber" IS NOT NULL
+       ORDER BY "createdAt" ASC LIMIT 1`,
+      transfereePersonId, body.companyId, userId
+    );
+    newFolioNo = existingFolioRow?.folioNumber || nextNewFolio;
+  } else {
+    newFolioNo = nextNewFolio;
   }
 
   const signingJson = body.signingDirectorsJson || transferorSh.signingDirectorsJson || '[]';
