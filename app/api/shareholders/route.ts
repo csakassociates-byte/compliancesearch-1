@@ -114,15 +114,17 @@ export async function POST(req: NextRequest) {
 
   if (!personId) return NextResponse.json({ error: "personId or personName required" }, { status: 400 });
 
-  // Upsert shareholder by (userId + companyId + personId + certificateNumber)
-  const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    `SELECT id FROM csi_shareholders
-     WHERE "userId" = $1 AND "companyId" = $2 AND "personId" = $3
-     ${body.certificateNumber ? `AND "certificateNumber" = $4` : ``}
-     LIMIT 1`,
-    userId, body.companyId, personId,
-    ...(body.certificateNumber ? [body.certificateNumber] : [])
-  );
+  // Upsert by (userId + companyId + personId + certificateNumber).
+  // Without a cert number we cannot safely identify which row to update,
+  // so skip the lookup and always INSERT.
+  const existing = body.certificateNumber
+    ? await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM csi_shareholders
+         WHERE "userId" = $1 AND "companyId" = $2 AND "personId" = $3
+           AND "certificateNumber" = $4 LIMIT 1`,
+        userId, body.companyId, personId, body.certificateNumber
+      )
+    : [];
 
   if (existing.length > 0) {
     await prisma.$executeRawUnsafe(

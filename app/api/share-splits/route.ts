@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
   const [orig] = await prisma.$queryRawUnsafe<Array<{
     id: string; personId: string; folioNumber: string; certificateNumber: string;
     numberOfShares: number; distinctiveFrom: number; distinctiveTo: number;
-    shareType: string; nominalValue: string; paidUpValue: string;
+    shareType: string; nominalValue: string; paidUpValue: string; issuePlace: string | null;
     signingDirectorsJson: string; dateOfAcquisition: string; certStatus: string;
   }>>(
     `SELECT * FROM csi_shareholders WHERE id = $1 AND "userId" = $2`,
@@ -168,18 +168,19 @@ export async function POST(req: NextRequest) {
          "distinctiveFrom", "distinctiveTo",
          "numberOfShares", "shareType",
          "dateOfAcquisition",
-         "nominalValue", "paidUpValue",
+         "nominalValue", "paidUpValue", "issuePlace",
          "signingDirectorsJson",
          "certStatus", "splitFromId", "splitEventId",
          "transferStatus"
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'active',$15,$16,NULL)`,
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'active',$16,$17,NULL)`,
       newShId, orig.personId, userId, body.companyId,
-      orig.folioNumber,        // same folio — same shareholder
+      orig.folioNumber,
       certNo,
       distFrom, distTo,
       part.shares, orig.shareType || 'Equity',
       orig.dateOfAcquisition || body.splitDate || null,
       orig.nominalValue || '10', orig.paidUpValue || '10',
+      orig.issuePlace || null,
       orig.signingDirectorsJson || '[]',
       orig.id, splitEventId
     );

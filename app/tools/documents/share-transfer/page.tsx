@@ -392,6 +392,7 @@ export default function ShareTransferPage() {
         regAddress: f.regAddress,
         shareClass: f.shareType,
         nominalValue: f.nominalValue,
+        calledUpValue: f.calledUpValue || f.nominalValue,
         paidUpValue: f.paidUpValue,
       } as TransferCompany,
       transferor: {

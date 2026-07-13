@@ -18,6 +18,8 @@ export async function PATCH(
     "folioNumber","certificateNumber","distinctiveFrom","distinctiveTo",
     "numberOfShares","shareType","dateOfAcquisition","dateOfTransfer",
     "transferFrom","nomineeName","nomineeRelation","nomineeAddress",
+    "nominalValue","paidUpValue","issuePlace","signingDirectorsJson",
+    "certStatus","transferStatus",
   ];
 
   const setClauses: string[] = [];

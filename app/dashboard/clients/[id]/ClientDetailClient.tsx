@@ -511,7 +511,7 @@ function printShareCertificate(sh: ShareholderRow & { personName?: string }, com
   // Build shareholder entry
   const certShareholder = {
     name:   sh.personName || '',
-    din:    sh.din || sh.panNo || '',
+    din:    sh.din || '',
     shares: sh.numberOfShares || 0,
   };
 
@@ -528,7 +528,7 @@ function printShareCertificate(sh: ShareholderRow & { personName?: string }, com
     from:     sh.distinctiveFrom || 1,
     to:       sh.distinctiveTo   || (sh.numberOfShares || 0),
     fromPad:  String(sh.distinctiveFrom || 1).padStart(5, '0'),
-    toPad:    String(sh.distinctiveTo   || sh.numberOfShares || 0),
+    toPad:    String(sh.distinctiveTo   || sh.numberOfShares || 0).padStart(5, '0'),
   };
   void certIdx;
 

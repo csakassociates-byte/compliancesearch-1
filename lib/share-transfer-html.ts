@@ -10,9 +10,10 @@ export interface TransferCompany {
   companyName: string;
   cin: string;
   regAddress: string;
-  shareClass: string;   // 'Equity' | 'Preference'
-  nominalValue: string; // ₹ per share
-  paidUpValue: string;  // ₹ per share
+  shareClass: string;    // 'Equity' | 'Preference'
+  nominalValue: string;  // ₹ per share (face value)
+  calledUpValue?: string; // ₹ per share (called-up — column 3 in SH-4)
+  paidUpValue: string;   // ₹ per share (paid-up  — column 4 in SH-4)
 }
 
 export interface Transferor {
@@ -308,7 +309,7 @@ function buildPage1(
         <tr>
           <td class="dat tc">${company.shareClass || 'Equity'} Shares</td>
           <td class="dat tc">Rs.&nbsp;${company.nominalValue || '___'}</td>
-          <td class="dat tc">Rs.&nbsp;${company.nominalValue || '___'}</td>
+          <td class="dat tc">Rs.&nbsp;${company.calledUpValue || company.nominalValue || '___'}</td>
           <td class="dat tc">Rs.&nbsp;${company.paidUpValue || '___'}</td>
         </tr>
         <tr>
