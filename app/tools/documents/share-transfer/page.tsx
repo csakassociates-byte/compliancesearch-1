@@ -171,6 +171,7 @@ export default function ShareTransferPage() {
   const [loadingSh, setLoadingSh] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [wordLoading, setWordLoading] = useState(false);
   const [confirmPending, setConfirmPending] = useState(false);
   const [availableDirectors, setAvailableDirectors] = useState<TransferSigner[]>([]);
   const [error, setError] = useState("");
@@ -665,7 +666,7 @@ export default function ShareTransferPage() {
         body: JSON.stringify({
           html,
           filename,
-          docType: "sh4",
+          docType: "spa",
           companyName: f.companyName,
           docTitle: "Share Purchase Agreement",
           dirs: [],
@@ -683,6 +684,35 @@ export default function ShareTransferPage() {
       alert("Failed to download SPA PDF. Please use the Print option instead.");
     } finally {
       setPdfLoading(false);
+    }
+  }
+
+  /* Download SPA as Word (.docx) */
+  async function downloadSPAWord(certNoOverride?: string) {
+    setWordLoading(true);
+    try {
+      const a = buildSPAArgs(certNoOverride);
+      const html = generateSPAHTML(a.company, a.seller, a.buyer, a.details, a.witnesses);
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const dateStr = f.transferDate?.replace(/-/g, "") || "undated";
+      const filename = `SPA_${safeName}_${dateStr}`;
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle: "Share Purchase Agreement", filename }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${filename}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to generate Word file. Please use the Print option instead.");
+    } finally {
+      setWordLoading(false);
     }
   }
 
@@ -1564,15 +1594,20 @@ export default function ShareTransferPage() {
                 <p className="text-xs text-slate-500 mb-4">
                   Legal contract between Seller and Buyer — executed alongside Form SH-4. Includes consideration, payment mode, reps & warranties.
                 </p>
-                <div className="flex gap-3">
+                <div className="flex gap-2 flex-wrap">
                   <button onClick={() => printSPA(done.newCertNo)}
-                    className="flex-1 py-2.5 rounded-xl border-2 border-amber-400 text-amber-700 font-bold text-sm hover:bg-amber-100 transition-colors">
-                    🖨️ Print SPA
+                    className="flex-1 min-w-[90px] py-2.5 rounded-xl border-2 border-amber-400 text-amber-700 font-bold text-sm hover:bg-amber-100 transition-colors">
+                    🖨️ Print
                   </button>
-                  <button onClick={() => downloadSPAPDF(done.newCertNo)} disabled={pdfLoading}
-                    className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 transition-all"
+                  <button onClick={() => downloadSPAPDF(done.newCertNo)} disabled={pdfLoading || wordLoading}
+                    className="flex-1 min-w-[90px] py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 transition-all"
                     style={{ background: "linear-gradient(135deg,#92400e,#b45309)" }}>
-                    {pdfLoading ? "⏳..." : "⬇️ Download SPA (PDF)"}
+                    {pdfLoading ? "⏳…" : "⬇️ PDF"}
+                  </button>
+                  <button onClick={() => downloadSPAWord(done.newCertNo)} disabled={pdfLoading || wordLoading}
+                    className="flex-1 min-w-[90px] py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 transition-all"
+                    style={{ background: "linear-gradient(135deg,#1e3a5f,#1d4ed8)" }}>
+                    {wordLoading ? "⏳…" : "📝 Word"}
                   </button>
                 </div>
               </div>
