@@ -174,7 +174,10 @@ export default function ClientsListClient() {
                     e.preventDefault();
                     e.stopPropagation();
                     if (deleting === c.id) return;
-                    if (!confirm(`Delete "${c.companyName}"?\n\nThis will remove the company and all its saved data. This cannot be undone.`)) return;
+                    const warn = c.docCount > 0
+                      ? `${c.docCount} saved meeting${c.docCount !== 1 ? 's' : ''} will also be permanently deleted.`
+                      : `No meetings are saved for this company.`;
+                    if (!confirm(`Delete "${c.companyName}"?\n\n${warn}\n\nThis cannot be undone.`)) return;
                     setDeleting(c.id);
                     const ok = await deleteCompany(c.id);
                     if (ok) {
