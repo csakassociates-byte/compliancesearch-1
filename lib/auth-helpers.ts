@@ -5,7 +5,9 @@ export function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-export async function createOtp(email: string, purpose: "signup" | "forgot_password"): Promise<string> {
+export type OtpPurpose = "signup" | "forgot_password" | "company_delete";
+
+export async function createOtp(email: string, purpose: OtpPurpose): Promise<string> {
   // Invalidate old OTPs for same email+purpose
   await prisma.$executeRawUnsafe(
     `UPDATE csi_otps SET used = true WHERE email = $1 AND purpose = $2 AND used = false`,
@@ -21,7 +23,7 @@ export async function createOtp(email: string, purpose: "signup" | "forgot_passw
   return code;
 }
 
-export async function verifyOtp(email: string, code: string, purpose: "signup" | "forgot_password"): Promise<boolean> {
+export async function verifyOtp(email: string, code: string, purpose: OtpPurpose): Promise<boolean> {
   const rows = await prisma.$queryRawUnsafe<Array<{id:string; "expiresAt": Date; used: boolean}>>(
     `SELECT id, "expiresAt", used FROM csi_otps WHERE email = $1 AND code = $2 AND purpose = $3 ORDER BY "createdAt" DESC LIMIT 1`,
     email, code, purpose
