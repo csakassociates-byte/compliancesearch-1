@@ -131,6 +131,12 @@ export async function GET(req: NextRequest) {
     if (type === "director") return NextResponse.json({ persons: merged });
   }
 
+  // ── type=all: return every csi_persons row for this company ─────
+  // Used by AddShareholderModal quick-select and openKYC (C-3, C-4, M-9 fix)
+  if (type === "all") {
+    return NextResponse.json({ persons: kycRows });
+  }
+
   // ── Shareholders from csi_persons ────────────────────────────────
   if (type === "shareholder" || !type) {
     const shareholders = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(

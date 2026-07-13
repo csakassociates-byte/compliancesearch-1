@@ -1856,7 +1856,12 @@ function DirectorsTab({ companyId, company, onSwitchTab }: { companyId: string; 
     const id = await ensureKycRecord(p);
     if (!id) return;
     setSyncing(id);
-    await fetch(`/api/persons/${id}/sync`, { method: 'POST' });
+    // H-6: pass direction so only isShareholder=true is set (not isDirector)
+    await fetch(`/api/persons/${id}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ direction: 'toShareholder' }),
+    });
     setSyncing(null);
     await load();
     onSwitchTab('shareholders');
@@ -2135,7 +2140,9 @@ function AddShareholderModal({
   onSaved,
 }: { companyId: string; onClose: () => void; onSaved: () => void }) {
   const INP = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
-  const [persons, setPersons] = useState<Array<{ id: string; name: string; panNo?: string; din?: string; folioNumber?: string }>>([]);
+  const [persons, setPersons] = useState<Array<{ id: string; name: string; panNo?: string; din?: string }>>([]);
+  // C-3: store loaded shareholders so selectPerson can look up existing folio by personId
+  const [loadedShareholders, setLoadedShareholders] = useState<Array<{ personId?: string; folioNumber?: string }>>([]);
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [name, setName]         = useState('');
   const [pan, setPan]           = useState('');
@@ -2151,28 +2158,28 @@ function AddShareholderModal({
   const [saving, setSaving]     = useState(false);
 
   useEffect(() => {
-    fetch(`/api/persons?companyId=${companyId}`)
+    // C-3: use type=all so both directors and pure shareholders appear in quick-select
+    fetch(`/api/persons?companyId=${companyId}&type=all`)
       .then(r => r.json())
       .then(d => setPersons((d.persons || []).filter((p: { name?: string }) => p.name)))
       .catch(() => {});
-    // Suggest next folio & cert numbers
+    // Suggest next folio & cert numbers; also store all shareholders for folio lookup
     fetch(`/api/shareholders?companyId=${companyId}`)
       .then(r => r.json())
       .then(d => {
-        const shs = d.shareholders || [];
-        const maxFolio = shs.reduce((m: number, s: { folioNumber?: string }) => {
+        const shs: Array<{ personId?: string; folioNumber?: string; certificateNumber?: string; distinctiveTo?: number }> = d.shareholders || [];
+        setLoadedShareholders(shs);
+        const maxFolio = shs.reduce((m, s) => {
           const n = parseInt((s.folioNumber || '').replace(/\D/g, '') || '0');
           return n > m ? n : m;
         }, 0);
-        const maxCert = shs.reduce((m: number, s: { certificateNumber?: string }) => {
+        const maxCert = shs.reduce((m, s) => {
           const n = parseInt((s.certificateNumber || '').replace(/\D/g, '') || '0');
           return n > m ? n : m;
         }, 0);
         setFolio(String(maxFolio + 1).padStart(2, '0'));
         setCertNo(String(maxCert + 1).padStart(2, '0'));
-        const maxDist = shs.reduce((m: number, s: { distinctiveTo?: number }) => {
-          return (s.distinctiveTo || 0) > m ? (s.distinctiveTo || 0) : m;
-        }, 0);
+        const maxDist = shs.reduce((m, s) => (s.distinctiveTo || 0) > m ? (s.distinctiveTo || 0) : m, 0);
         setDistFrom(String(maxDist + 1));
       })
       .catch(() => {});
@@ -2185,12 +2192,13 @@ function AddShareholderModal({
     if (!isNaN(from) && !isNaN(sh) && sh > 0) setDistTo(String(from + sh - 1));
   }, [distFrom, shares]);
 
-  function selectPerson(p: { id: string; name: string; panNo?: string; din?: string; folioNumber?: string }) {
+  function selectPerson(p: { id: string; name: string; panNo?: string; din?: string }) {
     setSelectedPersonId(p.id);
     setName(p.name);
     setPan(p.panNo || '');
-    // If person already has a folio in this company, reuse it
-    if (p.folioNumber) setFolio(p.folioNumber);
+    // C-3: look up existing folio from already-loaded shareholders (folio lives in csi_shareholders, not csi_persons)
+    const existingFolio = loadedShareholders.find(s => s.personId === p.id)?.folioNumber;
+    if (existingFolio) setFolio(existingFolio);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -2204,6 +2212,7 @@ function AddShareholderModal({
         companyId,
         personId: selectedPersonId || undefined,
         personName: name.trim(),
+        panNo: pan.trim() || null,   // C-2: PAN now saved to csi_persons
         folioNumber: folio || null,
         certificateNumber: certNo || null,
         distinctiveFrom: distFrom ? parseInt(distFrom) : null,
@@ -2394,7 +2403,12 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
   async function handleSyncToDirector(sh: ShareholderRow) {
     if (!sh.personId) return;
     setSyncing(sh.personId);
-    await fetch(`/api/persons/${sh.personId}/sync`, { method: 'POST' });
+    // H-6: pass direction so only isDirector=true is set (not isShareholder)
+    await fetch(`/api/persons/${sh.personId}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ direction: 'toDirector' }),
+    });
     setSyncing(null);
     load();
   }
@@ -2407,7 +2421,8 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
 
   async function openKYC(sh: ShareholderRow) {
     if (!sh.personId) return;
-    const r = await fetch(`/api/persons?companyId=${companyId}`);
+    // C-4: use type=all so non-director shareholders are found too
+    const r = await fetch(`/api/persons?companyId=${companyId}&type=all`);
     const d = r.ok ? await r.json() : { persons: [] };
     const person = (d.persons as PersonKYC[]).find(p => p.id === sh.personId);
     if (person) setEditPerson(person);

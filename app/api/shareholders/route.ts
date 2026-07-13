@@ -25,16 +25,21 @@ export async function GET(req: NextRequest) {
     userId, companyId
   );
 
-  // Calculate total shares for % holding
-  const totalShares = (shareholders as Array<{ numberOfShares?: number }>)
+  // totalShares = only active certificates (cancelled/split certs must not inflate the denominator)
+  const rows = shareholders as Array<{ numberOfShares?: number; certStatus?: string }>;
+  const totalShares = rows
+    .filter(s => s.certStatus !== 'cancelled' && s.certStatus !== 'split')
     .reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
 
-  const result = (shareholders as Array<Record<string, unknown>>).map(s => ({
-    ...s,
-    holdingPercent: totalShares > 0
-      ? (((s.numberOfShares as number) || 0) / totalShares * 100).toFixed(2)
-      : "0.00",
-  }));
+  const result = (shareholders as Array<Record<string, unknown>>).map(s => {
+    const isInactive = s.certStatus === 'cancelled' || s.certStatus === 'split';
+    return {
+      ...s,
+      holdingPercent: (isInactive || totalShares === 0)
+        ? "0.00"
+        : (((s.numberOfShares as number) || 0) / totalShares * 100).toFixed(2),
+    };
+  });
 
   return NextResponse.json({ shareholders: result, totalShares });
 }
@@ -56,6 +61,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as {
     personId?: string;
     personName?: string;
+    panNo?: string;        // C-2: saved to csi_persons
     companyId: string;
     folioNumber?: string;
     certificateNumber?: string;
@@ -91,10 +97,19 @@ export async function POST(req: NextRequest) {
     } else {
       personId = crypto.randomUUID();
       await prisma.$executeRawUnsafe(
-        `INSERT INTO csi_persons (id, "userId", "companyId", name, "isShareholder") VALUES ($1,$2,$3,$4,true)`,
-        personId, userId, body.companyId, body.personName
+        `INSERT INTO csi_persons (id, "userId", "companyId", name, "panNo", "isShareholder") VALUES ($1,$2,$3,$4,$5,true)`,
+        personId, userId, body.companyId, body.personName, body.panNo || null
       );
     }
+  }
+
+  // C-2: If person already exists and PAN provided, update it
+  if (personId && body.panNo) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE csi_persons SET "panNo" = COALESCE(NULLIF($3,''), "panNo"), "updatedAt" = NOW()
+       WHERE id = $1 AND "userId" = $2`,
+      personId, userId, body.panNo
+    ).catch(() => {});
   }
 
   if (!personId) return NextResponse.json({ error: "personId or personName required" }, { status: 400 });

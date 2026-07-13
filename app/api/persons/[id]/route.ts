@@ -22,6 +22,7 @@ export async function PATCH(
     "din","dateOfJoining","designation","directorCategory",
     "nomineeName","nomineeRelation","nomineeAddress",
     "dematDpId","dematClientId","isDirector","isShareholder",
+    "signatureBase64",  // M-1: was missing — signature can now be updated via PATCH
   ];
 
   const setClauses: string[] = [];
