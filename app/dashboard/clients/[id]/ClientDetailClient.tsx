@@ -1938,10 +1938,12 @@ function MasterDataModal({ cin, onClose }: { cin: string; onClose: () => void })
 
   function handleDownload() {
     if (!data) return;
-    const w = window.open('', '_blank', 'width=900,height=700');
-    if (!w) { alert('Pop-up blocked — allow pop-ups to download.'); return; }
-    w.document.write(buildMasterDataHTML(data));
-    w.document.close();
+    const html = buildMasterDataHTML(data);
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const w = window.open(url, "_blank");
+    if (w) { w.addEventListener("load", () => { w.focus(); w.print(); }); }
+    else { alert("Pop-up blocked — allow pop-ups to download."); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 
   const Row = ({ label, val, mono }: { label: string; val?: string | null; mono?: boolean }) =>
