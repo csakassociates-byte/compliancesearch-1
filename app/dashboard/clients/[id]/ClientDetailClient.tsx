@@ -540,21 +540,45 @@ function printShareCertificate(sh: ShareholderRow & { personName?: string }, com
 
 /* ── Print: All Shareholders list ─────────────────────── */
 function printAllShareholders(shareholders: (ShareholderRow & { personName?: string })[], company: Company, totalShares: number) {
-  const rows = shareholders.map((sh, i) => `
-    <tr>
+  // Active shares = only non-cancelled, non-split certs
+  const activeShares = shareholders
+    .filter(sh => sh.certStatus !== 'cancelled' && sh.certStatus !== 'split')
+    .reduce((sum, sh) => sum + (sh.numberOfShares || 0), 0);
+  const holdingBase = activeShares || totalShares;
+
+  const rows = shareholders.map((sh, i) => {
+    const isCancelled = sh.certStatus === 'cancelled' || sh.certStatus === 'split';
+    // Status label & colour
+    let statusLabel = 'Active';
+    let statusColor = '#15803d';
+    if (sh.certStatus === 'cancelled') {
+      statusLabel = (sh.cancelledReason === 'transferred' || sh.transferStatus === 'transferred') ? 'Transferred' : 'Cancelled';
+      statusColor = '#dc2626';
+    } else if (sh.certStatus === 'split') {
+      statusLabel = 'Split';
+      statusColor = '#b45309';
+    } else if (sh.transferStatus === 'received') {
+      statusLabel = 'Received';
+      statusColor = '#0369a1';
+    }
+    const holdingPct = isCancelled ? '—' : (((sh.numberOfShares || 0) / holdingBase * 100).toFixed(2) + '%');
+    return `
+    <tr style="${isCancelled ? 'background:#fff5f5;color:#aaa;' : ''}">
       <td>${i+1}</td>
-      <td class="bold">${sh.personName || '—'}</td>
+      <td style="font-weight:bold;${isCancelled ? 'text-decoration:line-through;color:#bbb;' : ''}">${sh.personName || '—'}</td>
       <td style="font-family:monospace">${sh.din || sh.panNo || '—'}</td>
       <td>${sh.folioNumber || '—'}</td>
       <td>${sh.certificateNumber || '—'}</td>
-      <td class="right bold">${sh.numberOfShares ? sh.numberOfShares.toLocaleString('en-IN') : '—'}</td>
-      <td>${sh.holdingPercent || '0'}%</td>
+      <td class="right" style="font-weight:bold">${sh.numberOfShares ? sh.numberOfShares.toLocaleString('en-IN') : '—'}</td>
+      <td>${holdingPct}</td>
       <td style="font-family:monospace">${sh.distinctiveFrom && sh.distinctiveTo ? sh.distinctiveFrom+' – '+sh.distinctiveTo : '—'}</td>
       <td>${sh.dateOfAcquisition || '—'}</td>
+      <td><span style="font-weight:bold;color:${statusColor}">${statusLabel}</span></td>
       <td>${sh.mobile || '—'}</td>
       <td>${sh.email || '—'}</td>
       <td>${sh.nomineeName ? sh.nomineeName + (sh.nomineeRelation ? ' ('+sh.nomineeRelation+')' : '') : '—'}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Shareholders Register</title>
   <style>
@@ -566,9 +590,7 @@ function printAllShareholders(shareholders: (ShareholderRow & { personName?: str
     table{width:100%;border-collapse:collapse}
     th{background:#1e3a8a;color:#fff;padding:5px 4px;text-align:left;font-size:7.5pt}
     td{border:1px solid #ccc;padding:4px;vertical-align:top}
-    tr:nth-child(even) td{background:#f8f9ff}
     .right{text-align:right}
-    .bold{font-weight:bold}
     .total-row td{background:#dbeafe;font-weight:bold;border-top:2px solid #1e3a8a}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
   </style></head><body>
@@ -579,10 +601,10 @@ function printAllShareholders(shareholders: (ShareholderRow & { personName?: str
     <thead><tr>
       <th>#</th><th>Name</th><th>DIN/PAN</th><th>Folio No.</th><th>Cert No.</th>
       <th>Shares</th><th>Holding%</th><th>Distinctive Nos.</th><th>Date</th>
-      <th>Mobile</th><th>Email</th><th>Nominee</th>
+      <th>Status</th><th>Mobile</th><th>Email</th><th>Nominee</th>
     </tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr class="total-row"><td colspan="5" class="right">TOTAL:</td><td>${totalShares.toLocaleString('en-IN')}</td><td>100%</td><td colspan="5"></td></tr></tfoot>
+    <tfoot><tr class="total-row"><td colspan="5" class="right">TOTAL (Active):</td><td>${activeShares.toLocaleString('en-IN')}</td><td>100%</td><td colspan="6"></td></tr></tfoot>
   </table>
   <script>window.onload=function(){window.print();}</script>
   </body></html>`;
