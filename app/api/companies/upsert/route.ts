@@ -89,27 +89,45 @@ export async function POST(req: NextRequest) {
         orderBy: { createdAt: "asc" },
       });
 
-      // ── Step 0: Remove existing DB duplicates (same DIN or same name) ──
-      // Keep the first (oldest) record per DIN / per normalised name; delete the rest.
-      const seenDin  = new Map<string, string>(); // din  → id to keep
-      const seenName = new Map<string, string>(); // name → id to keep
+      // ── Step 0: Remove existing DB duplicates (same DIN OR same name) ──
+      // Rows are already ordered oldest-first.
+      // Cross-check both DIN and name so a no-DIN row and a same-name DIN row
+      // are correctly detected as duplicates.
+      // Prefer the row WITH a DIN (more data); otherwise keep the oldest.
+      // SCOPE: existing is already filtered to { companyId: company.id } so
+      // directors in other companies are never touched.
+      const toKeep: typeof existing[number][] = [];
+      const toDelete: string[] = [];
+
       for (const e of existing) {
         const normDin  = e.din?.trim() || null;
         const normName = e.name.trim().toUpperCase();
-        let keepId: string | null = null;
 
-        if (normDin) {
-          if (!seenDin.has(normDin)) { seenDin.set(normDin, e.id); }
-          else keepId = seenDin.get(normDin)!;
+        // Find if any already-kept row represents the same person
+        const dupIdx = toKeep.findIndex(k =>
+          (normDin && (k.din?.trim() || "") === normDin)   // same non-empty DIN
+          || k.name.trim().toUpperCase() === normName       // same normalised name
+        );
+
+        if (dupIdx === -1) {
+          // No duplicate found — keep this row
+          toKeep.push(e);
         } else {
-          if (!seenName.has(normName)) { seenName.set(normName, e.id); }
-          else keepId = seenName.get(normName)!;
+          // Duplicate of toKeep[dupIdx]
+          const kept = toKeep[dupIdx];
+          if (normDin && !(kept.din?.trim())) {
+            // Current row has DIN but the kept one doesn't → current is richer → swap
+            toDelete.push(kept.id);
+            toKeep.splice(dupIdx, 1, e);
+          } else {
+            // Kept row is equally good or better → delete current
+            toDelete.push(e.id);
+          }
         }
+      }
 
-        if (keepId && keepId !== e.id) {
-          // This row is a duplicate — delete it
-          await prisma.companyDirector.delete({ where: { id: e.id } });
-        }
+      for (const id of toDelete) {
+        await prisma.companyDirector.delete({ where: { id } }).catch(() => {});
       }
 
       // Re-fetch after cleanup
