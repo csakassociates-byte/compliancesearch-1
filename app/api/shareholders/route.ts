@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   const shareholders = await prisma.$queryRawUnsafe<unknown[]>(
     `SELECT s.*, p.name as "personName", p.din, p.mobile, p.email,
             p."panNo", p."aadhaarNo", p."isDirector", p."designation",
+            p."fatherName", p."presentAddress", p."permanentAddress", p.occupation,
             s."nominalValue", s."paidUpValue", s."issuePlace", s."signingDirectorsJson"
      FROM csi_shareholders s
      LEFT JOIN csi_persons p ON p.id = s."personId"

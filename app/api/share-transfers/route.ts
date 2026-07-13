@@ -57,13 +57,17 @@ async function ensureTables() {
   // Add witness + cert lifecycle columns if missing
   await prisma.$executeRawUnsafe(`
     ALTER TABLE csi_share_transfers
-      ADD COLUMN IF NOT EXISTS "witness1Name"    TEXT,
-      ADD COLUMN IF NOT EXISTS "witness1Address" TEXT,
-      ADD COLUMN IF NOT EXISTS "witness2Name"    TEXT,
-      ADD COLUMN IF NOT EXISTS "witness2Address" TEXT,
+      ADD COLUMN IF NOT EXISTS "witness1Name"      TEXT,
+      ADD COLUMN IF NOT EXISTS "witness1Address"   TEXT,
+      ADD COLUMN IF NOT EXISTS "witness2Name"      TEXT,
+      ADD COLUMN IF NOT EXISTS "witness2Address"   TEXT,
       ADD COLUMN IF NOT EXISTS "transfereeFather"  TEXT,
       ADD COLUMN IF NOT EXISTS "transfereeAddress" TEXT,
-      ADD COLUMN IF NOT EXISTS "transfereePan"     TEXT
+      ADD COLUMN IF NOT EXISTS "transfereePan"     TEXT,
+      ADD COLUMN IF NOT EXISTS "transfereeRelation"  TEXT,
+      ADD COLUMN IF NOT EXISTS "transferorRelation"  TEXT,
+      ADD COLUMN IF NOT EXISTS "transferorFatherName" TEXT,
+      ADD COLUMN IF NOT EXISTS "transferorAddress"    TEXT
   `).catch(() => {});
 
   await prisma.$executeRawUnsafe(`
@@ -129,6 +133,9 @@ export async function POST(req: NextRequest) {
     transferorFolio?: string;
     transferorCertNo?: string;
     transferorShareholderId: string;
+    transferorFatherName?: string;
+    transferorAddress?: string;
+    transferorRelation?: string;
 
     // Transferee
     transfereePersonId?: string;
@@ -137,6 +144,7 @@ export async function POST(req: NextRequest) {
     transfereeAddress?: string;
     transfereePan?: string;
     transfereeOccupation?: string;
+    transfereeRelation?: string;
 
     // Transfer details
     numberOfShares: number;
@@ -205,16 +213,33 @@ export async function POST(req: NextRequest) {
   const newFolioNo = String((parseInt(folioResult?.maxFolio || '0') || 0) + 1).padStart(2, '0');
   const newCertNo  = String((parseInt(certResult?.maxCert  || '0') || 0) + 1).padStart(2, '0');
 
-  /* ── 4. Ensure transferee person exists ── */
+  /* ── 4. Ensure transferee person exists + save/update KYC ── */
   let transfereePersonId = body.transfereePersonId;
-  if (!transfereePersonId && body.transfereeName) {
-    const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM csi_persons WHERE "userId" = $1 AND "companyId" = $2 AND LOWER(name) = LOWER($3) LIMIT 1`,
-      userId, body.companyId, body.transfereeName
-    );
-    if (existing.length > 0) {
-      transfereePersonId = existing[0].id;
+  if (body.transfereeName) {
+    if (!transfereePersonId) {
+      const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM csi_persons WHERE "userId" = $1 AND "companyId" = $2 AND LOWER(name) = LOWER($3) LIMIT 1`,
+        userId, body.companyId, body.transfereeName
+      );
+      if (existing.length > 0) transfereePersonId = existing[0].id;
+    }
+    if (transfereePersonId) {
+      // Update existing person's KYC with any newly provided values (non-empty overrides)
+      await prisma.$executeRawUnsafe(
+        `UPDATE csi_persons SET
+           "fatherName"     = COALESCE(NULLIF($3,''), "fatherName"),
+           "presentAddress" = COALESCE(NULLIF($4,''), "presentAddress"),
+           "panNo"          = COALESCE(NULLIF($5,''), "panNo"),
+           occupation       = COALESCE(NULLIF($6,''), occupation),
+           "isShareholder"  = true,
+           "updatedAt"      = NOW()
+         WHERE id = $1 AND "userId" = $2`,
+        transfereePersonId, userId,
+        body.transfereeFatherName || '', body.transfereeAddress || '',
+        body.transfereePan || '', body.transfereeOccupation || ''
+      );
     } else {
+      // Create new person with full KYC
       transfereePersonId = crypto.randomUUID();
       await prisma.$executeRawUnsafe(
         `INSERT INTO csi_persons (id, "userId", "companyId", name, "fatherName", "presentAddress", "panNo", occupation, "isShareholder")
@@ -225,6 +250,20 @@ export async function POST(req: NextRequest) {
         body.transfereeOccupation || null
       );
     }
+  }
+
+  /* ── 4b. Save back transferor KYC (address, fatherName) if provided ── */
+  const torPersonId = body.transferorPersonId || transferorSh.personId;
+  if (torPersonId && (body.transferorFatherName || body.transferorAddress)) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE csi_persons SET
+         "fatherName"     = COALESCE(NULLIF($3,''), "fatherName"),
+         "presentAddress" = COALESCE(NULLIF($4,''), "presentAddress"),
+         "updatedAt"      = NOW()
+       WHERE id = $1 AND "userId" = $2`,
+      torPersonId, userId,
+      body.transferorFatherName || '', body.transferorAddress || ''
+    ).catch(() => {}); // non-fatal
   }
 
   const signingJson = body.signingDirectorsJson || transferorSh.signingDirectorsJson || '[]';
@@ -253,16 +292,16 @@ export async function POST(req: NextRequest) {
        "distinctiveFrom", "distinctiveTo",
        "numberOfShares", "shareType",
        "dateOfAcquisition",
-       "nominalValue", "paidUpValue",
+       "nominalValue", "paidUpValue", "issuePlace",
        "signingDirectorsJson",
        "certStatus", "transferStatus"
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'active','received')`,
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'active','received')`,
     newShId, transfereePersonId, userId, body.companyId,
     newFolioNo, newCertNo,
     transferFrom, transferTo,
     body.numberOfShares, body.shareType || transferorSh.shareType || 'Equity',
     body.transferDate || null,
-    nominalVal, paidUpVal, signingJson
+    nominalVal, paidUpVal, body.issuePlace || null, signingJson
   );
 
   /* ── 7. Create transfer record ── */
@@ -271,7 +310,9 @@ export async function POST(req: NextRequest) {
     `INSERT INTO csi_share_transfers (
        id, "userId", "companyId",
        "transferorPersonId", "transferorName", "transferorFolio", "transferorCertNo", "transferorShareholderId",
+       "transferorFatherName", "transferorAddress", "transferorRelation",
        "transfereePersonId", "transfereeName", "transfereeFather", "transfereeAddress", "transfereePan",
+       "transfereeRelation",
        "transfereeFolio", "transfereeCertNo", "transfereeShareholderId",
        "numberOfShares", "shareType", "distinctiveFrom", "distinctiveTo",
        "transferDate", "considerationPerShare", "totalConsideration", "stampDuty", "issuePlace",
@@ -281,21 +322,25 @@ export async function POST(req: NextRequest) {
      ) VALUES (
        $1,$2,$3,
        $4,$5,$6,$7,$8,
-       $9,$10,$11,$12,$13,
-       $14,$15,$16,
-       $17,$18,$19,$20,
-       $21,$22,$23,$24,$25,
-       $26,$27,$28,$29,
-       $30,$31,$32,
-       'approved',$33
+       $9,$10,$11,
+       $12,$13,$14,$15,$16,
+       $17,
+       $18,$19,$20,
+       $21,$22,$23,$24,
+       $25,$26,$27,$28,$29,
+       $30,$31,$32,$33,
+       $34,$35,$36,
+       'approved',$37
      )`,
     transferId, userId, body.companyId,
     body.transferorPersonId || transferorSh.personId, body.transferorName,
     body.transferorFolio || transferorSh.folioNumber,
     body.transferorCertNo || transferorSh.certificateNumber,
     transferorSh.id,
+    body.transferorFatherName || null, body.transferorAddress || null, body.transferorRelation || null,
     transfereePersonId || null, body.transfereeName,
     body.transfereeFatherName || null, body.transfereeAddress || null, body.transfereePan || null,
+    body.transfereeRelation || null,
     newFolioNo, newCertNo, newShId,
     body.numberOfShares, body.shareType || 'Equity', transferFrom, transferTo,
     body.transferDate || null,

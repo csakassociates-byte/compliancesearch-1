@@ -35,6 +35,10 @@ interface SavedShareholder {
   personName?: string;
   din?: string;
   panNo?: string;
+  fatherName?: string;       // from csi_persons join
+  presentAddress?: string;   // from csi_persons join
+  permanentAddress?: string; // from csi_persons join
+  occupation?: string;       // from csi_persons join
   folioNumber?: string;
   certificateNumber?: string;
   numberOfShares?: number;
@@ -43,6 +47,7 @@ interface SavedShareholder {
   shareType?: string;
   nominalValue?: string;
   paidUpValue?: string;
+  issuePlace?: string;
   signingDirectorsJson?: string;
   holdingPercent?: string;
   transferStatus?: string;
@@ -346,24 +351,28 @@ export default function ShareTransferPage() {
     void applyCompanyData(c);
   }
 
-  /* Apply transferor from saved shareholder */
+  /* Apply transferor from saved shareholder — fills all available KYC */
   function applyTransferor(sh: SavedShareholder) {
     setConfirmPending(false);
+    const addr = sh.presentAddress || sh.permanentAddress || "";
     upd({
-      transferorShareholderId: sh.id,
-      transferorPersonId: sh.personId,
-      transferorName: sh.personName || "",
-      transferorFolio: sh.folioNumber || "",
-      transferorCertNo: sh.certificateNumber || "",
-      transferorTotalShares: sh.numberOfShares || 0,
+      transferorShareholderId:   sh.id,
+      transferorPersonId:        sh.personId,
+      transferorName:            sh.personName || "",
+      transferorFolio:           sh.folioNumber || "",
+      transferorCertNo:          sh.certificateNumber || "",
+      transferorTotalShares:     sh.numberOfShares || 0,
       transferorDistinctiveFrom: sh.distinctiveFrom || 1,
-      transferorDistinctiveTo: sh.distinctiveTo || 0,
-      transferorPan: sh.panNo || "",
-      shareType: sh.shareType || "Equity",
-      nominalValue: sh.nominalValue || "10",
-      calledUpValue: sh.paidUpValue || "10",
-      paidUpValue: sh.paidUpValue || "10",
-      sharesToTransfer: sh.numberOfShares || 0,
+      transferorDistinctiveTo:   sh.distinctiveTo || 0,
+      transferorPan:             sh.panNo || "",
+      transferorAddress:         addr,
+      transferorFatherName:      sh.fatherName || "",
+      shareType:                 sh.shareType || "Equity",
+      nominalValue:              sh.nominalValue || "10",
+      calledUpValue:             sh.paidUpValue || "10",
+      paidUpValue:               sh.paidUpValue || "10",
+      issuePlace:                sh.issuePlace || "",
+      sharesToTransfer:          sh.numberOfShares || 0,
       // pre-fill signers from saved cert
       signers: sh.signingDirectorsJson
         ? (() => { try { return JSON.parse(sh.signingDirectorsJson); } catch { return DEFAULT.signers; } })()
@@ -565,30 +574,38 @@ export default function ShareTransferPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         companyId: f.companyId,
-        transferorPersonId: f.transferorPersonId || undefined,
-        transferorName: f.transferorName,
-        transferorFolio: f.transferorFolio || undefined,
-        transferorCertNo: activeCertNo || undefined,
+        // Transferor
+        transferorPersonId:    f.transferorPersonId || undefined,
+        transferorName:        f.transferorName,
+        transferorFolio:       f.transferorFolio || undefined,
+        transferorCertNo:      activeCertNo || undefined,
         transferorShareholderId: activeSharId,
-        transfereeName: f.transfereeName.trim(),
-        transfereeFatherName: f.transfereeFather || undefined,
-        transfereeAddress: f.transfereeAddress || undefined,
-        transfereePan: f.transfereePan || undefined,
-        transfereeOccupation: f.transfereeOccupation || undefined,
-        numberOfShares: f.sharesToTransfer,
-        shareType: f.shareType,
-        transferDate: f.transferDate || undefined,
+        transferorFatherName:  f.transferorFatherName || undefined,
+        transferorAddress:     f.transferorAddress || undefined,
+        transferorRelation:    f.transferorRelation || undefined,
+        // Transferee
+        transfereePersonId:    f.transfereePersonId || undefined,
+        transfereeName:        f.transfereeName.trim(),
+        transfereeFatherName:  f.transfereeFather || undefined,
+        transfereeAddress:     f.transfereeAddress || undefined,
+        transfereePan:         f.transfereePan || undefined,
+        transfereeOccupation:  f.transfereeOccupation || undefined,
+        transfereeRelation:    f.transfereeRelation || undefined,
+        // Transfer details
+        numberOfShares:        f.sharesToTransfer,
+        shareType:             f.shareType,
+        transferDate:          f.transferDate || undefined,
         considerationPerShare: f.considerationPerShare || undefined,
-        totalConsideration: totalConsideration || undefined,
-        stampDuty: f.stampDuty || undefined,
-        issuePlace: f.issuePlace || undefined,
-        nominalValue: f.nominalValue,
-        paidUpValue: f.paidUpValue,
-        signingDirectorsJson: JSON.stringify(f.signers.filter(s => s.name)),
-        // Witness fields
-        witness1Name: f.witness1Name || undefined,
+        totalConsideration:    totalConsideration || undefined,
+        stampDuty:             f.stampDuty || undefined,
+        issuePlace:            f.issuePlace || undefined,
+        nominalValue:          f.nominalValue,
+        paidUpValue:           f.paidUpValue,
+        signingDirectorsJson:  JSON.stringify(f.signers.filter(s => s.name)),
+        // Witnesses
+        witness1Name:    f.witness1Name || undefined,
         witness1Address: f.witness1Address || undefined,
-        witness2Name: f.witness2Name || undefined,
+        witness2Name:    f.witness2Name || undefined,
         witness2Address: f.witness2Address || undefined,
       }),
     });
@@ -1329,10 +1346,14 @@ export default function ShareTransferPage() {
                       <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
                         {hits.slice(0, 6).map(sh => (
                           <button key={sh.id} onMouseDown={() => {
+                            const addr = sh.presentAddress || sh.permanentAddress || "";
                             upd({
-                              transfereeName: sh.personName || "",
-                              transfereePersonId: sh.personId || "",
-                              transfereePan: sh.panNo || f.transfereePan,
+                              transfereeName:       sh.personName || "",
+                              transfereePersonId:   sh.personId || "",
+                              transfereePan:        sh.panNo || f.transfereePan,
+                              transfereeFather:     sh.fatherName || f.transfereeFather,
+                              transfereeAddress:    addr || f.transfereeAddress,
+                              transfereeOccupation: sh.occupation || f.transfereeOccupation,
                             });
                           }}
                             className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors">
