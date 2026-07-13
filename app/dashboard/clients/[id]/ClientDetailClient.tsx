@@ -2128,6 +2128,217 @@ function SplitCertificateModal({
   );
 }
 
+/* ── Add Shareholder Modal ───────────────────────────── */
+function AddShareholderModal({
+  companyId,
+  onClose,
+  onSaved,
+}: { companyId: string; onClose: () => void; onSaved: () => void }) {
+  const INP = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
+  const [persons, setPersons] = useState<Array<{ id: string; name: string; panNo?: string; din?: string; folioNumber?: string }>>([]);
+  const [selectedPersonId, setSelectedPersonId] = useState('');
+  const [name, setName]         = useState('');
+  const [pan, setPan]           = useState('');
+  const [folio, setFolio]       = useState('');
+  const [certNo, setCertNo]     = useState('');
+  const [shares, setShares]     = useState('');
+  const [distFrom, setDistFrom] = useState('');
+  const [distTo, setDistTo]     = useState('');
+  const [shareType, setShareType] = useState('Equity');
+  const [dateAcq, setDateAcq]   = useState('');
+  const [nominal, setNominal]   = useState('10');
+  const [paidUp, setPaidUp]     = useState('10');
+  const [saving, setSaving]     = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/persons?companyId=${companyId}`)
+      .then(r => r.json())
+      .then(d => setPersons((d.persons || []).filter((p: { name?: string }) => p.name)))
+      .catch(() => {});
+    // Suggest next folio & cert numbers
+    fetch(`/api/shareholders?companyId=${companyId}`)
+      .then(r => r.json())
+      .then(d => {
+        const shs = d.shareholders || [];
+        const maxFolio = shs.reduce((m: number, s: { folioNumber?: string }) => {
+          const n = parseInt((s.folioNumber || '').replace(/\D/g, '') || '0');
+          return n > m ? n : m;
+        }, 0);
+        const maxCert = shs.reduce((m: number, s: { certificateNumber?: string }) => {
+          const n = parseInt((s.certificateNumber || '').replace(/\D/g, '') || '0');
+          return n > m ? n : m;
+        }, 0);
+        setFolio(String(maxFolio + 1).padStart(2, '0'));
+        setCertNo(String(maxCert + 1).padStart(2, '0'));
+        const maxDist = shs.reduce((m: number, s: { distinctiveTo?: number }) => {
+          return (s.distinctiveTo || 0) > m ? (s.distinctiveTo || 0) : m;
+        }, 0);
+        setDistFrom(String(maxDist + 1));
+      })
+      .catch(() => {});
+  }, [companyId]);
+
+  // Auto-calc distTo when distFrom or shares changes
+  useEffect(() => {
+    const from = parseInt(distFrom);
+    const sh   = parseInt(shares);
+    if (!isNaN(from) && !isNaN(sh) && sh > 0) setDistTo(String(from + sh - 1));
+  }, [distFrom, shares]);
+
+  function selectPerson(p: { id: string; name: string; panNo?: string; din?: string; folioNumber?: string }) {
+    setSelectedPersonId(p.id);
+    setName(p.name);
+    setPan(p.panNo || '');
+    // If person already has a folio in this company, reuse it
+    if (p.folioNumber) setFolio(p.folioNumber);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    await fetch('/api/shareholders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyId,
+        personId: selectedPersonId || undefined,
+        personName: name.trim(),
+        folioNumber: folio || null,
+        certificateNumber: certNo || null,
+        distinctiveFrom: distFrom ? parseInt(distFrom) : null,
+        distinctiveTo: distTo ? parseInt(distTo) : null,
+        numberOfShares: shares ? parseInt(shares) : null,
+        shareType,
+        dateOfAcquisition: dateAcq || null,
+        nominalValue: nominal || null,
+        paidUpValue: paidUp || null,
+      }),
+    });
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10"
+          style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
+          <h3 className="font-bold text-white text-sm">📜 Add Shareholder</h3>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {/* Quick-select from existing persons/directors */}
+          {persons.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 mb-2">Select existing person (directors shown first)</p>
+              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                {[...persons].sort((a, b) => (a.din ? -1 : 1) - (b.din ? -1 : 1)).map(p => (
+                  <button key={p.id} type="button"
+                    onClick={() => selectPerson(p)}
+                    className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                      selectedPersonId === p.id
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300'
+                    }`}>
+                    {p.din ? '👤' : '🧑'} {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <hr className="border-slate-100" />
+
+          {/* Name */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-1">Full Name *</label>
+            <input required className={INP} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Ramesh Kumar" />
+          </div>
+
+          {/* PAN */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-1">PAN (optional)</label>
+            <input className={`${INP} font-mono uppercase`} value={pan} onChange={e => setPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F" />
+          </div>
+
+          {/* Folio + Cert */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Folio No.</label>
+              <input className={INP} value={folio} onChange={e => setFolio(e.target.value)} placeholder="01" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Certificate No.</label>
+              <input className={INP} value={certNo} onChange={e => setCertNo(e.target.value)} placeholder="01" />
+            </div>
+          </div>
+
+          {/* Shares + Type */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">No. of Shares *</label>
+              <input required type="number" min="1" className={INP} value={shares} onChange={e => setShares(e.target.value)} placeholder="1000" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Share Type</label>
+              <select className={INP} value={shareType} onChange={e => setShareType(e.target.value)}>
+                <option>Equity</option>
+                <option>Preference</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Distinctive Nos */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Distinctive From</label>
+              <input type="number" className={INP} value={distFrom} onChange={e => setDistFrom(e.target.value)} placeholder="1" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Distinctive To</label>
+              <input type="number" className={INP} value={distTo} onChange={e => setDistTo(e.target.value)} placeholder="auto" />
+            </div>
+          </div>
+
+          {/* Date + Values */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Date of Acquisition</label>
+              <input type="date" className={INP} value={dateAcq} onChange={e => setDateAcq(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Nominal Value (₹)</label>
+              <input type="number" className={INP} value={nominal} onChange={e => setNominal(e.target.value)} placeholder="10" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Paid-up Value (₹)</label>
+              <input type="number" className={INP} value={paidUp} onChange={e => setPaidUp(e.target.value)} placeholder="10" />
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-60"
+              style={{background:'linear-gradient(135deg,#1e40af,#1d4ed8)'}}>
+              {saving ? 'Saving...' : 'Add Shareholder'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ── Shareholders Tab ────────────────────────────────── */
 interface ShareholderRow extends ShareholderRecord {
   personName?: string;
@@ -2381,7 +2592,7 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
       )}
 
       {editPerson && <KYCModal person={editPerson} onClose={() => setEditPerson(null)} onSaved={load} />}
-      {showAdd && <AddPersonModal companyId={companyId} mode="shareholder" onClose={() => setShowAdd(false)} onSaved={load} />}
+      {showAdd && <AddShareholderModal companyId={companyId} onClose={() => setShowAdd(false)} onSaved={load} />}
       {viewSh && (
         <ShareholderViewModal
           sh={viewSh}
