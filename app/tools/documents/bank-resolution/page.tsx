@@ -758,6 +758,7 @@ export default function BankResolutionPage() {
 
   // Directors from Excel (with attendance checkbox state)
   const [dirPresent, setDirPresent] = useState<boolean[]>([]);
+  const [busyDoc, setBusyDoc] = useState<"pdf" | "word" | null>(null);
 
   // Keep dirPresent in sync when directors array changes
   const presentFlags = f.directors.map((_, i) =>
@@ -790,6 +791,75 @@ export default function BankResolutionPage() {
 
   // Director name list for dropdowns
   const directorNames = f.directors.filter(d => d.name.trim());
+
+  function buildResHTML(): string | null {
+    const el = document.getElementById("resolution-doc");
+    if (!el) return null;
+    const title = `Bank_Resolution_${f.companyName.replace(/\s+/g, "_").slice(0, 30) || "Company"}`;
+    return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><title>${title}</title>
+<style>
+@page { size: A4; margin: 16mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Times New Roman", Times, serif; font-size: 10.5pt; line-height: 1.35; color: #000; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+strong, b { font-weight: bold; } p { margin-bottom: 4px; }
+</style></head><body>${el.innerHTML}</body></html>`;
+  }
+
+  function openPrintResolution() {
+    const rawHtml = buildResHTML();
+    if (!rawHtml) return;
+    const src = session?.user ? rawHtml : injectPreviewWatermark(rawHtml);
+    const url = URL.createObjectURL(new Blob([src], { type: "text/html;charset=utf-8" }));
+    const win = window.open(url, "_blank");
+    if (!win) { alert("Pop-up blocked! Please allow pop-ups."); URL.revokeObjectURL(url); return; }
+    win.addEventListener("load", () => { win.focus(); win.print(); });
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  async function downloadResPDF() {
+    const html = buildResHTML();
+    if (!html) return;
+    setBusyDoc("pdf");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `BankResolution_${safeName}`;
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename, docType: "bank-resolution", companyName: f.companyName, docTitle: "Board Resolution — Bank Account", dirs: [] }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to download PDF. Please use the Print option instead."); }
+    finally { setBusyDoc(null); }
+  }
+
+  async function downloadResWord() {
+    const html = buildResHTML();
+    if (!html) return;
+    setBusyDoc("word");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `BankResolution_${safeName}`;
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle: "Board Resolution — Bank Account", filename }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setBusyDoc(null); }
+  }
 
   /* ─ STEP 3: Meeting ─ */
   const venueDefault = f.meetingVenue ||
@@ -1331,30 +1401,20 @@ export default function BankResolutionPage() {
                   className="px-4 py-2 rounded-xl font-bold text-slate-600 border-2 border-slate-200 text-sm hover:bg-slate-50 transition">
                   ← Edit
                 </button>
-                <button onClick={()=>window.print()}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105"
+                <button onClick={openPrintResolution} disabled={!!busyDoc}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-50"
                   style={{ background:"linear-gradient(135deg,#475569,#334155)" }}>
                   🖨️ Print
                 </button>
-                <button
-                  onClick={() => {
-                    if (!session?.user) {
-                      // Non-logged-in: open watermarked preview
-                      const el = document.getElementById("resolution-doc");
-                      if (!el) return;
-                      const title = `Board_Resolution_${f.companyName.replace(/\s+/g,"_").slice(0,30) || "Company"}`;
-                      const rawHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>${title}</title><style>@page{size:A4;margin:14mm 16mm;}*{box-sizing:border-box;margin:0;padding:0;}body{font-family:"Times New Roman",Times,serif;font-size:10.5pt;line-height:1.35;color:#000;background:#fff;}strong,b{font-weight:bold;}p{margin-bottom:4px;}</style></head><body>${el.innerHTML}</body></html>`;
-                      const blobUrl = URL.createObjectURL(new Blob([injectPreviewWatermark(rawHtml)], { type: "text/html;charset=utf-8" }));
-                      const win = window.open(blobUrl, "_blank");
-                      if (!win) { alert("Pop-up blocked! Please allow pop-ups for this site."); URL.revokeObjectURL(blobUrl); return; }
-                      setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000);
-                    } else {
-                      downloadResolutionPDF(f.companyName);
-                    }
-                  }}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105 shadow-lg"
-                  style={{ background:"linear-gradient(135deg,#16a34a,#15803d)", boxShadow:"0 6px 20px rgba(22,163,74,0.35)" }}>
-                  ⬇ Download PDF
+                <button onClick={downloadResPDF} disabled={!!busyDoc}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105 shadow-lg disabled:opacity-50"
+                  style={{ background:"linear-gradient(135deg,#16a34a,#15803d)" }}>
+                  {busyDoc === "pdf" ? "⏳…" : "⬇️ PDF"}
+                </button>
+                <button onClick={downloadResWord} disabled={!!busyDoc}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105 shadow-lg disabled:opacity-50"
+                  style={{ background:"linear-gradient(135deg,#1e3a5f,#1d4ed8)" }}>
+                  {busyDoc === "word" ? "⏳…" : "📝 Word"}
                 </button>
               </div>
             </div>

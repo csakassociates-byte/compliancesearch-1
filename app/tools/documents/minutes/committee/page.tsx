@@ -1030,6 +1030,7 @@ function Step4({ f, upd }: { f: F; upd: (x: Partial<F>) => void }) {
 /* — STEP 5: Preview & Print — */
 function Step5({ f, upd, session }: { f: F; upd: (x: Partial<F>) => void; session: any }) {
   const commName = getCommitteeDisplayName(f);
+  const [busyDoc, setBusyDoc] = useState<string | null>(null);
 
   function openBlobWindow(html: string) {
     const src = session ? html : injectPreviewWatermark(html);
@@ -1046,6 +1047,44 @@ function Step5({ f, upd, session }: { f: F; upd: (x: Partial<F>) => void; sessio
     const html = generateCommitteeCtcHTML(f);
     if (!html) { alert("No decisions/recommendations found. Please add at least one agenda item with a Decision or Recommendation."); return; }
     openBlobWindow(html);
+  }
+
+  async function downloadPDF(html: string, docType: string, docTitle: string, filename: string) {
+    setBusyDoc(docType + "_pdf");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename: `${filename}_${safeName}`, docType, companyName: f.companyName, docTitle, dirs: [] }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}_${safeName}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to download PDF. Please use the Print option instead."); }
+    finally { setBusyDoc(null); }
+  }
+
+  async function downloadWord(html: string, docTitle: string, filename: string) {
+    setBusyDoc(filename + "_word");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle, filename: `${filename}_${safeName}` }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}_${safeName}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setBusyDoc(null); }
   }
 
   const resolutionItems = f.agendaItems.filter(a => a.resolutionType !== "none" && a.resolution.trim());
@@ -1124,27 +1163,49 @@ function Step5({ f, upd, session }: { f: F; upd: (x: Partial<F>) => void; sessio
       {/* Compliance Checklist */}
       <CommitteeComplianceChecklist f={f} />
 
-      {/* Print Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-        <button onClick={openMinutes}
-          className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-6 rounded-2xl transition-all hover:scale-105 shadow-lg text-sm">
-          <span className="text-lg">📄</span>
-          <div className="text-left">
-            <div>Generate Minutes</div>
-            <div className="text-emerald-200 text-xs font-normal">Full meeting minutes (print/PDF)</div>
+      {/* Print / PDF / Word Buttons */}
+      <div className="space-y-3 pt-2">
+        {/* Minutes */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+          <p className="text-xs font-bold text-emerald-700 mb-2">📄 Meeting Minutes</p>
+          <div className="flex gap-2">
+            <button onClick={openMinutes}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-xl transition-all text-xs">
+              🖨️ Print
+            </button>
+            <button onClick={() => downloadPDF(generateCommitteeHTML(f), "committee-minutes", `${commName} Minutes`, "CommitteeMinutes")}
+              disabled={!!busyDoc} className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 px-3 rounded-xl transition-all text-xs disabled:opacity-50">
+              {busyDoc === "committee-minutes_pdf" ? "⏳…" : "⬇️ PDF"}
+            </button>
+            <button onClick={() => downloadWord(generateCommitteeHTML(f), `${commName} Minutes`, "CommitteeMinutes")}
+              disabled={!!busyDoc} className="flex-1 bg-teal-700 hover:bg-teal-800 text-white font-bold py-2.5 px-3 rounded-xl transition-all text-xs disabled:opacity-50">
+              {busyDoc === "CommitteeMinutes_word" ? "⏳…" : "📝 Word"}
+            </button>
           </div>
-        </button>
-        <button onClick={openCTC}
-          disabled={resolutionItems.length === 0}
-          className={`flex items-center justify-center gap-2 font-bold py-4 px-6 rounded-2xl transition-all text-sm ${resolutionItems.length > 0 ? "bg-teal-600 hover:bg-teal-700 text-white hover:scale-105 shadow-lg" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}>
-          <span className="text-lg">🖊️</span>
-          <div className="text-left">
-            <div>Generate CTC</div>
-            <div className={`text-xs font-normal ${resolutionItems.length > 0 ? "text-teal-200" : "text-slate-400"}`}>
-              {resolutionItems.length > 0 ? `${resolutionItems.length} decision${resolutionItems.length !== 1 ? "s" : ""} — Certified True Copies` : "No decisions/recommendations found"}
-            </div>
+        </div>
+        {/* CTC */}
+        <div className={`border rounded-2xl p-4 ${resolutionItems.length > 0 ? "bg-teal-50 border-teal-200" : "bg-slate-50 border-slate-200"}`}>
+          <p className={`text-xs font-bold mb-2 ${resolutionItems.length > 0 ? "text-teal-700" : "text-slate-400"}`}>
+            🖊️ Certified True Copies
+            {resolutionItems.length === 0 && <span className="font-normal"> — no decisions found</span>}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={openCTC} disabled={resolutionItems.length === 0}
+              className={`flex-1 font-bold py-2.5 px-3 rounded-xl transition-all text-xs ${resolutionItems.length > 0 ? "bg-teal-600 hover:bg-teal-700 text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed"}`}>
+              🖨️ Print
+            </button>
+            <button onClick={() => { const html = generateCommitteeCtcHTML(f); if (html) downloadPDF(html, "committee-minutes", `${commName} CTC`, "CommitteeCTC"); }}
+              disabled={!!busyDoc || resolutionItems.length === 0}
+              className="flex-1 bg-teal-700 hover:bg-teal-800 text-white font-bold py-2.5 px-3 rounded-xl transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+              {busyDoc === "committee-minutes_pdf" ? "⏳…" : "⬇️ PDF"}
+            </button>
+            <button onClick={() => { const html = generateCommitteeCtcHTML(f); if (html) downloadWord(html, `${commName} CTC`, "CommitteeCTC"); }}
+              disabled={!!busyDoc || resolutionItems.length === 0}
+              className="flex-1 bg-teal-800 hover:bg-teal-900 text-white font-bold py-2.5 px-3 rounded-xl transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+              {busyDoc === "CommitteeCTC_word" ? "⏳…" : "📝 Word"}
+            </button>
           </div>
-        </button>
+        </div>
       </div>
     </div>
   );

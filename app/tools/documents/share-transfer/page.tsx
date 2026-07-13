@@ -812,6 +812,149 @@ export default function ShareTransferPage() {
     }
   }
 
+  /* Download Form SH-4 as Word (.docx) */
+  async function downloadSH4Word(newFolioNo = "(Auto)", newCertNo = "(Auto)", transferorCertNoOverride?: string) {
+    setWordLoading(true);
+    try {
+      const a = buildSH4Args(newFolioNo, newCertNo, transferorCertNoOverride);
+      const html = generateSH4HTML(a.company, a.transferor, a.transferee, a.details, a.signers, a.witnesses);
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const dateStr = f.transferDate?.replace(/-/g, "") || "undated";
+      const filename = `SH4_${safeName}_${dateStr}`;
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle: "Form SH-4 — Securities Transfer Form", filename }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a2 = document.createElement("a");
+      a2.href = url; a2.download = `${filename}.docx`; a2.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setWordLoading(false); }
+  }
+
+  /* Build new share certificate HTML (reusable for print/PDF/Word) */
+  function buildCertHTML(newFolioNo: string, newCertNo: string) {
+    const ranges = computeCertRanges([{ shares: f.sharesToTransfer }], transferDistFrom);
+    return generateShareCertificateHTML(
+      { companyName: f.companyName, cin: f.cin, regAddress: f.regAddress, shareClass: f.shareType,
+        nominalValue: f.nominalValue, paidUpValue: f.paidUpValue, issueDate: f.transferDate, issuePlace: f.issuePlace },
+      [{ name: f.transfereeName, pan: f.transfereePan || undefined, shares: f.sharesToTransfer }],
+      [{ ...ranges[0], folioNo: newFolioNo, certNo: newCertNo }],
+      f.signers.filter(s => s.name)
+    );
+  }
+
+  /* Download New Share Certificate as PDF */
+  async function downloadCertPDF(newFolioNo: string, newCertNo: string) {
+    setPdfLoading(true);
+    try {
+      const html = buildCertHTML(newFolioNo, newCertNo);
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `ShareCert_${safeName}_${newCertNo.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename, docType: "share-certificate", companyName: f.companyName, docTitle: "Share Certificate", dirs: [] }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to download PDF. Please use the Print option instead."); }
+    finally { setPdfLoading(false); }
+  }
+
+  /* Download New Share Certificate as Word */
+  async function downloadCertWord(newFolioNo: string, newCertNo: string) {
+    setWordLoading(true);
+    try {
+      const html = buildCertHTML(newFolioNo, newCertNo);
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `ShareCert_${safeName}_${newCertNo.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle: "Share Certificate", filename }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setWordLoading(false); }
+  }
+
+  /* Build Board Resolution HTML without autoPrint (for PDF/Word) */
+  function buildBoardResHTML(resolutionText: string): string | null {
+    if (!done) return null;
+    const signers = f.signers.filter(s => s.name);
+    return generateTransferBoardResolutionHTML(
+      { companyName: f.companyName, cin: f.cin, regAddress: f.regAddress },
+      { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
+        numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+        transfereeName: f.transfereeName, transferDate: f.transferDate,
+        newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+      { date: boardResDate || f.transferDate, venue: boardResVenue || "Registered Office of the Company",
+        directors: signers.map(s => ({ name: s.name, din: s.din || "", designation: s.designation })) },
+      signers,
+      resolutionText,
+    );
+  }
+
+  /* Download Board Resolution as PDF */
+  async function downloadBoardResPDF(resolutionText: string) {
+    setPdfLoading(true);
+    try {
+      const html = buildBoardResHTML(resolutionText);
+      if (!html) return;
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `BoardRes_Transfer_${safeName}`;
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename, docType: "board-resolution", companyName: f.companyName, docTitle: "Board Resolution — Share Transfer", dirs: [] }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to download PDF. Please use the Print option instead."); }
+    finally { setPdfLoading(false); }
+  }
+
+  /* Download Board Resolution as Word */
+  async function downloadBoardResWord(resolutionText: string) {
+    setWordLoading(true);
+    try {
+      const html = buildBoardResHTML(resolutionText);
+      if (!html) return;
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `BoardRes_Transfer_${safeName}`;
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle: "Board Resolution — Share Transfer", filename }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setWordLoading(false); }
+  }
+
   /* Save Board Resolution to DB + print */
   async function saveBoardResolution() {
     if (!done || !isLoggedIn) return;
@@ -1569,15 +1712,22 @@ export default function ShareTransferPage() {
                 </div>
 
                 {/* Preview / Download SH-4 */}
-                <button onClick={() => printSH4()}
-                  className="w-full py-3 rounded-xl border-2 border-emerald-600 text-emerald-700 font-bold text-sm hover:bg-emerald-50 flex items-center justify-center gap-2 transition-colors">
-                  👁️ Preview Form SH-4
-                </button>
-                <button onClick={() => downloadSH4PDF()} disabled={pdfLoading}
-                  className="w-full py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
-                  style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
-                  {pdfLoading ? "⏳ Generating PDF..." : "⬇️ Download PDF (SH-4)"}
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => printSH4()}
+                    className="flex-1 py-3 rounded-xl border-2 border-emerald-600 text-emerald-700 font-bold text-sm hover:bg-emerald-50 flex items-center justify-center gap-2 transition-colors">
+                    🖨️ Print SH-4
+                  </button>
+                  <button onClick={() => downloadSH4PDF()} disabled={pdfLoading || wordLoading}
+                    className="flex-1 py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                    style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
+                    {pdfLoading ? "⏳…" : "⬇️ PDF"}
+                  </button>
+                  <button onClick={() => downloadSH4Word()} disabled={pdfLoading || wordLoading}
+                    className="flex-1 py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                    style={{ background: "linear-gradient(135deg,#1e3a5f,#1d4ed8)" }}>
+                    {wordLoading ? "⏳…" : "📝 Word"}
+                  </button>
+                </div>
 
                 {/* Confirm panel — shown when user clicks Execute Transfer */}
                 {confirmPending && (
@@ -1666,7 +1816,7 @@ export default function ShareTransferPage() {
                       <div className="text-xs font-bold text-emerald-700">✅ Board Resolution Saved</div>
                       <div className="text-xs text-slate-500 mt-0.5">Resolution No: {boardResDoc.resolutionNo}</div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <button onClick={() => printBoardResolution(buildTransferResolutionText(
                         { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
                           numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
@@ -1675,6 +1825,26 @@ export default function ShareTransferPage() {
                         done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
                       ))} className="text-xs text-blue-700 font-semibold hover:underline">
                         🖨️ Print
+                      </button>
+                      <button onClick={() => downloadBoardResPDF(buildTransferResolutionText(
+                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
+                          numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                          transfereeName: f.transfereeName, transferDate: f.transferDate,
+                          newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                        done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                      ))} disabled={pdfLoading || wordLoading}
+                        className="text-xs text-blue-600 font-semibold hover:underline disabled:opacity-40">
+                        {pdfLoading ? "⏳" : "⬇️ PDF"}
+                      </button>
+                      <button onClick={() => downloadBoardResWord(buildTransferResolutionText(
+                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
+                          numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                          transfereeName: f.transfereeName, transferDate: f.transferDate,
+                          newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                        done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                      ))} disabled={pdfLoading || wordLoading}
+                        className="text-xs text-blue-600 font-semibold hover:underline disabled:opacity-40">
+                        {wordLoading ? "⏳" : "📝 Word"}
                       </button>
                       <Link href={`/tools/documents/minutes/board?load=${boardResDoc.meetingDocId}`}
                         className="text-xs text-emerald-700 font-semibold hover:underline" target="_blank">
@@ -1698,21 +1868,69 @@ export default function ShareTransferPage() {
                       </div>
                     </div>
                     {isLoggedIn && f.companyId ? (
-                      <button onClick={saveBoardResolution} disabled={savingBoardRes}
-                        className="w-full py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
-                        style={{ background: "linear-gradient(135deg,#1e40af,#3b82f6)" }}>
-                        {savingBoardRes ? "⏳ Saving..." : "📜 Save & Print Board Resolution"}
-                      </button>
+                      <div className="flex gap-2 flex-wrap">
+                        <button onClick={saveBoardResolution} disabled={savingBoardRes || pdfLoading || wordLoading}
+                          className="flex-1 min-w-[90px] py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                          style={{ background: "linear-gradient(135deg,#1e40af,#3b82f6)" }}>
+                          {savingBoardRes ? "⏳ Saving…" : "📜 Save & Print"}
+                        </button>
+                        <button onClick={() => downloadBoardResPDF(buildTransferResolutionText(
+                          { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
+                            numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                            transfereeName: f.transfereeName, transferDate: f.transferDate,
+                            newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                          done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                        ))} disabled={pdfLoading || wordLoading || savingBoardRes}
+                          className="flex-1 min-w-[90px] py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                          style={{ background: "linear-gradient(135deg,#92400e,#b45309)" }}>
+                          {pdfLoading ? "⏳…" : "⬇️ PDF"}
+                        </button>
+                        <button onClick={() => downloadBoardResWord(buildTransferResolutionText(
+                          { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
+                            numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                            transfereeName: f.transfereeName, transferDate: f.transferDate,
+                            newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                          done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                        ))} disabled={pdfLoading || wordLoading || savingBoardRes}
+                          className="flex-1 min-w-[90px] py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                          style={{ background: "linear-gradient(135deg,#1e3a5f,#1d4ed8)" }}>
+                          {wordLoading ? "⏳…" : "📝 Word"}
+                        </button>
+                      </div>
                     ) : (
-                      <button onClick={() => printBoardResolution(buildTransferResolutionText(
-                        { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
-                          numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
-                          transfereeName: f.transfereeName, transferDate: f.transferDate,
-                          newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
-                        done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
-                      ))} className="w-full py-2.5 rounded-xl font-bold text-blue-700 text-sm border-2 border-blue-300 hover:bg-blue-50">
-                        🖨️ Print Board Resolution (Preview)
-                      </button>
+                      <div className="flex gap-2 flex-wrap">
+                        <button onClick={() => printBoardResolution(buildTransferResolutionText(
+                          { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
+                            numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                            transfereeName: f.transfereeName, transferDate: f.transferDate,
+                            newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                          done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                        ))} className="flex-1 min-w-[90px] py-2.5 rounded-xl font-bold text-blue-700 text-sm border-2 border-blue-300 hover:bg-blue-50">
+                          🖨️ Print
+                        </button>
+                        <button onClick={() => downloadBoardResPDF(buildTransferResolutionText(
+                          { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
+                            numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                            transfereeName: f.transfereeName, transferDate: f.transferDate,
+                            newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                          done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                        ))} disabled={pdfLoading || wordLoading}
+                          className="flex-1 min-w-[90px] py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                          style={{ background: "linear-gradient(135deg,#92400e,#b45309)" }}>
+                          {pdfLoading ? "⏳…" : "⬇️ PDF"}
+                        </button>
+                        <button onClick={() => downloadBoardResWord(buildTransferResolutionText(
+                          { transferorName: f.transferorName, transferorFolio: f.transferorFolio, transferorCertNo: done.activeCertNo,
+                            numberOfShares: f.sharesToTransfer, shareType: f.shareType, nominalValue: f.nominalValue,
+                            transfereeName: f.transfereeName, transferDate: f.transferDate,
+                            newFolioNo: done.newFolioNo, newCertNo: done.newCertNo, transferId: done.transferId },
+                          done.newFolioNo, done.newCertNo, f.signers.filter(s => s.name)[0]?.name
+                        ))} disabled={pdfLoading || wordLoading}
+                          className="flex-1 min-w-[90px] py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                          style={{ background: "linear-gradient(135deg,#1e3a5f,#1d4ed8)" }}>
+                          {wordLoading ? "⏳…" : "📝 Word"}
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1743,21 +1961,46 @@ export default function ShareTransferPage() {
               </div>
 
               <div className="flex flex-col gap-3">
-                <button onClick={() => downloadSH4PDF(done.newFolioNo, done.newCertNo)} disabled={pdfLoading}
-                  className="w-full py-3 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
-                  {pdfLoading ? "⏳ Generating PDF..." : "⬇️ Download Form SH-4 (PDF)"}
-                </button>
-                <button onClick={() => printSH4(done.newFolioNo, done.newCertNo)}
-                  className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
-                  style={{ background: "linear-gradient(135deg,#065f46,#047857)" }}>
-                  🖨️ Print Form SH-4
-                </button>
-                <button onClick={() => printNewCert(done.newFolioNo, done.newCertNo)}
-                  className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
-                  style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
-                  📜 Print New Share Certificate
-                </button>
+                {/* Form SH-4 */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                  <div className="text-xs font-bold text-slate-600 mb-2">📋 Form SH-4</div>
+                  <div className="flex gap-2">
+                    <button onClick={() => printSH4(done.newFolioNo, done.newCertNo)}
+                      className="flex-1 py-2.5 rounded-xl border-2 border-slate-300 text-slate-700 font-bold text-sm hover:bg-slate-100 transition-colors">
+                      🖨️ Print
+                    </button>
+                    <button onClick={() => downloadSH4PDF(done.newFolioNo, done.newCertNo)} disabled={pdfLoading || wordLoading}
+                      className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 transition-all"
+                      style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
+                      {pdfLoading ? "⏳…" : "⬇️ PDF"}
+                    </button>
+                    <button onClick={() => downloadSH4Word(done.newFolioNo, done.newCertNo)} disabled={pdfLoading || wordLoading}
+                      className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 transition-all"
+                      style={{ background: "linear-gradient(135deg,#1e3a5f,#1d4ed8)" }}>
+                      {wordLoading ? "⏳…" : "📝 Word"}
+                    </button>
+                  </div>
+                </div>
+                {/* New Share Certificate */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                  <div className="text-xs font-bold text-slate-600 mb-2">📜 New Share Certificate</div>
+                  <div className="flex gap-2">
+                    <button onClick={() => printNewCert(done.newFolioNo, done.newCertNo)}
+                      className="flex-1 py-2.5 rounded-xl border-2 border-slate-300 text-slate-700 font-bold text-sm hover:bg-slate-100 transition-colors">
+                      🖨️ Print
+                    </button>
+                    <button onClick={() => downloadCertPDF(done.newFolioNo, done.newCertNo)} disabled={pdfLoading || wordLoading}
+                      className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 transition-all"
+                      style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
+                      {pdfLoading ? "⏳…" : "⬇️ PDF"}
+                    </button>
+                    <button onClick={() => downloadCertWord(done.newFolioNo, done.newCertNo)} disabled={pdfLoading || wordLoading}
+                      className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 transition-all"
+                      style={{ background: "linear-gradient(135deg,#1e3a5f,#1d4ed8)" }}>
+                      {wordLoading ? "⏳…" : "📝 Word"}
+                    </button>
+                  </div>
+                </div>
                 <button onClick={() => { setF(DEFAULT); setStep(1); setDone(null); setSavedShareholders([]); setAvailableDirectors([]); setConfirmPending(false); setBoardResDoc(null); setBoardResDate(""); setBoardResVenue(""); setStampDutyManual(false); }}
                   className="w-full py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
                   🔄 New Transfer

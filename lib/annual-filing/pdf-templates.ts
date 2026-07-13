@@ -44,6 +44,21 @@ export function getDocPdfConfig(docType: string): PdfDocConfig {
     // Board Resolution — content includes own header/title; no Puppeteer header/footer
     return { landscape: false, marginSide: "15mm", marginTop: "15mm", marginBottom: "15mm", noHeaderFooter: true };
   }
+  if (docType === "board-minutes" || docType === "agm-minutes" || docType === "egm-minutes" || docType === "committee-minutes") {
+    return { landscape: false, marginSide: "15mm", marginTop: "15mm", marginBottom: "15mm", noHeaderFooter: true };
+  }
+  if (docType === "bank-resolution") {
+    return { landscape: false, marginSide: "16mm", marginTop: "16mm", marginBottom: "16mm", noHeaderFooter: true };
+  }
+  if (docType === "director-notice" || docType === "director-resolution" || docType === "dir2-consent" || docType === "dir8-declaration" || docType === "roc-guide") {
+    return { landscape: false, marginSide: "15mm", marginTop: "15mm", marginBottom: "15mm", noHeaderFooter: true };
+  }
+  if (docType === "master-data") {
+    return { landscape: false, marginSide: "15mm", marginTop: "15mm", marginBottom: "15mm", noHeaderFooter: true };
+  }
+  if (docType === "shareholders-register" || docType === "directors-register") {
+    return { landscape: true, marginSide: "10mm", marginTop: "10mm", marginBottom: "10mm", noHeaderFooter: true };
+  }
   return { landscape: false, marginSide: "20mm", marginTop: "28mm", marginBottom: "34mm" };
 }
 

@@ -639,6 +639,7 @@ export default function EgmMinutesPage() {
   const [draftSaved, setDraftSaved] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [existingDocId, setExistingDocId] = useState<string | null>(null);
+  const [busyDoc, setBusyDoc] = useState<string | null>(null);
   const [showAddAgenda, setShowAddAgenda] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [showChecklist, setShowChecklist] = useState(false);
@@ -745,6 +746,44 @@ export default function EgmMinutesPage() {
     if (!win) { alert("Please allow popups to open."); URL.revokeObjectURL(url); return; }
     if (session) { win.addEventListener("load", () => { win.focus(); win.print(); }); }
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  async function downloadPDF(html: string, docType: string, docTitle: string, filename: string) {
+    setBusyDoc(docType + "_pdf");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename: `${filename}_${safeName}`, docType, companyName: f.companyName, docTitle, dirs: [] }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}_${safeName}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to download PDF. Please use the Print option instead."); }
+    finally { setBusyDoc(null); }
+  }
+
+  async function downloadWord(html: string, docTitle: string, filename: string) {
+    setBusyDoc(filename + "_word");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle, filename: `${filename}_${safeName}` }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}_${safeName}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setBusyDoc(null); }
   }
 
   const ctcCount = f.agendaItems.filter(a => a.resolutionType !== "none" && a.resolution.trim()).length;
@@ -1393,26 +1432,66 @@ export default function EgmMinutesPage() {
               </button>
             </div>
 
-            {/* Print Buttons */}
+            {/* Print / PDF / Word Buttons */}
             <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-5 text-white shadow-lg">
-              <h3 className="font-extrabold text-lg mb-1 text-center">Ready to Print / Save as PDF</h3>
-              <p className="text-amber-100 text-sm mb-5 text-center">
-                A4 print-ready document opens in new window. Use browser <b>Print → Save as PDF</b>.
-              </p>
-              <button onClick={() => openPrint(generateMinutesAndCtcHTML(f))}
-                className="w-full bg-white text-amber-700 font-extrabold px-6 py-3.5 rounded-xl hover:bg-amber-50 transition-all shadow hover:scale-[1.02] text-sm mb-3 flex items-center justify-center gap-2">
-                🖨️ Print All — Minutes + {ctcCount} CTC{ctcCount !== 1 ? "s" : ""}
-                <span className="text-xs bg-amber-100 text-amber-600 font-bold px-2 py-0.5 rounded-full">{ctcCount} CTC{ctcCount !== 1 ? "s" : ""}</span>
-              </button>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => openPrint(generateEgmHTML(f))}
-                  className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition-all border border-white/30">
-                  📄 Minutes Only
-                </button>
-                <button onClick={() => openPrint(generateEgmCtcHTML(f))} disabled={ctcCount === 0}
-                  className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
-                  📋 CTCs Only ({ctcCount})
-                </button>
+              <h3 className="font-extrabold text-base mb-1 text-center">Generate Documents</h3>
+              <p className="text-amber-100 text-xs mb-4 text-center">Print, download PDF, or export to Word</p>
+
+              {/* All — Minutes + CTCs */}
+              <div className="mb-3">
+                <p className="text-xs text-amber-100 font-semibold mb-1.5 text-center">All — Minutes + {ctcCount} CTC{ctcCount !== 1 ? "s" : ""}</p>
+                <div className="flex gap-2">
+                  <button onClick={() => openPrint(generateMinutesAndCtcHTML(f))}
+                    className="flex-1 bg-white text-amber-700 font-extrabold px-3 py-2.5 rounded-xl hover:bg-amber-50 transition-all shadow text-xs flex items-center justify-center gap-1">
+                    🖨️ Print
+                  </button>
+                  <button onClick={() => downloadPDF(generateMinutesAndCtcHTML(f), "egm-minutes", "EGM Minutes + CTCs", "EGMMinutes_All")}
+                    disabled={!!busyDoc} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40">
+                    {busyDoc === "egm-minutes_pdf" ? "⏳…" : "⬇️ PDF"}
+                  </button>
+                  <button onClick={() => downloadWord(generateMinutesAndCtcHTML(f), "EGM Minutes + CTCs", "EGMMinutes_All")}
+                    disabled={!!busyDoc} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40">
+                    {busyDoc === "EGMMinutes_All_word" ? "⏳…" : "📝 Word"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Minutes Only */}
+              <div className="mb-3">
+                <p className="text-xs text-amber-100 font-semibold mb-1.5">Minutes Only</p>
+                <div className="flex gap-2">
+                  <button onClick={() => openPrint(generateEgmHTML(f))}
+                    className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30">
+                    🖨️ Print
+                  </button>
+                  <button onClick={() => downloadPDF(generateEgmHTML(f), "egm-minutes", "EGM Minutes", "EGMMinutes")}
+                    disabled={!!busyDoc} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40">
+                    {busyDoc === "egm-minutes_pdf" ? "⏳…" : "⬇️ PDF"}
+                  </button>
+                  <button onClick={() => downloadWord(generateEgmHTML(f), "EGM Minutes", "EGMMinutes")}
+                    disabled={!!busyDoc} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40">
+                    {busyDoc === "EGMMinutes_word" ? "⏳…" : "📝 Word"}
+                  </button>
+                </div>
+              </div>
+
+              {/* CTCs Only */}
+              <div>
+                <p className="text-xs text-amber-100 font-semibold mb-1.5">CTCs Only ({ctcCount})</p>
+                <div className="flex gap-2">
+                  <button onClick={() => openPrint(generateEgmCtcHTML(f))} disabled={ctcCount === 0}
+                    className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
+                    🖨️ Print
+                  </button>
+                  <button onClick={() => downloadPDF(generateEgmCtcHTML(f), "egm-minutes", "EGM CTCs", "EGMMinutes_CTCs")}
+                    disabled={!!busyDoc || ctcCount === 0} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {busyDoc === "egm-minutes_pdf" ? "⏳…" : "⬇️ PDF"}
+                  </button>
+                  <button onClick={() => downloadWord(generateEgmCtcHTML(f), "EGM CTCs", "EGMMinutes_CTCs")}
+                    disabled={!!busyDoc || ctcCount === 0} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {busyDoc === "EGMMinutes_CTCs_word" ? "⏳…" : "📝 Word"}
+                  </button>
+                </div>
               </div>
             </div>
 

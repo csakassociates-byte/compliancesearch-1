@@ -778,6 +778,7 @@ export default function BoardMinutesPage() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   // If re-opened from dashboard, track the existing doc ID to update instead of create
   const [existingDocId, setExistingDocId] = useState<string | null>(null);
+  const [busyDoc, setBusyDoc] = useState<string | null>(null);
 
   // ── First Meeting & Duplicate Date detection ──
   const [firstMeetingBannerDismissed, setFirstMeetingBannerDismissed] = useState(false);
@@ -1214,6 +1215,44 @@ export default function BoardMinutesPage() {
   function openPrint()    { openPrintWindow(generateMinutesHTML(f)); }
   function openPrintCtc() { openPrintWindow(generateBoardCtcHTML(f)); }
   function openPrintAll() { openPrintWindow(generateBoardAllHTML(f)); }
+
+  async function downloadPDF(html: string, docType: string, docTitle: string, filename: string) {
+    setBusyDoc(docType + "_pdf");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename: `${filename}_${safeName}`, docType, companyName: f.companyName, docTitle, dirs: [] }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}_${safeName}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to download PDF. Please use the Print option instead."); }
+    finally { setBusyDoc(null); }
+  }
+
+  async function downloadWord(html: string, docTitle: string, filename: string) {
+    setBusyDoc(filename + "_word");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle, filename: `${filename}_${safeName}` }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}_${safeName}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setBusyDoc(null); }
+  }
 
   /* ── Auto FY from date ── */
   function autoFY(dateStr: string): string {
@@ -1998,28 +2037,66 @@ export default function BoardMinutesPage() {
         <strong>Before printing:</strong> Verify all details — Director DINs, resolution text, dates. Minutes must be signed by the Chairman within 30 days. Consult a qualified CS for compliance review.
       </div>
 
-      {/* Print buttons */}
+      {/* Print / PDF / Word buttons */}
       <div className="rounded-2xl p-5 text-white shadow-lg" style={{ background: "linear-gradient(135deg,#1d4ed8,#7c3aed)" }}>
-        <h3 className="font-extrabold text-base mb-1 text-center">Ready to Print / Save as PDF</h3>
-        <p className="text-blue-200 text-xs mb-4 text-center">Opens in new window — use browser Print → Save as PDF</p>
-        <button
-          onClick={openPrintAll}
-          className="w-full bg-white text-blue-700 font-extrabold px-6 py-3 rounded-xl hover:bg-blue-50 transition-all shadow text-sm mb-3 flex items-center justify-center gap-2">
-          🖨️ Print All — Minutes + {ctcCount} CTC{ctcCount !== 1 ? "s" : ""}
-          <span className="text-xs bg-blue-100 text-blue-600 font-bold px-2 py-0.5 rounded-full">{ctcCount} CTC{ctcCount !== 1 ? "s" : ""}</span>
-        </button>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={openPrint}
-            className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition-all border border-white/30">
-            📄 Minutes Only
-          </button>
-          <button
-            onClick={openPrintCtc}
-            disabled={ctcCount === 0}
-            className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
-            📋 CTCs Only ({ctcCount})
-          </button>
+        <h3 className="font-extrabold text-base mb-1 text-center">Generate Documents</h3>
+        <p className="text-blue-200 text-xs mb-4 text-center">Print, download PDF, or export to Word</p>
+
+        {/* All — Minutes + CTCs */}
+        <div className="mb-3">
+          <p className="text-xs text-blue-200 font-semibold mb-1.5 text-center">All — Minutes + {ctcCount} CTC{ctcCount !== 1 ? "s" : ""}</p>
+          <div className="flex gap-2">
+            <button onClick={openPrintAll}
+              className="flex-1 bg-white text-blue-700 font-extrabold px-3 py-2.5 rounded-xl hover:bg-blue-50 transition-all shadow text-xs flex items-center justify-center gap-1">
+              🖨️ Print
+            </button>
+            <button onClick={() => downloadPDF(generateBoardAllHTML(f), "board-minutes", "Board Meeting Minutes + CTCs", "BoardMinutes_All")}
+              disabled={!!busyDoc} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40">
+              {busyDoc === "board-minutes_pdf" ? "⏳…" : "⬇️ PDF"}
+            </button>
+            <button onClick={() => downloadWord(generateBoardAllHTML(f), "Board Meeting Minutes + CTCs", "BoardMinutes_All")}
+              disabled={!!busyDoc} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40">
+              {busyDoc === "BoardMinutes_All_word" ? "⏳…" : "📝 Word"}
+            </button>
+          </div>
+        </div>
+
+        {/* Minutes Only */}
+        <div className="mb-3">
+          <p className="text-xs text-blue-200 font-semibold mb-1.5">Minutes Only</p>
+          <div className="flex gap-2">
+            <button onClick={openPrint}
+              className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30">
+              🖨️ Print
+            </button>
+            <button onClick={() => downloadPDF(generateMinutesHTML(f), "board-minutes", "Board Meeting Minutes", "BoardMinutes")}
+              disabled={!!busyDoc} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40">
+              {busyDoc === "board-minutes_pdf" ? "⏳…" : "⬇️ PDF"}
+            </button>
+            <button onClick={() => downloadWord(generateMinutesHTML(f), "Board Meeting Minutes", "BoardMinutes")}
+              disabled={!!busyDoc} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40">
+              {busyDoc === "BoardMinutes_word" ? "⏳…" : "📝 Word"}
+            </button>
+          </div>
+        </div>
+
+        {/* CTCs Only */}
+        <div>
+          <p className="text-xs text-blue-200 font-semibold mb-1.5">CTCs Only ({ctcCount})</p>
+          <div className="flex gap-2">
+            <button onClick={openPrintCtc} disabled={ctcCount === 0}
+              className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
+              🖨️ Print
+            </button>
+            <button onClick={() => downloadPDF(generateBoardCtcHTML(f), "board-minutes", "Board Meeting CTCs", "BoardMinutes_CTCs")}
+              disabled={!!busyDoc || ctcCount === 0} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
+              {busyDoc === "board-minutes_pdf" ? "⏳…" : "⬇️ PDF"}
+            </button>
+            <button onClick={() => downloadWord(generateBoardCtcHTML(f), "Board Meeting CTCs", "BoardMinutes_CTCs")}
+              disabled={!!busyDoc || ctcCount === 0} className="flex-1 bg-white/20 hover:bg-white/30 text-white font-semibold px-3 py-2.5 rounded-xl text-xs transition-all border border-white/30 disabled:opacity-40 disabled:cursor-not-allowed">
+              {busyDoc === "BoardMinutes_CTCs_word" ? "⏳…" : "📝 Word"}
+            </button>
+          </div>
         </div>
       </div>
 

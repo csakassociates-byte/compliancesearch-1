@@ -633,6 +633,7 @@ export default function DirectorAppointmentPage() {
   const [activeNdTab, setActiveNdTab] = useState(0);
   const [activeDocKey, setActiveDocKey] = useState("notice");
   const [companySearchVal, setCompanySearchVal] = useState("");
+  const [busyKey, setBusyKey] = useState<string | null>(null);
 
   useEffect(() => {
     try { const s = localStorage.getItem(DRAFT_KEY); if (s) setF(JSON.parse(s) as F); } catch {}
@@ -702,11 +703,51 @@ export default function DirectorAppointmentPage() {
 
   function openPrint(html: string) {
     const h = session ? html : injectPreviewWatermark(html);
-    const w = window.open("", "_blank", "width=900,height=750");
-    if (!w) return;
-    w.document.write(h);
-    w.document.close();
-    setTimeout(() => w.print(), 600);
+    const url = URL.createObjectURL(new Blob([h], { type: "text/html;charset=utf-8" }));
+    const w = window.open(url, "_blank");
+    if (!w) { alert("Pop-up blocked! Please allow pop-ups."); URL.revokeObjectURL(url); return; }
+    if (session) { w.addEventListener("load", () => { w.focus(); w.print(); }); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  async function downloadDocPDF(html: string, docType: string, docTitle: string, key: string) {
+    setBusyKey(key + "_pdf");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `${key}_${safeName}`;
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename, docType, companyName: f.companyName, docTitle, dirs: [] }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to download PDF. Please use the Print option instead."); }
+    finally { setBusyKey(null); }
+  }
+
+  async function downloadDocWord(html: string, docTitle: string, key: string) {
+    setBusyKey(key + "_word");
+    try {
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `${key}_${safeName}`;
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle, filename }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setBusyKey(null); }
   }
 
   const isGM = f.ndDesignation === "director_gm";
@@ -1005,10 +1046,20 @@ export default function DirectorAppointmentPage() {
               <span className="text-lg">{activeDoc.emoji}</span>
               <span className="text-sm font-bold text-slate-800">{activeDoc.label}</span>
             </div>
-            <button onClick={() => openPrint(activeDoc.gen())}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">
-              🖨️ Print / Download
-            </button>
+            <div className="flex gap-1.5">
+              <button onClick={() => openPrint(activeDoc.gen())} disabled={!!busyKey}
+                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors disabled:opacity-50">
+                🖨️ Print
+              </button>
+              <button onClick={() => downloadDocPDF(activeDoc.gen(), "director-resolution", activeDoc.label, activeDoc.key)} disabled={!!busyKey}
+                className="flex items-center gap-1 bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors disabled:opacity-50">
+                {busyKey === activeDoc.key + "_pdf" ? "⏳…" : "⬇️ PDF"}
+              </button>
+              <button onClick={() => downloadDocWord(activeDoc.gen(), activeDoc.label, activeDoc.key)} disabled={!!busyKey}
+                className="flex items-center gap-1 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors disabled:opacity-50">
+                {busyKey === activeDoc.key + "_word" ? "⏳…" : "📝 Word"}
+              </button>
+            </div>
           </div>
           <div className="bg-white p-4 max-h-[500px] overflow-y-auto"
             dangerouslySetInnerHTML={{ __html: activeDoc.gen()
@@ -1022,10 +1073,20 @@ export default function DirectorAppointmentPage() {
 
       <div className="flex flex-wrap gap-2">
         {docs.map(d => (
-          <button key={d.key} onClick={() => openPrint(d.gen())}
-            className="py-2 px-3 rounded-xl text-xs font-bold border-2 border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 transition-all flex items-center gap-1">
-            {d.emoji} Print {d.label}
-          </button>
+          <div key={d.key} className="flex gap-1">
+            <button onClick={() => openPrint(d.gen())} disabled={!!busyKey}
+              className="py-2 px-2.5 rounded-l-xl text-xs font-bold border-2 border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 transition-all flex items-center gap-1 disabled:opacity-50">
+              {d.emoji} Print {d.label}
+            </button>
+            <button onClick={() => downloadDocPDF(d.gen(), "director-resolution", d.label, d.key)} disabled={!!busyKey}
+              className="py-2 px-2.5 rounded-none text-xs font-bold border-2 border-l-0 border-slate-200 text-blue-700 hover:border-blue-400 hover:bg-blue-50 transition-all disabled:opacity-50">
+              {busyKey === d.key + "_pdf" ? "⏳" : "⬇️"}
+            </button>
+            <button onClick={() => downloadDocWord(d.gen(), d.label, d.key)} disabled={!!busyKey}
+              className="py-2 px-2.5 rounded-r-xl text-xs font-bold border-2 border-l-0 border-slate-200 text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all disabled:opacity-50">
+              {busyKey === d.key + "_word" ? "⏳" : "📝"}
+            </button>
+          </div>
         ))}
       </div>
 

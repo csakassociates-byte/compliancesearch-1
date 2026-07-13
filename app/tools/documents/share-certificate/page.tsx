@@ -443,6 +443,8 @@ export default function ShareCertificatePage() {
   const [savedShareholders, setSavedShareholders] = useState<SavedShareholder[]>([]);
   const [editShIdx, setEditShIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [wordBusy, setWordBusy] = useState(false);
 
   const set = (k: keyof F, v: unknown) => setF(p => ({ ...p, [k]: v }));
   const { data: session } = useSession();
@@ -557,6 +559,48 @@ export default function ShareCertificatePage() {
     if (!win) { alert("Pop-up blocked! Please allow pop-ups for this site."); URL.revokeObjectURL(url); return; }
     if (autoprint && session?.user) { win.addEventListener("load", () => { win.focus(); win.print(); }); }
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  async function downloadCertsPDF() {
+    setPdfBusy(true);
+    try {
+      const html = generatePrintHTML(f, ranges);
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `ShareCertificates_${safeName}`;
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, filename, docType: "share-certificate", companyName: f.companyName, docTitle: "Share Certificates", dirs: [] }),
+      });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to download PDF. Please use the Print option instead."); }
+    finally { setPdfBusy(false); }
+  }
+
+  async function downloadCertsWord() {
+    setWordBusy(true);
+    try {
+      const html = generatePrintHTML(f, ranges);
+      const safeName = f.companyName.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40);
+      const filename = `ShareCertificates_${safeName}`;
+      const res = await fetch("/api/share-transfer/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, companyName: f.companyName, docTitle: "Share Certificates", filename }),
+      });
+      if (!res.ok) throw new Error("DOCX generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${filename}.docx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Failed to generate Word file. Please use the Print option instead."); }
+    finally { setWordBusy(false); }
   }
 
   async function applyCompanyData(data: CompanyData) {
@@ -1332,20 +1376,25 @@ export default function ShareCertificatePage() {
                 {f.shareholders.length} certificate(s) — {formatNum(totalShares)} total shares
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <button onClick={()=>setPreview(false)}
                 className="px-4 py-2 rounded-xl font-bold text-slate-600 border-2 border-slate-200 text-sm hover:bg-slate-50 transition">
                 ← Edit
               </button>
-              <button onClick={()=>openPrintWindow(false)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105"
-                style={{ background:"linear-gradient(135deg,#1d4ed8,#2563eb)" }}>
-                👁️ Open Preview
-              </button>
               <button onClick={()=>openPrintWindow(true)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105"
-                style={{ background:"linear-gradient(135deg,#d97706,#b45309)" }}>
-                🖨️ Print / Download PDF
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105"
+                style={{ background:"linear-gradient(135deg,#065f46,#047857)" }}>
+                🖨️ Print
+              </button>
+              <button onClick={downloadCertsPDF} disabled={pdfBusy || wordBusy}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-50"
+                style={{ background:"linear-gradient(135deg,#1d4ed8,#2563eb)" }}>
+                {pdfBusy ? "⏳…" : "⬇️ PDF"}
+              </button>
+              <button onClick={downloadCertsWord} disabled={pdfBusy || wordBusy}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition hover:scale-105 disabled:opacity-50"
+                style={{ background:"linear-gradient(135deg,#1e3a5f,#1d4ed8)" }}>
+                {wordBusy ? "⏳…" : "📝 Word"}
               </button>
             </div>
           </div>
