@@ -83,41 +83,71 @@ export async function POST(req: NextRequest) {
     });
 
     // ── Smart Director Sync ───────────────────────────────────────
-    // Key: (companyId + DIN) — same DIN can exist in multiple companies (normal)
-    // Dedup rule: within THIS company, same DIN = same person → update, not duplicate
     if (Array.isArray(directors)) {
-      const existing = await prisma.companyDirector.findMany({
+      let existing = await prisma.companyDirector.findMany({
+        where: { companyId: company.id },
+        orderBy: { createdAt: "asc" },
+      });
+
+      // ── Step 0: Remove existing DB duplicates (same DIN or same name) ──
+      // Keep the first (oldest) record per DIN / per normalised name; delete the rest.
+      const seenDin  = new Map<string, string>(); // din  → id to keep
+      const seenName = new Map<string, string>(); // name → id to keep
+      for (const e of existing) {
+        const normDin  = e.din?.trim() || null;
+        const normName = e.name.trim().toUpperCase();
+        let keepId: string | null = null;
+
+        if (normDin) {
+          if (!seenDin.has(normDin)) { seenDin.set(normDin, e.id); }
+          else keepId = seenDin.get(normDin)!;
+        } else {
+          if (!seenName.has(normName)) { seenName.set(normName, e.id); }
+          else keepId = seenName.get(normName)!;
+        }
+
+        if (keepId && keepId !== e.id) {
+          // This row is a duplicate — delete it
+          await prisma.companyDirector.delete({ where: { id: e.id } });
+        }
+      }
+
+      // Re-fetch after cleanup
+      existing = await prisma.companyDirector.findMany({
         where: { companyId: company.id },
       });
 
-      // Map by DIN (preferred) or normalized name
-      const incomingMap = new Map<string, typeof directors[0]>();
-      for (const d of directors) {
-        const key = (d.din || "").trim() || d.name.trim().toUpperCase();
-        if (key) incomingMap.set(key, d);
+      // ── Helper: find best existing match for an incoming director ──
+      function findMatch(inc: { din?: string | null; name: string }) {
+        const incDin  = inc.din?.trim();
+        const incName = inc.name.trim().toUpperCase();
+        // Priority 1: DIN match (most reliable)
+        if (incDin) {
+          const byDin = existing.find(e => e.din?.trim() === incDin);
+          if (byDin) return byDin;
+        }
+        // Priority 2: normalised name match
+        return existing.find(e => e.name.trim().toUpperCase() === incName) || null;
       }
 
-      const existingMap = new Map<string, typeof existing[0]>();
+      // ── Step 1: Mark ceased — DB directors not in upload ──
       for (const e of existing) {
-        const key = (e.din || "").trim() || e.name.trim().toUpperCase();
-        if (key) existingMap.set(key, e);
-      }
-
-      // Directors in DB but NOT in new upload → mark ceased
-      for (const [key, dbDir] of existingMap) {
-        if (!incomingMap.has(key) && dbDir.isActive) {
+        const stillIncoming = directors.some(
+          d => (d.din?.trim() && d.din.trim() === e.din?.trim())
+            || d.name.trim().toUpperCase() === e.name.trim().toUpperCase()
+        );
+        if (!stillIncoming && e.isActive) {
           await prisma.companyDirector.update({
-            where: { id: dbDir.id },
+            where: { id: e.id },
             data: { isActive: false, ceasedAt: new Date().toISOString().split("T")[0], updatedAt: new Date() },
           });
         }
       }
 
-      // Directors in upload → create or update
-      for (const [key, inc] of incomingMap) {
-        const dbDir = existingMap.get(key);
+      // ── Step 2: Upsert incoming directors ──
+      for (const inc of directors) {
+        const dbDir = findMatch(inc);
         if (dbDir) {
-          // Update existing — re-activate if was ceased
           await prisma.companyDirector.update({
             where: { id: dbDir.id },
             data: {
@@ -125,14 +155,13 @@ export async function POST(req: NextRequest) {
               designation: inc.designation || dbDir.designation,
               category:    inc.category    || dbDir.category,
               appointedAt: inc.appointedAt || dbDir.appointedAt,
-              din:         inc.din         || dbDir.din,
+              din:         inc.din         || dbDir.din, // fill in DIN if it was missing
               isActive:    true,
               ceasedAt:    null,
               updatedAt:   new Date(),
             },
           });
         } else {
-          // New director for this company (may have same DIN in other companies — that's OK)
           await prisma.companyDirector.create({
             data: {
               companyId:   company.id,
