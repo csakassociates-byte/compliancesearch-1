@@ -151,6 +151,7 @@ export default function ShareTransferPage() {
   const [step, setStep] = useState(1);
   const [f, setF] = useState<F>(DEFAULT);
   const [companyQuery, setCompanyQuery] = useState("");
+  const [fromDashboard, setFromDashboard] = useState(false);
 
   /* ── Restore from sessionStorage on mount (guest users) ── */
   useEffect(() => {
@@ -165,6 +166,74 @@ export default function ShareTransferPage() {
         }
       } catch { /* ignore */ }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Prefill from dashboard Transfer button (localStorage) ── */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = localStorage.getItem("csi_transfer_prefill");
+    if (!raw) return;
+    localStorage.removeItem("csi_transfer_prefill");
+    try {
+      const d = JSON.parse(raw) as {
+        companyId?: string; companyName?: string; cin?: string; regAddress?: string;
+        transferorShareholderId?: string; transferorPersonId?: string; transferorName?: string;
+        transferorFolio?: string; transferorCertNo?: string; transferorTotalShares?: number;
+        transferorDistinctiveFrom?: number; transferorDistinctiveTo?: number; transferorPan?: string;
+        shareType?: string; nominalValue?: string; calledUpValue?: string; paidUpValue?: string;
+        issuePlace?: string; signingDirectorsJson?: string;
+      };
+
+      // Parse saved signers if present
+      let signers = DEFAULT.signers;
+      if (d.signingDirectorsJson) {
+        try { signers = JSON.parse(d.signingDirectorsJson) as typeof DEFAULT.signers; } catch { /* */ }
+      }
+
+      const totalShares = d.transferorTotalShares || 0;
+      upd({
+        companyId:                 d.companyId || "",
+        companyName:               d.companyName || "",
+        cin:                       d.cin || "",
+        regAddress:                d.regAddress || "",
+        transferorShareholderId:   d.transferorShareholderId || "",
+        transferorPersonId:        d.transferorPersonId || "",
+        transferorName:            d.transferorName || "",
+        transferorFolio:           d.transferorFolio || "",
+        transferorCertNo:          d.transferorCertNo || "",
+        transferorTotalShares:     totalShares,
+        transferorDistinctiveFrom: d.transferorDistinctiveFrom || 1,
+        transferorDistinctiveTo:   d.transferorDistinctiveTo || 0,
+        transferorPan:             d.transferorPan || "",
+        sharesToTransfer:          totalShares,   // default: transfer all shares
+        shareType:                 d.shareType || "Equity",
+        nominalValue:              d.nominalValue || "10",
+        calledUpValue:             d.calledUpValue || d.nominalValue || "10",
+        paidUpValue:               d.paidUpValue || d.nominalValue || "10",
+        issuePlace:                d.issuePlace || "",
+        signers:                   signers.length ? signers : DEFAULT.signers,
+      });
+
+      if (d.companyName) setCompanyQuery(d.companyName);
+      setFromDashboard(true);
+
+      // Load shareholders + directors for autocomplete
+      if (d.companyId) {
+        loadShareholders(d.companyId);
+        fetch(`/api/persons?companyId=${d.companyId}&type=director`)
+          .then(r => r.json())
+          .then((pd: { persons?: Array<{ name?: string; din?: string; designation?: string; isActive?: boolean }> }) => {
+            const dirs = (pd.persons || [])
+              .filter(p => p.isActive !== false && p.name)
+              .map(p => ({ name: p.name!, designation: p.designation || "Director", din: p.din || "" }));
+            setAvailableDirectors(dirs);
+          }).catch(() => {});
+      }
+
+      // Company + Transferor are pre-filled → jump straight to Details step
+      setStep(3);
+    } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [savedShareholders, setSavedShareholders] = useState<SavedShareholder[]>([]);
@@ -807,6 +876,20 @@ export default function ShareTransferPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Dashboard prefill banner ── */}
+      {fromDashboard && f.companyName && (
+        <div className="max-w-3xl mx-auto px-4 mt-4">
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-sm">
+            <span className="text-emerald-600 font-semibold flex-1">
+              ✅ Pre-filled from dashboard — <strong>{f.companyName}</strong> · Transferor: <strong>{f.transferorName}</strong> · {f.transferorTotalShares.toLocaleString("en-IN")} shares
+            </span>
+            <a href={`/dashboard/clients`} className="text-xs font-semibold text-emerald-700 underline underline-offset-2 whitespace-nowrap">
+              ← Back to Dashboard
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ── STEP INDICATOR ── */}
       <div className="max-w-3xl mx-auto px-4 mt-6">

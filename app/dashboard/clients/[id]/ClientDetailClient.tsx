@@ -2135,6 +2135,7 @@ interface ShareholderRow extends ShareholderRecord {
 }
 
 function ShareholdersTab({ companyId, company }: { companyId: string; company: Company }) {
+  const router = useRouter();
   const [shareholders, setShareholders] = useState<ShareholderRow[]>([]);
   const [totalShares, setTotalShares] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -2296,7 +2297,32 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
                 </button>
                 {(sh.numberOfShares || 0) > 0 && sh.certStatus !== 'cancelled' && sh.certStatus !== 'split' && sh.transferStatus !== 'transferred' && (
                   <>
-                    <button onClick={() => setTransferSh(sh)}
+                    <button onClick={() => {
+                      // Store all available data for the standalone tool to pick up
+                      const prefill = {
+                        companyId:                  company.id,
+                        companyName:                company.companyName,
+                        cin:                        company.cin || '',
+                        regAddress:                 company.regAddress || '',
+                        transferorShareholderId:    sh.id,
+                        transferorPersonId:         sh.personId,
+                        transferorName:             sh.personName || '',
+                        transferorFolio:            sh.folioNumber || '',
+                        transferorCertNo:           sh.certificateNumber || '',
+                        transferorTotalShares:      sh.numberOfShares || 0,
+                        transferorDistinctiveFrom:  sh.distinctiveFrom || 1,
+                        transferorDistinctiveTo:    sh.distinctiveTo || 0,
+                        transferorPan:              sh.panNo || '',
+                        shareType:                  sh.shareType || 'Equity',
+                        nominalValue:               sh.nominalValue || '10',
+                        calledUpValue:              sh.nominalValue || '10',
+                        paidUpValue:                sh.paidUpValue || sh.nominalValue || '10',
+                        issuePlace:                 sh.issuePlace || '',
+                        signingDirectorsJson:       sh.signingDirectorsJson || '',
+                      };
+                      localStorage.setItem('csi_transfer_prefill', JSON.stringify(prefill));
+                      router.push('/tools/documents/share-transfer');
+                    }}
                       className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
                       🔄 Transfer
                     </button>
