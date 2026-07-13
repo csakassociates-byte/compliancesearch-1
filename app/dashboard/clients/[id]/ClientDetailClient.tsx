@@ -1793,7 +1793,7 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
 }
 
 /* ── Directors Tab ───────────────────────────────────── */
-function DirectorsTab({ companyId, company }: { companyId: string; company: Company }) {
+function DirectorsTab({ companyId, company, onSwitchTab }: { companyId: string; company: Company; onSwitchTab: (tab: 'shareholders') => void }) {
   const [persons, setPersons] = useState<PersonKYC[]>([]);
   const [loading, setLoading] = useState(true);
   const [editPerson, setEditPerson] = useState<PersonKYC | null>(null);
@@ -1858,7 +1858,8 @@ function DirectorsTab({ companyId, company }: { companyId: string; company: Comp
     setSyncing(id);
     await fetch(`/api/persons/${id}/sync`, { method: 'POST' });
     setSyncing(null);
-    load();
+    await load();
+    onSwitchTab('shareholders');
   }
 
   async function handleDelete(p: PersonKYC) {
@@ -1946,14 +1947,14 @@ function DirectorsTab({ companyId, company }: { companyId: string; company: Comp
                     {isCreating ? '⏳...' : '✏️ Edit KYC'}
                   </button>
                   <button
-                    onClick={() => handleSync(p)}
+                    onClick={() => p.isShareholder ? onSwitchTab('shareholders') : handleSync(p)}
                     disabled={syncing === p.id}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
                       p.isShareholder
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                         : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
                     }`}>
-                    {syncing === p.id ? '...' : p.isShareholder ? '🔗 Shareholder' : '🔄 Add as SH'}
+                    {syncing === p.id ? '...' : p.isShareholder ? '🔗 Shareholder ↗' : '🔄 Add as SH'}
                   </button>
                   {p.id && (
                     <button onClick={() => handleDelete(p)}
@@ -2810,7 +2811,7 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
         )}
 
         {activeTab === 'directors' && (
-          <DirectorsTab companyId={companyId} company={company!} />
+          <DirectorsTab companyId={companyId} company={company!} onSwitchTab={setActiveTab} />
         )}
 
         {activeTab === 'shareholders' && (
