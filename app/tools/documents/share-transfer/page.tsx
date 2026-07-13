@@ -691,10 +691,12 @@ export default function ShareTransferPage() {
       },
       signers,
       resolutionText,
+      { autoPrint: true },
     );
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const w = window.open(url, "_blank");
     if (!w) { alert("Pop-up blocked — please allow pop-ups"); URL.revokeObjectURL(url); return; }
+    w.addEventListener("load", () => { w.focus(); w.print(); });
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
   }
 

@@ -533,9 +533,11 @@ function printShareCertificate(sh: ShareholderRow & { personName?: string }, com
   void certIdx;
 
   const html = generateShareCertificateHTML(certCompany, [certShareholder], [range], signers);
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) { alert('Pop-up blocked! Please allow pop-ups.'); return; }
-  w.document.write(html); w.document.close();
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  const w = window.open(url, '_blank');
+  if (w) { w.addEventListener('load', () => { w.focus(); w.print(); }); }
+  else { alert('Pop-up blocked — please allow pop-ups.'); }
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
 }
 
 /* ── Print: All Shareholders list ─────────────────────── */
@@ -608,9 +610,11 @@ function printAllShareholders(shareholders: (ShareholderRow & { personName?: str
   </table>
   <script>window.onload=function(){window.print();}</script>
   </body></html>`;
-  const w = window.open('','_blank','width=1200,height=700');
-  if (!w) { alert('Pop-up blocked!'); return; }
-  w.document.write(html); w.document.close();
+  const _url1 = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  const _w1 = window.open(_url1, '_blank');
+  if (_w1) { _w1.addEventListener('load', () => { _w1.focus(); _w1.print(); }); }
+  else { alert('Pop-up blocked — please allow pop-ups.'); }
+  setTimeout(() => URL.revokeObjectURL(_url1), 120_000);
 }
 
 /* ── Print: All Directors list ────────────────────────── */
@@ -657,9 +661,11 @@ function printAllDirectors(directors: PersonKYC[], company: Company) {
   </table>
   <script>window.onload=function(){window.print();}</script>
   </body></html>`;
-  const w = window.open('','_blank','width=1200,height=700');
-  if (!w) { alert('Pop-up blocked!'); return; }
-  w.document.write(html); w.document.close();
+  const _url2 = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  const _w2 = window.open(_url2, '_blank');
+  if (_w2) { _w2.addEventListener('load', () => { _w2.focus(); _w2.print(); }); }
+  else { alert('Pop-up blocked — please allow pop-ups.'); }
+  setTimeout(() => URL.revokeObjectURL(_url2), 120_000);
 }
 
 /* ── Shareholder View Modal ───────────────────────────── */
@@ -924,9 +930,11 @@ function ShareTransferModal({
       signers.filter(s => s.name),
       witnesses
     );
-    const w = window.open('', '_blank', 'width=900,height=700');
-    if (!w) { alert('Pop-up blocked!'); return; }
-    w.document.write(html); w.document.close();
+    const _sh4url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    const _sh4w = window.open(_sh4url, '_blank');
+    if (_sh4w) { _sh4w.addEventListener('load', () => { _sh4w.focus(); _sh4w.print(); }); }
+    else { alert('Pop-up blocked — please allow pop-ups.'); }
+    setTimeout(() => URL.revokeObjectURL(_sh4url), 120_000);
   }
 
   async function handleSubmit() {
@@ -1490,12 +1498,39 @@ interface TransferRecord {
   signingDirectorsJson?: string;
   status?: string;
   createdAt: string;
+  /* SPA / KYC fields */
+  transferorFatherName?: string;
+  transferorAddress?: string;
+  transferorRelation?: string;
+  transferorPan?: string;
+  transfereeFather?: string;
+  transfereeAddress?: string;
+  transfereePan?: string;
+  transfereeRelation?: string;
+  transfereeOccupation?: string;
+  paymentMode?: string;
+  witness1Name?: string;
+  witness1Address?: string;
+  witness2Name?: string;
+  witness2Address?: string;
+  /* Board resolution fields */
+  meetingDocId?: string;
+  resolutionNo?: string;
+  resolutionText?: string;
+}
+
+interface BrConflict {
+  transfer: TransferRecord;
+  meeting: { id: string; title: string; meetingDate: string };
+  action: () => void;
 }
 
 function TransfersTab({ companyId, company }: { companyId: string; company: Company }) {
-  const [transfers, setTransfers] = useState<TransferRecord[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [viewT, setViewT]         = useState<TransferRecord | null>(null);
+  const [transfers, setTransfers]     = useState<TransferRecord[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [viewT, setViewT]             = useState<TransferRecord | null>(null);
+  const [brConflict, setBrConflict]   = useState<BrConflict | null>(null);
+  const [brBusy, setBrBusy]           = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1507,76 +1542,132 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
 
   useEffect(() => { load(); }, [load]);
 
+  function getSigners(t: TransferRecord) {
+    if (!t.signingDirectorsJson) return [];
+    try { return JSON.parse(t.signingDirectorsJson) as { name: string; designation: string; din?: string }[]; }
+    catch { return []; }
+  }
+
+  function openInNewTab(html: string) {
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    const w = window.open(url, '_blank');
+    if (w) { w.addEventListener('load', () => { w.focus(); w.print(); }); }
+    else { alert('Pop-up blocked — please allow pop-ups to print.'); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  }
+
+  async function downloadWord(html: string, filename: string, docTitle: string) {
+    const r = await fetch('/api/share-transfer/docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html, companyName: company.companyName, docTitle, filename }),
+    });
+    if (!r.ok) { alert('Word download failed. Please try again.'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename + '.docx'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
   function printSH4(t: TransferRecord) {
     import('@/lib/share-transfer-html').then(({ generateSH4HTML }) => {
-      let signers: { name: string; designation: string; din?: string }[] = [];
-      if (t.signingDirectorsJson) {
-        try { signers = JSON.parse(t.signingDirectorsJson); } catch { /* */ }
-      }
       const html = generateSH4HTML(
-        {
-          companyName:  company.companyName,
-          cin:          company.cin || '',
-          regAddress:   company.regAddress || '',
-          shareClass:   t.shareType || 'Equity',
-          nominalValue: t.nominalValue || '10',
-          paidUpValue:  t.paidUpValue  || '10',
-        },
-        {
-          name:           t.transferorName,
-          folioNo:        t.transferorFolio || '',
-          certNo:         t.transferorCertNo || '',
-          numberOfShares: t.numberOfShares || 0,
-          distinctiveFrom: t.distinctiveFrom || 1,
-          distinctiveTo:  t.distinctiveTo   || 0,
-        },
-        {
-          name:              t.transfereeName,
-          newFolioNo:        t.transfereeFolio || '—',
-          newCertNo:         t.transfereeCertNo || '—',
-          newDistinctiveFrom: t.distinctiveFrom || 1,
-          newDistinctiveTo:  t.distinctiveTo   || 0,
-        },
-        {
-          transferDate:          t.transferDate || '',
-          considerationPerShare: t.considerationPerShare || undefined,
-          totalConsideration:    t.totalConsideration    || undefined,
-          stampDuty:             t.stampDuty             || undefined,
-          issuePlace:            t.issuePlace            || undefined,
-        },
-        signers
+        { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '', shareClass: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', paidUpValue: t.paidUpValue || '10' },
+        { name: t.transferorName, folioNo: t.transferorFolio || '', certNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, distinctiveFrom: t.distinctiveFrom || 1, distinctiveTo: t.distinctiveTo || 0 },
+        { name: t.transfereeName, newFolioNo: t.transfereeFolio || '—', newCertNo: t.transfereeCertNo || '—', newDistinctiveFrom: t.distinctiveFrom || 1, newDistinctiveTo: t.distinctiveTo || 0 },
+        { transferDate: t.transferDate || '', considerationPerShare: t.considerationPerShare || undefined, totalConsideration: t.totalConsideration || undefined, stampDuty: t.stampDuty || undefined, issuePlace: t.issuePlace || undefined },
+        getSigners(t)
       );
-      const w = window.open('', '_blank', 'width=900,height=700');
-      if (!w) { alert('Pop-up blocked!'); return; }
-      w.document.write(html); w.document.close();
+      openInNewTab(html);
     });
   }
 
   function printNewCert(t: TransferRecord) {
     import('@/lib/share-certificate-html').then(({ generateShareCertificateHTML, computeCertRanges }) => {
-      let signers: { name: string; designation: string; din?: string }[] = [];
-      if (t.signingDirectorsJson) {
-        try { signers = JSON.parse(t.signingDirectorsJson); } catch { /* */ }
-      }
       const ranges = computeCertRanges([{ shares: t.numberOfShares || 0 }], t.distinctiveFrom || 1);
       const html = generateShareCertificateHTML(
-        {
-          companyName:  company.companyName,
-          cin:          company.cin || '',
-          regAddress:   company.regAddress || '',
-          shareClass:   t.shareType || 'Equity',
-          nominalValue: t.nominalValue || '10',
-          paidUpValue:  t.paidUpValue  || '10',
-          issueDate:    t.transferDate || '',
-          issuePlace:   t.issuePlace   || '',
-        },
+        { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '', shareClass: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', paidUpValue: t.paidUpValue || '10', issueDate: t.transferDate || '', issuePlace: t.issuePlace || '' },
         [{ name: t.transfereeName, din: '', shares: t.numberOfShares || 0 }],
         [{ ...ranges[0], folioNo: t.transfereeFolio || '01', certNo: t.transfereeCertNo || '01' }],
-        signers
+        getSigners(t)
       );
-      const w = window.open('', '_blank', 'width=900,height=700');
-      if (!w) { alert('Pop-up blocked!'); return; }
-      w.document.write(html); w.document.close();
+      openInNewTab(html);
+    });
+  }
+
+  async function printSPA(t: TransferRecord) {
+    const { generateSPAHTML } = await import('@/lib/share-purchase-agreement-html');
+    const html = generateSPAHTML(
+      { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '' },
+      { name: t.transferorName, relation: t.transferorRelation || 'S/O', relativeName: t.transferorFatherName || '', address: t.transferorAddress || '', pan: t.transferorPan },
+      { name: t.transfereeName, relation: t.transfereeRelation || 'S/O', relativeName: t.transfereeFather || '', address: t.transfereeAddress || '', pan: t.transfereePan },
+      { numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', folioNo: t.transferorFolio || '', certNo: t.transferorCertNo || '', considerationPerShare: t.considerationPerShare || '', totalConsideration: t.totalConsideration || '', paymentMode: t.paymentMode || 'Bank Transfer', agreementDate: t.transferDate || '', place: t.issuePlace || '' },
+      [{ name: t.witness1Name || '', address: t.witness1Address || '' }, { name: t.witness2Name || '', address: t.witness2Address || '' }],
+      { autoPrint: true }
+    );
+    openInNewTab(html);
+  }
+
+  async function downloadSPAWord(t: TransferRecord) {
+    const { generateSPAHTML } = await import('@/lib/share-purchase-agreement-html');
+    const html = generateSPAHTML(
+      { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '' },
+      { name: t.transferorName, relation: t.transferorRelation || 'S/O', relativeName: t.transferorFatherName || '', address: t.transferorAddress || '', pan: t.transferorPan },
+      { name: t.transfereeName, relation: t.transfereeRelation || 'S/O', relativeName: t.transfereeFather || '', address: t.transfereeAddress || '', pan: t.transfereePan },
+      { numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', folioNo: t.transferorFolio || '', certNo: t.transferorCertNo || '', considerationPerShare: t.considerationPerShare || '', totalConsideration: t.totalConsideration || '', paymentMode: t.paymentMode || 'Bank Transfer', agreementDate: t.transferDate || '', place: t.issuePlace || '' },
+      [{ name: t.witness1Name || '', address: t.witness1Address || '' }, { name: t.witness2Name || '', address: t.witness2Address || '' }]
+    );
+    await downloadWord(html, `SPA_${t.transferorName}_to_${t.transfereeName}`, 'Share Purchase Agreement');
+  }
+
+  function buildBRHtml(t: TransferRecord, autoPrint = false) {
+    return import('@/lib/share-transfer-board-resolution').then(({ generateTransferBoardResolutionHTML, buildTransferResolutionText }) => {
+      const signers = getSigners(t);
+      const resolutionText = t.resolutionText || buildTransferResolutionText(
+        { transferorName: t.transferorName, transferorFolio: t.transferorFolio || '', transferorCertNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', distinctiveFrom: t.distinctiveFrom, distinctiveTo: t.distinctiveTo, transfereeName: t.transfereeName, transferDate: t.transferDate || '', newFolioNo: t.transfereeFolio, newCertNo: t.transfereeCertNo },
+        t.transfereeFolio, t.transfereeCertNo,
+        signers[0]?.name
+      );
+      return generateTransferBoardResolutionHTML(
+        { companyName: company.companyName, cin: company.cin || '', regAddress: company.regAddress || '' },
+        { transferorName: t.transferorName, transferorFolio: t.transferorFolio || '', transferorCertNo: t.transferorCertNo || '', numberOfShares: t.numberOfShares || 0, shareType: t.shareType || 'Equity', nominalValue: t.nominalValue || '10', distinctiveFrom: t.distinctiveFrom, distinctiveTo: t.distinctiveTo, transfereeName: t.transfereeName, transferDate: t.transferDate || '', newFolioNo: t.transfereeFolio, newCertNo: t.transfereeCertNo, transferId: t.id },
+        { date: t.transferDate || '', venue: 'Registered Office of the Company', directors: signers.map(s => ({ name: s.name, din: s.din, designation: s.designation })) },
+        signers,
+        resolutionText,
+        { autoPrint }
+      );
+    });
+  }
+
+  async function checkBrConflict(t: TransferRecord, action: () => void) {
+    if (!t.transferDate) { action(); return; }
+    setBrBusy(true);
+    try {
+      const r = await fetch(`/api/board-resolutions?companyId=${companyId}&date=${t.transferDate}`);
+      if (r.ok) {
+        const d = await r.json();
+        if (d.exactMatch) {
+          setBrConflict({ transfer: t, meeting: d.exactMatch, action });
+          setBrBusy(false);
+          return;
+        }
+      }
+    } catch { /* network error — proceed anyway */ }
+    setBrBusy(false);
+    action();
+  }
+
+  async function printBoardRes(t: TransferRecord) {
+    await checkBrConflict(t, async () => {
+      const html = await buildBRHtml(t, true);
+      openInNewTab(html);
+    });
+  }
+
+  async function downloadBRWord(t: TransferRecord) {
+    await checkBrConflict(t, async () => {
+      const html = await buildBRHtml(t, false);
+      await downloadWord(html, `BoardResolution_Transfer_${t.transferDate || t.id}`, 'Board Resolution — Share Transfer');
     });
   }
 
@@ -1613,13 +1704,10 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
             <div key={t.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
               {/* Header row */}
               <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-3 flex-wrap">
-                  {/* Transfer arrow visual */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-bold text-slate-800">{t.transferorName}</span>
-                    <span className="text-slate-400 font-bold">→</span>
-                    <span className="font-bold text-emerald-700">{t.transfereeName}</span>
-                  </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-bold text-slate-800">{t.transferorName}</span>
+                  <span className="text-slate-400 font-bold">→</span>
+                  <span className="font-bold text-emerald-700">{t.transfereeName}</span>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="font-black text-blue-700 text-lg">{(t.numberOfShares||0).toLocaleString('en-IN')}</div>
@@ -1630,9 +1718,7 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
               {/* Details chips */}
               <div className="flex flex-wrap gap-2 mb-3">
                 {t.transferDate && (
-                  <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">
-                    📅 {t.transferDate}
-                  </span>
+                  <span className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">📅 {t.transferDate}</span>
                 )}
                 {t.transferorFolio && (
                   <span className="text-xs bg-blue-50 text-blue-600 rounded-full px-2.5 py-1">
@@ -1654,17 +1740,13 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                     ₹ {parseFloat(t.totalConsideration).toLocaleString('en-IN')}
                   </span>
                 )}
-                <span className={`text-xs rounded-full px-2.5 py-1 font-semibold ${
-                  t.status === 'approved'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-amber-100 text-amber-700'
-                }`}>
+                <span className={`text-xs rounded-full px-2.5 py-1 font-semibold ${t.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                   {t.status === 'approved' ? '✅ Approved' : '⏳ Pending'}
                 </span>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex flex-wrap gap-2">
+              {/* Action buttons — Row 1: core docs */}
+              <div className="flex flex-wrap gap-2 mb-2">
                 <button onClick={() => setViewT(t)}
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">
                   👁️ View Details
@@ -1678,8 +1760,70 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                   📜 New Certificate
                 </button>
               </div>
+
+              {/* Action buttons — Row 2: SPA + Board Resolution */}
+              <div className="flex flex-wrap gap-2">
+                <span className="text-xs text-slate-400 self-center mr-0.5">SPA:</span>
+                <button onClick={() => printSPA(t)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100">
+                  🖨️ Print
+                </button>
+                <button onClick={() => downloadSPAWord(t)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100">
+                  📝 Word
+                </button>
+                <span className="text-xs text-slate-300 self-center">|</span>
+                <span className="text-xs text-slate-400 self-center mr-0.5">Board Res:</span>
+                <button onClick={() => printBoardRes(t)} disabled={brBusy}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 disabled:opacity-50">
+                  {brBusy ? '⏳' : '🖨️'} Print
+                </button>
+                <button onClick={() => downloadBRWord(t)} disabled={brBusy}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 disabled:opacity-50">
+                  📝 Word
+                </button>
+              </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Board Meeting Conflict Warning Modal ── */}
+      {brConflict && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+          onClick={() => setBrConflict(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="text-2xl">⚠️</div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm">Board Meeting Already Exists</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  A Board Meeting is already saved for <strong>{brConflict.meeting.meetingDate}</strong>:
+                  <br /><span className="font-semibold text-slate-700">"{brConflict.meeting.title}"</span>
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
+              If this transfer was approved in that meeting, you may already have the board resolution there.
+              Generating a separate board resolution document here will not create a new meeting record — it is for printing/download only.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setBrConflict(null)}
+                className="flex-1 py-2.5 rounded-xl font-semibold text-slate-700 text-sm border border-slate-200 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const action = brConflict.action;
+                  setBrConflict(null);
+                  action();
+                }}
+                className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
+                style={{ background: 'linear-gradient(135deg,#0f766e,#0d9488)' }}>
+                Generate Anyway
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1694,9 +1838,7 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
               style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
               <div>
                 <h3 className="font-bold text-white text-sm">🔄 Transfer Details</h3>
-                <p className="text-xs text-white/60 mt-0.5">
-                  {viewT.transferorName} → {viewT.transfereeName}
-                </p>
+                <p className="text-xs text-white/60 mt-0.5">{viewT.transferorName} → {viewT.transfereeName}</p>
               </div>
               <button onClick={() => setViewT(null)} className="text-white/70 hover:text-white text-xl">×</button>
             </div>
@@ -1716,6 +1858,8 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                   <div className="flex justify-between"><span className="text-slate-400">Name</span><span className="font-bold text-slate-800">{viewT.transferorName}</span></div>
                   {viewT.transferorFolio && <div className="flex justify-between"><span className="text-slate-400">Folio No.</span><span className="font-semibold">{viewT.transferorFolio}</span></div>}
                   {viewT.transferorCertNo && <div className="flex justify-between"><span className="text-slate-400">Cert No.</span><span className="font-semibold">{viewT.transferorCertNo}</span></div>}
+                  {viewT.transferorPan && <div className="flex justify-between"><span className="text-slate-400">PAN</span><span className="font-mono font-semibold">{viewT.transferorPan}</span></div>}
+                  {viewT.transferorAddress && <div className="flex justify-between gap-4"><span className="text-slate-400 shrink-0">Address</span><span className="text-right">{viewT.transferorAddress}</span></div>}
                 </div>
               </div>
 
@@ -1726,6 +1870,8 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                   <div className="flex justify-between"><span className="text-slate-400">Name</span><span className="font-bold text-emerald-800">{viewT.transfereeName}</span></div>
                   {viewT.transfereeFolio && <div className="flex justify-between"><span className="text-slate-400">New Folio No.</span><span className="font-semibold text-emerald-700">{viewT.transfereeFolio}</span></div>}
                   {viewT.transfereeCertNo && <div className="flex justify-between"><span className="text-slate-400">New Cert No.</span><span className="font-semibold text-emerald-700">{viewT.transfereeCertNo}</span></div>}
+                  {viewT.transfereePan && <div className="flex justify-between"><span className="text-slate-400">PAN</span><span className="font-mono font-semibold">{viewT.transfereePan}</span></div>}
+                  {viewT.transfereeAddress && <div className="flex justify-between gap-4"><span className="text-slate-400 shrink-0">Address</span><span className="text-right">{viewT.transfereeAddress}</span></div>}
                 </div>
               </div>
 
@@ -1745,45 +1891,70 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
                     {viewT.considerationPerShare && <div className="flex justify-between"><span className="text-slate-400">Consideration/share</span><span className="font-semibold">₹ {viewT.considerationPerShare}</span></div>}
                     {viewT.totalConsideration && <div className="flex justify-between"><span className="text-slate-400">Total Consideration</span><span className="font-bold text-emerald-700">₹ {parseFloat(viewT.totalConsideration).toLocaleString('en-IN')}</span></div>}
                     {viewT.stampDuty && <div className="flex justify-between"><span className="text-slate-400">Stamp Duty</span><span className="font-semibold">₹ {viewT.stampDuty}</span></div>}
+                    {viewT.paymentMode && <div className="flex justify-between"><span className="text-slate-400">Payment Mode</span><span className="font-semibold">{viewT.paymentMode}</span></div>}
                   </div>
                 </div>
               )}
 
               {/* Signatories */}
               {viewT.signingDirectorsJson && (() => {
-                try {
-                  const sigs = JSON.parse(viewT.signingDirectorsJson) as { name: string; designation: string; din?: string }[];
-                  if (!sigs.length) return null;
-                  return (
-                    <div>
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">✍️ Signatories</p>
-                      <div className="space-y-1">
-                        {sigs.map((s, i) => (
-                          <div key={i} className="text-xs flex gap-2">
-                            <span className="font-semibold text-slate-700">{s.name}</span>
-                            <span className="text-slate-400">{s.designation}</span>
-                            {s.din && <span className="font-mono text-slate-400">DIN: {s.din}</span>}
-                          </div>
-                        ))}
-                      </div>
+                const sigs = getSigners(viewT);
+                if (!sigs.length) return null;
+                return (
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">✍️ Signatories</p>
+                    <div className="space-y-1">
+                      {sigs.map((s, i) => (
+                        <div key={i} className="text-xs flex gap-2">
+                          <span className="font-semibold text-slate-700">{s.name}</span>
+                          <span className="text-slate-400">{s.designation}</span>
+                          {s.din && <span className="font-mono text-slate-400">DIN: {s.din}</span>}
+                        </div>
+                      ))}
                     </div>
-                  );
-                } catch { return null; }
+                  </div>
+                );
               })()}
             </div>
 
             {/* Footer buttons */}
-            <div className="px-5 pb-5 flex gap-3">
-              <button onClick={() => printSH4(viewT)}
-                className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
-                style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
-                🖨️ Print SH-4
-              </button>
-              <button onClick={() => printNewCert(viewT)}
-                className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
-                style={{ background: 'linear-gradient(135deg,#1e40af,#1d4ed8)' }}>
-                📜 New Cert
-              </button>
+            <div className="px-5 pb-5 space-y-2">
+              <div className="flex gap-2">
+                <button onClick={() => printSH4(viewT)}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
+                  style={{ background: 'linear-gradient(135deg,#065f46,#047857)' }}>
+                  🖨️ Print SH-4
+                </button>
+                <button onClick={() => printNewCert(viewT)}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
+                  style={{ background: 'linear-gradient(135deg,#1e40af,#1d4ed8)' }}>
+                  📜 New Cert
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => printSPA(viewT)}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
+                  style={{ background: 'linear-gradient(135deg,#5b21b6,#7c3aed)' }}>
+                  📃 Print SPA
+                </button>
+                <button onClick={() => downloadSPAWord(viewT)}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
+                  style={{ background: 'linear-gradient(135deg,#6d28d9,#8b5cf6)' }}>
+                  📝 SPA Word
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => printBoardRes(viewT)} disabled={brBusy}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg,#0f766e,#0d9488)' }}>
+                  📋 Print Board Res
+                </button>
+                <button onClick={() => downloadBRWord(viewT)} disabled={brBusy}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg,#0f766e,#0d9488)' }}>
+                  📝 BR Word
+                </button>
+              </div>
             </div>
           </div>
         </div>
