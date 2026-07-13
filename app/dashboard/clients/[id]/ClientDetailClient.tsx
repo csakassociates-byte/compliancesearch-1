@@ -1792,6 +1792,423 @@ function TransfersTab({ companyId, company }: { companyId: string; company: Comp
   );
 }
 
+/* ── Master Data types ───────────────────────────────── */
+interface MasterDataDirector {
+  din: string | null; name: string; designation: string | null;
+  category: string | null; appointedAt: string | null;
+  ceasedAt: string | null; isActive: boolean;
+}
+interface MasterDataCharge {
+  chargeId: string | null; holderName: string; dateOfCreation: string | null;
+  amount: string | null; isSatisfied: boolean;
+}
+interface MasterData {
+  cin: string; companyName: string; regAddress: string | null;
+  entityType: string | null; email: string | null; rocName: string | null;
+  status: string | null; isListed: boolean; mobile: string | null;
+  gstNumber: string | null; incorporationDate: string | null;
+  paidUpCapital: string | null; authorisedCapital: string | null;
+  registrationNumber: string | null; dateOfLastAGM: string | null;
+  dateOfBalanceSheet: string | null; categoryOfCompany: string | null;
+  subcategory: string | null; classOfCompany: string | null;
+  jurisdiction: string | null; smallCompany: boolean;
+  directors: MasterDataDirector[]; charges: MasterDataCharge[];
+}
+interface DinRecord {
+  id: string; din: string | null; name: string; designation: string | null;
+  category: string | null; appointedAt: string | null; ceasedAt: string | null;
+  isActive: boolean;
+  company: { cin: string; companyName: string; entityType: string | null; status: string | null };
+}
+
+/* ── Build print-ready MCA-style HTML ────────────────── */
+function buildMasterDataHTML(d: MasterData): string {
+  const r = (label: string, val: string | null | undefined) =>
+    val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : '';
+  const dirRows = d.directors.map((x, i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td style="font-family:monospace">${x.din||'—'}</td>
+      <td><strong>${x.name}</strong></td>
+      <td>${x.designation||'—'}</td>
+      <td>${x.category||'—'}</td>
+      <td>${x.appointedAt||'—'}</td>
+      <td>${x.ceasedAt||'—'}</td>
+      <td><span class="${x.isActive?'active':'ceased'}">${x.isActive?'Active':'Ceased'}</span></td>
+    </tr>`).join('');
+  const chgRows = d.charges.map((c, i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td style="font-family:monospace">${c.chargeId||'—'}</td>
+      <td>${c.holderName}</td>
+      <td>${c.dateOfCreation||'—'}</td>
+      <td>${c.amount||'—'}</td>
+      <td><span class="${c.isSatisfied?'active':'ceased'}">${c.isSatisfied?'Satisfied':'Open'}</span></td>
+    </tr>`).join('');
+  const now = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Master Data — ${d.companyName}</title>
+<style>
+  @page{size:A4;margin:12mm}
+  body{font-family:Arial,sans-serif;font-size:9pt;color:#111;margin:0}
+  .hdr{background:#1e3a8a;color:#fff;text-align:center;padding:10px;font-size:11pt;font-weight:bold}
+  .subhdr{background:#dbeafe;text-align:center;padding:6px 10px;font-size:10pt;color:#1e40af;font-weight:700;border-bottom:2px solid #1e40af}
+  .cin{text-align:center;padding:4px;font-family:monospace;font-size:9pt;background:#f0f4ff;border-bottom:1px solid #c7d2fe;color:#3730a3}
+  .note{text-align:right;font-size:7pt;color:#94a3b8;margin:4px 0 8px}
+  h2{font-size:10pt;color:#1e3a8a;border-bottom:1.5px solid #1e3a8a;padding-bottom:2px;margin:12px 0 5px}
+  table.main{width:100%;border-collapse:collapse;margin-bottom:8px}
+  table.main td{padding:3px 7px;border:1px solid #e2e8f0;font-size:8.5pt}
+  td.lbl{width:38%;background:#f8fafc;font-weight:600;color:#475569}
+  table.data{width:100%;border-collapse:collapse;margin-bottom:10px}
+  table.data th{background:#1e3a8a;color:#fff;padding:4px 5px;text-align:left;font-size:8pt}
+  table.data td{border:1px solid #ddd;padding:3px 5px;font-size:8pt}
+  table.data tr:nth-child(even) td{background:#f0f4ff}
+  .active{background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;font-size:7.5pt}
+  .ceased{background:#fee2e2;color:#991b1b;padding:1px 5px;border-radius:3px;font-size:7.5pt}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<div class="hdr">Ministry of Corporate Affairs — Company Master Data</div>
+<div class="subhdr">${d.companyName}</div>
+<div class="cin">CIN: ${d.cin}${d.registrationNumber?' | Reg. No.: '+d.registrationNumber:''}</div>
+<div class="note">Generated: ${now}</div>
+
+<h2>Company Information</h2>
+<table class="main">
+  ${r('Company Name',d.companyName)}
+  ${r('CIN',d.cin)}
+  ${r('Registration Number',d.registrationNumber)}
+  ${r('ROC Name',d.rocName)}
+  ${r('Entity Type',d.entityType)}
+  ${r('Category',d.categoryOfCompany)}
+  ${r('Sub-category',d.subcategory)}
+  ${r('Class of Company',d.classOfCompany)}
+  ${r('Jurisdiction / State',d.jurisdiction)}
+  ${r('Status',d.status)}
+  ${r('Date of Incorporation',d.incorporationDate)}
+  ${r('Listed on Stock Exchange',d.isListed?'Yes':'No')}
+  ${r('Small Company',d.smallCompany?'Yes':'No')}
+  ${r('Date of Last AGM',d.dateOfLastAGM)}
+  ${r('Date of Balance Sheet',d.dateOfBalanceSheet)}
+</table>
+
+<h2>Capital Structure</h2>
+<table class="main">
+  ${r('Authorised Capital (₹)',d.authorisedCapital)}
+  ${r('Paid-up Capital (₹)',d.paidUpCapital)}
+</table>
+
+<h2>Contact Details</h2>
+<table class="main">
+  ${r('Registered Address',d.regAddress)}
+  ${r('Email',d.email)}
+  ${r('Mobile',d.mobile)}
+  ${r('GST Number',d.gstNumber)}
+</table>
+
+<h2>Directors / Signatories (${d.directors.length})</h2>
+${d.directors.length>0?`<table class="data"><thead><tr>
+  <th>#</th><th>DIN</th><th>Name</th><th>Designation</th><th>Category</th>
+  <th>Appointed</th><th>Ceased</th><th>Status</th>
+</tr></thead><tbody>${dirRows}</tbody></table>`:'<p style="font-size:8pt;color:#64748b">No directors on record.</p>'}
+
+${d.charges.length>0?`<h2>Charges (${d.charges.length})</h2>
+<table class="data"><thead><tr>
+  <th>#</th><th>Charge ID</th><th>Holder Name</th><th>Date of Creation</th><th>Amount (₹)</th><th>Status</th>
+</tr></thead><tbody>${chgRows}</tbody></table>`:''}
+
+<script>window.onload=function(){window.print();}</script>
+</body></html>`;
+}
+
+/* ── Master Data Modal ───────────────────────────────── */
+function MasterDataModal({ cin, onClose }: { cin: string; onClose: () => void }) {
+  const [data, setData]       = useState<MasterData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/companies/master-data?cin=${encodeURIComponent(cin)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.company) setData(d.company);
+        else setNotFound(true);
+        setLoading(false);
+      });
+  }, [cin]);
+
+  function handleDownload() {
+    if (!data) return;
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) { alert('Pop-up blocked — allow pop-ups to download.'); return; }
+    w.document.write(buildMasterDataHTML(data));
+    w.document.close();
+  }
+
+  const Row = ({ label, val, mono }: { label: string; val?: string | null; mono?: boolean }) =>
+    val ? (
+      <div className="flex gap-3 py-2 border-b border-slate-50 last:border-0">
+        <span className="text-xs text-slate-400 w-44 shrink-0 pt-0.5">{label}</span>
+        <span className={`text-xs font-semibold text-slate-700 ${mono ? 'font-mono' : ''}`}>{val}</span>
+      </div>
+    ) : null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4 py-6"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="px-6 py-4 flex items-center justify-between rounded-t-2xl shrink-0"
+          style={{background:'linear-gradient(135deg,#1e3a8a,#1d4ed8)'}}>
+          <div>
+            <h3 className="font-bold text-white">📋 Company Master Data</h3>
+            <p className="text-xs text-white/60 mt-0.5 font-mono">{cin}</p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl">×</button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading && (
+            <div className="text-center py-12 text-sm text-slate-400">Fetching master data...</div>
+          )}
+          {notFound && (
+            <div className="text-center py-12">
+              <p className="text-slate-500 font-semibold">Master data not available</p>
+              <p className="text-xs text-slate-400 mt-1">Upload the MCA Excel for this company to populate master data.</p>
+            </div>
+          )}
+          {data && (
+            <div className="space-y-6">
+              {/* Company Info */}
+              <div>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Company Information</h4>
+                <div className="bg-slate-50 rounded-xl px-4 py-2">
+                  <Row label="Company Name" val={data.companyName} />
+                  <Row label="CIN" val={data.cin} mono />
+                  <Row label="Registration Number" val={data.registrationNumber} mono />
+                  <Row label="ROC Name" val={data.rocName} />
+                  <Row label="Entity Type" val={data.entityType} />
+                  <Row label="Category" val={data.categoryOfCompany} />
+                  <Row label="Sub-category" val={data.subcategory} />
+                  <Row label="Class of Company" val={data.classOfCompany} />
+                  <Row label="Jurisdiction / State" val={data.jurisdiction} />
+                  <Row label="Status" val={data.status} />
+                  <Row label="Date of Incorporation" val={data.incorporationDate} />
+                  <Row label="Listed" val={data.isListed ? 'Yes' : 'No'} />
+                  <Row label="Small Company" val={data.smallCompany ? 'Yes' : 'No'} />
+                  <Row label="Date of Last AGM" val={data.dateOfLastAGM} />
+                  <Row label="Date of Balance Sheet" val={data.dateOfBalanceSheet} />
+                </div>
+              </div>
+              {/* Capital */}
+              <div>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Capital Structure</h4>
+                <div className="bg-slate-50 rounded-xl px-4 py-2">
+                  <Row label="Authorised Capital (₹)" val={data.authorisedCapital} />
+                  <Row label="Paid-up Capital (₹)" val={data.paidUpCapital} />
+                </div>
+              </div>
+              {/* Contact */}
+              <div>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Contact Details</h4>
+                <div className="bg-slate-50 rounded-xl px-4 py-2">
+                  <Row label="Registered Address" val={data.regAddress} />
+                  <Row label="Email" val={data.email} />
+                  <Row label="Mobile" val={data.mobile} />
+                  <Row label="GST Number" val={data.gstNumber} mono />
+                </div>
+              </div>
+              {/* Directors */}
+              <div>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                  Directors / Signatories ({data.directors.length})
+                </h4>
+                {data.directors.length === 0 ? (
+                  <p className="text-xs text-slate-400">No directors on record.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-100">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{background:'#1e3a8a'}}>
+                          {['DIN','Name','Designation','Category','Appointed','Ceased','Status'].map(h=>(
+                            <th key={h} className="text-left text-white px-3 py-2 font-semibold whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.directors.map((dir, i) => (
+                          <tr key={i} className={i%2===0?'bg-white':'bg-blue-50/40'}>
+                            <td className="px-3 py-1.5 font-mono text-slate-500">{dir.din||'—'}</td>
+                            <td className="px-3 py-1.5 font-semibold text-slate-800">{dir.name}</td>
+                            <td className="px-3 py-1.5 text-slate-600">{dir.designation||'—'}</td>
+                            <td className="px-3 py-1.5 text-slate-500">{dir.category||'—'}</td>
+                            <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{dir.appointedAt||'—'}</td>
+                            <td className="px-3 py-1.5 text-slate-400 whitespace-nowrap">{dir.ceasedAt||'—'}</td>
+                            <td className="px-3 py-1.5">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${dir.isActive?'bg-emerald-50 text-emerald-700':'bg-red-50 text-red-500'}`}>
+                                {dir.isActive ? 'Active' : 'Ceased'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              {/* Charges */}
+              {data.charges.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Charges ({data.charges.length})
+                  </h4>
+                  <div className="overflow-x-auto rounded-xl border border-slate-100">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{background:'#1e3a8a'}}>
+                          {['Charge ID','Holder Name','Date of Creation','Amount (₹)','Status'].map(h=>(
+                            <th key={h} className="text-left text-white px-3 py-2 font-semibold whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.charges.map((ch, i) => (
+                          <tr key={i} className={i%2===0?'bg-white':'bg-blue-50/40'}>
+                            <td className="px-3 py-1.5 font-mono text-slate-500">{ch.chargeId||'—'}</td>
+                            <td className="px-3 py-1.5 font-semibold text-slate-800">{ch.holderName}</td>
+                            <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{ch.dateOfCreation||'—'}</td>
+                            <td className="px-3 py-1.5 text-slate-600">{ch.amount||'—'}</td>
+                            <td className="px-3 py-1.5">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${ch.isSatisfied?'bg-emerald-50 text-emerald-700':'bg-amber-50 text-amber-700'}`}>
+                                {ch.isSatisfied ? 'Satisfied' : 'Open'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-100 flex gap-3 shrink-0">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+            Close
+          </button>
+          {data && (
+            <button onClick={handleDownload}
+              className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2"
+              style={{background:'linear-gradient(135deg,#1e3a8a,#1d4ed8)'}}>
+              ⬇️ Download PDF
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── DIN Lookup Modal ────────────────────────────────── */
+function DinLookupModal({ din, name, onClose }: { din: string; name: string; onClose: () => void }) {
+  const [records, setRecords] = useState<DinRecord[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/directors/din-lookup?din=${encodeURIComponent(din)}`)
+      .then(r => r.json())
+      .then(d => { setRecords(d.records || []); setLoading(false); });
+  }, [din]);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]"
+        onClick={e => e.stopPropagation()}>
+
+        <div className="px-6 py-4 flex items-center justify-between rounded-t-2xl shrink-0"
+          style={{background:'linear-gradient(135deg,#0f172a,#1e40af)'}}>
+          <div>
+            <h3 className="font-bold text-white text-sm">{name}</h3>
+            <p className="text-xs text-white/60 font-mono mt-0.5">DIN: {din}</p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-xl">×</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          {loading && (
+            <p className="text-center text-sm text-slate-400 py-8">Looking up companies...</p>
+          )}
+          {records && records.length === 0 && (
+            <p className="text-center text-sm text-slate-400 py-8">No company records found for this DIN.</p>
+          )}
+          {records && records.length > 0 && (
+            <div>
+              <p className="text-xs text-slate-400 mb-3">
+                Director in <strong className="text-slate-700">{records.length}</strong> {records.length===1?'company':'companies'} as per MCA records
+              </p>
+              <div className="space-y-2">
+                {records.map((rec) => (
+                  <div key={rec.id}
+                    className={`rounded-xl border p-3 ${rec.isActive?'border-emerald-200 bg-emerald-50/40':'border-slate-100 bg-slate-50 opacity-70'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-800 leading-tight">{rec.company.companyName}</p>
+                        {rec.company.cin && (
+                          <p className="text-xs font-mono text-slate-400 mt-0.5">{rec.company.cin}</p>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-1.5">
+                          {rec.designation && (
+                            <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+                              {rec.designation}
+                            </span>
+                          )}
+                          {rec.company.entityType && (
+                            <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                              {rec.company.entityType}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-3 mt-1.5 text-xs text-slate-400">
+                          {rec.appointedAt && <span>Appointed: <strong className="text-slate-600">{rec.appointedAt}</strong></span>}
+                          {rec.ceasedAt    && <span>Ceased: <strong className="text-red-500">{rec.ceasedAt}</strong></span>}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 text-xs font-bold px-2 py-1 rounded-full ${
+                        rec.isActive
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-red-50 text-red-500'
+                      }`}>
+                        {rec.isActive ? 'Active' : 'Ceased'}
+                      </span>
+                    </div>
+                    {rec.company.status && rec.company.status.toLowerCase() !== 'active' && (
+                      <p className="text-xs text-amber-600 mt-1.5 font-medium">Company status: {rec.company.status}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 shrink-0">
+          <button onClick={onClose}
+            className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Directors Tab ───────────────────────────────────── */
 function DirectorsTab({ companyId, company, onSwitchTab }: { companyId: string; company: Company; onSwitchTab: (tab: 'shareholders') => void }) {
   const [persons, setPersons] = useState<PersonKYC[]>([]);
@@ -1801,6 +2218,7 @@ function DirectorsTab({ companyId, company, onSwitchTab }: { companyId: string; 
   const [showAdd, setShowAdd] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [creatingKyc, setCreatingKyc] = useState<string | null>(null);
+  const [dinLookup, setDinLookup] = useState<{ din: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1922,7 +2340,14 @@ function DirectorsTab({ companyId, company, onSwitchTab }: { companyId: string; 
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
                     <div className="font-bold text-slate-800 truncate">{p.name}</div>
-                    {p.din && <div className="text-xs font-mono text-slate-400 mt-0.5">DIN: {p.din}</div>}
+                    {p.din && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setDinLookup({ din: p.din!, name: p.name }); }}
+                        className="text-xs font-mono text-blue-500 hover:text-blue-700 hover:underline mt-0.5 text-left cursor-pointer"
+                        title="Click to see all companies where this director has DIN">
+                        DIN: {p.din} 🔍
+                      </button>
+                    )}
                     {p.designation && <div className="text-xs text-slate-500 mt-0.5">{p.designation}</div>}
                     {(p.directorCategory || p.category) && (
                       <div className="text-xs text-slate-400">
@@ -1977,6 +2402,7 @@ function DirectorsTab({ companyId, company, onSwitchTab }: { companyId: string; 
       {editPerson && <KYCModal person={editPerson} onClose={() => setEditPerson(null)} onSaved={load} />}
       {viewPerson && <DirectorViewModal person={viewPerson} onClose={() => setViewPerson(null)} />}
       {showAdd && <AddPersonModal companyId={companyId} mode="director" onClose={() => setShowAdd(false)} onSaved={load} />}
+      {dinLookup && <DinLookupModal din={dinLookup.din} name={dinLookup.name} onClose={() => setDinLookup(null)} />}
     </div>
   );
 }
@@ -2642,6 +3068,7 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
   const [activeTab, setActiveTab] = useState<'timeline' | 'directors' | 'shareholders' | 'transfers' | 'analysis'>('timeline');
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Company>>({});
+  const [showMasterData, setShowMasterData] = useState(false);
 
   // Filters
   const [filterFY, setFilterFY]       = useState('');
@@ -2999,6 +3426,13 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
                     {!company.cin&&!company.entityType&&!company.incorporationDate&&(
                       <p className="text-xs text-slate-400 text-center py-2">No details added yet.<br/>Click Edit to add.</p>
                     )}
+                    {company.cin && (
+                      <button
+                        onClick={() => setShowMasterData(true)}
+                        className="w-full mt-1 text-xs font-semibold py-2 rounded-lg border border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1.5">
+                        📋 View Master Data
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -3098,6 +3532,11 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
           onClose={() => setEditDoc(null)}
           onSaved={load}
         />
+      )}
+
+      {/* ── Master Data Modal ── */}
+      {showMasterData && company?.cin && (
+        <MasterDataModal cin={company.cin} onClose={() => setShowMasterData(false)} />
       )}
     </main>
   );
