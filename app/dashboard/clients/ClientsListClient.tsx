@@ -10,10 +10,16 @@ interface Company {
   regAddress: string | null; docCount: number; createdAt: string;
 }
 
+async function deleteCompany(id: string): Promise<boolean> {
+  const r = await fetch(`/api/clients/${id}`, { method: "DELETE" });
+  return r.ok;
+}
+
 export default function ClientsListClient() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
+  const [deleting, setDeleting]   = useState<string | null>(null); // id being deleted
 
   async function load() {
     setLoading(true);
@@ -118,49 +124,73 @@ export default function ClientsListClient() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map(c => (
-              <Link
-                key={c.id}
-                href={`/dashboard/clients/${c.id}`}
-                className="bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-xl hover:border-blue-300 transition-all hover:-translate-y-0.5 group block"
-              >
-                <div className="flex items-start gap-4 mb-4">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${
-                    entityColors[c.entityType || ''] || 'from-slate-500 to-slate-700'
-                  } flex items-center justify-center text-white font-black text-lg flex-shrink-0 shadow-md`}>
-                    {c.companyName[0]}
+              <div key={c.id} className="relative group">
+                <Link
+                  href={`/dashboard/clients/${c.id}`}
+                  className="bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-xl hover:border-blue-300 transition-all hover:-translate-y-0.5 group/card block"
+                >
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${
+                      entityColors[c.entityType || ''] || 'from-slate-500 to-slate-700'
+                    } flex items-center justify-center text-white font-black text-lg flex-shrink-0 shadow-md`}>
+                      {c.companyName[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-slate-800 text-sm leading-tight group-hover/card:text-blue-700 transition-colors line-clamp-2">
+                        {c.companyName}
+                      </h3>
+                      {c.entityType && (
+                        <span className="inline-block text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-1">
+                          {c.entityType}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-slate-800 text-sm leading-tight group-hover:text-blue-700 transition-colors line-clamp-2">
-                      {c.companyName}
-                    </h3>
-                    {c.entityType && (
-                      <span className="inline-block text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-1">
-                        {c.entityType}
-                      </span>
+                  <div className="space-y-1.5 text-xs text-slate-500">
+                    {c.cin && (
+                      <div className="flex items-center gap-1.5">
+                        <span>🔢</span><span className="font-mono">{c.cin}</span>
+                      </div>
+                    )}
+                    {c.incorporationDate && (
+                      <div className="flex items-center gap-1.5">
+                        <span>📅</span><span>Inc. {c.incorporationDate}</span>
+                      </div>
                     )}
                   </div>
-                </div>
-                <div className="space-y-1.5 text-xs text-slate-500">
-                  {c.cin && (
-                    <div className="flex items-center gap-1.5">
-                      <span>🔢</span><span className="font-mono">{c.cin}</span>
-                    </div>
-                  )}
-                  {c.incorporationDate && (
-                    <div className="flex items-center gap-1.5">
-                      <span>📅</span><span>Inc. {c.incorporationDate}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {c.docCount} meeting{c.docCount !== 1 ? 's' : ''} saved
-                  </span>
-                  <span className="text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform inline-block">
-                    View →
-                  </span>
-                </div>
-              </Link>
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500">
+                      {c.docCount} meeting{c.docCount !== 1 ? 's' : ''} saved
+                    </span>
+                    <span className="text-xs font-bold text-blue-600 group-hover/card:translate-x-1 transition-transform inline-block">
+                      View →
+                    </span>
+                  </div>
+                </Link>
+
+                {/* Delete button — shown on hover */}
+                <button
+                  onClick={async e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (deleting === c.id) return;
+                    if (!confirm(`Delete "${c.companyName}"?\n\nThis will remove the company and all its saved data. This cannot be undone.`)) return;
+                    setDeleting(c.id);
+                    const ok = await deleteCompany(c.id);
+                    if (ok) {
+                      setCompanies(prev => prev.filter(x => x.id !== c.id));
+                    } else {
+                      alert("Could not delete company. Please try again.");
+                    }
+                    setDeleting(null);
+                  }}
+                  disabled={deleting === c.id}
+                  title="Delete this company"
+                  className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white border border-slate-200 text-slate-400 hover:bg-red-50 hover:border-red-300 hover:text-red-500 flex items-center justify-center text-xs font-bold shadow-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 z-10"
+                >
+                  {deleting === c.id ? '…' : '✕'}
+                </button>
+              </div>
             ))}
           </div>
         )}

@@ -17,10 +17,13 @@ export async function POST(req: NextRequest) {
   if (!body.companyName?.trim())
     return NextResponse.json({ error: "Company name required" }, { status: 400 });
 
-  // Check if already exists for this user (avoid duplicates)
+  // Check if already exists for this user — match by name OR CIN to avoid duplicates
   const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("companyName") = LOWER($2) LIMIT 1`,
-    userId, body.companyName.trim()
+    `SELECT id FROM csi_companies WHERE "userId" = $1 AND (
+       LOWER("companyName") = LOWER($2)
+       OR (cin IS NOT NULL AND cin != '' AND cin = $3)
+     ) LIMIT 1`,
+    userId, body.companyName.trim(), body.cin?.trim() || '__NONE__'
   );
 
   if (existing.length) {
