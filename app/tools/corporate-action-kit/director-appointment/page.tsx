@@ -196,7 +196,7 @@ function genBoardNotice(f: F, nds: NewDirectorEntry[]): string {
     ${addressees}
     <p class="subject">Sub: Notice of Meeting of the Board of Directors of ${f.companyName || "[Company Name]"}</p>
     <p>Dear Sir/Madam,</p>
-    <p>Pursuant to the provisions of <strong>Section 173</strong> of the Companies Act, 2013 and the Secretarial Standard on Meetings of the Board of Directors (<strong>SS-1</strong>), notice is hereby given that a Meeting of the Board of Directors of <strong>${f.companyName || "[Company Name]"}</strong> will be held on <strong>${fmtDay(f.meetingDate)}, the ${fmtDate(f.meetingDate)}</strong>, at <strong>${fmtTime(f.meetingTime)}</strong>, at <strong>${f.venue || "[Venue]"}</strong>, to transact the following business:</p>
+    <p>Pursuant to the provisions of <strong>Section 173</strong> of the Companies Act, 2013 and the Secretarial Standard on Meetings of the Board of Directors (<strong>SS-1</strong>), notice is hereby given that the <strong>${f.meetingSerial || "___"}</strong> Meeting of the Board of Directors of <strong>${f.companyName || "[Company Name]"}</strong> will be held on <strong>${fmtDay(f.meetingDate)}, the ${fmtDate(f.meetingDate)}</strong>, at <strong>${fmtTime(f.meetingTime)}</strong>, at <strong>${f.venue || "[Venue]"}</strong>, to transact the following business:</p>
     <p><strong>AGENDA:</strong></p>
     <ol>
       <li>Election of Chairman of the Meeting.</li>
@@ -363,7 +363,8 @@ function genGMResolution(f: F, nds: NewDirectorEntry[]): string {
     ${coHeader(f)}
     <div class="doc-title">EXTRACT OF MINUTES OF THE EXTRAORDINARY GENERAL MEETING</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
-      <tr><td style="font-weight:bold;width:200px;padding:3px 0;">Date:</td><td style="padding:3px 0;">${fmtDate(f.meetingDate)}</td></tr>
+      <tr><td style="font-weight:bold;width:200px;padding:3px 0;">EGM Reference:</td><td style="padding:3px 0;">${f.meetingSerial || "___________________"}</td></tr>
+      <tr><td style="font-weight:bold;padding:3px 0;">Date:</td><td style="padding:3px 0;">${fmtDate(f.meetingDate)}</td></tr>
       <tr><td style="font-weight:bold;padding:3px 0;">Time:</td><td style="padding:3px 0;">${fmtTime(f.meetingTime)}</td></tr>
       <tr><td style="font-weight:bold;padding:3px 0;">Venue:</td><td style="padding:3px 0;">${f.venue || "___________________"}</td></tr>
       <tr><td style="font-weight:bold;padding:3px 0;">Chairman:</td><td style="padding:3px 0;">${f.chairmanName || "___________"}${f.chairmanDin ? ` (DIN: ${f.chairmanDin})` : ""}</td></tr>
@@ -402,6 +403,8 @@ function genDIR2(f: F, nd: NewDirectorEntry): string {
     <div class="field-row"><span class="field-lbl">Nationality: </span><span class="field-val">${nd.nationality || "Indian"}</span></div>
     <div class="field-row"><span class="field-lbl">Occupation: </span><span class="field-val">${nd.occupation || ""}</span></div>
     <div class="field-row"><span class="field-lbl">PAN: </span><span class="field-val">${nd.pan || ""}</span></div>
+    <div class="field-row"><span class="field-lbl">Email ID: </span><span class="field-val">${nd.email || ""}</span></div>
+    <div class="field-row"><span class="field-lbl">Mobile No.: </span><span class="field-val">${nd.mobile || ""}</span></div>
     <div class="field-row"><span class="field-lbl">Present Address: </span><span class="field-val">${addr || ""}</span></div>
     <div class="field-row"><span class="field-lbl">Date of Appointment: </span><span class="field-val">${fmtDate(nd.effectiveDate || f.meetingDate)}</span></div>
     <div class="decl-box">
@@ -413,6 +416,7 @@ function genDIR2(f: F, nd: NewDirectorEntry): string {
         <li>The information furnished above is true and correct to the best of my knowledge and belief, and nothing material has been concealed.</li>
       </ol>
     </div>
+    <p style="margin-top:24px;">Verified at <span class="field-val" style="min-width:160px;">&nbsp;</span> on this <span class="field-val" style="min-width:60px;">&nbsp;</span> day of <span class="field-val" style="min-width:100px;">&nbsp;</span>, 20<span class="field-val" style="min-width:40px;">&nbsp;</span>.</p>
     <div class="sign-block">
       <table><tr>
         <td style="width:55%;vertical-align:bottom;"><br><br>____________________________<br><strong>${nd.name || "[Name]"}</strong><br>DIN: ${nd.din || "________"}</td>
@@ -751,6 +755,7 @@ export default function DirectorAppointmentPage() {
   }
 
   const isGM = f.ndDesignation === "director_gm";
+  const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
   const activeNds = useMemo(() => f.newDirectors.slice(0, f.directorCount), [f.newDirectors, f.directorCount]);
   const dates = useMemo(() => calcDates(f.meetingDate, isGM), [f.meetingDate, isGM]);
 
@@ -791,8 +796,8 @@ export default function DirectorAppointmentPage() {
   const canStep1 = !!f.companyName;
   const canStep2 = true; // designation always has a default
   const canStep3 = !!f.meetingDate && !!f.meetingSerial && !!f.chairmanName;
-  const canStep4 = f.directors.filter(d => d.isPresent).length >= 1;
-  const canStep5 = !!f.newDirectors[0]?.name && !!f.newDirectors[0]?.din && !!f.newDirectors[0]?.fatherName;
+  const canStep4 = f.directors.filter(d => d.isPresent).length >= (f.entityType === "opc" ? 1 : 2);
+  const canStep5 = activeNds.length > 0 && activeNds.every(nd => !!nd.name && !!nd.din && !!nd.fatherName);
   const canProceed = [true, canStep1, canStep2, canStep3, canStep4, canStep5][step] ?? false;
 
   const STEPS = ["Company", "Appointment", "Meeting & Dates", "Attendance", "Director Details", "Documents"];
@@ -841,7 +846,7 @@ export default function DirectorAppointmentPage() {
             <option value="nominee_director">Nominee Director — Section 161(3)</option>
             <option value="managing_director">Managing Director — Section 196 + Schedule V</option>
             <option value="whole_time_director">Whole-time Director — Section 196 + Schedule V</option>
-            <option value="independent_director">Independent Director — Section 149(4)(6) + Schedule IV</option>
+            <option value="independent_director">Independent Director — Section 149(4) &amp; (6) + Schedule IV</option>
           </optgroup>
           <optgroup label="— General Meeting Appointed —">
             <option value="director_gm">Director (at General Meeting) — Section 152</option>
@@ -908,11 +913,12 @@ export default function DirectorAppointmentPage() {
       {f.meetingDate && (
         <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
           <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-3">📅 Auto Date Planner</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${isMdWtd ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1 sm:grid-cols-3"}`}>
             {[
               { label: isGM ? "EGM Notice (Sec. 101)" : "Board Notice (SS-1)", date: dates.noticeDate, note: isGM ? "21 clear days before EGM" : "7 days before meeting", color: "bg-white border-slate-200 text-slate-700" },
               { label: isGM ? "EGM Date" : "Board Meeting", date: f.meetingDate, note: "Director appointed on this date", color: "bg-blue-600 border-blue-600 text-white" },
               { label: "DIR-12 Deadline ⚠️", date: dates.rocDeadline, note: "30 days from appointment", color: "bg-red-50 border-red-300 text-red-700" },
+              ...(isMdWtd ? [{ label: "MR-1 Deadline ⚠️", date: dates.mr1Deadline, note: "60 days — MD/WTD mandatory", color: "bg-orange-50 border-orange-300 text-orange-700" }] : []),
             ].map(item => (
               <div key={item.label} className={`rounded-xl border-2 p-3 text-center ${item.color}`}>
                 <p className="text-xs font-bold mb-1 opacity-80">{item.label}</p>
@@ -1063,10 +1069,9 @@ export default function DirectorAppointmentPage() {
           </div>
           <div className="bg-white p-4 max-h-[500px] overflow-y-auto"
             dangerouslySetInnerHTML={{ __html: activeDoc.gen()
-              .replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/, "")
+              .replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/, `<style>${DOC_CSS.replace(/\bbody\s*\{[^}]*\}/g, "")}</style>`)
               .replace(/<\/body>[\s\S]*?<\/html>/, "")
-              .replace(/<style>[\s\S]*?<\/style>/g, "")
-              .replace(/<div class="page">/, '<div style="font-family:Times New Roman,serif;font-size:12pt;line-height:1.8;color:#000;padding:4px 8px;">')
+              .replace(/<div class="page">/, '<div class="page" style="font-family:\'Times New Roman\',serif;font-size:12pt;line-height:1.8;color:#000;">')
             }} />
         </div>
       )}
