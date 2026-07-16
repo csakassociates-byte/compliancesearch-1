@@ -1053,8 +1053,8 @@ export default function DirectorAppointmentPage() {
         ? { key: "gm_notice",     label: "EGM Notice",       emoji: "📬", gen: () => genGMNotice(f, nds) }
         : { key: "notice",        label: "Board Notice",      emoji: "📬", gen: () => genBoardNotice(f, nds) },
       gm
-        ? { key: "gm_resolution", label: "EGM Resolution",   emoji: "⚖️",  gen: () => genGMResolution(f, nds) }
-        : { key: "resolution",    label: "Board Resolution",  emoji: "⚖️",  gen: () => genBoardResolution(f, nds) },
+        ? { key: "gm_resolution", label: "EGM CTC",          emoji: "⚖️",  gen: () => genGMResolution(f, nds) }
+        : { key: "resolution",    label: "Board CTC",         emoji: "⚖️",  gen: () => genBoardResolution(f, nds) },
       ...nds.map((nd, i) => ({
         key: `dir2_${i}`,
         label: nds.length > 1 ? `DIR-2 Dir ${i + 1}` : "DIR-2 Consent",
