@@ -116,6 +116,17 @@ function addDays(dateStr: string, days: number): string {
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
 }
+function ordinalDate(dateStr: string): string {
+  if (!dateStr) return "___________";
+  try {
+    const d = new Date(dateStr + "T00:00:00");
+    const day = d.getDate();
+    const suffix = [11,12,13].includes(day) ? "th" : (["st","nd","rd"][((day%10)-1)] || "th");
+    const month = d.toLocaleDateString("en-IN", { month: "short" }).toUpperCase();
+    const year = d.getFullYear();
+    return `${day}<sup>${suffix}</sup> DAY OF ${month}, ${year}`;
+  } catch { return dateStr; }
+}
 function calcDates(meetingDate: string, isGM = false) {
   if (!meetingDate) return { noticeDate: "", rocDeadline: "", mr1Deadline: "" };
   return {
@@ -163,132 +174,106 @@ function signBlock(name: string, din: string, dateStr: string): string {
 function genBoardNotice(f: F, nds: NewDirectorEntry[]): string {
   const { noticeDate } = calcDates(f.meetingDate);
   const presentDirs = f.directors.filter(d => d.isPresent);
-  const addressees = presentDirs.length > 0
-    ? presentDirs.map(d => `<p>To,<br><strong>${d.name}</strong><br>${d.designation || "Director"}${d.din ? `<br>DIN: ${d.din}` : ""}</p>`).join("")
-    : `<p>To,<br><strong>All Directors</strong><br>${f.companyName || "[Company Name]"}</p>`;
+  const needsEGM = f.ndDesignation === "director_gm";
+  const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
+  const desg = DESIGNATION_LABEL[f.ndDesignation];
 
-  function ndAgenda(nd: NewDirectorEntry): string {
-    const desg = DESIGNATION_LABEL[f.ndDesignation];
-    const sec  = SECTION_REF[f.ndDesignation];
-    const eff  = fmtDate(nd.effectiveDate || f.meetingDate);
-    if (f.ndDesignation === "alternate_director")
-      return `Appointment of <strong>${nd.name || "__________"}</strong> (DIN: ${nd.din || "________"}) as <strong>Alternate Director</strong> under <strong>Section 161(2)</strong>, in place of <strong>${nd.originalDirector || "[Original Director]"}</strong>${nd.originalDin ? ` (DIN: ${nd.originalDin})` : ""}, during his/her absence from India.`;
-    if (f.ndDesignation === "nominee_director")
-      return `Appointment of <strong>${nd.name || "__________"}</strong> (DIN: ${nd.din || "________"}) as <strong>Nominee Director</strong> under <strong>Section 161(3)</strong>, as nominated by <strong>${nd.nominatingBody || "[Nominating Body]"}</strong>.`;
-    if (f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director")
-      return `Appointment of <strong>${nd.name || "__________"}</strong> (DIN: ${nd.din || "________"}) as <strong>${desg}</strong> under <strong>${sec}</strong> for a term of <strong>${nd.termYears || "5"} (${numWords(nd.termYears || "5")}) years</strong> w.e.f. ${eff}, subject to shareholders&rsquo; approval.`;
-    if (f.ndDesignation === "independent_director")
-      return `Appointment of <strong>${nd.name || "__________"}</strong> (DIN: ${nd.din || "________"}) as <strong>Additional Independent Director</strong> under <strong>Section 161(1) read with Section 149(4) &amp; (6) and Schedule IV</strong>, who has submitted Declaration of Independence u/s 149(7).`;
-    return `Appointment of <strong>${nd.name || "__________"}</strong> (DIN: ${nd.din || "________"}) as <strong>${desg}</strong> under <strong>${sec}</strong> with effect from ${eff}.`;
+  const ndNames = nds.map(nd => `<strong>${nd.name || "___________"}</strong>`).join(" and ");
+
+  function dirsSignTable(dirs: ExistingDirector[]): string {
+    const d = dirs.slice(0, 2);
+    if (!d.length) return `<table style="width:100%;"><tr><td><br><strong>[Director]</strong><br>Director</td></tr></table>`;
+    const cells = d.map(x => `<td style="width:50%;vertical-align:top;padding-right:12px;"><br><strong>${x.name}</strong><br>Director<br>DIN: ${x.din}</td>`).join("");
+    return `<table style="width:100%;"><tr>${cells}</tr></table>`;
   }
 
-  const agendaItem = nds.length === 1
-    ? `To consider and, if thought fit, to pass a resolution for: ${ndAgenda(nds[0])}`
-    : `To consider and, if thought fit, to pass resolutions for appointment of the following persons as Directors:<ol type="a">${nds.map(nd => `<li>${ndAgenda(nd)}</li>`).join("")}</ol>`;
-
-  const extraDocs = f.ndDesignation === "independent_director"
-    ? `<li>Form DIR-2 and Form DIR-8 from each incoming director.</li><li>Declaration of Independence under Section 149(7) from each incoming director.</li>`
-    : `<li>Form DIR-2 — Consent to Act as Director [Section 152(5) and Rule 8].</li><li>Form DIR-8 — Non-Disqualification Declaration [Section 164(2) and Rule 14(1)].</li>`;
+  const agendaItems = needsEGM ? `
+    <li>Appointment of ${ndNames} as Director of the Company<br>To consider appointment of directors.</li>
+    <li>To approve notice of Extra-Ordinary General Meeting (EGM) and explanatory statement.</li>
+    <li>To fix date, time and venue of EGM.</li>
+    <li>To authorize a Director to file necessary forms with ROC.</li>
+    <li>Any other business with the permission of the Chair.</li>` : `
+    <li>Appointment of ${ndNames} as <strong>${desg}</strong> of the Company<br>To consider and approve the appointment.</li>
+    <li>To authorize a Director to file Form DIR-12 with the Registrar of Companies within 30 days of appointment.</li>
+    ${isMdWtd ? `<li>To authorize a Director to file Form MR-1 with the Registrar of Companies within 60 days of appointment.</li>` : ""}
+    <li>Any other business with the permission of the Chair.</li>`;
 
   const body = `
+    <div style="text-align:center;font-weight:bold;font-size:14pt;margin-bottom:4px;">NOTICE OF BOARD MEETING</div>
+    <div style="text-align:center;font-size:11pt;margin-bottom:18px;">(Section 173 of Companies Act, 2013)</div>
     ${coHeader(f)}
-    <p>Date: <strong>${fmtDate(noticeDate)}</strong></p><br>
-    ${addressees}
-    <p class="subject">Sub: Notice of Meeting of the Board of Directors of ${f.companyName || "[Company Name]"}</p>
-    <p>Dear Sir/Madam,</p>
-    <p>Pursuant to the provisions of <strong>Section 173</strong> of the Companies Act, 2013 and the Secretarial Standard on Meetings of the Board of Directors (<strong>SS-1</strong>), notice is hereby given that the <strong>${f.meetingSerial || "___"}</strong> Meeting of the Board of Directors of <strong>${f.companyName || "[Company Name]"}</strong> will be held on <strong>${fmtDay(f.meetingDate)}, the ${fmtDate(f.meetingDate)}</strong>, at <strong>${fmtTime(f.meetingTime)}</strong>, at <strong>${f.venue || "[Venue]"}</strong>, to transact the following business:</p>
-    <p><strong>AGENDA:</strong></p>
-    <ol>
-      <li>Election of Chairman of the Meeting.</li>
-      <li>Ascertainment of Quorum.</li>
-      <li>Grant of Leave of Absence to Directors unable to attend.</li>
-      <li>Noting of Attendance.</li>
-      <li>${agendaItem}</li>
-      <li>Any Other Business with the permission of the Chairman.</li>
-    </ol>
-    <p>Please find enclosed the following documents received from the incoming director(s):</p>
-    <ol>${extraDocs}</ol>
-    <p>You are requested to make it convenient to attend the meeting on the scheduled date, time, and venue.</p>
-    <div class="sign-block">
+    <p style="font-weight:bold;font-size:13pt;margin:18px 0 8px;">NOTICE</p>
+    <p>Notice is hereby given that the <strong>${f.meetingSerial || "___"}</strong> Meeting of the Board of Directors of <strong>${f.companyName || "[Company Name]"}</strong> will be held on <strong>${fmtDay(f.meetingDate)}, ${ordinalDate(f.meetingDate)}</strong> at <strong>${fmtTime(f.meetingTime)}</strong> at ${f.venue || "the Registered Office of the Company"} to transact the following business:</p>
+    <p style="font-weight:bold;margin-top:18px;text-decoration:underline;">AGENDA</p>
+    <ol>${agendaItems}</ol>
+    <div class="sign-block" style="margin-top:40px;">
       <p>By Order of the Board<br>For <strong>${f.companyName || "[Company Name]"}</strong></p>
-      ${signBlock(f.chairmanName, f.chairmanDin, noticeDate)}
+      ${dirsSignTable(presentDirs)}
+      <br>
+      <p>Date: ${fmtDate(noticeDate)}<br>Place: ${f.venue || f.regAddress || "_______________"}</p>
     </div>`;
   return wrap(body, "Board Notice — Director Appointment");
 }
 
-/* ── 2. Board Resolution ──────────────────────────────────────── */
+/* ── 2. Board Resolution (CTC Format) ────────────────────────── */
 function genBoardResolution(f: F, nds: NewDirectorEntry[]): string {
   const presentDirs = f.directors.filter(d => d.isPresent);
+  const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
+  const isGMType = f.ndDesignation === "director_gm";
+  const desg = DESIGNATION_LABEL[f.ndDesignation];
+  const sec  = SECTION_REF[f.ndDesignation];
 
   function resolvedThat(nd: NewDirectorEntry): string {
-    const desg = DESIGNATION_LABEL[f.ndDesignation];
-    const sec  = SECTION_REF[f.ndDesignation];
     const eff  = fmtDate(nd.effectiveDate || f.meetingDate);
-    const term = `<strong>${nd.termYears || "5"} (${numWords(nd.termYears || "5")}) years</strong>`;
+    const term = `${nd.termYears || "5"} (${numWords(nd.termYears || "5")}) years`;
+    const namedin = `${nd.name || "___________"} having DIN ${nd.din || "________"}`;
     if (f.ndDesignation === "additional_director")
-      return `pursuant to <strong>Section 161(1)</strong> and all other applicable provisions of the Companies Act, 2013, read with the Companies (Appointment and Qualification of Directors) Rules, 2014, and the Articles of Association, <strong>${nd.name || "__________"}</strong> (DIN: <strong>${nd.din || "________"}</strong>), who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Additional Director</strong> with effect from <strong>${eff}</strong>, to hold office up to the date of the next AGM or the last date on which the AGM should have been held, whichever is earlier.`;
+      return `pursuant to the provisions of Section 161(1) and all other applicable provisions of the Companies Act, 2013 read with rules made thereunder and provisions of the Articles of Associations of the Company, ${namedin}, who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Additional Director</strong> with effect from ${eff}, to hold office up to the date of the next AGM or the last date on which the AGM should have been held, whichever is earlier.`;
     if (f.ndDesignation === "alternate_director")
-      return `pursuant to <strong>Section 161(2)</strong> and all other applicable provisions of the Companies Act, 2013, <strong>${nd.name || "__________"}</strong> (DIN: <strong>${nd.din || "________"}</strong>), who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Alternate Director</strong> in place of <strong>${nd.originalDirector || "[Original Director]"}</strong>${nd.originalDin ? ` (DIN: ${nd.originalDin})` : ""}, during his/her absence from India for not less than 3 months, with effect from <strong>${eff}</strong>. The said Alternate Director shall vacate office when the original Director returns to India.`;
+      return `pursuant to Section 161(2) and all other applicable provisions of the Companies Act, 2013, ${namedin}, who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Alternate Director</strong> in place of ${nd.originalDirector || "[Original Director]"}${nd.originalDin ? ` having DIN ${nd.originalDin}` : ""}, during his/her absence from India for not less than 3 months, with effect from ${eff}.`;
     if (f.ndDesignation === "nominee_director")
-      return `pursuant to <strong>Section 161(3)</strong> of the Companies Act, 2013 and the Articles of Association, <strong>${nd.name || "__________"}</strong> (DIN: <strong>${nd.din || "________"}</strong>), as nominated by <strong>${nd.nominatingBody || "[Nominating Body]"}</strong>, who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Nominee Director</strong> with effect from <strong>${eff}</strong>.`;
+      return `pursuant to Section 161(3) of the Companies Act, 2013 and the Articles of Association, ${namedin}, as nominated by ${nd.nominatingBody || "[Nominating Body]"}, who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Nominee Director</strong> with effect from ${eff}.`;
     if (f.ndDesignation === "managing_director")
-      return `pursuant to <strong>Sections 196, 197, 203</strong> and all other applicable provisions of the Companies Act, 2013, read with Schedule V and the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014, and subject to shareholders&rsquo; approval at the next General Meeting, <strong>${nd.name || "__________"}</strong> (DIN: <strong>${nd.din || "________"}</strong>), who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Managing Director</strong> for a term of ${term} with effect from <strong>${eff}</strong>, on such terms and conditions as set out in the service agreement.`;
+      return `pursuant to Sections 196, 197, 203 and all other applicable provisions of the Companies Act, 2013 read with Schedule V and the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014, and subject to shareholders&rsquo; approval at the next General Meeting, ${namedin}, who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Managing Director</strong> for a term of ${term} with effect from ${eff}, on such terms and conditions as the Board may determine.`;
     if (f.ndDesignation === "whole_time_director")
-      return `pursuant to <strong>Sections 196, 197, 203</strong> and all other applicable provisions of the Companies Act, 2013, read with Schedule V, and subject to shareholders&rsquo; approval at the next General Meeting, <strong>${nd.name || "__________"}</strong> (DIN: <strong>${nd.din || "________"}</strong>), who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Whole-time Director</strong> for a term of ${term} with effect from <strong>${eff}</strong>, to devote his/her whole time and attention to the management of the Company.`;
+      return `pursuant to Sections 196, 197, 203 and all other applicable provisions of the Companies Act, 2013 read with Schedule V, and subject to shareholders&rsquo; approval at the next General Meeting, ${namedin}, who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Whole-time Director</strong> for a term of ${term} with effect from ${eff}.`;
     if (f.ndDesignation === "independent_director")
-      return `pursuant to <strong>Section 161(1) read with Section 149(4) &amp; (6)</strong> and Schedule IV of the Companies Act, 2013, <strong>${nd.name || "__________"}</strong> (DIN: <strong>${nd.din || "________"}</strong>), who has submitted Form DIR-2, Form DIR-8, and Declaration of Independence under Section 149(7), and who in the opinion of the Board fulfils the conditions for appointment as an Independent Director, be and is hereby appointed as <strong>Additional Independent Director</strong> with effect from <strong>${eff}</strong>, to hold office till the conclusion of the next AGM or 3 months from appointment, whichever is earlier.`;
-    return `pursuant to <strong>${sec}</strong> and all other applicable provisions of the Companies Act, 2013, <strong>${nd.name || "__________"}</strong> (DIN: <strong>${nd.din || "________"}</strong>) be and is hereby appointed as <strong>${desg}</strong> with effect from <strong>${eff}</strong>.`;
+      return `pursuant to Section 161(1) read with Section 149(4) &amp; (6) and Schedule IV of the Companies Act, 2013, ${namedin}, who has submitted Form DIR-2, Form DIR-8, and Declaration of Independence under Section 149(7), be and is hereby appointed as <strong>Additional Independent Director</strong> with effect from ${eff}, to hold office till the conclusion of the next AGM or 3 months from appointment, whichever is earlier.`;
+    // director_gm — Board recommends to EGM
+    return `pursuant to the provisions of Section 152 read with Rule 8, 9, and 14 of Companies (Appointment and Qualification of Directors) Rules, 2014 and other applicable provisions of the Companies Act, 2013 read with rules made thereunder (including any statutory modifications or re-enactment thereof for the time being in force) and provisions of the Articles of Associations of the Company, subject to consent of the shareholders of the Company in EGM be and are hereby accorded to ${nd.name || "___________"} having DIN ${nd.din || "________"}, will be appointed with effect from ${eff}`;
   }
 
-  const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
   const filingClause = isMdWtd
-    ? `any Director or the Company Secretary be and is hereby severally authorised to file Form <strong>DIR-12</strong> within 30 days and Form <strong>MR-1</strong> within 60 days of this appointment, and to do all acts necessary to give effect to the foregoing resolutions.`
-    : `any Director or the Company Secretary be and is hereby severally authorised to file Form <strong>DIR-12</strong> with the Registrar of Companies within 30 days of this appointment, and to do all acts necessary to give effect to the foregoing resolutions.`;
+    ? `any of the director of the company be and is hereby authorized to file Form DIR-12 within 30 days and Form MR-1 within 60 days of this appointment, and to do all such acts /deeds/things as may deem fit to give effect to this resolution.`
+    : isGMType
+    ? `any of the director of the company be and is hereby authorized to approve the EGM notice and fix the date, time and venue of EGM and to file necessary forms with the Registrar of Companies, to do all such acts /deeds/things as may deem fit to give effect to this resolution.`
+    : `any of the director of the company be and is hereby authorized to file Form DIR-12 with the Registrar of Companies, to do all such acts /deeds/things as may deem fit to give effect to this resolution.`;
 
-  const ndNames = nds.map(nd => nd.name || "__________").join(" and ");
-  const contextPara = f.ndDesignation === "alternate_director"
-    ? `<p>The Chairman informed the Board that ${nds.map(nd => `<strong>${nd.originalDirector || "[Original Director]"}</strong>`).join(" and ")} ${nds.length > 1 ? "are" : "is"} expected to be absent from India for not less than 3 months. The Board proposed the appointment of <strong>${ndNames}</strong> as Alternate Director(s). The following documents were noted:</p>`
-    : f.ndDesignation === "nominee_director"
-    ? `<p>The Chairman informed the Board that ${nds.map(nd => `<strong>${nd.nominatingBody || "[Nominating Body]"}</strong>`).join(" and ")} ${nds.length > 1 ? "have" : "has"} nominated <strong>${ndNames}</strong> as Nominee Director(s). The following documents were noted:</p>`
-    : `<p>The Chairman informed the Board that the Company has received intimation from <strong>${ndNames}</strong> expressing willingness to be appointed as <strong>${DESIGNATION_LABEL[f.ndDesignation]}</strong>. The following documents were noted:</p>`;
-
+  const ndNamesTitle = nds.map(nd => (nd.name || "___________").toUpperCase()).join(" AND ");
   const resolutionClauses = nds.map(nd =>
-    `<p><strong>&ldquo;RESOLVED THAT</strong> ${resolvedThat(nd)}&rdquo;</p>`
+    `<p style="margin:12px 0;">"<strong>RESOLVED THAT</strong> ${resolvedThat(nd)}</p>`
   ).join("");
+
+  function dirsSignTable(dirs: ExistingDirector[]): string {
+    const d = dirs.slice(0, 2);
+    if (!d.length) return `<table style="width:100%;"><tr><td><br><br>____________________________<br><strong>[Director]</strong><br>Director</td></tr></table>`;
+    const cells = d.map(x => `<td style="width:50%;vertical-align:top;padding-right:12px;"><br><strong>${x.name}</strong><br>Director<br>DIN: ${x.din}</td>`).join("");
+    return `<table style="width:100%;"><tr>${cells}</tr></table>`;
+  }
 
   const body = `
     ${coHeader(f)}
-    <div class="doc-title">EXTRACT OF MINUTES OF THE MEETING OF THE BOARD OF DIRECTORS</div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
-      <tr><td style="font-weight:bold;width:200px;padding:3px 0;">Meeting No.:</td><td style="padding:3px 0;">${f.meetingSerial || "___/____-__"}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Date:</td><td style="padding:3px 0;">${fmtDate(f.meetingDate)}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Time:</td><td style="padding:3px 0;">${fmtTime(f.meetingTime)}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Venue:</td><td style="padding:3px 0;">${f.venue || "___________________"}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Chairman:</td><td style="padding:3px 0;">${f.chairmanName || "___________"}${f.chairmanDin ? ` (DIN: ${f.chairmanDin})` : ""}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Directors Present:</td><td style="padding:3px 0;">${presentDirs.length || "__"} out of ${f.directors.length || "__"} Directors</td></tr>
-    </table>
-    <p><strong>AGENDA ITEM: Appointment of ${DESIGNATION_LABEL[f.ndDesignation]}</strong></p>
-    ${contextPara}
-    <ol>
-      <li>Form DIR-2 — Consent to Act as Director under Section 152(5) read with Rule 8.</li>
-      <li>Form DIR-8 — Declaration under Section 164(2) read with Rule 14(1).</li>
-      ${f.ndDesignation === "independent_director" ? "<li>Declaration of Independence under Section 149(7).</li>" : ""}
-    </ol>
-    <p>The Board noted that the incoming director(s) satisfy the conditions specified in Section 164 and are not disqualified. After discussion, the following resolution(s) were proposed, seconded, and <strong>passed unanimously</strong>:</p>
+    <div class="doc-title" style="font-size:12pt;">EXTRACT OF RESOLUTION PASSED IN THE BOARD MEETING OF BOARD OF DIRECTOR OF ${(f.companyName || "[COMPANY NAME]").toUpperCase()} HELD ON ${ordinalDate(f.meetingDate)} AT ${fmtTime(f.meetingTime)} AT THE REGISTERED OFFICE OF THE COMPANY AT ${(f.regAddress || "[ADDRESS]").toUpperCase()}</div>
+    <p style="font-weight:bold;text-decoration:underline;margin:18px 0 10px;">APPOINTMENT OF ${ndNamesTitle} AS ${desg.toUpperCase()} OF THE COMPANY</p>
     <div class="res-box">
       ${resolutionClauses}
-      <p><strong>&ldquo;RESOLVED FURTHER THAT</strong> pursuant to <strong>Section 170</strong> of the Companies Act, 2013, the Company Secretary (if any) or any Director be and is hereby authorised to make necessary entries in the Register of Directors and Key Managerial Personnel.&rdquo;</p>
-      <p><strong>&ldquo;RESOLVED FURTHER THAT</strong> ${filingClause}&rdquo;</p>
+      <p style="margin:12px 0;">"<strong>RESOLVED FURTHER THAT</strong>, ${filingClause}"</p>
     </div>
-    <p>There being no other business to transact, the meeting concluded with a vote of thanks to the Chair.</p>
-    <div class="sign-block">
-      <table style="width:100%;"><tr>
-        <td style="width:55%;vertical-align:bottom;"><br><br>____________________________<br><strong>${f.chairmanName || "[Chairman]"}</strong><br>Chairman of the Meeting${f.chairmanDin ? `<br>DIN: ${f.chairmanDin}` : ""}</td>
-        <td style="text-align:right;vertical-align:bottom;">Date: ${fmtDate(f.meetingDate)}<br>Place: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
-      </tr></table>
-      <br>
-      <p style="font-size:10pt;"><em>Certified to be a True Extract of the Minutes of the Meeting of the Board of Directors of <strong>${f.companyName || "[Company Name]"}</strong> held on ${fmtDate(f.meetingDate)}.</em></p>
-      <br>____________________________<br><strong>${f.chairmanName || "[Director]"}</strong><br>Director${f.chairmanDin ? `<br>DIN: ${f.chairmanDin}` : ""}<br><br>Date: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Place: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <div class="sign-block" style="margin-top:40px;">
+      <p>Certified to Be True<br>For and on behalf of the Board of Directors</p>
+      <p>Place: - ${f.venue || (f.regAddress ? f.regAddress.split(",")[0] : "_______________")}</p>
+      ${dirsSignTable(presentDirs)}
+      <br><p>Date: - ${fmtDate(f.meetingDate)}</p>
     </div>`;
   return wrap(body, "Board Resolution — Director Appointment");
 }
@@ -298,131 +283,240 @@ function genGMNotice(f: F, nds: NewDirectorEntry[]): string {
   const { noticeDate } = calcDates(f.meetingDate, true);
 
   const agendaItems = nds.map((nd, i) => {
-    const prefix = nds.length > 1 ? `${i + 1}. ` : "";
-    return `<li>${prefix}<strong>Ordinary Resolution:</strong> Appointment of <strong>${nd.name || `[Director ${i + 1}]`}</strong> (DIN: ${nd.din || "________"}) as a Director of the Company, liable to retire by rotation, pursuant to <strong>Section 152</strong> of the Companies Act, 2013.</li>`;
+    const label = nds.length > 1 ? ` ${i + 1}` : "";
+    return `<li>APPOINTMENT OF <strong>${(nd.name || `DIRECTOR ${i+1}`).toUpperCase()}</strong>${nd.din ? ` HAVING DIN ${nd.din}` : ""} AS DIRECTOR OF THE COMPANY</li>`;
+  }).join("");
+
+  const resolutionClauses = nds.map((nd, i) => {
+    const label = nds.length > 1 ? ` ${i + 1}` : "";
+    const eff = fmtDate(nd.effectiveDate || f.meetingDate);
+    const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
+    return `
+      <p style="font-weight:bold;text-decoration:underline;margin:18px 0 8px;">APPOINTMENT OF ${(nd.name || `[DIRECTOR${label}]`).toUpperCase()} AS DIRECTOR OF THE COMPANY</p>
+      <p>To consider and if thought fit, to pass, with or without modification the following resolution as <strong>Ordinary Resolution</strong>:</p>
+      <div class="res-box">
+        <p>"<strong>RESOLVED THAT</strong> pursuant to the provisions of Section 152 read with Rule 8, 9, and 14 of Companies (Appointment and Qualification of Directors) Rules, 2014 and other applicable provisions of the Companies Act, 2013 read with rules made thereunder (including any statutory modifications or re-enactment thereof for the time being in force) and provisions of the Articles of Associations of the Company and subject to the approval of the shareholders of the Company in the Extraordinary General Meeting, <strong>${nd.name || "___________"}</strong>${nd.din ? ` having DIN <strong>${nd.din}</strong>` : ""} be and hereby are appointed as the Director of the Company with effect from <strong>${eff}</strong>.</p>
+        <p><strong>RESOLVED FURTHER THAT</strong>, any of the director of the company be and is hereby authorized to file Form DIR-12 with the Registrar of Companies, to do all such acts /deeds/things as may deem fit to give effect to this resolution."</p>
+      </div>
+    `;
   }).join("");
 
   const explItems = nds.map((nd, i) => {
-    const heading = nds.length > 1 ? `Item No. ${i + 1} — ` : "";
+    const label = nds.length > 1 ? `Item No. ${i + 1}: ` : "";
     const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
+    const eff = fmtDate(nd.effectiveDate || f.meetingDate);
     return `
-      <p><strong>${heading}Appointment of ${nd.name || `[Director ${i + 1}]`} as Director</strong></p>
-      <div class="field-row"><span class="field-lbl">Full Name:</span> <span class="field-val">${nd.name || "___________"}</span></div>
-      <div class="field-row"><span class="field-lbl">DIN:</span> <span class="field-val">${nd.din || "___________"}</span></div>
-      <div class="field-row"><span class="field-lbl">Date of Birth:</span> <span class="field-val">${fmtDate(nd.dob)}</span></div>
-      <div class="field-row"><span class="field-lbl">Occupation:</span> <span class="field-val">${nd.occupation || "___________"}</span></div>
-      <div class="field-row"><span class="field-lbl">Address:</span> <span class="field-val">${addr || "___________"}</span></div>
-      <p>The above person, if appointed, would be a Director of the Company liable to retire by rotation. ${nd.name || "He/She"} has submitted Form DIR-2 (Consent to Act as Director) and Form DIR-8 (Non-Disqualification Declaration). The Board recommends this Ordinary Resolution for approval by the Members.</p>
-      <p><em>No Director, Key Managerial Personnel, or their relatives are interested or concerned in this Resolution, except for <strong>${nd.name || "the appointee"}</strong>.</em></p>
-      ${i < nds.length - 1 ? "<hr style=\"margin:24px 0;\">" : ""}
+      <p><strong>${label}APPOINTMENT OF ${(nd.name || `[DIRECTOR ${i+1}]`).toUpperCase()} AS DIRECTOR OF THE COMPANY</strong></p>
+      <p>Pursuant to the provisions of Section 152 read with Rule 8, 9, and 14 of Companies (Appointment and Qualification of Directors) Rules, 2014 and other applicable provisions of the Companies Act, 2013 read with rules made thereunder (including any statutory modifications or re-enactment thereof for the time being in force) and provisions of the Articles of Associations of the Company and subject to the approval of the shareholders of the Company in the Extraordinary General Meeting, <strong>${nd.name || "___________"}</strong>${nd.din ? ` having DIN <strong>${nd.din}</strong>` : ""}${addr ? `, residing at ${addr}` : ""}, be and hereby are appointed as the Director of the Company with effect from <strong>${eff}</strong>.</p>
+      ${nd.dob || nd.occupation ? `<p><strong>Brief profile:</strong>${nd.dob ? ` Date of Birth: ${fmtDate(nd.dob)}.` : ""}${nd.occupation ? ` Occupation: ${nd.occupation}.` : ""}</p>` : ""}
+      <p>None of the Directors and Key Managerial Personnel of the Company and their relatives is concerned or interested, financially or otherwise, in the resolution, except for <strong>${nd.name || "the proposed director"}</strong>.</p>
+      ${i < nds.length - 1 ? "<hr style=\"margin:20px 0;\">" : ""}
     `;
   }).join("");
 
-  const body = `
-    ${coHeader(f)}
-    <div class="doc-title">NOTICE OF EXTRAORDINARY GENERAL MEETING</div>
-    <p>NOTICE is hereby given, pursuant to <strong>Section 101 and Section 173</strong> of the Companies Act, 2013 read with the Companies (Management and Administration) Rules, 2014, that an <strong>Extraordinary General Meeting (&ldquo;EGM&rdquo;)</strong> of the Members of <strong>${f.companyName || "[Company Name]"}</strong> will be held on <strong>${fmtDay(f.meetingDate)}, the ${fmtDate(f.meetingDate)}</strong>, at <strong>${fmtTime(f.meetingTime)}</strong>, at <strong>${f.venue || "[Venue]"}</strong>, to transact the following business:</p>
-    <p><strong>ORDINARY BUSINESS:</strong></p>
-    <ol>${agendaItems}</ol>
-    <p style="font-size:10pt;margin-top:20px;"><strong>Note:</strong> This Notice is being sent at least <strong>21 clear days</strong> before the date of the EGM, as required under Section 101 of the Companies Act, 2013. A Member entitled to attend and vote is entitled to appoint a Proxy to attend and vote on his/her behalf. Proxies must be deposited at the Registered Office at least 48 hours before the EGM.</p>
-    <p>By Order of the Board<br>For <strong>${f.companyName || "[Company Name]"}</strong></p>
-    <div class="sign-block">${signBlock(f.chairmanName, f.chairmanDin, noticeDate)}</div>
-    <p style="font-size:10pt;">Date: ${fmtDate(noticeDate)}<br>Place: ${f.regAddress || "[Registered Office]"}</p>
+  // Proxy Form (MGT-11)
+  const proxyForm = `
     <div class="page-break">
-      <div class="doc-title">EXPLANATORY STATEMENT</div>
-      <p><em>(Pursuant to Section 102 of the Companies Act, 2013)</em></p>
-      ${explItems}
+      <div class="doc-title">Form No. MGT-11</div>
+      <p style="text-align:center;font-weight:bold;">PROXY FORM</p>
+      <p style="text-align:center;font-size:10pt;">[Pursuant to Section 105(6) of the Companies Act, 2013 and Rule 19(3) of the Companies (Management and Administration) Rules, 2014]</p>
+      <p style="text-align:center;font-size:10pt;">Extraordinary General Meeting &ndash; ${fmtDate(f.meetingDate)}</p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #555;margin:14px 0;">
+        <tr><td style="padding:8px;border:1px solid #555;width:180px;font-weight:bold;">Name of the member(s):</td><td style="padding:8px;border:1px solid #555;">&nbsp;</td></tr>
+        <tr><td style="padding:8px;border:1px solid #555;font-weight:bold;">Registered address:</td><td style="padding:8px;border:1px solid #555;">&nbsp;</td></tr>
+        <tr><td style="padding:8px;border:1px solid #555;font-weight:bold;">Email:</td><td style="padding:8px;border:1px solid #555;">&nbsp;</td></tr>
+        <tr><td style="padding:8px;border:1px solid #555;font-weight:bold;">Folio No. / Client ID:</td><td style="padding:8px;border:1px solid #555;">&nbsp;</td></tr>
+      </table>
+      <p>I / We, being the member(s) of ………………………………………………. shares of the above named company, hereby appoint:</p>
+      <p><strong>Name:</strong> ………………………………………………&emsp;<strong>Email:</strong> ………………………………………<br>
+      <strong>Address:</strong> ………………………………………………………………………………………………<br>
+      <strong>Signature:</strong> ………………………………………… or failing him/her</p>
+      <p><strong>Name:</strong> ………………………………………………&emsp;<strong>Email:</strong> ………………………………………<br>
+      <strong>Address:</strong> ………………………………………………………………………………………………<br>
+      <strong>Signature:</strong> …………………………………………</p>
+      <p>as my / our proxy to attend and vote (on a poll) for me / us and on my / our behalf at the Extraordinary General Meeting of the Company, to be held on <strong>${fmtDate(f.meetingDate)}</strong>, at <strong>${fmtTime(f.meetingTime)}</strong> at ${f.venue || "[Venue]"} and at any adjournment thereof in respect of such resolutions as indicated below:</p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #555;margin:14px 0;font-size:10.5pt;">
+        <tr style="background:#f0f0f0;"><th style="border:1px solid #555;padding:7px;text-align:center;width:8%;">Res. No.</th><th style="border:1px solid #555;padding:7px;text-align:left;">Resolution</th><th style="border:1px solid #555;padding:7px;text-align:center;width:18%;">Type</th><th style="border:1px solid #555;padding:7px;text-align:center;width:8%;">For</th><th style="border:1px solid #555;padding:7px;text-align:center;width:8%;">Against</th></tr>
+        ${nds.map((nd, i) => `<tr><td style="border:1px solid #555;padding:7px;text-align:center;">${i+1}</td><td style="border:1px solid #555;padding:7px;">Appointment of ${nd.name || `[Director ${i+1}]`}${nd.din ? ` (DIN: ${nd.din})` : ""} as Director</td><td style="border:1px solid #555;padding:7px;text-align:center;">Ordinary</td><td style="border:1px solid #555;padding:7px;">&nbsp;</td><td style="border:1px solid #555;padding:7px;">&nbsp;</td></tr>`).join("")}
+      </table>
+      <p>Signed this …………………………… day of ……………………… 2025-26.</p>
+      <table style="width:100%;"><tr>
+        <td style="width:50%;text-align:center;">
+          <div style="border:1px dashed #999;padding:20px 10px;margin:0 10px;font-size:10pt;">Affix Revenue Stamp of ₹ 1</div>
+        </td>
+        <td style="width:50%;text-align:center;"></td>
+      </tr><tr>
+        <td style="text-align:center;font-size:10pt;padding-top:8px;">……………………………………<br>Signature of the member(s)</td>
+        <td style="text-align:center;font-size:10pt;padding-top:8px;">……………………………………<br>Signature of the proxy holder(s)</td>
+      </tr></table>
+      <p style="font-size:9pt;margin-top:16px;"><strong>Notes:</strong> (1) This form of proxy, in order to be effective, should be duly stamped, completed, signed and deposited at the registered office of the Company, not less than 48 hours before the meeting. (2) A Proxy need not be a member of the company.</p>
     </div>`;
+
+  // Attendance Slip
+  const attendanceSlip = `
+    <div class="page-break">
+      <p style="text-align:center;border:1px dashed #999;padding:5px;font-size:9pt;">PLEASE CUT HERE AND BRING THE BELOW ATTENDANCE SLIP TO THE MEETING HALL</p>
+      <p style="font-weight:bold;text-align:center;font-size:13pt;margin-bottom:4px;">ATTENDANCE SLIP</p>
+      <p style="text-align:center;font-size:10pt;margin-bottom:16px;">Extraordinary General Meeting &ndash; ${fmtDate(f.meetingDate)} at ${fmtTime(f.meetingTime)}</p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #555;margin:14px 0;">
+        <tr><td style="padding:8px;border:1px solid #555;width:200px;font-weight:bold;">Registered Folio No. / Client ID:</td><td style="padding:8px;border:1px solid #555;">&nbsp;</td></tr>
+        <tr><td style="padding:8px;border:1px solid #555;font-weight:bold;">DP ID No.:</td><td style="padding:8px;border:1px solid #555;">&nbsp;</td></tr>
+        <tr><td style="padding:8px;border:1px solid #555;font-weight:bold;">Number of Shares Held:</td><td style="padding:8px;border:1px solid #555;">&nbsp;</td></tr>
+      </table>
+      <p>I certify that I am a member / proxy for the member of the Company.</p>
+      <p>I / We hereby record my / our presence at the Extraordinary General Meeting of the Company on <strong>${fmtDate(f.meetingDate)}</strong> at <strong>${fmtTime(f.meetingTime)}</strong> at ${f.venue || "[Venue]"}.</p>
+      <br><br>
+      <table style="width:100%;"><tr>
+        <td style="width:55%;">……………………………………………<br><em>Name of the member / proxy (in BLOCK letters)</em></td>
+        <td style="text-align:right;">……………………………………………<br><em>Signature of the member / proxy</em></td>
+      </tr></table>
+      <p style="font-size:9pt;margin-top:12px;"><strong>Note:</strong> Please fill up this attendance slip and hand it over at the entrance of the meeting hall. Members are requested to bring their copies of the Notice to the EGM.</p>
+    </div>`;
+
+  const body = `
+    <div style="text-align:center;font-weight:bold;font-size:14pt;margin-bottom:4px;">NOTICE OF EGM WITH EXPLANATORY STATEMENT</div>
+    <div style="text-align:center;font-size:11pt;margin-bottom:18px;">(Section 101 &amp; 102 of Companies Act, 2013)</div>
+    ${coHeader(f)}
+    <p style="font-weight:bold;font-size:13pt;margin:18px 0 8px;">NOTICE</p>
+    <p>Notice is hereby given that an Extra-Ordinary General Meeting (EGM) of the Members of <strong>${f.companyName || "[Company Name]"}</strong> will be held on <strong>${fmtDay(f.meetingDate)}, ${ordinalDate(f.meetingDate)}</strong> at <strong>${fmtTime(f.meetingTime)}</strong> at ${f.venue || "[Venue]"}, to transact the following business:</p>
+    <p style="font-weight:bold;text-decoration:underline;margin-top:18px;">SPECIAL BUSINESS</p>
+    <p style="font-weight:bold;">RESOLUTION:</p>
+    <ol>${agendaItems}</ol>
+    ${resolutionClauses}
+    <div class="sign-block" style="margin-top:30px;">
+      <p>For <strong>${f.companyName || "[Company Name]"}</strong></p>
+      ${signBlock(f.chairmanName, f.chairmanDin, noticeDate)}
+    </div>
+    <br>
+    <p>Date: ${fmtDate(noticeDate)}<br>Place: ${f.venue || f.regAddress || "_______________"}</p>
+    <p style="font-weight:bold;margin-top:18px;">NOTES:</p>
+    <ol style="font-size:10.5pt;">
+      <li>Explanatory statement pursuant to Section 102 of the Companies Act, 2013 is annexed hereto as Annexure I.</li>
+      <li>A member entitled to attend and vote at the meeting and is entitled to appoint a proxy, to attend and vote on poll instead of himself and proxy need not be a member of the Company. Proxy form, in order to be effective must be received by the company not less than 48 hours before the meeting.</li>
+      <li>All documents and papers as referred to in this notice and as required by the Companies Act, 2013 shall be available for inspection between 11.00 a.m. to 1.00 p.m. on all working days at the Registered Office of the Company and shall also be so available during the meeting.</li>
+      <li>Members are requested: (a) To bring their copies of Notice and Attendance Slip at the time of the Meeting. (b) To quote their Folio No. in all correspondence. (c) To notify the change in the address, if any. (d) Members desiring any information/clarification are requested to write to the Company in advance at least seven (7) days before the meeting.</li>
+    </ol>
+    <div class="sign-block" style="margin-top:20px;">
+      <p>For <strong>${f.companyName || "[Company Name]"}</strong></p>
+      ${signBlock(f.chairmanName, f.chairmanDin, noticeDate)}
+    </div>
+    <p>Date: ${fmtDate(noticeDate)}<br>Place: ${f.venue || f.regAddress || "_______________"}</p>
+    <div class="page-break">
+      <p style="font-weight:bold;text-align:center;">ANNEXURE I:</p>
+      <div class="doc-title">EXPLANATORY STATEMENT</div>
+      <p style="text-align:center;font-size:10.5pt;">ANNEXED TO THE NOTICE OF THE GENERAL MEETING OF THE COMPANY</p>
+      ${explItems}
+    </div>
+    ${proxyForm}
+    ${attendanceSlip}`;
   return wrap(body, "EGM Notice — Director Appointment");
 }
 
-/* ── 4. GM Minutes + Ordinary Resolution ─────────────────────── */
+/* ── 4. GM Resolution (EGM CTC Format) ───────────────────────── */
 function genGMResolution(f: F, nds: NewDirectorEntry[]): string {
   const presentDirs = f.directors.filter(d => d.isPresent);
 
-  const resolutions = nds.map((nd, i) => {
+  const ndNamesTitle = nds.map(nd => (nd.name || "___________").toUpperCase()).join(" AND ");
+
+  const resolutionClauses = nds.map((nd, i) => {
     const label = nds.length > 1 ? ` ${i + 1}` : "";
     const eff = fmtDate(nd.effectiveDate || f.meetingDate);
     return `
-      <p><strong>Agenda Item${label}: Appointment of ${nd.name || `[Director ${i + 1}]`} as Director</strong></p>
-      <p>The Chairman informed the Members that the Company has received intimation from <strong>${nd.name || "__________"}</strong> (DIN: ${nd.din || "________"}) expressing willingness to act as Director. The following documents were noted:</p>
-      <ol>
-        <li>Form DIR-2 — Consent to Act as Director</li>
-        <li>Form DIR-8 — Non-Disqualification Declaration</li>
-      </ol>
-      <p>The following Ordinary Resolution was put to vote by show of hands and <strong>passed unanimously</strong>:</p>
-      <div class="res-box">
-        <p><strong>&ldquo;RESOLVED THAT</strong> pursuant to the provisions of <strong>Section 152</strong> and all other applicable provisions of the Companies Act, 2013 and the rules made thereunder, <strong>${nd.name || "__________"}</strong> (DIN: <strong>${nd.din || "________"}</strong>), who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as a <strong>Director</strong> of the Company, liable to retire by rotation, with effect from <strong>${eff}</strong>.&rdquo;</p>
-        <p><strong>&ldquo;RESOLVED FURTHER THAT</strong> any Director or the Company Secretary of the Company be and is hereby authorised to file Form <strong>DIR-12</strong> with the Registrar of Companies within 30 days of this appointment, and to do all acts, deeds, and things necessary to give effect to this resolution.&rdquo;</p>
-      </div>
-      ${i < nds.length - 1 ? "<hr style=\"margin:28px 0;\">" : ""}
+      ${nds.length > 1 ? `<p style="font-weight:bold;text-decoration:underline;margin-top:18px;">APPOINTMENT OF ${(nd.name || `[DIRECTOR ${i+1}]`).toUpperCase()} AS DIRECTOR:</p>` : ""}
+      <p style="margin:12px 0;">"<strong>RESOLVED THAT</strong> pursuant to the provisions of Section 152 read with Rule 8, 9, and 14 of Companies (Appointment and Qualification of Directors) Rules, 2014 and other applicable provisions of the Companies Act, 2013 read with rules made thereunder (including any statutory modifications or re-enactment thereof for the time being in force) and provisions of the Articles of Associations of the Company, <strong>${nd.name || "___________"}</strong>${nd.din ? ` having DIN <strong>${nd.din}</strong>` : ""} be and hereby are appointed as the Director of the Company with effect from <strong>${eff}</strong>.</p>
+      <p style="margin:12px 0;"><strong>RESOLVED FURTHER THAT</strong>, any of the director of the company be and is hereby authorized to file Form DIR-12 with the Registrar of Companies, to do all such acts /deeds/things as may deem fit to give effect to this resolution."</p>
     `;
   }).join("");
 
+  function dirsSignTable(dirs: ExistingDirector[]): string {
+    const d = dirs.slice(0, 2);
+    if (!d.length) return `<table style="width:100%;"><tr><td><br><br>____________________________<br><strong>[Director]</strong><br>Director</td></tr></table>`;
+    const cells = d.map(x => `<td style="width:50%;vertical-align:top;padding-right:12px;"><br><strong>${x.name}</strong><br>Director<br>DIN: ${x.din}</td>`).join("");
+    return `<table style="width:100%;"><tr>${cells}</tr></table>`;
+  }
+
+  // Member Attendance Register (appended at end)
+  const attendanceRegister = `
+    <div class="page-break">
+      <div class="doc-title">MEMBER ATTENDANCE REGISTER</div>
+      <p style="text-align:center;font-size:10.5pt;">(Extra-Ordinary General Meeting)</p>
+      <p><strong>Date of Meeting:</strong> ${fmtDate(f.meetingDate)}&emsp;<strong>Time:</strong> ${fmtTime(f.meetingTime)}&emsp;<strong>Venue:</strong> ${f.venue || "_______________"}</p>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #555;margin:14px 0;font-size:10.5pt;">
+        <tr style="background:#f0f0f0;">
+          <th style="border:1px solid #555;padding:7px;text-align:center;width:8%;">Sl. No.</th>
+          <th style="border:1px solid #555;padding:7px;text-align:left;">Name of Member</th>
+          <th style="border:1px solid #555;padding:7px;text-align:left;width:18%;">Folio No. / DP ID</th>
+          <th style="border:1px solid #555;padding:7px;text-align:center;width:15%;">No. of Shares Held</th>
+          <th style="border:1px solid #555;padding:7px;text-align:center;width:18%;">Signature of Member</th>
+          <th style="border:1px solid #555;padding:7px;text-align:center;width:12%;">Time of Entry</th>
+        </tr>
+        ${presentDirs.map((d, i) => `<tr><td style="border:1px solid #555;padding:8px;text-align:center;">${i+1}.</td><td style="border:1px solid #555;padding:8px;">${d.name}</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td></tr>`).join("")}
+        ${Array.from({length: Math.max(0, 4 - presentDirs.length)}).map((_, i) => `<tr><td style="border:1px solid #555;padding:8px;text-align:center;">${presentDirs.length+i+1}.</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td></tr>`).join("")}
+      </table>
+      <p style="font-size:10.5pt;"><strong>CERTIFICATION</strong><br>I hereby certify that the above members were present at the Extra-Ordinary General Meeting of the Company held on ${fmtDate(f.meetingDate)}.</p>
+      <div class="sign-block" style="margin-top:30px;">
+        <p>For <strong>${f.companyName || "[Company Name]"}</strong></p>
+        ${dirsSignTable(presentDirs)}
+        <p>Date: ${fmtDate(f.meetingDate)}<br>Place: ${f.venue || f.regAddress || "_______________"}</p>
+      </div>
+    </div>`;
+
   const body = `
     ${coHeader(f)}
-    <div class="doc-title">EXTRACT OF MINUTES OF THE EXTRAORDINARY GENERAL MEETING</div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
-      <tr><td style="font-weight:bold;width:200px;padding:3px 0;">EGM Reference:</td><td style="padding:3px 0;">${f.meetingSerial || "___________________"}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Date:</td><td style="padding:3px 0;">${fmtDate(f.meetingDate)}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Time:</td><td style="padding:3px 0;">${fmtTime(f.meetingTime)}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Venue:</td><td style="padding:3px 0;">${f.venue || "___________________"}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Chairman:</td><td style="padding:3px 0;">${f.chairmanName || "___________"}${f.chairmanDin ? ` (DIN: ${f.chairmanDin})` : ""}</td></tr>
-      <tr><td style="font-weight:bold;padding:3px 0;">Members Present:</td><td style="padding:3px 0;">${presentDirs.length || "__"} member(s) present in person</td></tr>
-    </table>
-    <p>The Chairman called the meeting to order, confirmed quorum was present, and informed the members of the Agenda items as per the Notice dated ${fmtDate(addDays(f.meetingDate, -21))}.</p>
-    ${resolutions}
-    <p>There being no other business to transact, the Extraordinary General Meeting concluded with a vote of thanks to the Chair.</p>
-    <div class="sign-block">
-      <table style="width:100%;"><tr>
-        <td style="width:55%;vertical-align:bottom;"><br><br>____________________________<br><strong>${f.chairmanName || "[Chairman]"}</strong><br>Chairman of the Meeting${f.chairmanDin ? `<br>DIN: ${f.chairmanDin}` : ""}</td>
-        <td style="text-align:right;vertical-align:bottom;">Date: ${fmtDate(f.meetingDate)}<br>Place: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
-      </tr></table>
-      <br>
-      <p style="font-size:10pt;"><em>Certified to be a True Extract of the Minutes of the Extraordinary General Meeting of <strong>${f.companyName || "[Company Name]"}</strong> held on ${fmtDate(f.meetingDate)}.</em></p>
-    </div>`;
-  return wrap(body, "EGM Minutes — Director Appointment");
+    <div class="doc-title" style="font-size:12pt;">EXTRACT OF RESOLUTION PASSED IN THE EXTRA ORDINARY GENERAL MEETING OF ${(f.companyName || "[COMPANY NAME]").toUpperCase()} HELD ON ${ordinalDate(f.meetingDate)} AT ${fmtTime(f.meetingTime)} AT THE REGISTERED OFFICE OF THE COMPANY AT ${(f.regAddress || "[ADDRESS]").toUpperCase()}</div>
+    <p style="font-weight:bold;text-decoration:underline;margin:18px 0 10px;">APPOINTMENT OF ${ndNamesTitle} AS DIRECTOR OF THE COMPANY</p>
+    <div class="res-box">
+      ${resolutionClauses}
+    </div>
+    <div class="sign-block" style="margin-top:40px;">
+      <p>Certified to Be True<br>For and on behalf of the Board of Directors</p>
+      <p>Place: - ${f.venue || (f.regAddress ? f.regAddress.split(",")[0] : "_______________")}</p>
+      ${dirsSignTable(presentDirs)}
+      <br><p>Date: - ${fmtDate(f.meetingDate)}</p>
+    </div>
+    ${attendanceRegister}`;
+  return wrap(body, "EGM Resolution — Director Appointment");
 }
 
 /* ── 5. DIR-2 ──────────────────────────────────────────────────── */
 function genDIR2(f: F, nd: NewDirectorEntry): string {
   const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
+  const signDate = nd.effectiveDate || f.meetingDate;
+  function fieldRow(label: string, val: string) {
+    return `<tr><td style="padding:6px 10px;border:1px solid #555;font-weight:bold;width:42%;vertical-align:top;">${label}:</td><td style="padding:6px 10px;border:1px solid #555;">${val || "&nbsp;"}</td></tr>`;
+  }
   const body = `
-    <div class="mf-label">FORM DIR-2<br>[Pursuant to Section 152(5) and Rule 8 of the Companies (Appointment and Qualification of Directors) Rules, 2014]</div>
-    <div class="doc-title">CONSENT TO ACT AS DIRECTOR OF A COMPANY</div>
-    <p>I, the undersigned, hereby give my consent to act as a Director of the following Company:</p>
-    <div class="field-row"><span class="field-lbl">Name of Company: </span><span class="field-val">${f.companyName || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">CIN: </span><span class="field-val">${f.cin || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">Registered Office: </span><span class="field-val">${f.regAddress || ""}</span></div>
-    <br>
-    <p><strong>Particulars of the person giving consent:</strong></p>
-    <div class="field-row"><span class="field-lbl">Full Name: </span><span class="field-val">${nd.name || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">Father's / Husband's Name: </span><span class="field-val">${nd.fatherName || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">DIN: </span><span class="field-val">${nd.din || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">Date of Birth: </span><span class="field-val">${fmtDate(nd.dob)}</span></div>
-    <div class="field-row"><span class="field-lbl">Nationality: </span><span class="field-val">${nd.nationality || "Indian"}</span></div>
-    <div class="field-row"><span class="field-lbl">Occupation: </span><span class="field-val">${nd.occupation || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">PAN: </span><span class="field-val">${nd.pan || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">Email ID: </span><span class="field-val">${nd.email || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">Mobile No.: </span><span class="field-val">${nd.mobile || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">Present Address: </span><span class="field-val">${addr || ""}</span></div>
-    <div class="field-row"><span class="field-lbl">Date of Appointment: </span><span class="field-val">${fmtDate(nd.effectiveDate || f.meetingDate)}</span></div>
+    <div class="mf-label">Form DIR-2<br>Consent to act as a director of a company<br>[Pursuant to section 152(5) and rule 8 of Companies (Appointment and Qualification of Directors) Rules, 2014]</div>
+    <p>To<br><strong>${f.companyName || "[COMPANY NAME]"}</strong><br>Address- ${f.regAddress || "[Registered Office Address]"}</p>
+    <p class="subject">Subject: Consent to act as a director.</p>
+    <p>I <strong>${nd.name || "___________"}</strong>, hereby give my consent to act as director of <strong>${f.companyName || "[Company Name]"}</strong>, pursuant to sub-section (5) of section 152 of the Companies Act, 2013 and certify that I am not disqualified to become a director under the Companies Act, 2013.</p>
+    <table style="width:100%;border-collapse:collapse;margin:18px 0;font-size:11pt;">
+      ${fieldRow("Director Identification Number (DIN)", nd.din || "")}
+      ${fieldRow("Name (in full)", nd.name || "")}
+      ${fieldRow("Father's Name (in full)", nd.fatherName || "")}
+      ${fieldRow("Address", addr || "")}
+      ${fieldRow("E-mail id", nd.email || "")}
+      ${fieldRow("Mobile no.", nd.mobile ? `+91 ${nd.mobile}` : "")}
+      ${fieldRow("Income-tax PAN", nd.pan || "")}
+      ${fieldRow("Occupation", nd.occupation || "")}
+      ${fieldRow("Date of birth", nd.dob ? fmtDate(nd.dob) : "")}
+      ${fieldRow("Nationality", nd.nationality || "INDIAN")}
+    </table>
+    <p style="font-size:10.5pt;">No. of companies in which I am already a Director and such companies the names of the companies in which I am a Managing Director, Chief Executive Officer, Whole time Director, Secretary, Chief Financial Officer, Manager. <strong>NIL</strong></p>
+    <p style="font-size:10.5pt;">Particulars of membership No. and Certificate of practice No. if the applicant is a member of any professional Institute. &nbsp;<strong>NIL</strong></p>
     <div class="decl-box">
-      <p>I hereby declare that:</p>
-      <ol>
-        <li>I am not disqualified from being appointed as a Director under Section 164 of the Companies Act, 2013.</li>
-        <li>I have not been declared insolvent and no petition has been filed against me for insolvency.</li>
-        <li>I have read and understood my responsibilities as a Director under the Companies Act, 2013 and Rules made thereunder.</li>
-        <li>The information furnished above is true and correct to the best of my knowledge and belief, and nothing material has been concealed.</li>
-      </ol>
+      <p><strong>Declaration</strong></p>
+      <p>I declare that I have not been convicted of any offence in connection with the promotion, formation or management of any company or LLP and have not been found guilty of any fraud or misfeasance or of any breach of duty to any company under this Act or any previous company law in the last five years. I further declare that if appointed my total Directorship in all the companies shall not exceed the prescribed number of companies in which a person can be appointed as a Director.</p>
     </div>
-    <p style="margin-top:24px;">Verified at <span class="field-val" style="min-width:160px;">&nbsp;</span> on this <span class="field-val" style="min-width:60px;">&nbsp;</span> day of <span class="field-val" style="min-width:100px;">&nbsp;</span>, 20<span class="field-val" style="min-width:40px;">&nbsp;</span>.</p>
-    <div class="sign-block">
-      <table><tr>
-        <td style="width:55%;vertical-align:bottom;"><br><br>____________________________<br><strong>${nd.name || "[Name]"}</strong><br>DIN: ${nd.din || "________"}</td>
-        <td style="text-align:right;vertical-align:bottom;">Date: ${fmtDate(nd.effectiveDate || f.meetingDate)}<br>Place: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
-      </tr></table>
-    </div>`;
+    <br>
+    <table style="width:100%;"><tr>
+      <td style="width:50%;vertical-align:bottom;">Date: ${fmtDate(signDate)}</td>
+      <td style="text-align:right;vertical-align:bottom;">____________________________</td>
+    </tr><tr>
+      <td style="vertical-align:top;">Place: ${f.venue || (f.regAddress ? f.regAddress.split(",")[0] : "_______________")}</td>
+      <td style="text-align:right;vertical-align:top;">Designation: &nbsp;<strong>Proposed Director</strong></td>
+    </tr></table>
+    <p style="margin-top:20px;font-size:10.5pt;"><strong>Attachments:</strong><br>1. Proof of identity;<br>2. Proof of Residence;</p>`;
   return wrap(body, `DIR-2 — ${nd.name || "Consent"}`);
 }
 
@@ -531,42 +625,33 @@ function genROCGuide(f: F, nds: NewDirectorEntry[]): string {
 /* ── 8. MBP-1 Notice of Interest ─────────────────────────────── */
 function genMBP1(f: F, nd: NewDirectorEntry): string {
   const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
+  const signDate = nd.effectiveDate || f.meetingDate;
   const body = `
-    <div class="mf-label">FORM MBP-1<br>[Pursuant to Section 184(1) and Rule 9(1) of the Companies (Meetings of Board and its Powers) Rules, 2014]</div>
-    <div class="doc-title">NOTICE OF INTEREST BY DIRECTOR</div>
-    <p>To,<br><strong>The Board of Directors,</strong><br><strong>${f.companyName || "[Company Name]"}</strong><br>${f.regAddress || "[Registered Office]"}</p>
-    <p>I, <strong>${nd.name || "__________"}</strong>, son/daughter of <strong>${nd.fatherName || "__________"}</strong>, bearing DIN <strong>${nd.din || "__________"}</strong>${nd.pan ? `, PAN <strong>${nd.pan}</strong>` : ""}${addr ? `, residing at ${addr}` : ""}, hereby give notice pursuant to <strong>Section 184(1)</strong> of the Companies Act, 2013 read with Rule 9(1) of the Companies (Meetings of Board and its Powers) Rules, 2014, that I am concerned or interested in the companies, firms, body corporates, and other associations as listed below:</p>
+    <div class="mf-label">FORM MBP - 1<br>Notice of interest by director<br>[Pursuant to section 184 (1) and rule 9(1)]</div>
+    <p>To<br>The Board of Directors<br><strong>${f.companyName || "[Company Name]"}</strong><br>Address: ${f.regAddress || "[Registered Office]"}</p>
+    <p>Dear Sir(s),</p>
+    <p>I, <strong>${nd.name || "__________"}</strong> son of <strong>${nd.fatherName || "__________"}</strong>${addr ? ` resident of ${addr}` : ""} being a director in the company hereby give notice of my interest or concern in the following company or companies, bodies corporate, firms or other association of individuals:-</p>
     <table style="width:100%;border-collapse:collapse;border:1px solid #555;margin:16px 0;font-size:10.5pt;">
       <tr style="background:#f0f0f0;">
-        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:5%;">Sr.</th>
-        <th style="border:1px solid #555;padding:7px 8px;text-align:left;width:25%;">Name of Company / Firm / Body Corporate</th>
-        <th style="border:1px solid #555;padding:7px 8px;text-align:left;width:15%;">CIN / LLPIN / Reg. No.</th>
-        <th style="border:1px solid #555;padding:7px 8px;text-align:left;width:25%;">Nature of Interest<br><em style="font-weight:normal;font-size:9pt;">(Director / Partner / Proprietor / Member / Trustee)</em></th>
-        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:15%;">% Shareholding / Interest</th>
-        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:15%;">Date of Acquisition / Change</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:6%;">Sr. No.</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:left;">Names of the Companies / bodies corporate / firms / association of individuals</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:left;width:22%;">Nature of interest or concern / Change in interest or concern</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:15%;">Shareholding</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:18%;">Date on which interest or concern arose / changed</th>
       </tr>
-      ${[1,2,3,4,5].map(i => `
-      <tr>
-        <td style="border:1px solid #555;padding:8px;text-align:center;">${i}.</td>
-        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
-        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
-        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
-        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
-        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
+      ${[1,2,3,4,5].map(i => `<tr>
+        <td style="border:1px solid #555;padding:10px 8px;text-align:center;">${i}.</td>
+        <td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td>
       </tr>`).join("")}
     </table>
-    <div class="decl-box">
-      <p style="margin:6px 0;">☐ &nbsp;<strong>No Interest Declaration:</strong> I hereby declare that I have <strong>no concern or interest</strong>, pecuniary or otherwise, in any company, firm, body corporate or other association of individuals as on the date of this notice. (Tick if applicable; leave table blank)</p>
-    </div>
-    <p style="margin-top:14px;">I undertake to give a fresh notice to the Company immediately whenever there is any change in my interest or concern as declared above.</p>
-    <p>I am aware that this notice shall be placed before the next Board Meeting of the Company and entered in the Register of Contracts or Arrangements in which Directors are interested, maintained under <strong>Section 189</strong> of the Companies Act, 2013.</p>
-    <p style="margin-top:20px;">Verified at <span class="field-val" style="min-width:150px;">&nbsp;</span> on this <span class="field-val" style="min-width:50px;">&nbsp;</span> day of <span class="field-val" style="min-width:100px;">&nbsp;</span>, 20<span class="field-val" style="min-width:36px;">&nbsp;</span>.</p>
-    <div class="sign-block">
-      <table><tr>
-        <td style="width:55%;vertical-align:bottom;"><br><br>____________________________<br><strong>${nd.name || "[Name]"}</strong><br>DIN: ${nd.din || "________"}</td>
-        <td style="text-align:right;vertical-align:bottom;">Date: ${fmtDate(nd.effectiveDate || f.meetingDate)}<br>Place: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
-      </tr></table>
-    </div>`;
+    <br>
+    <table style="width:100%;"><tr>
+      <td style="vertical-align:bottom;">Place: ${f.venue || (f.regAddress ? f.regAddress.split(",")[0] : "_______________")}&emsp;<br>Date: ${fmtDate(signDate)}</td>
+      <td style="text-align:right;vertical-align:bottom;">Signature:<br>____________________________<br><strong>${nd.name || "[Name]"}</strong><br>DIN: ${nd.din || "________"}</td>
+    </tr></table>`;
   return wrap(body, `MBP-1 — ${nd.name || "Notice of Interest"}`);
 }
 
