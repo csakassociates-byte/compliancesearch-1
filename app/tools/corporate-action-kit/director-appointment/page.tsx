@@ -13,6 +13,7 @@ import { useSession } from "next-auth/react";
 ═══════════════════════════════════════════════════════════════════ */
 interface ExistingDirector {
   id: string; name: string; din: string; designation: string; isPresent: boolean;
+  isResigning?: boolean; resignDate?: string; resignReason?: string;
 }
 
 type DesignationType =
@@ -655,6 +656,75 @@ function genMBP1(f: F, nd: NewDirectorEntry): string {
   return wrap(body, `MBP-1 — ${nd.name || "Notice of Interest"}`);
 }
 
+/* ── 9. Resignation Letter ────────────────────────────────────── */
+function genResignationLetter(f: F, dir: ExistingDirector): string {
+  const resignDate = dir.resignDate || f.meetingDate;
+  const body = `
+    ${coHeader(f)}
+    <div class="doc-title">RESIGNATION LETTER</div>
+    <p>Date: ${fmtDate(resignDate)}</p>
+    <br>
+    <p>To<br>The Board of Directors<br><strong>${f.companyName || "[COMPANY NAME]"}</strong><br>${f.regAddress || "[Registered Office Address]"}</p>
+    <br>
+    <p><strong>Subject: Resignation from the office of ${dir.designation || "Director"}</strong></p>
+    <br>
+    <p>Dear Sir/Madam,</p>
+    <p>I, <strong>${dir.name || "[DIRECTOR NAME]"}</strong>, hereby tender my resignation from the office of <strong>${dir.designation || "Director"}</strong> of <strong>${f.companyName || "[COMPANY NAME]"}</strong> with effect from ${fmtDate(resignDate)}, due to ${dir.resignReason || "personal reasons"}.</p>
+    <p>I confirm that there are no other material reasons for my resignation other than those stated above. I request the Board to kindly take note of my resignation and file the necessary forms with the Registrar of Companies.</p>
+    <p>I take this opportunity to thank the Board and fellow Directors for the support and cooperation extended to me during my tenure with the Company.</p>
+    <p>Thanking You.</p>
+    <br>
+    <p>Yours sincerely,</p>
+    <div class="sign-block">
+      <br><br>
+      <p>____________________________<br><strong>${dir.name || "[DIRECTOR NAME]"}</strong>${dir.din ? `<br>DIN: ${dir.din}` : ""}<br>(Signature)</p>
+      <p>Date: ${fmtDate(resignDate)}</p>
+    </div>`;
+  return wrap(body, `Resignation Letter — ${dir.name || "Director"}`);
+}
+
+/* ── 10. Board Resolution CTC — Resignation ───────────────────── */
+function genResignBoardCTC(f: F, resigningDirs: ExistingDirector[]): string {
+  const presentNonResigning = f.directors.filter(d => d.isPresent && !d.isResigning);
+  const signers = presentNonResigning.length
+    ? presentNonResigning.slice(0, 2)
+    : f.directors.filter(d => d.isPresent).slice(0, 2);
+
+  const sigCells = signers.length
+    ? signers.map(d => `<td style="width:50%;vertical-align:top;padding-right:16px;"><br><br>____________________________<br><strong>${d.name}</strong><br>Director<br>DIN: ${d.din}</td>`).join("")
+    : `<td><br><br>____________________________<br><strong>${f.chairmanName || "[Authorised Signatory]"}</strong><br>Director${f.chairmanDin ? `<br>DIN: ${f.chairmanDin}` : ""}</td>`;
+
+  const dirList = resigningDirs.map(d =>
+    `<p style="margin:6px 0;"><strong>${d.name || "___________"}</strong> (DIN: ${d.din || "________"}), ${d.designation || "Director"} — effective ${fmtDate(d.resignDate || f.meetingDate)}, due to ${d.resignReason || "personal reasons"}.</p>`
+  ).join("");
+
+  const firstDate = fmtDate(resigningDirs[0]?.resignDate || f.meetingDate);
+  const plural = resigningDirs.length > 1;
+
+  const resText = plural
+    ? `<p><strong>RESOLVED THAT</strong> the resignation letters received from the following Directors be and are hereby accepted by the Board:</p>${dirList}`
+    : `<p><strong>RESOLVED THAT</strong> the resignation letter dated ${firstDate} received from <strong>${resigningDirs[0]?.name || "___________"}</strong> (DIN: ${resigningDirs[0]?.din || "________"}), ${resigningDirs[0]?.designation || "Director"} be and is hereby accepted with effect from ${firstDate}, due to ${resigningDirs[0]?.resignReason || "personal reasons"}.</p>`;
+
+  const cityLine = (() => {
+    const parts = (f.regAddress || "").split(",").map(s => s.trim());
+    return parts[parts.length - 1] || "[City]";
+  })();
+
+  const body = `
+    ${coHeader(f)}
+    <div class="doc-title">EXTRACT OF MINUTES OF BOARD MEETING</div>
+    <p style="text-align:center;font-size:11pt;">Meeting of the Board of Directors of <strong>${f.companyName || "[COMPANY NAME]"}</strong><br>held on ${fmtDate(f.meetingDate)} at ${f.meetingTime || "__:__"} at the Registered Office</p>
+    <div class="res-box">
+      ${resText}
+      <p><strong>RESOLVED FURTHER THAT</strong> the Board hereby places on record its sincere appreciation for the valuable services rendered by the aforesaid Director${plural ? "s" : ""} during their tenure with the Company.</p>
+      <p><strong>RESOLVED FURTHER THAT</strong> any Director of the Company be and is hereby authorised to file e-Form DIR-12 and DIR-11 and all other necessary forms, documents and returns with the Registrar of Companies, and to do all such acts, deeds and things as may be necessary to give effect to this resolution.</p>
+    </div>
+    <p style="margin-top:28px;"><strong>CERTIFIED TRUE COPY</strong><br>For <strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
+    <table style="width:100%;margin-top:8px;"><tr>${sigCells}</tr></table>
+    <p style="margin-top:20px;">Date: ${fmtDate(f.meetingDate)}<br>Place: ${cityLine}</p>`;
+  return wrap(body, "Board Resolution CTC — Director Resignation");
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    UI COMPONENTS
 ═══════════════════════════════════════════════════════════════════ */
@@ -1048,6 +1118,7 @@ export default function DirectorAppointmentPage() {
   const docs = useMemo(() => {
     const nds = f.newDirectors.slice(0, f.directorCount);
     const gm = f.ndDesignation === "director_gm";
+    const resigningDirs = f.directors.filter(d => d.isResigning);
     return [
       gm
         ? { key: "gm_notice",     label: "EGM Notice",       emoji: "📬", gen: () => genGMNotice(f, nds) }
@@ -1074,6 +1145,19 @@ export default function DirectorAppointmentPage() {
         gen: () => genMBP1(f, nd),
       })),
       { key: "roc", label: "ROC Guide", emoji: "📋", gen: () => genROCGuide(f, nds) },
+      // Resignation documents — auto-added when any director is marked Resigning in Step 4
+      ...resigningDirs.map((dir, i) => ({
+        key: `resign_letter_${i}`,
+        label: resigningDirs.length > 1 ? `Resign Letter ${i + 1}` : "Resignation Letter",
+        emoji: "✉️",
+        gen: () => genResignationLetter(f, dir),
+      })),
+      ...(resigningDirs.length > 0 ? [{
+        key: "resign_ctc",
+        label: "Resignation CTC",
+        emoji: "🚪",
+        gen: () => genResignBoardCTC(f, resigningDirs),
+      }] : []),
     ];
   }, [f]);
 
@@ -1278,7 +1362,7 @@ export default function DirectorAppointmentPage() {
   const s4 = (
     <>
       <SectionCard title={isGM ? "Members / Directors Present" : "Directors Present at Meeting"}>
-        <p className="text-xs text-slate-500 mb-3">{isGM ? "List members/directors attending the EGM — needed for quorum confirmation and minutes" : "Mark who attended — needed for quorum and board notice addresses"}</p>
+        <p className="text-xs text-slate-500 mb-3">{isGM ? "List members/directors attending the EGM — needed for quorum confirmation and minutes" : "Mark attendance and flag any director resigning — resignation documents will be auto-added in Step 6"}</p>
         {f.directors.length === 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-3">
             No directors loaded. Add manually or upload MCA Excel in Step 1.
@@ -1286,15 +1370,37 @@ export default function DirectorAppointmentPage() {
         )}
         <div className="space-y-3">
           {f.directors.map((d, i) => (
-            <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-colors ${d.isPresent ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-slate-50"}`}>
-              <input type="checkbox" checked={d.isPresent} onChange={e => updateExistingDir(d.id, "isPresent", e.target.checked)}
-                className="w-5 h-5 rounded accent-blue-600 cursor-pointer flex-shrink-0" />
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <input value={d.name} onChange={e => updateExistingDir(d.id, "name", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder={`Director ${i + 1} Name`} />
-                <input value={d.din} onChange={e => updateExistingDir(d.id, "din", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="DIN (8 digits)" maxLength={8} />
-                <input value={d.designation} onChange={e => updateExistingDir(d.id, "designation", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="Designation" />
+            <div key={d.id} className={`rounded-xl border-2 transition-colors ${d.isResigning ? "border-red-200 bg-red-50" : d.isPresent ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-slate-50"}`}>
+              <div className="flex items-center gap-3 p-3">
+                <input type="checkbox" checked={d.isPresent} onChange={e => updateExistingDir(d.id, "isPresent", e.target.checked)}
+                  className="w-5 h-5 rounded accent-blue-600 cursor-pointer flex-shrink-0" title="Present" />
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input value={d.name} onChange={e => updateExistingDir(d.id, "name", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white" placeholder={`Director ${i + 1} Name`} />
+                  <input value={d.din} onChange={e => updateExistingDir(d.id, "din", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white" placeholder="DIN (8 digits)" maxLength={8} />
+                  <input value={d.designation} onChange={e => updateExistingDir(d.id, "designation", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white" placeholder="Designation" />
+                </div>
+                <label className="flex items-center gap-1.5 flex-shrink-0 cursor-pointer select-none">
+                  <input type="checkbox" checked={!!d.isResigning} onChange={e => updateExistingDir(d.id, "isResigning", e.target.checked)}
+                    className="w-4 h-4 rounded accent-red-500 cursor-pointer" />
+                  <span className="text-xs font-bold text-red-600">Resigning</span>
+                </label>
+                <button onClick={() => removeExistingDir(d.id)} className="text-slate-400 hover:text-red-500 text-lg flex-shrink-0">✕</button>
               </div>
-              <button onClick={() => removeExistingDir(d.id)} className="text-slate-400 hover:text-red-500 text-lg flex-shrink-0">✕</button>
+              {d.isResigning && (
+                <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-red-600 uppercase tracking-wide">Effective Resignation Date</label>
+                    <input type="date" value={d.resignDate || ""} onChange={e => updateExistingDir(d.id, "resignDate", e.target.value)}
+                      className="border border-red-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-red-400" />
+                  </div>
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <label className="text-[10px] font-bold text-red-600 uppercase tracking-wide">Reason for Resignation</label>
+                    <input value={d.resignReason || ""} onChange={e => updateExistingDir(d.id, "resignReason", e.target.value)}
+                      className="border border-red-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-red-400"
+                      placeholder="e.g. personal reasons / professional commitments" />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1302,9 +1408,15 @@ export default function DirectorAppointmentPage() {
           + Add Director / Member
         </button>
         {f.directors.length > 0 && (
-          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold mt-3 ${quorumOk ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
-            {quorumOk ? "✓" : "⚠"} Quorum: {presentCount} director{presentCount !== 1 ? "s" : ""} present
-            {!quorumOk && " — minimum 2 required (Pvt Ltd)"}
+          <div className="flex flex-wrap gap-2 mt-3">
+            <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold flex-1 ${quorumOk ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+              {quorumOk ? "✓" : "⚠"} Quorum: {presentCount} present{!quorumOk && " — min 2 required"}
+            </div>
+            {f.directors.filter(d => d.isResigning).length > 0 && (
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-red-50 border border-red-200 text-red-700">
+                🚪 {f.directors.filter(d => d.isResigning).length} director{f.directors.filter(d => d.isResigning).length > 1 ? "s" : ""} resigning — resignation docs will be in Step 6
+              </div>
+            )}
           </div>
         )}
       </SectionCard>
