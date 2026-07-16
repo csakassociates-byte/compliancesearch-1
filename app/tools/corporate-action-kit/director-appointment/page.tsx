@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import CompanySearch from "@/components/CompanySearch";
@@ -528,6 +528,48 @@ function genROCGuide(f: F, nds: NewDirectorEntry[]): string {
   return wrap(body, "ROC Filing Guide — Director Appointment");
 }
 
+/* ── 8. MBP-1 Notice of Interest ─────────────────────────────── */
+function genMBP1(f: F, nd: NewDirectorEntry): string {
+  const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
+  const body = `
+    <div class="mf-label">FORM MBP-1<br>[Pursuant to Section 184(1) and Rule 9(1) of the Companies (Meetings of Board and its Powers) Rules, 2014]</div>
+    <div class="doc-title">NOTICE OF INTEREST BY DIRECTOR</div>
+    <p>To,<br><strong>The Board of Directors,</strong><br><strong>${f.companyName || "[Company Name]"}</strong><br>${f.regAddress || "[Registered Office]"}</p>
+    <p>I, <strong>${nd.name || "__________"}</strong>, son/daughter of <strong>${nd.fatherName || "__________"}</strong>, bearing DIN <strong>${nd.din || "__________"}</strong>${nd.pan ? `, PAN <strong>${nd.pan}</strong>` : ""}${addr ? `, residing at ${addr}` : ""}, hereby give notice pursuant to <strong>Section 184(1)</strong> of the Companies Act, 2013 read with Rule 9(1) of the Companies (Meetings of Board and its Powers) Rules, 2014, that I am concerned or interested in the companies, firms, body corporates, and other associations as listed below:</p>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #555;margin:16px 0;font-size:10.5pt;">
+      <tr style="background:#f0f0f0;">
+        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:5%;">Sr.</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:left;width:25%;">Name of Company / Firm / Body Corporate</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:left;width:15%;">CIN / LLPIN / Reg. No.</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:left;width:25%;">Nature of Interest<br><em style="font-weight:normal;font-size:9pt;">(Director / Partner / Proprietor / Member / Trustee)</em></th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:15%;">% Shareholding / Interest</th>
+        <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:15%;">Date of Acquisition / Change</th>
+      </tr>
+      ${[1,2,3,4,5].map(i => `
+      <tr>
+        <td style="border:1px solid #555;padding:8px;text-align:center;">${i}.</td>
+        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:8px;">&nbsp;</td>
+      </tr>`).join("")}
+    </table>
+    <div class="decl-box">
+      <p style="margin:6px 0;">☐ &nbsp;<strong>No Interest Declaration:</strong> I hereby declare that I have <strong>no concern or interest</strong>, pecuniary or otherwise, in any company, firm, body corporate or other association of individuals as on the date of this notice. (Tick if applicable; leave table blank)</p>
+    </div>
+    <p style="margin-top:14px;">I undertake to give a fresh notice to the Company immediately whenever there is any change in my interest or concern as declared above.</p>
+    <p>I am aware that this notice shall be placed before the next Board Meeting of the Company and entered in the Register of Contracts or Arrangements in which Directors are interested, maintained under <strong>Section 189</strong> of the Companies Act, 2013.</p>
+    <p style="margin-top:20px;">Verified at <span class="field-val" style="min-width:150px;">&nbsp;</span> on this <span class="field-val" style="min-width:50px;">&nbsp;</span> day of <span class="field-val" style="min-width:100px;">&nbsp;</span>, 20<span class="field-val" style="min-width:36px;">&nbsp;</span>.</p>
+    <div class="sign-block">
+      <table><tr>
+        <td style="width:55%;vertical-align:bottom;"><br><br>____________________________<br><strong>${nd.name || "[Name]"}</strong><br>DIN: ${nd.din || "________"}</td>
+        <td style="text-align:right;vertical-align:bottom;">Date: ${fmtDate(nd.effectiveDate || f.meetingDate)}<br>Place: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+      </tr></table>
+    </div>`;
+  return wrap(body, `MBP-1 — ${nd.name || "Notice of Interest"}`);
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    UI COMPONENTS
 ═══════════════════════════════════════════════════════════════════ */
@@ -638,6 +680,8 @@ export default function DirectorAppointmentPage() {
   const [activeDocKey, setActiveDocKey] = useState("notice");
   const [companySearchVal, setCompanySearchVal] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [chairDropdown, setChairDropdown] = useState(false);
+  const chairInputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try { const s = localStorage.getItem(DRAFT_KEY); if (s) setF(JSON.parse(s) as F); } catch {}
@@ -657,6 +701,13 @@ export default function DirectorAppointmentPage() {
       newDirectors: p.newDirectors.map(nd => nd.effectiveDate ? nd : { ...nd, effectiveDate: p.meetingDate }),
     }));
   }, [f.meetingDate]);
+
+  // Auto-fill venue from registered office when venue is empty
+  useEffect(() => {
+    if (f.regAddress && !f.venue) {
+      setF(p => ({ ...p, venue: p.regAddress }));
+    }
+  }, [f.regAddress]);
 
   function up<K extends keyof F>(key: K) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -781,6 +832,12 @@ export default function DirectorAppointmentPage() {
         emoji: "📜",
         gen: () => genDIR8(f, nd),
       })),
+      ...nds.map((nd, i) => ({
+        key: `mbp1_${i}`,
+        label: nds.length > 1 ? `MBP-1 Dir ${i + 1}` : "MBP-1 Interest",
+        emoji: "🔔",
+        gen: () => genMBP1(f, nd),
+      })),
       { key: "roc", label: "ROC Guide", emoji: "📋", gen: () => genROCGuide(f, nds) },
     ];
   }, [f]);
@@ -795,7 +852,9 @@ export default function DirectorAppointmentPage() {
   // Validation
   const canStep1 = !!f.companyName;
   const canStep2 = true; // designation always has a default
-  const canStep3 = !!f.meetingDate && !!f.meetingSerial && !!f.chairmanName;
+  const chairSuggs = f.directors.filter(d => d.name && (!f.chairmanName || d.name.toLowerCase().includes(f.chairmanName.toLowerCase())));
+  const chairDinError = f.chairmanDin.length > 0 && f.chairmanDin.length !== 8;
+  const canStep3 = !!f.meetingDate && !!f.meetingSerial && !!f.chairmanName && !chairDinError;
   const canStep4 = f.directors.filter(d => d.isPresent).length >= (f.entityType === "opc" ? 1 : 2);
   const canStep5 = activeNds.length > 0 && activeNds.every(nd => !!nd.name && !!nd.din && !!nd.fatherName);
   const canProceed = [true, canStep1, canStep2, canStep3, canStep4, canStep5][step] ?? false;
@@ -882,15 +941,24 @@ export default function DirectorAppointmentPage() {
 
       <div>
         <p className="text-xs font-bold text-slate-700 mb-3">Number of Directors to Appoint in this Meeting <span className="text-red-500">*</span></p>
-        <div className="flex gap-3">
-          {[1, 2, 3].map(n => (
+        <div className="flex gap-2 flex-wrap items-end">
+          {[1, 2, 3, 4, 5].map(n => (
             <button key={n} type="button"
               onClick={() => setDirectorCount(n)}
-              className={`flex-1 py-4 rounded-xl border-2 text-center font-bold transition-all ${f.directorCount === n ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
-              <div className="text-2xl font-black">{n}</div>
-              <div className="text-xs mt-1 font-medium">{n === 1 ? "Director" : "Directors"}</div>
+              className={`py-3 px-4 rounded-xl border-2 text-center font-bold transition-all ${f.directorCount === n ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+              <div className="text-xl font-black">{n}</div>
+              <div className="text-xs mt-0.5 font-medium">{n === 1 ? "Director" : "Directors"}</div>
             </button>
           ))}
+          <div className="flex flex-col items-center gap-1 ml-1">
+            <span className="text-xs text-slate-400 font-medium">or type</span>
+            <input
+              type="number" min="1" max="10"
+              value={f.directorCount}
+              onChange={e => { const v = Math.min(10, Math.max(1, parseInt(e.target.value) || 1)); setDirectorCount(v); }}
+              className="w-16 border-2 border-slate-200 rounded-xl px-2 py-2 text-center font-black text-lg text-slate-700 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
         </div>
         {f.directorCount > 1 && (
           <p className="text-xs text-slate-500 mt-2">All {f.directorCount} directors will be appointed in the same {isGM ? "General Meeting" : "Board Meeting"} — separate documents (DIR-2, DIR-8) will be generated for each.</p>
@@ -938,10 +1006,53 @@ export default function DirectorAppointmentPage() {
         <Field label={isGM ? "EGM Serial / Reference No." : "Board Meeting Serial No."} req hint="e.g. 3/2025-26 for 3rd Board meeting, or EGM/2025-26 for EGM">
           <input value={f.meetingSerial} onChange={up("meetingSerial")} className={INPUT} placeholder={isGM ? "e.g. EGM/2025-26" : "e.g. 3/2025-26"} />
         </Field>
-        <Field label="Venue"><input value={f.venue} onChange={up("venue")} className={INPUT} placeholder="Registered office / any other venue" /></Field>
-        <Field label={isGM ? "Chairman's Name" : "Chairman's Name"} req><input value={f.chairmanName} onChange={up("chairmanName")} className={INPUT} placeholder="Name of meeting chairman" /></Field>
-        <Field label="Chairman's DIN"><input value={f.chairmanDin} onChange={up("chairmanDin")} className={INPUT} placeholder="8-digit DIN" maxLength={8} /></Field>
+        <Field label="Venue" hint="Defaults to registered office — edit if meeting is elsewhere">
+          <input value={f.venue} onChange={up("venue")} className={INPUT} placeholder="Registered office / any other venue" />
+        </Field>
+        <Field label="Chairman's Name" req>
+          <div className="relative" ref={chairInputRef}>
+            <input
+              value={f.chairmanName}
+              onChange={e => { setF(p => ({ ...p, chairmanName: e.target.value })); setChairDropdown(true); }}
+              onFocus={() => setChairDropdown(true)}
+              onBlur={() => setTimeout(() => setChairDropdown(false), 150)}
+              className={INPUT}
+              placeholder="Name of meeting chairman"
+            />
+            {chairDropdown && chairSuggs.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                {chairSuggs.map(d => (
+                  <button key={d.id} type="button"
+                    onMouseDown={() => { setF(p => ({ ...p, chairmanName: d.name, chairmanDin: d.din || p.chairmanDin })); setChairDropdown(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between border-b border-slate-100 last:border-0">
+                    <span className="font-medium text-slate-800">{d.name}</span>
+                    {d.din && <span className="text-xs text-slate-400 ml-2 flex-shrink-0">DIN: {d.din}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </Field>
+        <Field label="Chairman's DIN" hint="8-digit Director Identification Number — auto-filled if selected above">
+          <>
+            <input
+              value={f.chairmanDin}
+              onChange={up("chairmanDin")}
+              className={`${INPUT} ${chairDinError ? "!border-red-400 focus:!border-red-500" : ""}`}
+              placeholder="e.g. 01234567"
+              maxLength={8}
+            />
+            {chairDinError && (
+              <p className="text-xs text-red-500 mt-1">⚠ DIN must be exactly 8 digits ({f.chairmanDin.length} entered)</p>
+            )}
+          </>
+        </Field>
       </div>
+      {f.meetingDate && (
+        <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 text-xs text-sky-700">
+          <strong>💡 Tip:</strong> If your company already has a {isGM ? "General" : "Board"} Meeting scheduled in <strong>{new Date(f.meetingDate + "T00:00:00").toLocaleString("en-IN", { month: "long", year: "numeric" })}</strong>, use that same date and add this appointment as an agenda item — one meeting instead of two.
+        </div>
+      )}
       <NavButtons step={step} setStep={setStep} maxStep={MAX_STEP} canProceed={canStep3} />
     </div>
   );
