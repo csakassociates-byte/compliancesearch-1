@@ -658,11 +658,25 @@ function genMBP1(f: F, nd: NewDirectorEntry): string {
 /* ═══════════════════════════════════════════════════════════════════
    UI COMPONENTS
 ═══════════════════════════════════════════════════════════════════ */
-function SHead({ n, title, sub }: { n: number; title: string; sub: string }) {
+
+const DIR_STEPS = [
+  { id: 1, label: "Company",          desc: "Company name, CIN, address and entity type" },
+  { id: 2, label: "Appointment",      desc: "Select designation and number of directors" },
+  { id: 3, label: "Meeting & Dates",  desc: "Meeting date, time, serial number and venue" },
+  { id: 4, label: "Attendance",       desc: "Mark directors present — quorum verification" },
+  { id: 5, label: "Director Details", desc: "New director's personal and KYC information" },
+  { id: 6, label: "Documents",        desc: "Preview, print, and download all documents" },
+];
+
+const STEP_ICONS: Record<number, string> = {
+  1: "🏢", 2: "📋", 3: "📅", 4: "👥", 5: "👤", 6: "📄",
+};
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 mb-5">
-      <div className="w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-black flex items-center justify-center flex-shrink-0 mt-0.5">{n}</div>
-      <div><h2 className="text-lg font-extrabold text-slate-900">{title}</h2><p className="text-xs text-slate-500 mt-0.5">{sub}</p></div>
+    <div className="bg-white border border-slate-200 rounded-xl p-5 mb-4 shadow-sm">
+      {title && <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-3 mb-4">{title}</h3>}
+      {children}
     </div>
   );
 }
@@ -680,18 +694,152 @@ function Field({ label, req, children, hint }: { label: string; req?: boolean; c
 const INPUT = "w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 bg-white";
 const SELECT = "w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
-function NavButtons({ step, setStep, maxStep, canProceed, onGenerate }: {
-  step: number; setStep: (s: number) => void; maxStep: number; canProceed: boolean; onGenerate?: () => void;
+function SidebarContent({ step, collapsed, companyName, cin, onStepClick, onToggle }: {
+  step: number; collapsed: boolean; companyName: string; cin: string;
+  onStepClick: (id: number) => void; onToggle: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between mt-8 pt-5 border-t border-slate-100">
-      {step > 1
-        ? <button onClick={() => setStep(step - 1)} className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">← Back</button>
-        : <div />}
-      {step < maxStep
-        ? <button onClick={() => canProceed && setStep(step + 1)} className={`px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all ${canProceed ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-300 cursor-not-allowed"}`}>Continue →</button>
-        : <button onClick={onGenerate} className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all">✅ Generate Package</button>}
-    </div>
+    <>
+      {/* Tool header */}
+      <div className={`flex-shrink-0 ${collapsed ? "p-3" : "p-4 pb-3"}`} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-2.5"}`}>
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0 text-lg">👤</div>
+          {!collapsed && (
+            <div>
+              <div className="text-[14px] font-semibold text-white leading-tight">Director Kit</div>
+              <div className="text-[11px] text-white/50">Sec. 161 / 152</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Steps navigation */}
+      <nav className={`flex-1 py-2 ${collapsed ? "px-1.5" : "px-1"}`}>
+        {DIR_STEPS.slice(0, 5).map(s => {
+          const isCurrent = step === s.id;
+          return (
+            <button
+              key={s.id}
+              onClick={() => onStepClick(s.id)}
+              title={collapsed ? s.label : undefined}
+              className="w-full flex items-center mb-0.5 transition-all duration-150"
+              style={{
+                padding: collapsed ? "8px 6px" : "7px 10px",
+                borderRadius: "8px",
+                background: isCurrent ? "rgba(37,99,235,0.12)" : "transparent",
+                borderLeft: isCurrent ? "2px solid #2563eb" : "2px solid transparent",
+              }}
+              onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+              onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              <div
+                className="flex-shrink-0 flex items-center justify-center font-bold"
+                style={{
+                  width: "22px", height: "22px", borderRadius: "50%",
+                  fontSize: "10px",
+                  marginRight: collapsed ? 0 : "10px",
+                  background: isCurrent ? "#2563eb" : "rgba(255,255,255,0.06)",
+                  color: isCurrent ? "#fff" : "rgba(255,255,255,0.30)",
+                  boxShadow: isCurrent ? "0 0 8px rgba(37,99,235,0.4)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {s.id}
+              </div>
+              {!collapsed && (
+                <span style={{
+                  fontSize: "13.5px",
+                  fontWeight: isCurrent ? 600 : 400,
+                  color: isCurrent ? "#fff" : "rgba(255,255,255,0.45)",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {s.label}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        <div style={{ margin: "8px 4px", borderTop: "1px solid rgba(255,255,255,0.07)" }} />
+
+        {/* Step 6 — Documents */}
+        {(() => {
+          const s = DIR_STEPS[5];
+          const isCurrent = step === 6;
+          return (
+            <button
+              onClick={() => onStepClick(6)}
+              title={collapsed ? s.label : undefined}
+              className="w-full flex items-center mb-0.5 transition-all duration-150"
+              style={{
+                padding: collapsed ? "8px 6px" : "7px 10px",
+                borderRadius: "8px",
+                background: isCurrent ? "rgba(5,150,105,0.13)" : "transparent",
+                borderLeft: isCurrent ? "2px solid #059669" : "2px solid transparent",
+              }}
+              onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+              onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              <div
+                className="flex-shrink-0 flex items-center justify-center font-bold"
+                style={{
+                  width: "22px", height: "22px", borderRadius: "50%",
+                  fontSize: "10px",
+                  marginRight: collapsed ? 0 : "10px",
+                  background: isCurrent ? "#059669" : "rgba(255,255,255,0.06)",
+                  color: isCurrent ? "#fff" : "rgba(255,255,255,0.30)",
+                  boxShadow: isCurrent ? "0 0 8px rgba(5,150,105,0.4)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >6</div>
+              {!collapsed && (
+                <span style={{
+                  fontSize: "13.5px",
+                  fontWeight: isCurrent ? 600 : 400,
+                  color: isCurrent ? "#fff" : "rgba(255,255,255,0.45)",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {s.label}
+                </span>
+              )}
+            </button>
+          );
+        })()}
+      </nav>
+
+      {/* Company badge */}
+      {!collapsed && (
+        <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Company</div>
+          {companyName ? (
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 bg-blue-600 rounded-md flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
+                {companyName[0]}
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11.5px] font-medium text-white truncate leading-tight">{companyName}</div>
+                <div className="text-[10px] text-white/30 truncate">{cin || "No CIN entered"}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] text-white/25 italic mb-2">No company selected</div>
+          )}
+          <div className="text-[10px] text-white/25 mt-2 text-center">Draft auto-saved to browser</div>
+        </div>
+      )}
+
+      {/* Collapse toggle */}
+      <button
+        onClick={onToggle}
+        className="flex-shrink-0 flex items-center justify-center py-3 text-white/20 hover:text-white/50 transition-colors"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        <svg className={`w-4 h-4 transition-transform duration-200 ${collapsed ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M18 19l-7-7 7-7" />
+        </svg>
+      </button>
+    </>
   );
 }
 
@@ -767,6 +915,8 @@ export default function DirectorAppointmentPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [chairDropdown, setChairDropdown] = useState(false);
   const chairInputRef = useRef<HTMLDivElement>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     try { const s = localStorage.getItem(DRAFT_KEY); if (s) setF(JSON.parse(s) as F); } catch {}
@@ -944,88 +1094,82 @@ export default function DirectorAppointmentPage() {
   const canStep5 = activeNds.length > 0 && activeNds.every(nd => !!nd.name && !!nd.din && !!nd.fatherName);
   const canProceed = [true, canStep1, canStep2, canStep3, canStep4, canStep5][step] ?? false;
 
-  const STEPS = ["Company", "Appointment", "Meeting & Dates", "Attendance", "Director Details", "Documents"];
-  const MAX_STEP = 6;
-
   /* ── Step 1: Company ── */
   const s1 = (
-    <div className="space-y-5">
-      <SHead n={1} title="Company Details" sub="Auto-fill from MCA Excel or search by company name / CIN" />
-      <CompanyExcelUpload onFill={fillCompany} />
-      <div className="relative flex items-center gap-3 text-xs text-slate-400">
-        <div className="flex-1 h-px bg-slate-200" /><span>or search your saved companies</span><div className="flex-1 h-px bg-slate-200" />
-      </div>
-      <CompanySearch value={companySearchVal} onChange={setCompanySearchVal} onSelect={fillCompany} className={INPUT} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-        <Field label="Company Name" req><input value={f.companyName} onChange={up("companyName")} className={INPUT} placeholder="e.g. ABC Enterprises Private Limited" /></Field>
-        <Field label="CIN"><input value={f.cin} onChange={up("cin")} className={INPUT} placeholder="e.g. U74999MH2020PTC123456" /></Field>
-        <Field label="Entity Type">
-          <select value={f.entityType} onChange={up("entityType")} className={SELECT}>
-            <option value="pvt_ltd">Private Limited Company</option>
-            <option value="public_ltd">Public Limited Company</option>
-            <option value="opc">One Person Company (OPC)</option>
-            <option value="section8">Section 8 Company</option>
-            <option value="nidhi">Nidhi Company</option>
-          </select>
-        </Field>
-        <div />
-        <Field label="Registered Office Address" req>
-          <textarea value={f.regAddress} onChange={up("regAddress")} className={INPUT} rows={2} placeholder="Full registered office address" />
-        </Field>
-      </div>
-      <NavButtons step={step} setStep={setStep} maxStep={MAX_STEP} canProceed={canStep1} />
-    </div>
+    <>
+      <SectionCard title="Auto-fill Company Data">
+        <CompanyExcelUpload onFill={fillCompany} />
+        <div className="relative flex items-center gap-3 text-xs text-slate-400 my-3">
+          <div className="flex-1 h-px bg-slate-200" /><span>or search saved companies</span><div className="flex-1 h-px bg-slate-200" />
+        </div>
+        <CompanySearch value={companySearchVal} onChange={setCompanySearchVal} onSelect={fillCompany} className={INPUT} />
+      </SectionCard>
+      <SectionCard title="Company Information">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Company Name" req><input value={f.companyName} onChange={up("companyName")} className={INPUT} placeholder="e.g. ABC Enterprises Private Limited" /></Field>
+          <Field label="CIN"><input value={f.cin} onChange={up("cin")} className={INPUT} placeholder="e.g. U74999MH2020PTC123456" /></Field>
+          <Field label="Entity Type">
+            <select value={f.entityType} onChange={up("entityType")} className={SELECT}>
+              <option value="pvt_ltd">Private Limited Company</option>
+              <option value="public_ltd">Public Limited Company</option>
+              <option value="opc">One Person Company (OPC)</option>
+              <option value="section8">Section 8 Company</option>
+              <option value="nidhi">Nidhi Company</option>
+            </select>
+          </Field>
+          <Field label="Registered Office Address" req>
+            <textarea value={f.regAddress} onChange={up("regAddress")} className={INPUT} rows={2} placeholder="Full registered office address" />
+          </Field>
+        </div>
+      </SectionCard>
+    </>
   );
 
   /* ── Step 2: Appointment Setup ── */
   const s2 = (
-    <div className="space-y-5">
-      <SHead n={2} title="Appointment Setup" sub="Select the type of appointment and how many directors to appoint in this meeting" />
-
-      <Field label="Type of Appointment" req hint="Select the designation — this determines which documents are generated and the notice period required">
-        <select value={f.ndDesignation} onChange={up("ndDesignation")} className={SELECT}>
-          <optgroup label="— Board Appointed —">
-            <option value="additional_director">Additional Director — Section 161(1)</option>
-            <option value="alternate_director">Alternate Director — Section 161(2)</option>
-            <option value="nominee_director">Nominee Director — Section 161(3)</option>
-            <option value="managing_director">Managing Director — Section 196 + Schedule V</option>
-            <option value="whole_time_director">Whole-time Director — Section 196 + Schedule V</option>
-            <option value="independent_director">Independent Director — Section 149(4) &amp; (6) + Schedule IV</option>
-          </optgroup>
-          <optgroup label="— General Meeting Appointed —">
-            <option value="director_gm">Director (at General Meeting) — Section 152</option>
-          </optgroup>
-        </select>
-      </Field>
-
-      {/* GM banner */}
-      {isGM && (
-        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-800">
-          <strong>📋 General Meeting Appointment (Section 152):</strong> This director is appointed by members at an EGM/AGM by Ordinary Resolution — not at a Board meeting. The tool will generate:
-          <ul className="mt-2 ml-4 list-disc space-y-1 text-xs">
-            <li><strong>EGM Notice</strong> (21-day notice per Section 101) with Explanatory Statement (Section 102)</li>
-            <li><strong>EGM Minutes</strong> with Ordinary Resolution (Section 152)</li>
-            <li>DIR-2 Consent and DIR-8 Declaration for each director</li>
-            <li>ROC Filing Guide (DIR-12 within 30 days of EGM)</li>
-          </ul>
+    <>
+      <SectionCard title="Type of Appointment">
+        <Field label="Designation" req hint="Determines documents generated and notice period required">
+          <select value={f.ndDesignation} onChange={up("ndDesignation")} className={SELECT}>
+            <optgroup label="— Board Appointed —">
+              <option value="additional_director">Additional Director — Section 161(1)</option>
+              <option value="alternate_director">Alternate Director — Section 161(2)</option>
+              <option value="nominee_director">Nominee Director — Section 161(3)</option>
+              <option value="managing_director">Managing Director — Section 196 + Schedule V</option>
+              <option value="whole_time_director">Whole-time Director — Section 196 + Schedule V</option>
+              <option value="independent_director">Independent Director — Section 149(4) &amp; (6) + Schedule IV</option>
+            </optgroup>
+            <optgroup label="— General Meeting Appointed —">
+              <option value="director_gm">Director (at General Meeting) — Section 152</option>
+            </optgroup>
+          </select>
+        </Field>
+        <div className="mt-3">
+          {isGM ? (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-800">
+              <strong>📋 General Meeting Appointment (Section 152):</strong> This director is appointed by members at an EGM/AGM by Ordinary Resolution — not at a Board meeting. The tool will generate:
+              <ul className="mt-2 ml-4 list-disc space-y-1 text-xs">
+                <li><strong>EGM Notice</strong> (21-day notice per Section 101) with Explanatory Statement (Section 102)</li>
+                <li><strong>EGM Minutes</strong> with Ordinary Resolution (Section 152)</li>
+                <li>DIR-2 Consent and DIR-8 Declaration for each director</li>
+                <li>ROC Filing Guide (DIR-12 within 30 days of EGM)</li>
+              </ul>
+            </div>
+          ) : (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+              <strong>📋 Board Meeting Appointment ({SECTION_REF[f.ndDesignation]}):</strong> The Board will appoint this director at a Board meeting with 7-day advance notice (SS-1). Documents generated:
+              <ul className="mt-2 ml-4 list-disc space-y-1 text-xs">
+                <li><strong>Board Notice</strong> (7-day notice per SS-1 &amp; Section 173)</li>
+                <li><strong>Board Resolution</strong> (Extract of Minutes)</li>
+                <li>DIR-2 Consent and DIR-8 Declaration for each director</li>
+                <li>ROC Filing Guide (DIR-12 within 30 days)</li>
+              </ul>
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Board notice info */}
-      {!isGM && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-          <strong>📋 Board Meeting Appointment ({SECTION_REF[f.ndDesignation]}):</strong> The Board will appoint this director at a Board meeting with 7-day advance notice (SS-1). Documents generated:
-          <ul className="mt-2 ml-4 list-disc space-y-1 text-xs">
-            <li><strong>Board Notice</strong> (7-day notice per SS-1 &amp; Section 173)</li>
-            <li><strong>Board Resolution</strong> (Extract of Minutes)</li>
-            <li>DIR-2 Consent and DIR-8 Declaration for each director</li>
-            <li>ROC Filing Guide (DIR-12 within 30 days)</li>
-          </ul>
-        </div>
-      )}
-
-      <div>
-        <p className="text-xs font-bold text-slate-700 mb-3">Number of Directors to Appoint in this Meeting <span className="text-red-500">*</span></p>
+      </SectionCard>
+      <SectionCard title="Number of Directors to Appoint">
+        <p className="text-xs text-slate-500 mb-3">All directors will be appointed in the same {isGM ? "General Meeting" : "Board Meeting"} — separate documents (DIR-2, DIR-8) will be generated for each.</p>
         <div className="flex gap-2 flex-wrap items-end">
           {[1, 2, 3, 4, 5].map(n => (
             <button key={n} type="button"
@@ -1045,27 +1189,15 @@ export default function DirectorAppointmentPage() {
             />
           </div>
         </div>
-        {f.directorCount > 1 && (
-          <p className="text-xs text-slate-500 mt-2">All {f.directorCount} directors will be appointed in the same {isGM ? "General Meeting" : "Board Meeting"} — separate documents (DIR-2, DIR-8) will be generated for each.</p>
-        )}
-      </div>
-
-      <NavButtons step={step} setStep={setStep} maxStep={MAX_STEP} canProceed={canStep2} />
-    </div>
+      </SectionCard>
+    </>
   );
 
   /* ── Step 3: Meeting & Dates ── */
   const s3 = (
-    <div className="space-y-5">
-      <SHead
-        n={3}
-        title={isGM ? "General Meeting Details & Date Planner" : "Board Meeting Details & Date Planner"}
-        sub={isGM ? "Enter the EGM date — notice must be sent 21 days in advance (Section 101)" : "Enter the board meeting date — notice date and ROC deadline are calculated automatically"}
-      />
-
+    <>
       {f.meetingDate && (
-        <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
-          <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-3">📅 Auto Date Planner</p>
+        <SectionCard title="Auto Date Planner">
           <div className={`grid gap-3 ${isMdWtd ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1 sm:grid-cols-3"}`}>
             {[
               { label: isGM ? "EGM Notice (Sec. 101)" : "Board Notice (SS-1)", date: dates.noticeDate, note: isGM ? "21 clear days before EGM" : "7 days before meeting", color: "bg-white border-slate-200 text-slate-700" },
@@ -1080,174 +1212,159 @@ export default function DirectorAppointmentPage() {
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
       )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label={isGM ? "EGM / General Meeting Date" : "Board Meeting Date"} req hint={isGM ? "EGM Notice will be 21 days before; DIR-12 deadline 30 days after" : "Notice will be 7 days before; DIR-12 deadline 30 days after"}>
-          <input type="date" value={f.meetingDate} onChange={up("meetingDate")} className={INPUT} />
-        </Field>
-        <Field label="Meeting Time"><input type="time" value={f.meetingTime} onChange={up("meetingTime")} className={INPUT} /></Field>
-        <Field label={isGM ? "EGM Serial / Reference No." : "Board Meeting Serial No."} req hint="e.g. 3/2025-26 for 3rd Board meeting, or EGM/2025-26 for EGM">
-          <input value={f.meetingSerial} onChange={up("meetingSerial")} className={INPUT} placeholder={isGM ? "e.g. EGM/2025-26" : "e.g. 3/2025-26"} />
-        </Field>
-        <Field label="Venue" hint="Defaults to registered office — edit if meeting is elsewhere">
-          <input value={f.venue} onChange={up("venue")} className={INPUT} placeholder="Registered office / any other venue" />
-        </Field>
-        <Field label="Chairman's Name" req>
-          <div className="relative" ref={chairInputRef}>
-            <input
-              value={f.chairmanName}
-              onChange={e => { setF(p => ({ ...p, chairmanName: e.target.value })); setChairDropdown(true); }}
-              onFocus={() => setChairDropdown(true)}
-              onBlur={() => setTimeout(() => setChairDropdown(false), 150)}
-              className={INPUT}
-              placeholder="Name of meeting chairman"
-            />
-            {chairDropdown && chairSuggs.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
-                {chairSuggs.map(d => (
-                  <button key={d.id} type="button"
-                    onMouseDown={() => { setF(p => ({ ...p, chairmanName: d.name, chairmanDin: d.din || p.chairmanDin })); setChairDropdown(false); }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between border-b border-slate-100 last:border-0">
-                    <span className="font-medium text-slate-800">{d.name}</span>
-                    {d.din && <span className="text-xs text-slate-400 ml-2 flex-shrink-0">DIN: {d.din}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
+      <SectionCard title={isGM ? "General Meeting Details" : "Board Meeting Details"}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label={isGM ? "EGM / General Meeting Date" : "Board Meeting Date"} req hint={isGM ? "EGM Notice will be 21 days before; DIR-12 deadline 30 days after" : "Notice will be 7 days before; DIR-12 deadline 30 days after"}>
+            <input type="date" value={f.meetingDate} onChange={up("meetingDate")} className={INPUT} />
+          </Field>
+          <Field label="Meeting Time"><input type="time" value={f.meetingTime} onChange={up("meetingTime")} className={INPUT} /></Field>
+          <Field label={isGM ? "EGM Serial / Reference No." : "Board Meeting Serial No."} req hint="e.g. 3/2025-26 for 3rd Board meeting, or EGM/2025-26 for EGM">
+            <input value={f.meetingSerial} onChange={up("meetingSerial")} className={INPUT} placeholder={isGM ? "e.g. EGM/2025-26" : "e.g. 3/2025-26"} />
+          </Field>
+          <Field label="Venue" hint="Defaults to registered office — edit if meeting is elsewhere">
+            <input value={f.venue} onChange={up("venue")} className={INPUT} placeholder="Registered office / any other venue" />
+          </Field>
+          <Field label="Chairman's Name" req>
+            <div className="relative" ref={chairInputRef}>
+              <input
+                value={f.chairmanName}
+                onChange={e => { setF(p => ({ ...p, chairmanName: e.target.value })); setChairDropdown(true); }}
+                onFocus={() => setChairDropdown(true)}
+                onBlur={() => setTimeout(() => setChairDropdown(false), 150)}
+                className={INPUT}
+                placeholder="Name of meeting chairman"
+              />
+              {chairDropdown && chairSuggs.length > 0 && (
+                <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                  {chairSuggs.map(d => (
+                    <button key={d.id} type="button"
+                      onMouseDown={() => { setF(p => ({ ...p, chairmanName: d.name, chairmanDin: d.din || p.chairmanDin })); setChairDropdown(false); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between border-b border-slate-100 last:border-0">
+                      <span className="font-medium text-slate-800">{d.name}</span>
+                      {d.din && <span className="text-xs text-slate-400 ml-2 flex-shrink-0">DIN: {d.din}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Field>
+          <Field label="Chairman's DIN" hint="8-digit DIN — auto-filled if selected above">
+            <>
+              <input
+                value={f.chairmanDin}
+                onChange={up("chairmanDin")}
+                className={`${INPUT} ${chairDinError ? "!border-red-400 focus:!border-red-500" : ""}`}
+                placeholder="e.g. 01234567"
+                maxLength={8}
+              />
+              {chairDinError && <p className="text-xs text-red-500 mt-1">⚠ DIN must be exactly 8 digits ({f.chairmanDin.length} entered)</p>}
+            </>
+          </Field>
+        </div>
+        {f.meetingDate && (
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 text-xs text-sky-700 mt-4">
+            <strong>💡 Tip:</strong> If your company already has a {isGM ? "General" : "Board"} Meeting scheduled in <strong>{new Date(f.meetingDate + "T00:00:00").toLocaleString("en-IN", { month: "long", year: "numeric" })}</strong>, use that same date and add this appointment as an agenda item.
           </div>
-        </Field>
-        <Field label="Chairman's DIN" hint="8-digit Director Identification Number — auto-filled if selected above">
-          <>
-            <input
-              value={f.chairmanDin}
-              onChange={up("chairmanDin")}
-              className={`${INPUT} ${chairDinError ? "!border-red-400 focus:!border-red-500" : ""}`}
-              placeholder="e.g. 01234567"
-              maxLength={8}
-            />
-            {chairDinError && (
-              <p className="text-xs text-red-500 mt-1">⚠ DIN must be exactly 8 digits ({f.chairmanDin.length} entered)</p>
-            )}
-          </>
-        </Field>
-      </div>
-      {f.meetingDate && (
-        <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 text-xs text-sky-700">
-          <strong>💡 Tip:</strong> If your company already has a {isGM ? "General" : "Board"} Meeting scheduled in <strong>{new Date(f.meetingDate + "T00:00:00").toLocaleString("en-IN", { month: "long", year: "numeric" })}</strong>, use that same date and add this appointment as an agenda item — one meeting instead of two.
-        </div>
-      )}
-      <NavButtons step={step} setStep={setStep} maxStep={MAX_STEP} canProceed={canStep3} />
-    </div>
+        )}
+      </SectionCard>
+    </>
   );
 
   /* ── Step 4: Attendance ── */
   const presentCount = f.directors.filter(d => d.isPresent).length;
   const quorumOk = presentCount >= (f.entityType === "opc" ? 1 : 2);
   const s4 = (
-    <div className="space-y-5">
-      <SHead
-        n={4}
-        title={isGM ? "Members / Directors Present" : "Directors Present at Meeting"}
-        sub={isGM ? "List members/directors attending the EGM — needed for quorum confirmation and minutes" : "Mark who attended — needed for quorum and board notice addresses"}
-      />
-      {f.directors.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-          No directors loaded. Add manually or upload MCA Excel in Step 1.
-        </div>
-      )}
-      <div className="space-y-3">
-        {f.directors.map((d, i) => (
-          <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-colors ${d.isPresent ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-slate-50"}`}>
-            <input type="checkbox" checked={d.isPresent} onChange={e => updateExistingDir(d.id, "isPresent", e.target.checked)}
-              className="w-5 h-5 rounded accent-blue-600 cursor-pointer flex-shrink-0" />
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <input value={d.name} onChange={e => updateExistingDir(d.id, "name", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder={`Director ${i + 1} Name`} />
-              <input value={d.din} onChange={e => updateExistingDir(d.id, "din", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="DIN (8 digits)" maxLength={8} />
-              <input value={d.designation} onChange={e => updateExistingDir(d.id, "designation", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="Designation" />
-            </div>
-            <button onClick={() => removeExistingDir(d.id)} className="text-slate-400 hover:text-red-500 text-lg flex-shrink-0">✕</button>
+    <>
+      <SectionCard title={isGM ? "Members / Directors Present" : "Directors Present at Meeting"}>
+        <p className="text-xs text-slate-500 mb-3">{isGM ? "List members/directors attending the EGM — needed for quorum confirmation and minutes" : "Mark who attended — needed for quorum and board notice addresses"}</p>
+        {f.directors.length === 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-3">
+            No directors loaded. Add manually or upload MCA Excel in Step 1.
           </div>
-        ))}
-      </div>
-      <button onClick={addExistingDir} className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-sm font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
-        + Add Director / Member
-      </button>
-      {f.directors.length > 0 && (
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold ${quorumOk ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
-          {quorumOk ? "✓" : "⚠"} Quorum: {presentCount} director{presentCount !== 1 ? "s" : ""} present
-          {!quorumOk && " — minimum 2 required (Pvt Ltd)"}
+        )}
+        <div className="space-y-3">
+          {f.directors.map((d, i) => (
+            <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-colors ${d.isPresent ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-slate-50"}`}>
+              <input type="checkbox" checked={d.isPresent} onChange={e => updateExistingDir(d.id, "isPresent", e.target.checked)}
+                className="w-5 h-5 rounded accent-blue-600 cursor-pointer flex-shrink-0" />
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input value={d.name} onChange={e => updateExistingDir(d.id, "name", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder={`Director ${i + 1} Name`} />
+                <input value={d.din} onChange={e => updateExistingDir(d.id, "din", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="DIN (8 digits)" maxLength={8} />
+                <input value={d.designation} onChange={e => updateExistingDir(d.id, "designation", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="Designation" />
+              </div>
+              <button onClick={() => removeExistingDir(d.id)} className="text-slate-400 hover:text-red-500 text-lg flex-shrink-0">✕</button>
+            </div>
+          ))}
         </div>
-      )}
-      <NavButtons step={step} setStep={setStep} maxStep={MAX_STEP} canProceed={canStep4} />
-    </div>
+        <button onClick={addExistingDir} className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-sm font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-colors mt-3">
+          + Add Director / Member
+        </button>
+        {f.directors.length > 0 && (
+          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold mt-3 ${quorumOk ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+            {quorumOk ? "✓" : "⚠"} Quorum: {presentCount} director{presentCount !== 1 ? "s" : ""} present
+            {!quorumOk && " — minimum 2 required (Pvt Ltd)"}
+          </div>
+        )}
+      </SectionCard>
+    </>
   );
 
   /* ── Step 5: New Director(s) ── */
   const s5 = (
-    <div className="space-y-5">
-      <SHead n={5} title="New Director Details" sub="Details used in DIR-2, DIR-8, and all resolution documents" />
-
-      {f.directorCount > 1 && (
-        <div className="flex gap-2 border-b border-slate-200 pb-0">
-          {activeNds.map((nd, i) => (
-            <button key={nd.id} onClick={() => setActiveNdTab(i)}
-              className={`px-4 py-2 text-sm font-bold rounded-t-xl border-2 border-b-0 transition-all ${activeNdTab === i ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-700"}`}>
-              {nd.name ? nd.name.split(" ")[0] : `Director ${i + 1}`}
-              {!nd.name && !nd.din ? " ●" : ""}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {activeNds.map((nd, i) => (
-        <div key={nd.id} className={f.directorCount > 1 && activeNdTab !== i ? "hidden" : ""}>
-          {f.directorCount > 1 && (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 mb-3">
-              <p className="text-xs font-bold text-slate-600">Director {i + 1} of {f.directorCount}</p>
-            </div>
-          )}
-          <NewDirectorForm
-            nd={nd}
-            designation={f.ndDesignation}
-            onChange={(key, val) => updateNd(i, key, val)}
-          />
-        </div>
-      ))}
-
-      {f.directorCount > 1 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
-          <strong>Tip:</strong> Fill details for all {f.directorCount} directors using the tabs above. All documents will be generated for each director.
-        </div>
-      )}
-
-      <NavButtons step={step} setStep={setStep} maxStep={MAX_STEP} canProceed={canStep5} onGenerate={() => setStep(6)} />
-    </div>
+    <>
+      <SectionCard title="New Director Details">
+        <p className="text-xs text-slate-500 mb-4">Details used in DIR-2, DIR-8, and all resolution documents.</p>
+        {f.directorCount > 1 && (
+          <div className="flex gap-2 border-b border-slate-200 pb-0 mb-4">
+            {activeNds.map((nd, i) => (
+              <button key={nd.id} onClick={() => setActiveNdTab(i)}
+                className={`px-4 py-2 text-sm font-bold rounded-t-xl border-2 border-b-0 transition-all ${activeNdTab === i ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-700"}`}>
+                {nd.name ? nd.name.split(" ")[0] : `Director ${i + 1}`}
+                {!nd.name && !nd.din ? " ●" : ""}
+              </button>
+            ))}
+          </div>
+        )}
+        {activeNds.map((nd, i) => (
+          <div key={nd.id} className={f.directorCount > 1 && activeNdTab !== i ? "hidden" : ""}>
+            {f.directorCount > 1 && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 mb-3">
+                <p className="text-xs font-bold text-slate-600">Director {i + 1} of {f.directorCount}</p>
+              </div>
+            )}
+            <NewDirectorForm nd={nd} designation={f.ndDesignation} onChange={(key, val) => updateNd(i, key, val)} />
+          </div>
+        ))}
+        {f.directorCount > 1 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700 mt-4">
+            <strong>Tip:</strong> Fill details for all {f.directorCount} directors using the tabs above.
+          </div>
+        )}
+      </SectionCard>
+    </>
   );
 
   /* ── Step 6: Documents ── */
   const s6 = (
-    <div className="space-y-5">
-      <SHead n={6} title="Complete Document Package" sub="All documents ready to print. Click any document to preview, then Print." />
-
-      <div className="flex flex-wrap gap-2">
-        {docs.map(d => (
-          <button key={d.key} onClick={() => setActiveDocKey(d.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-center transition-all ${activeDocKey === d.key ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
-            <span className="text-base">{d.emoji}</span>
-            <span className="text-xs font-bold leading-tight">{d.label}</span>
-          </button>
-        ))}
-      </div>
+    <>
+      <SectionCard title="Select Document">
+        <div className="flex flex-wrap gap-2">
+          {docs.map(d => (
+            <button key={d.key} onClick={() => setActiveDocKey(d.key)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-center transition-all ${activeDocKey === d.key ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+              <span className="text-base">{d.emoji}</span>
+              <span className="text-xs font-bold leading-tight">{d.label}</span>
+            </button>
+          ))}
+        </div>
+      </SectionCard>
 
       {activeDoc && (
-        <div className="border-2 border-slate-200 rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">{activeDoc.emoji}</span>
-              <span className="text-sm font-bold text-slate-800">{activeDoc.label}</span>
-            </div>
+        <SectionCard title={activeDoc.label}>
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <span className="text-sm font-bold text-slate-700">{activeDoc.emoji} {activeDoc.label}</span>
             <div className="flex gap-1.5">
               <button onClick={() => openPrint(activeDoc.gen())} disabled={!!busyKey}
                 className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors disabled:opacity-50">
@@ -1263,97 +1380,142 @@ export default function DirectorAppointmentPage() {
               </button>
             </div>
           </div>
-          <div className="bg-white p-4 max-h-[500px] overflow-y-auto"
-            dangerouslySetInnerHTML={{ __html: activeDoc.gen()
-              .replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/, `<style>${DOC_CSS.replace(/\bbody\s*\{[^}]*\}/g, "")}</style>`)
-              .replace(/<\/body>[\s\S]*?<\/html>/, "")
-              .replace(/<div class="page">/, '<div class="page" style="font-family:\'Times New Roman\',serif;font-size:12pt;line-height:1.8;color:#000;">')
-            }} />
-        </div>
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="bg-white p-4 max-h-[500px] overflow-y-auto"
+              dangerouslySetInnerHTML={{ __html: activeDoc.gen()
+                .replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/, `<style>${DOC_CSS.replace(/\bbody\s*\{[^}]*\}/g, "")}</style>`)
+                .replace(/<\/body>[\s\S]*?<\/html>/, "")
+                .replace(/<div class="page">/, '<div class="page" style="font-family:\'Times New Roman\',serif;font-size:12pt;line-height:1.8;color:#000;">')
+              }} />
+          </div>
+        </SectionCard>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {docs.map(d => (
-          <div key={d.key} className="flex gap-1">
-            <button onClick={() => openPrint(d.gen())} disabled={!!busyKey}
-              className="py-2 px-2.5 rounded-l-xl text-xs font-bold border-2 border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 transition-all flex items-center gap-1 disabled:opacity-50">
-              {d.emoji} Print {d.label}
-            </button>
-            <button onClick={() => downloadDocPDF(d.gen(), "director-resolution", d.label, d.key)} disabled={!!busyKey}
-              className="py-2 px-2.5 rounded-none text-xs font-bold border-2 border-l-0 border-slate-200 text-blue-700 hover:border-blue-400 hover:bg-blue-50 transition-all disabled:opacity-50">
-              {busyKey === d.key + "_pdf" ? "⏳" : "⬇️"}
-            </button>
-            <button onClick={() => downloadDocWord(d.gen(), d.label, d.key)} disabled={!!busyKey}
-              className="py-2 px-2.5 rounded-r-xl text-xs font-bold border-2 border-l-0 border-slate-200 text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all disabled:opacity-50">
-              {busyKey === d.key + "_word" ? "⏳" : "📝"}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-        <button onClick={() => setStep(5)} className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50">← Edit Details</button>
-        <button onClick={() => { setF({ ...DEFAULT, newDirectors: [makeNd()] }); setStep(1); try { localStorage.removeItem(DRAFT_KEY); } catch {} }}
-          className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-500 hover:bg-slate-50">
-          🔄 New Appointment
-        </button>
-      </div>
-    </div>
+      <SectionCard title="Print / Download All Documents">
+        <div className="flex flex-wrap gap-2 mb-5">
+          {docs.map(d => (
+            <div key={d.key} className="flex gap-1">
+              <button onClick={() => openPrint(d.gen())} disabled={!!busyKey}
+                className="py-2 px-2.5 rounded-l-xl text-xs font-bold border-2 border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 transition-all flex items-center gap-1 disabled:opacity-50">
+                {d.emoji} Print {d.label}
+              </button>
+              <button onClick={() => downloadDocPDF(d.gen(), "director-resolution", d.label, d.key)} disabled={!!busyKey}
+                className="py-2 px-2.5 rounded-none text-xs font-bold border-2 border-l-0 border-slate-200 text-blue-700 hover:border-blue-400 hover:bg-blue-50 transition-all disabled:opacity-50">
+                {busyKey === d.key + "_pdf" ? "⏳" : "⬇️"}
+              </button>
+              <button onClick={() => downloadDocWord(d.gen(), d.label, d.key)} disabled={!!busyKey}
+                className="py-2 px-2.5 rounded-r-xl text-xs font-bold border-2 border-l-0 border-slate-200 text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all disabled:opacity-50">
+                {busyKey === d.key + "_word" ? "⏳" : "📝"}
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          <button onClick={() => setStep(5)} className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50">← Edit Details</button>
+          <button onClick={() => { setF({ ...DEFAULT, newDirectors: [makeNd()] }); setStep(1); try { localStorage.removeItem(DRAFT_KEY); } catch {} }}
+            className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-500 hover:bg-slate-50">
+            🔄 New Appointment
+          </button>
+        </div>
+      </SectionCard>
+    </>
   );
 
   const stepContent: Record<number, React.ReactNode> = { 1: s1, 2: s2, 3: s3, 4: s4, 5: s5, 6: s6 };
 
   return (
-    <>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }} className="bg-slate-50">
       <Navbar />
-      <main className="min-h-screen bg-slate-50 py-6 px-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
-            <Link href="/tools/corporate-action-kit" className="hover:text-blue-600 font-semibold">Corporate Action Kit</Link>
-            <span>›</span>
-            <span className="text-slate-700 font-bold">Director Appointment</span>
-          </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4 px-5 py-4">
+      {/* Mobile sidebar overlay */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileSidebarOpen(false)} />
+          <aside className="relative w-[260px] flex flex-col overflow-y-auto z-10" style={{ background: "#0f172a" }}>
+            <SidebarContent
+              step={step} collapsed={false}
+              companyName={f.companyName} cin={f.cin}
+              onStepClick={(id) => { setStep(id); setMobileSidebarOpen(false); }}
+              onToggle={() => setMobileSidebarOpen(false)}
+            />
+          </aside>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Desktop sidebar */}
+        <aside
+          className="hidden md:flex flex-col flex-shrink-0 overflow-y-auto"
+          style={{ width: sidebarCollapsed ? "64px" : "220px", background: "#0f172a", transition: "width 0.2s ease" }}
+        >
+          <SidebarContent
+            step={step} collapsed={sidebarCollapsed}
+            companyName={f.companyName} cin={f.cin}
+            onStepClick={setStep}
+            onToggle={() => setSidebarCollapsed(c => !c)}
+          />
+        </aside>
+
+        {/* Main content */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          {/* Sticky step header */}
+          <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex-shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                style={{ background: "linear-gradient(135deg,#1d4ed8,#1e40af)" }}>👤</div>
-              <div>
-                <h1 className="text-lg font-extrabold text-slate-900">Director Appointment Kit</h1>
-                <p className="text-xs text-slate-500">Section 161 / 152 · Companies Act 2013 · Board &amp; GM Appointment · Multi-Director Support</p>
+              <button
+                className="md:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"
+                onClick={() => setMobileSidebarOpen(true)}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <div className="w-9 h-9 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
+                {STEP_ICONS[step]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Step {step} of 6</div>
+                <h1 className="text-[15px] font-semibold text-slate-900 leading-tight">{DIR_STEPS[step - 1].label}</h1>
+                <p className="text-[11.5px] text-slate-500 mt-0.5 hidden sm:block">{DIR_STEPS[step - 1].desc}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {step > 1 && (
+                  <button onClick={() => setStep(step - 1)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
+                    ← Back
+                  </button>
+                )}
+                {step < 6 && (
+                  <button
+                    onClick={() => canProceed && setStep(step + 1)}
+                    className={`flex items-center gap-1 px-4 py-1.5 text-xs font-bold rounded-lg text-white transition-all ${canProceed ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-300 cursor-not-allowed"}`}
+                  >
+                    Next →
+                  </button>
+                )}
+                {step === 5 && canProceed && (
+                  <button
+                    onClick={() => setStep(6)}
+                    className="flex items-center gap-1 px-4 py-1.5 text-xs font-bold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 transition-all"
+                  >
+                    ✅ Get Documents
+                  </button>
+                )}
               </div>
             </div>
-          </div>
-
-          {/* Progress */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4 px-5 py-3">
-            <div className="flex items-center gap-0">
-              {STEPS.map((s, i) => {
-                const n = i + 1;
-                const done = n < step;
-                const active = n === step;
-                return (
-                  <div key={s} className="flex items-center gap-0 flex-1">
-                    <div className="flex flex-col items-center">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border-2 transition-all ${done || active ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-300 text-slate-400"}`}>
-                        {done ? "✓" : n}
-                      </div>
-                      <span className={`text-xs mt-1 font-semibold hidden sm:block ${active ? "text-blue-700" : done ? "text-slate-600" : "text-slate-400"}`}>{s}</span>
-                    </div>
-                    {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mx-1 ${n < step ? "bg-blue-500" : "bg-slate-200"}`} />}
-                  </div>
-                );
-              })}
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-2">
+              <Link href="/tools/corporate-action-kit" className="hover:text-blue-600 font-medium">Corporate Action Kit</Link>
+              <span>›</span>
+              <span className="text-slate-600 font-medium">Director Appointment</span>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            {stepContent[step]}
+          {/* Step content */}
+          <div className="flex-1 px-4 md:px-6 lg:px-8 py-6">
+            <div className="max-w-3xl mx-auto">
+              {stepContent[step]}
+            </div>
           </div>
-
-          <p className="text-center text-xs text-slate-400 mt-3">Draft auto-saved to browser · No account needed</p>
         </div>
-      </main>
-    </>
+      </div>
+    </div>
   );
 }
