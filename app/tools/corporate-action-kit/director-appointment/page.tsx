@@ -32,8 +32,11 @@ interface NewDirectorEntry {
   termYears: string;
 }
 
+type MeetingAction = "appoint" | "resign" | "both";
+
 interface F {
   companyName: string; cin: string; regAddress: string; entityType: string;
+  meetingAction: MeetingAction;
   ndDesignation: DesignationType;
   directorCount: number;
   newDirectors: NewDirectorEntry[];
@@ -81,6 +84,7 @@ function makeNd(): NewDirectorEntry {
 
 const DEFAULT: F = {
   companyName: "", cin: "", regAddress: "", entityType: "pvt_ltd",
+  meetingAction: "appoint",
   ndDesignation: "additional_director",
   directorCount: 1,
   newDirectors: [makeNd()],
@@ -730,16 +734,16 @@ function genResignBoardCTC(f: F, resigningDirs: ExistingDirector[]): string {
 ═══════════════════════════════════════════════════════════════════ */
 
 const DIR_STEPS = [
-  { id: 1, label: "Company",          desc: "Company name, CIN, address and entity type" },
-  { id: 2, label: "Appointment",      desc: "Select designation and number of directors" },
-  { id: 3, label: "Meeting & Dates",  desc: "Meeting date, time, serial number and venue" },
-  { id: 4, label: "Attendance",       desc: "Mark directors present — quorum verification" },
-  { id: 5, label: "Director Details", desc: "New director's personal and KYC information" },
-  { id: 6, label: "Documents",        desc: "Preview, print, and download all documents" },
+  { id: 1, label: "Company",        desc: "Company name, CIN, address and entity type" },
+  { id: 2, label: "Meeting Action", desc: "Select action — Appoint, Resign, or Both in same meeting" },
+  { id: 3, label: "Meeting & Dates",desc: "Meeting date, time, serial number and venue" },
+  { id: 4, label: "Attendance",     desc: "Mark directors present and flag resignations" },
+  { id: 5, label: "New Directors",  desc: "New director's personal and KYC information" },
+  { id: 6, label: "Documents",      desc: "Preview, print, and download all documents" },
 ];
 
 const STEP_ICONS: Record<number, string> = {
-  1: "🏢", 2: "📋", 3: "📅", 4: "👥", 5: "👤", 6: "📄",
+  1: "🏢", 2: "⚡", 3: "📅", 4: "👥", 5: "👤", 6: "📄",
 };
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -764,8 +768,9 @@ function Field({ label, req, children, hint }: { label: string; req?: boolean; c
 const INPUT = "w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 bg-white";
 const SELECT = "w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
-function SidebarContent({ step, collapsed, companyName, cin, onStepClick, onToggle }: {
+function SidebarContent({ step, collapsed, companyName, cin, meetingAction, onStepClick, onToggle }: {
   step: number; collapsed: boolean; companyName: string; cin: string;
+  meetingAction: MeetingAction;
   onStepClick: (id: number) => void; onToggle: () => void;
 }) {
   return (
@@ -787,10 +792,11 @@ function SidebarContent({ step, collapsed, companyName, cin, onStepClick, onTogg
       <nav className={`flex-1 py-2 ${collapsed ? "px-1.5" : "px-1"}`}>
         {DIR_STEPS.slice(0, 5).map(s => {
           const isCurrent = step === s.id;
+          const isSkipped = s.id === 5 && meetingAction === "resign";
           return (
             <button
               key={s.id}
-              onClick={() => onStepClick(s.id)}
+              onClick={() => !isSkipped && onStepClick(s.id)}
               title={collapsed ? s.label : undefined}
               className="w-full flex items-center mb-0.5 transition-all duration-150"
               style={{
@@ -798,8 +804,10 @@ function SidebarContent({ step, collapsed, companyName, cin, onStepClick, onTogg
                 borderRadius: "8px",
                 background: isCurrent ? "rgba(37,99,235,0.12)" : "transparent",
                 borderLeft: isCurrent ? "2px solid #2563eb" : "2px solid transparent",
+                opacity: isSkipped ? 0.3 : 1,
+                cursor: isSkipped ? "not-allowed" : "pointer",
               }}
-              onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+              onMouseEnter={e => { if (!isCurrent && !isSkipped) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
               onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
               <div
@@ -814,7 +822,7 @@ function SidebarContent({ step, collapsed, companyName, cin, onStepClick, onTogg
                   transition: "all 0.15s ease",
                 }}
               >
-                {s.id}
+                {isSkipped ? "–" : s.id}
               </div>
               {!collapsed && (
                 <span style={{
@@ -1170,13 +1178,24 @@ export default function DirectorAppointmentPage() {
 
   // Validation
   const canStep1 = !!f.companyName;
-  const canStep2 = true; // designation always has a default
+  const canStep2 = true;
   const chairSuggs = f.directors.filter(d => d.name && (!f.chairmanName || d.name.toLowerCase().includes(f.chairmanName.toLowerCase())));
   const chairDinError = f.chairmanDin.length > 0 && f.chairmanDin.length !== 8;
   const canStep3 = !!f.meetingDate && !!f.meetingSerial && !!f.chairmanName && !chairDinError;
   const canStep4 = f.directors.filter(d => d.isPresent).length >= (f.entityType === "opc" ? 1 : 2);
-  const canStep5 = activeNds.length > 0 && activeNds.every(nd => !!nd.name && !!nd.din && !!nd.fatherName);
+  const canStep5 = f.meetingAction === "resign" || (activeNds.length > 0 && activeNds.every(nd => !!nd.name && !!nd.din && !!nd.fatherName));
   const canProceed = [true, canStep1, canStep2, canStep3, canStep4, canStep5][step] ?? false;
+
+  // Smart step navigation — skip Step 5 (New Directors) when action is resign-only
+  function goNext() {
+    if (!canProceed) return;
+    if (step === 4 && f.meetingAction === "resign") { setStep(6); return; }
+    setStep(s => Math.min(6, s + 1));
+  }
+  function goBack() {
+    if (step === 6 && f.meetingAction === "resign") { setStep(4); return; }
+    setStep(s => Math.max(1, s - 1));
+  }
 
   /* ── Step 1: Company ── */
   const s1 = (
@@ -1209,71 +1228,105 @@ export default function DirectorAppointmentPage() {
     </>
   );
 
-  /* ── Step 2: Appointment Setup ── */
+  /* ── Step 2: Meeting Action ── */
+  const ACTION_OPTIONS: { key: MeetingAction; icon: string; title: string; sub: string; color: string; accent: string; docs: string[] }[] = [
+    {
+      key: "appoint", icon: "👤", title: "Appoint Director(s)", sub: "Sec. 161 / 152",
+      color: "border-blue-500 bg-blue-50", accent: "text-blue-700",
+      docs: ["Board Notice", "Board CTC", "DIR-2", "DIR-8", "MBP-1", "ROC Guide"],
+    },
+    {
+      key: "resign", icon: "🚪", title: "Director Resignation(s)", sub: "Sec. 168 · DIR-11 / DIR-12",
+      color: "border-red-400 bg-red-50", accent: "text-red-700",
+      docs: ["Resignation Letter(s)", "Resignation CTC", "ROC Guide"],
+    },
+    {
+      key: "both", icon: "🔄", title: "Appoint + Resign", sub: "Both in same meeting",
+      color: "border-emerald-500 bg-emerald-50", accent: "text-emerald-700",
+      docs: ["Board Notice", "Board CTC", "DIR-2", "DIR-8", "Resignation Letter(s)", "Resignation CTC", "ROC Guide"],
+    },
+  ];
   const s2 = (
     <>
-      <SectionCard title="Type of Appointment">
-        <Field label="Designation" req hint="Determines documents generated and notice period required">
-          <select value={f.ndDesignation} onChange={up("ndDesignation")} className={SELECT}>
-            <optgroup label="— Board Appointed —">
-              <option value="additional_director">Additional Director — Section 161(1)</option>
-              <option value="alternate_director">Alternate Director — Section 161(2)</option>
-              <option value="nominee_director">Nominee Director — Section 161(3)</option>
-              <option value="managing_director">Managing Director — Section 196 + Schedule V</option>
-              <option value="whole_time_director">Whole-time Director — Section 196 + Schedule V</option>
-              <option value="independent_director">Independent Director — Section 149(4) &amp; (6) + Schedule IV</option>
-            </optgroup>
-            <optgroup label="— General Meeting Appointed —">
-              <option value="director_gm">Director (at General Meeting) — Section 152</option>
-            </optgroup>
-          </select>
-        </Field>
-        <div className="mt-3">
-          {isGM ? (
-            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-sm text-amber-800">
-              <strong>📋 General Meeting Appointment (Section 152):</strong> This director is appointed by members at an EGM/AGM by Ordinary Resolution — not at a Board meeting. The tool will generate:
-              <ul className="mt-2 ml-4 list-disc space-y-1 text-xs">
-                <li><strong>EGM Notice</strong> (21-day notice per Section 101) with Explanatory Statement (Section 102)</li>
-                <li><strong>EGM Minutes</strong> with Ordinary Resolution (Section 152)</li>
-                <li>DIR-2 Consent and DIR-8 Declaration for each director</li>
-                <li>ROC Filing Guide (DIR-12 within 30 days of EGM)</li>
-              </ul>
-            </div>
-          ) : (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-              <strong>📋 Board Meeting Appointment ({SECTION_REF[f.ndDesignation]}):</strong> The Board will appoint this director at a Board meeting with 7-day advance notice (SS-1). Documents generated:
-              <ul className="mt-2 ml-4 list-disc space-y-1 text-xs">
-                <li><strong>Board Notice</strong> (7-day notice per SS-1 &amp; Section 173)</li>
-                <li><strong>Board Resolution</strong> (Extract of Minutes)</li>
-                <li>DIR-2 Consent and DIR-8 Declaration for each director</li>
-                <li>ROC Filing Guide (DIR-12 within 30 days)</li>
-              </ul>
-            </div>
-          )}
-        </div>
-      </SectionCard>
-      <SectionCard title="Number of Directors to Appoint">
-        <p className="text-xs text-slate-500 mb-3">All directors will be appointed in the same {isGM ? "General Meeting" : "Board Meeting"} — separate documents (DIR-2, DIR-8) will be generated for each.</p>
-        <div className="flex gap-2 flex-wrap items-end">
-          {[1, 2, 3, 4, 5].map(n => (
-            <button key={n} type="button"
-              onClick={() => setDirectorCount(n)}
-              className={`py-3 px-4 rounded-xl border-2 text-center font-bold transition-all ${f.directorCount === n ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
-              <div className="text-xl font-black">{n}</div>
-              <div className="text-xs mt-0.5 font-medium">{n === 1 ? "Director" : "Directors"}</div>
+      <SectionCard title="What's happening in this meeting?">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
+          {ACTION_OPTIONS.map(opt => (
+            <button key={opt.key} type="button"
+              onClick={() => setF(p => ({ ...p, meetingAction: opt.key }))}
+              className={`rounded-xl border-2 p-4 text-left transition-all ${f.meetingAction === opt.key ? opt.color : "border-slate-200 bg-white hover:border-slate-300"}`}>
+              <div className="text-2xl mb-2">{opt.icon}</div>
+              <div className={`font-bold text-sm leading-tight ${f.meetingAction === opt.key ? opt.accent : "text-slate-800"}`}>{opt.title}</div>
+              <div className="text-[11px] text-slate-400 mt-0.5 mb-3">{opt.sub}</div>
+              <div className="flex flex-wrap gap-1">
+                {opt.docs.map(d => (
+                  <span key={d} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${f.meetingAction === opt.key ? "bg-white/70 " + opt.accent : "bg-slate-100 text-slate-500"}`}>{d}</span>
+                ))}
+              </div>
             </button>
           ))}
-          <div className="flex flex-col items-center gap-1 ml-1">
-            <span className="text-xs text-slate-400 font-medium">or type</span>
-            <input
-              type="number" min="1" max="10"
-              value={f.directorCount}
-              onChange={e => { const v = Math.min(10, Math.max(1, parseInt(e.target.value) || 1)); setDirectorCount(v); }}
-              className="w-16 border-2 border-slate-200 rounded-xl px-2 py-2 text-center font-black text-lg text-slate-700 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
         </div>
       </SectionCard>
+
+      {/* Appointment details — shown when appoint or both */}
+      {(f.meetingAction === "appoint" || f.meetingAction === "both") && (
+        <>
+          <SectionCard title="Appointment — Designation">
+            <Field label="Type of Appointment" req hint="Determines documents generated and notice period required">
+              <select value={f.ndDesignation} onChange={up("ndDesignation")} className={SELECT}>
+                <optgroup label="— Board Appointed —">
+                  <option value="additional_director">Additional Director — Section 161(1)</option>
+                  <option value="alternate_director">Alternate Director — Section 161(2)</option>
+                  <option value="nominee_director">Nominee Director — Section 161(3)</option>
+                  <option value="managing_director">Managing Director — Section 196 + Schedule V</option>
+                  <option value="whole_time_director">Whole-time Director — Section 196 + Schedule V</option>
+                  <option value="independent_director">Independent Director — Section 149(4) &amp; (6) + Schedule IV</option>
+                </optgroup>
+                <optgroup label="— General Meeting Appointed —">
+                  <option value="director_gm">Director (at General Meeting) — Section 152</option>
+                </optgroup>
+              </select>
+            </Field>
+            <div className={`mt-3 rounded-xl p-3 text-xs ${isGM ? "bg-amber-50 border border-amber-200 text-amber-800" : "bg-blue-50 border border-blue-100 text-blue-800"}`}>
+              {isGM
+                ? <><strong>EGM Route (Sec. 152):</strong> Notice 21 days prior · Ordinary Resolution · DIR-12 within 30 days</>
+                : <><strong>Board Route ({SECTION_REF[f.ndDesignation]}):</strong> Board Notice 7 days prior (SS-1) · Board CTC · DIR-12 within 30 days</>
+              }
+            </div>
+          </SectionCard>
+          <SectionCard title="How many directors being appointed?">
+            <div className="flex gap-2 flex-wrap items-end">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} type="button" onClick={() => setDirectorCount(n)}
+                  className={`py-3 px-4 rounded-xl border-2 text-center font-bold transition-all ${f.directorCount === n ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                  <div className="text-xl font-black">{n}</div>
+                  <div className="text-xs mt-0.5 font-medium">{n === 1 ? "Director" : "Directors"}</div>
+                </button>
+              ))}
+              <div className="flex flex-col items-center gap-1 ml-1">
+                <span className="text-xs text-slate-400 font-medium">or type</span>
+                <input type="number" min="1" max="10" value={f.directorCount}
+                  onChange={e => { const v = Math.min(10, Math.max(1, parseInt(e.target.value) || 1)); setDirectorCount(v); }}
+                  className="w-16 border-2 border-slate-200 rounded-xl px-2 py-2 text-center font-black text-lg text-slate-700 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          </SectionCard>
+        </>
+      )}
+
+      {/* Resign info card */}
+      {(f.meetingAction === "resign" || f.meetingAction === "both") && (
+        <SectionCard title="Resignation — What you'll need">
+          <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-800">
+            <strong>Next steps:</strong> In Step 4 (Attendance), mark each resigning director with the <span className="font-bold">"Resigning" checkbox</span> and fill their resignation date &amp; reason. Documents auto-generate in Step 6.
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-center">
+            <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">✉️</div><div className="font-bold text-slate-700">Resignation Letter</div><div className="text-slate-400">Per director</div></div>
+            <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">🚪</div><div className="font-bold text-slate-700">Resignation CTC</div><div className="text-slate-400">Board resolution</div></div>
+            <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">📋</div><div className="font-bold text-slate-700">ROC Guide</div><div className="text-slate-400">DIR-11 + DIR-12</div></div>
+          </div>
+        </SectionCard>
+      )}
     </>
   );
 
@@ -1362,7 +1415,7 @@ export default function DirectorAppointmentPage() {
   const s4 = (
     <>
       <SectionCard title={isGM ? "Members / Directors Present" : "Directors Present at Meeting"}>
-        <p className="text-xs text-slate-500 mb-3">{isGM ? "List members/directors attending the EGM — needed for quorum confirmation and minutes" : "Mark attendance and flag any director resigning — resignation documents will be auto-added in Step 6"}</p>
+        <p className="text-xs text-slate-500 mb-3">{isGM ? "List members/directors attending the EGM — needed for quorum confirmation and minutes" : f.meetingAction === "appoint" ? "Mark who attended — needed for quorum and board notice addresses" : "Mark attendance · Check 'Resigning' for directors resigning at this meeting"}</p>
         {f.directors.length === 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-3">
             No directors loaded. Add manually or upload MCA Excel in Step 1.
@@ -1379,11 +1432,13 @@ export default function DirectorAppointmentPage() {
                   <input value={d.din} onChange={e => updateExistingDir(d.id, "din", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white" placeholder="DIN (8 digits)" maxLength={8} />
                   <input value={d.designation} onChange={e => updateExistingDir(d.id, "designation", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white" placeholder="Designation" />
                 </div>
-                <label className="flex items-center gap-1.5 flex-shrink-0 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!d.isResigning} onChange={e => updateExistingDir(d.id, "isResigning", e.target.checked)}
-                    className="w-4 h-4 rounded accent-red-500 cursor-pointer" />
-                  <span className="text-xs font-bold text-red-600">Resigning</span>
-                </label>
+                {(f.meetingAction === "resign" || f.meetingAction === "both") && (
+                  <label className="flex items-center gap-1.5 flex-shrink-0 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!d.isResigning} onChange={e => updateExistingDir(d.id, "isResigning", e.target.checked)}
+                      className="w-4 h-4 rounded accent-red-500 cursor-pointer" />
+                    <span className="text-xs font-bold text-red-600">Resigning</span>
+                  </label>
+                )}
                 <button onClick={() => removeExistingDir(d.id)} className="text-slate-400 hover:text-red-500 text-lg flex-shrink-0">✕</button>
               </div>
               {d.isResigning && (
@@ -1547,6 +1602,7 @@ export default function DirectorAppointmentPage() {
             <SidebarContent
               step={step} collapsed={false}
               companyName={f.companyName} cin={f.cin}
+              meetingAction={f.meetingAction}
               onStepClick={(id) => { setStep(id); setMobileSidebarOpen(false); }}
               onToggle={() => setMobileSidebarOpen(false)}
             />
@@ -1563,6 +1619,7 @@ export default function DirectorAppointmentPage() {
           <SidebarContent
             step={step} collapsed={sidebarCollapsed}
             companyName={f.companyName} cin={f.cin}
+            meetingAction={f.meetingAction}
             onStepClick={setStep}
             onToggle={() => setSidebarCollapsed(c => !c)}
           />
@@ -1591,19 +1648,19 @@ export default function DirectorAppointmentPage() {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {step > 1 && (
-                  <button onClick={() => setStep(step - 1)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
+                  <button onClick={goBack} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
                     ← Back
                   </button>
                 )}
                 {step < 6 && (
                   <button
-                    onClick={() => canProceed && setStep(step + 1)}
+                    onClick={goNext}
                     className={`flex items-center gap-1 px-4 py-1.5 text-xs font-bold rounded-lg text-white transition-all ${canProceed ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-300 cursor-not-allowed"}`}
                   >
-                    Next →
+                    {step === 4 && f.meetingAction === "resign" ? "Get Documents →" : "Next →"}
                   </button>
                 )}
-                {step === 5 && canProceed && (
+                {(step === 5 || (step === 4 && f.meetingAction === "resign")) && canProceed && (
                   <button
                     onClick={() => setStep(6)}
                     className="flex items-center gap-1 px-4 py-1.5 text-xs font-bold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 transition-all"
