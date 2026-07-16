@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 
 const ACTIONS = [
   {
@@ -246,7 +245,6 @@ export default function CorporateActionKitPage() {
           </div>
         </section>
       </main>
-      <Footer />
     </>
   );
 }
