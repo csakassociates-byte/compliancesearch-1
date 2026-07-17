@@ -46,14 +46,14 @@ const ACTIONS = [
     icon: "🔍",
     title: "Auditor Appointment",
     subtitle: "Section 139 · ADT-1",
-    desc: "Appoint statutory auditor at AGM — consent letter, AGM minutes, board resolution, ADT-1 attachment.",
-    docs: ["AGM Notice", "AGM Minutes", "Resolution", "Consent Letter", "ADT-1 Attachment"],
-    rocForm: "ADT-1 (within 15 days of AGM)",
-    href: "#",
-    active: false,
-    badge: "Coming Soon",
-    color: { bg: "#f8fafc", border: "#e2e8f0", title: "#64748b", badge: "#64748b", badgeBg: "#f1f5f9" },
-    icon_bg: "linear-gradient(135deg,#64748b,#475569)",
+    desc: "First auditor, AGM appointment, or casual vacancy — board notice, resolution CTC, auditor consent & certificate, letter of appointment, ADT-1 guide.",
+    docs: ["Board/AGM Notice", "Resolution CTC", "Auditor Consent", "Appointment Letter", "ADT-1 Guide"],
+    rocForm: "ADT-1 (within 15 days)",
+    href: "/tools/corporate-action-kit/auditor-appointment",
+    active: true,
+    badge: "Live",
+    color: { bg: "#f0fdfa", border: "#99f6e4", title: "#0f766e", badge: "#0f766e", badgeBg: "#ccfbf1" },
+    icon_bg: "linear-gradient(135deg,#0d9488,#0f766e)",
   },
   {
     icon: "🏢",
@@ -132,7 +132,7 @@ export default function CorporateActionKitPage() {
           <div className="max-w-2xl mx-auto">
             <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-xs font-bold text-white/80 mb-5 tracking-wider uppercase">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Director Appointment Live · More Actions Coming Soon
+              Director &amp; Auditor Appointment Live · More Actions Coming Soon
             </div>
             <h1 className="text-4xl font-black text-white mb-4 leading-tight">
               Corporate<span className="text-amber-400"> Action Kit</span>
