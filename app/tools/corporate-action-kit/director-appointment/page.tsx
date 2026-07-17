@@ -39,6 +39,7 @@ interface F {
   meetingAction: MeetingAction;
   ndDesignation: DesignationType;
   directorCount: number;
+  resignCount: number;
   newDirectors: NewDirectorEntry[];
   meetingDate: string; meetingTime: string; meetingSerial: string; venue: string;
   chairmanName: string; chairmanDin: string;
@@ -87,6 +88,7 @@ const DEFAULT: F = {
   meetingAction: "appoint",
   ndDesignation: "additional_director",
   directorCount: 1,
+  resignCount: 1,
   newDirectors: [makeNd()],
   meetingDate: "", meetingTime: "", meetingSerial: "", venue: "",
   chairmanName: "", chairmanDin: "",
@@ -1229,6 +1231,22 @@ export default function DirectorAppointmentPage() {
     if (activeNdTab >= count) setActiveNdTab(0);
   }
 
+  function setResignCount(count: number) {
+    setF(p => {
+      const dirs = [...p.directors];
+      // Ensure we have at least 'count' director rows
+      while (dirs.length < count) {
+        dirs.push({ id: `dir-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: "", din: "", designation: "Director", isPresent: true, isResigning: true });
+      }
+      // Mark first 'count' as resigning, rest as not resigning
+      return {
+        ...p,
+        resignCount: count,
+        directors: dirs.map((d, i) => ({ ...d, isResigning: i < count })),
+      };
+    });
+  }
+
   function updateNd(idx: number, key: keyof NewDirectorEntry, val: string) {
     setF(p => {
       const updated = [...p.newDirectors];
@@ -1554,18 +1572,36 @@ export default function DirectorAppointmentPage() {
         </>
       )}
 
-      {/* Resign info card */}
+      {/* Resign count selector + info card */}
       {(f.meetingAction === "resign" || f.meetingAction === "both") && (
-        <SectionCard title="Resignation — What you'll need">
-          <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-800">
-            <strong>Next steps:</strong> In Step 4 (Attendance), mark each resigning director with the <span className="font-bold">"Resigning" checkbox</span> and fill their resignation date &amp; reason. Documents auto-generate in Step 6.
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-center">
-            <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">✉️</div><div className="font-bold text-slate-700">Resignation Letter</div><div className="text-slate-400">Per director</div></div>
-            <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">🚪</div><div className="font-bold text-slate-700">Resignation CTC</div><div className="text-slate-400">Board resolution</div></div>
-            <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">📋</div><div className="font-bold text-slate-700">ROC Guide</div><div className="text-slate-400">DIR-11 + DIR-12</div></div>
-          </div>
-        </SectionCard>
+        <>
+          <SectionCard title="How many directors are resigning?">
+            <div className="flex gap-2 flex-wrap items-end">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} type="button" onClick={() => setResignCount(n)}
+                  className={`py-3 px-4 rounded-xl border-2 text-center font-bold transition-all ${f.resignCount === n ? "border-red-500 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                  <div className="text-xl font-black">{n}</div>
+                  <div className="text-xs mt-0.5 font-medium">{n === 1 ? "Director" : "Directors"}</div>
+                </button>
+              ))}
+              <div className="flex flex-col items-center gap-1 ml-1">
+                <span className="text-xs text-slate-400 font-medium">or type</span>
+                <input type="number" min="1" max="10" value={f.resignCount}
+                  onChange={e => { const v = Math.min(10, Math.max(1, parseInt(e.target.value) || 1)); setResignCount(v); }}
+                  className="w-16 border-2 border-slate-200 rounded-xl px-2 py-2 text-center font-black text-lg text-slate-700 focus:border-red-500 focus:outline-none"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mt-3">Director details (name, DIN, resignation date, reason) will be filled in Step 4.</p>
+          </SectionCard>
+          <SectionCard title="Resignation — Documents Generated">
+            <div className="grid grid-cols-3 gap-2 text-xs text-center">
+              <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">✉️</div><div className="font-bold text-slate-700">Resignation Letter</div><div className="text-slate-400">Per director</div></div>
+              <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">🚪</div><div className="font-bold text-slate-700">Resignation CTC</div><div className="text-slate-400">Board resolution</div></div>
+              <div className="bg-white border border-slate-200 rounded-lg p-2"><div className="text-lg mb-1">📋</div><div className="font-bold text-slate-700">ROC Guide</div><div className="text-slate-400">DIR-11 + DIR-12</div></div>
+            </div>
+          </SectionCard>
+        </>
       )}
     </>
   );
