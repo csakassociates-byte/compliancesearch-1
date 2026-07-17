@@ -627,6 +627,199 @@ function genROCGuide(f: F, nds: NewDirectorEntry[]): string {
   return wrap(body, "ROC Filing Guide — Director Appointment");
 }
 
+/* ── 8a. Board Notice — Combined (Both scenario) ─────────────── */
+function genBoardNoticeBoth(f: F, nds: NewDirectorEntry[], resigningDirs: ExistingDirector[]): string {
+  const { noticeDate } = calcDates(f.meetingDate);
+  const presentDirs = f.directors.filter(d => d.isPresent);
+  const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
+  const desg = DESIGNATION_LABEL[f.ndDesignation];
+  const ndNames = nds.map(nd => `<strong>${nd.name || "___________"}</strong>`).join(" and ");
+  const resignNames = resigningDirs.map(d =>
+    `<strong>${d.name || "___________"}</strong> (DIN: ${d.din || "________"}), ${d.designation || "Director"}`
+  ).join("; ");
+
+  function dirsSignTable(dirs: ExistingDirector[]): string {
+    const d = dirs.slice(0, 2);
+    if (!d.length) return `<table style="width:100%;"><tr><td><br><strong>[Director]</strong><br>Director</td></tr></table>`;
+    const cells = d.map(x => `<td style="width:50%;vertical-align:top;padding-right:12px;"><br><strong>${x.name}</strong><br>Director<br>DIN: ${x.din}</td>`).join("");
+    return `<table style="width:100%;"><tr>${cells}</tr></table>`;
+  }
+
+  const agendaItems = `
+    <li>Taking note of resignation of ${resignNames} from the Board of Directors of the Company pursuant to Section 168 of the Companies Act, 2013.</li>
+    <li>Appointment of ${ndNames} as <strong>${desg}</strong> of the Company.<br>To consider and approve the appointment pursuant to ${SECTION_REF[f.ndDesignation]}.</li>
+    <li>To authorize a Director to file Form DIR-12 with the Registrar of Companies within 30 days covering both cessation and appointment.${isMdWtd ? " To also authorize filing of Form MR-1 within 60 days." : ""}</li>
+    <li>Any other business with the permission of the Chair.</li>`;
+
+  const body = `
+    <div style="text-align:center;font-weight:bold;font-size:14pt;margin-bottom:4px;">NOTICE OF BOARD MEETING</div>
+    <div style="text-align:center;font-size:11pt;margin-bottom:18px;">(Section 173 of Companies Act, 2013)</div>
+    ${coHeader(f)}
+    <p style="font-weight:bold;font-size:13pt;margin:18px 0 8px;">NOTICE</p>
+    <p>Notice is hereby given that the <strong>${f.meetingSerial || "___"}</strong> Meeting of the Board of Directors of <strong>${f.companyName || "[Company Name]"}</strong> will be held on <strong>${fmtDay(f.meetingDate)}, ${ordinalDate(f.meetingDate)}</strong> at <strong>${fmtTime(f.meetingTime)}</strong> at ${f.venue || "the Registered Office of the Company"} to transact the following business:</p>
+    <p style="font-weight:bold;margin-top:18px;text-decoration:underline;">AGENDA</p>
+    <ol>${agendaItems}</ol>
+    <div class="sign-block" style="margin-top:40px;">
+      <p>By Order of the Board<br>For <strong>${f.companyName || "[Company Name]"}</strong></p>
+      ${dirsSignTable(presentDirs)}
+      <br>
+      <p>Date: ${fmtDate(noticeDate)}<br>Place: ${f.venue || f.regAddress || "_______________"}</p>
+    </div>`;
+  return wrap(body, "Board Notice — Director Change");
+}
+
+/* ── 8b. ROC Guide — Resign Only ──────────────────────────────── */
+function genROCGuideResign(f: F, resigningDirs: ExistingDirector[]): string {
+  const rocDeadline = addDays(f.meetingDate, 30);
+  const isListed = f.entityType === "public_ltd";
+
+  const dirList = resigningDirs.map((dir, i) =>
+    `<li>${dir.name || `Director ${i + 1}`} — DIN: ${dir.din || "________"} — Effective: ${fmtDate(dir.resignDate || f.meetingDate)}</li>`
+  ).join("");
+
+  const body = `
+    <div class="doc-title" style="text-decoration:none;font-size:15pt;">📋 ROC Filing Guide</div>
+    <p style="text-align:center;font-size:11pt;color:#555;">Director Resignation — ${f.companyName || "[Company Name]"}</p>
+    <br>
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #999;">
+      <tr style="background:#f0f0f0;"><td style="padding:10px;font-weight:bold;border:1px solid #999;font-size:13pt;" colspan="2">Form DIR-12 — Cessation of Director(s)</td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;width:200px;">Resigning Director(s):</td><td style="padding:8px 10px;border:1px solid #999;"><ul style="margin:0;padding-left:18px;">${dirList}</ul></td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DIR-12 Deadline:</td><td style="padding:8px 10px;border:1px solid #999;"><strong>30 days from receipt of resignation letter → approx. ${fmtDate(rocDeadline)}</strong> ⚠️ Clock starts from date of RECEIPT of resignation letter OR effective date — whichever is EARLIER.</td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DSC Required:</td><td style="padding:8px 10px;border:1px solid #999;">DSC of any existing Director or Company Secretary</td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">Filing Portal:</td><td style="padding:8px 10px;border:1px solid #999;">MCA V3 — www.mca.gov.in → e-Filing → Company Forms → DIR-12</td></tr>
+    </table>
+    <br>
+    <p><strong>Attachments required for DIR-12:</strong></p>
+    <ol>
+      <li>✅ <strong>Resignation Letter(s)</strong> — self-attested copy, generated above</li>
+      <li>✅ <strong>Board Resolution CTC</strong> — taking note and accepting resignation, generated above</li>
+    </ol>
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;margin:16px 0;">
+      <tr><td style="padding:12px;">
+        <strong>⚠️ Cessation Date — Critical</strong><br><br>
+        In DIR-12, enter the <strong>effective date of resignation</strong> (as stated in the resignation letter) as the cessation date — NOT the date of the board meeting. The company cannot change or override the date specified by the director in their resignation letter (Section 168(1), Companies Act 2013).
+      </td></tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid ${isListed ? "#dc2626" : "#4ade80"};background:${isListed ? "#fef2f2" : "#f0fdf4"};margin-bottom:16px;">
+      <tr><td style="padding:12px;">
+        <strong>${isListed ? "⚠️" : "ℹ️"} Form DIR-11 — Filed by Resigning Director</strong><br><br>
+        ${isListed
+          ? `<strong>This is a public limited company.</strong> DIR-11 filing by the resigning director is <strong>MANDATORY</strong> within 30 days of resignation — deadline approx. ${fmtDate(rocDeadline)}.`
+          : `For non-listed / private companies: DIR-11 filing by the resigning director is <strong>OPTIONAL</strong> as per Companies (Appointment and Qualification of Directors) Fifth Amendment Rules, 2019 (GSR 640(E)).<br><br>However, it is <strong>strongly advisable</strong> — filing DIR-11 ensures MCA records are updated even if the company delays filing DIR-12, protecting the director from being shown as director in public records.`
+        }
+      </td></tr>
+    </table>
+    <p><strong>Step-by-Step DIR-12 Filing (Cessation):</strong></p>
+    <ol>
+      <li>Log in to MCA V3 portal at www.mca.gov.in with Company credentials.</li>
+      <li>Navigate to: <strong>e-Filing → Company Forms Submission → DIR-12</strong></li>
+      <li>Enter Company CIN: <strong>${f.cin || "_______________"}</strong></li>
+      <li>Select event type: <strong>Cessation</strong> for each resigning director.</li>
+      <li>Enter cessation date: <strong>the effective date from the resignation letter</strong> (not the board meeting date).</li>
+      <li>Upload all required attachments in PDF format.</li>
+      <li>Affix DSC of authorised Director/CS and submit. Note the SRN for records.</li>
+    </ol>
+    <br>
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #ccc;background:#f9f9f9;">
+      <tr><td style="padding:12px;"><strong>📌 Post-Resignation Checklist:</strong><br><br>
+      <ul style="margin:8px 0;padding-left:20px;">
+        <li>Update <strong>Register of Directors</strong> — mark cessation date for resigned director(s).</li>
+        <li>Issue formal acknowledgement letter to the resigned director.</li>
+        <li>If board falls below minimum director requirement, appoint replacement immediately.</li>
+        <li>Update company website / official records if applicable.</li>
+      </ul>
+      </td></tr>
+    </table>`;
+  return wrap(body, "ROC Filing Guide — Director Resignation");
+}
+
+/* ── 8c. ROC Guide — Both (Combined) ─────────────────────────── */
+function genROCGuideBoth(f: F, nds: NewDirectorEntry[], resigningDirs: ExistingDirector[]): string {
+  const { rocDeadline, mr1Deadline } = calcDates(f.meetingDate);
+  const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
+  const isListed = f.entityType === "public_ltd";
+
+  const appointList = nds.map((nd, i) =>
+    `<li>${nd.name || `Director ${i + 1}`} — DIN: ${nd.din || "________"} — Appointed: ${fmtDate(nd.effectiveDate || f.meetingDate)}</li>`
+  ).join("");
+  const resignList = resigningDirs.map((dir, i) =>
+    `<li>${dir.name || `Director ${i + 1}`} — DIN: ${dir.din || "________"} — Ceased: ${fmtDate(dir.resignDate || f.meetingDate)}</li>`
+  ).join("");
+
+  const body = `
+    <div class="doc-title" style="text-decoration:none;font-size:15pt;">📋 ROC Filing Guide</div>
+    <p style="text-align:center;font-size:11pt;color:#555;">Director Resignation + Appointment — ${f.companyName || "[Company Name]"}</p>
+    <br>
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #2563eb;background:#eff6ff;margin-bottom:16px;">
+      <tr><td style="padding:12px;">
+        <strong>ℹ️ Single DIR-12 Covers Both Events</strong><br><br>
+        Both the <strong>cessation</strong> of the resigning director(s) AND the <strong>appointment</strong> of new director(s) are reported in a <strong>single DIR-12 filing</strong>. This is correct practice under Rule 18 of Companies (Appointment and Qualification of Directors) Rules, 2014.
+      </td></tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #999;">
+      <tr style="background:#f0f0f0;"><td style="padding:10px;font-weight:bold;border:1px solid #999;font-size:13pt;" colspan="2">Form DIR-12 — Cessation + Appointment</td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;width:200px;">Resigning (Cessation):</td><td style="padding:8px 10px;border:1px solid #999;"><ul style="margin:0;padding-left:18px;">${resignList}</ul></td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">New Appointment:</td><td style="padding:8px 10px;border:1px solid #999;"><ul style="margin:0;padding-left:18px;">${appointList}</ul></td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DIR-12 Deadline:</td><td style="padding:8px 10px;border:1px solid #999;"><strong>30 days → ${fmtDate(rocDeadline)}</strong> ⚠️ Late filing incurs additional fees per Section 403</td></tr>
+      ${isMdWtd ? `<tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;color:#c00;">MR-1 Deadline:</td><td style="padding:8px 10px;border:1px solid #999;color:#c00;"><strong>60 days → ${fmtDate(mr1Deadline)}</strong> — Form MR-1 mandatory for MD/WTD.</td></tr>` : ""}
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DSC Required:</td><td style="padding:8px 10px;border:1px solid #999;">DSC of any existing Director or Company Secretary</td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">Filing Portal:</td><td style="padding:8px 10px;border:1px solid #999;">MCA V3 — www.mca.gov.in → e-Filing → Company Forms → DIR-12</td></tr>
+    </table>
+    <br>
+    <p><strong>Attachments required for DIR-12:</strong></p>
+    <ol>
+      <li>✅ <strong>Resignation Letter(s)</strong> — generated above</li>
+      <li>✅ <strong>Resignation Board CTC</strong> — taking note of resignation, generated above</li>
+      <li>✅ <strong>Appointment Board CTC</strong> — appointment of new director(s), generated above</li>
+      <li>✅ <strong>DIR-2</strong> — Consent from each new director, generated above</li>
+      <li>✅ <strong>DIR-8</strong> — Declaration from each new director, generated above</li>
+      <li>⬜ <strong>DIN Proof</strong> — DIN allotment letters for all incoming directors</li>
+    </ol>
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;margin:16px 0;">
+      <tr><td style="padding:12px;">
+        <strong>⚠️ Two Separate Resolutions Passed in One Meeting</strong><br><br>
+        The board meeting had two distinct agenda items and two separate resolutions:<br>
+        <strong>Resolution 1:</strong> Taking note of resignation — cessation date = effective date from resignation letter<br>
+        <strong>Resolution 2:</strong> Appointment of new Director(s) — appointment date = board meeting date<br><br>
+        Both resolutions are covered in their respective CTCs generated above. DIR-12 reports both events in one filing.
+      </td></tr>
+    </table>
+    ${!isListed ? `<table style="width:100%;border-collapse:collapse;border:1.5px solid #4ade80;background:#f0fdf4;margin-bottom:16px;">
+      <tr><td style="padding:12px;">
+        <strong>ℹ️ DIR-11 — Filed by Resigning Director (Optional for Non-Listed)</strong><br><br>
+        DIR-11 is <strong>optional</strong> for non-listed companies (2019 amendment). Advise director to file for their own protection — ensures MCA records are updated.
+      </td></tr>
+    </table>` : `<table style="width:100%;border-collapse:collapse;border:1.5px solid #dc2626;background:#fef2f2;margin-bottom:16px;">
+      <tr><td style="padding:12px;">
+        <strong>⚠️ DIR-11 — Filed by Resigning Director (MANDATORY for Listed Companies)</strong><br><br>
+        This is a public limited company. The resigning director must file DIR-11 within 30 days of resignation — deadline approx. ${fmtDate(rocDeadline)}.
+      </td></tr>
+    </table>`}
+    <p><strong>Step-by-Step DIR-12 Filing (Both Events):</strong></p>
+    <ol>
+      <li>Log in to MCA V3 portal at www.mca.gov.in with Company credentials.</li>
+      <li>Navigate to: <strong>e-Filing → Company Forms Submission → DIR-12</strong></li>
+      <li>Enter Company CIN: <strong>${f.cin || "_______________"}</strong></li>
+      <li>Add <strong>Cessation entries</strong>: for each resigning director — DIN, cessation date (from resignation letter), reason.</li>
+      <li>Add <strong>Appointment entries</strong>: for each new director — DIN, date of appointment, designation.</li>
+      <li>Upload all attachments listed above in PDF format.</li>
+      <li>Affix DSC and submit. Note the SRN for records.</li>
+    </ol>
+    <br>
+    <table style="width:100%;border-collapse:collapse;border:1.5px solid #ccc;background:#f9f9f9;">
+      <tr><td style="padding:12px;"><strong>📌 Post-Meeting Checklist:</strong><br><br>
+      <ul style="margin:8px 0;padding-left:20px;">
+        <li>Update <strong>Register of Directors</strong> — cessation of resigned + addition of new director(s).</li>
+        <li>Send formal appointment letter to new director with copy of Resolution.</li>
+        <li>Issue formal acknowledgement to resigned director.</li>
+        ${isMdWtd ? `<li>File Form MR-1 within 60 days (deadline: ${fmtDate(mr1Deadline)}).</li>` : ""}
+        ${isListed ? `<li>Intimate stock exchange within 24 hours via LODR Regulation 30.</li>` : ""}
+      </ul>
+      </td></tr>
+    </table>`;
+  return wrap(body, "ROC Filing Guide — Director Change");
+}
+
 /* ── 8. MBP-1 Notice of Interest ─────────────────────────────── */
 function genMBP1(f: F, nd: NewDirectorEntry): string {
   const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
@@ -1127,13 +1320,73 @@ export default function DirectorAppointmentPage() {
     const nds = f.newDirectors.slice(0, f.directorCount);
     const gm = f.ndDesignation === "director_gm";
     const resigningDirs = f.directors.filter(d => d.isResigning);
+
+    if (f.meetingAction === "resign") {
+      return [
+        ...resigningDirs.map((dir, i) => ({
+          key: `resign_letter_${i}`,
+          label: resigningDirs.length > 1 ? `Resign Letter ${i + 1}` : "Resignation Letter",
+          emoji: "✉️",
+          gen: () => genResignationLetter(f, dir),
+        })),
+        ...(resigningDirs.length > 0 ? [{
+          key: "resign_ctc",
+          label: "Resignation CTC",
+          emoji: "🚪",
+          gen: () => genResignBoardCTC(f, resigningDirs),
+        }] : []),
+        { key: "roc_resign", label: "ROC Guide", emoji: "📋", gen: () => genROCGuideResign(f, resigningDirs) },
+      ];
+    }
+
+    if (f.meetingAction === "appoint") {
+      return [
+        gm
+          ? { key: "gm_notice",     label: "EGM Notice",  emoji: "📬", gen: () => genGMNotice(f, nds) }
+          : { key: "notice",        label: "Board Notice", emoji: "📬", gen: () => genBoardNotice(f, nds) },
+        gm
+          ? { key: "gm_resolution", label: "EGM CTC",     emoji: "⚖️", gen: () => genGMResolution(f, nds) }
+          : { key: "resolution",    label: "Board CTC",    emoji: "⚖️", gen: () => genBoardResolution(f, nds) },
+        ...nds.map((nd, i) => ({
+          key: `dir2_${i}`,
+          label: nds.length > 1 ? `DIR-2 Dir ${i + 1}` : "DIR-2 Consent",
+          emoji: "✅",
+          gen: () => genDIR2(f, nd),
+        })),
+        ...nds.map((nd, i) => ({
+          key: `dir8_${i}`,
+          label: nds.length > 1 ? `DIR-8 Dir ${i + 1}` : "DIR-8 Declaration",
+          emoji: "📜",
+          gen: () => genDIR8(f, nd),
+        })),
+        ...nds.map((nd, i) => ({
+          key: `mbp1_${i}`,
+          label: nds.length > 1 ? `MBP-1 Dir ${i + 1}` : "MBP-1 Interest",
+          emoji: "🔔",
+          gen: () => genMBP1(f, nd),
+        })),
+        { key: "roc", label: "ROC Guide", emoji: "📋", gen: () => genROCGuide(f, nds) },
+      ];
+    }
+
+    // "both" — combined resignation + appointment in same meeting
     return [
+      { key: "notice_both", label: "Board Notice", emoji: "📬", gen: () => genBoardNoticeBoth(f, nds, resigningDirs) },
+      ...resigningDirs.map((dir, i) => ({
+        key: `resign_letter_${i}`,
+        label: resigningDirs.length > 1 ? `Resign Letter ${i + 1}` : "Resignation Letter",
+        emoji: "✉️",
+        gen: () => genResignationLetter(f, dir),
+      })),
+      ...(resigningDirs.length > 0 ? [{
+        key: "resign_ctc",
+        label: "Resignation CTC",
+        emoji: "🚪",
+        gen: () => genResignBoardCTC(f, resigningDirs),
+      }] : []),
       gm
-        ? { key: "gm_notice",     label: "EGM Notice",       emoji: "📬", gen: () => genGMNotice(f, nds) }
-        : { key: "notice",        label: "Board Notice",      emoji: "📬", gen: () => genBoardNotice(f, nds) },
-      gm
-        ? { key: "gm_resolution", label: "EGM CTC",          emoji: "⚖️",  gen: () => genGMResolution(f, nds) }
-        : { key: "resolution",    label: "Board CTC",         emoji: "⚖️",  gen: () => genBoardResolution(f, nds) },
+        ? { key: "gm_resolution", label: "EGM CTC",        emoji: "⚖️", gen: () => genGMResolution(f, nds) }
+        : { key: "resolution",    label: "Appointment CTC", emoji: "⚖️", gen: () => genBoardResolution(f, nds) },
       ...nds.map((nd, i) => ({
         key: `dir2_${i}`,
         label: nds.length > 1 ? `DIR-2 Dir ${i + 1}` : "DIR-2 Consent",
@@ -1152,20 +1405,7 @@ export default function DirectorAppointmentPage() {
         emoji: "🔔",
         gen: () => genMBP1(f, nd),
       })),
-      { key: "roc", label: "ROC Guide", emoji: "📋", gen: () => genROCGuide(f, nds) },
-      // Resignation documents — auto-added when any director is marked Resigning in Step 4
-      ...resigningDirs.map((dir, i) => ({
-        key: `resign_letter_${i}`,
-        label: resigningDirs.length > 1 ? `Resign Letter ${i + 1}` : "Resignation Letter",
-        emoji: "✉️",
-        gen: () => genResignationLetter(f, dir),
-      })),
-      ...(resigningDirs.length > 0 ? [{
-        key: "resign_ctc",
-        label: "Resignation CTC",
-        emoji: "🚪",
-        gen: () => genResignBoardCTC(f, resigningDirs),
-      }] : []),
+      { key: "roc_both", label: "ROC Guide", emoji: "📋", gen: () => genROCGuideBoth(f, nds, resigningDirs) },
     ];
   }, [f]);
 
@@ -1335,29 +1575,44 @@ export default function DirectorAppointmentPage() {
     <>
       {f.meetingDate && (
         <SectionCard title="Auto Date Planner">
-          <div className={`grid gap-3 ${isMdWtd ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1 sm:grid-cols-3"}`}>
-            {[
-              { label: isGM ? "EGM Notice (Sec. 101)" : "Board Notice (SS-1)", date: dates.noticeDate, note: isGM ? "21 clear days before EGM" : "7 days before meeting", color: "bg-white border-slate-200 text-slate-700" },
-              { label: isGM ? "EGM Date" : "Board Meeting", date: f.meetingDate, note: "Director appointed on this date", color: "bg-blue-600 border-blue-600 text-white" },
-              { label: "DIR-12 Deadline ⚠️", date: dates.rocDeadline, note: "30 days from appointment", color: "bg-red-50 border-red-300 text-red-700" },
-              ...(isMdWtd ? [{ label: "MR-1 Deadline ⚠️", date: dates.mr1Deadline, note: "60 days — MD/WTD mandatory", color: "bg-orange-50 border-orange-300 text-orange-700" }] : []),
-            ].map(item => (
-              <div key={item.label} className={`rounded-xl border-2 p-3 text-center ${item.color}`}>
-                <p className="text-xs font-bold mb-1 opacity-80">{item.label}</p>
-                <p className="font-extrabold text-sm">{fmtDate(item.date)}</p>
-                <p className="text-xs opacity-70 mt-1">{item.note}</p>
-              </div>
-            ))}
-          </div>
+          {f.meetingAction === "resign" ? (
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+              {[
+                { label: "Board Meeting Date", date: f.meetingDate, note: "Resignation noted at this meeting", color: "bg-blue-600 border-blue-600 text-white" },
+                { label: "DIR-12 Deadline ⚠️", date: dates.rocDeadline, note: "30 days from resignation receipt", color: "bg-red-50 border-red-300 text-red-700" },
+              ].map(item => (
+                <div key={item.label} className={`rounded-xl border-2 p-3 text-center ${item.color}`}>
+                  <p className="text-xs font-bold mb-1 opacity-80">{item.label}</p>
+                  <p className="font-extrabold text-sm">{fmtDate(item.date)}</p>
+                  <p className="text-xs opacity-70 mt-1">{item.note}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={`grid gap-3 ${isMdWtd ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1 sm:grid-cols-3"}`}>
+              {[
+                { label: isGM ? "EGM Notice (Sec. 101)" : "Board Notice (SS-1)", date: dates.noticeDate, note: isGM ? "21 clear days before EGM" : "7 days before meeting", color: "bg-white border-slate-200 text-slate-700" },
+                { label: isGM ? "EGM Date" : "Board Meeting", date: f.meetingDate, note: "Director appointed on this date", color: "bg-blue-600 border-blue-600 text-white" },
+                { label: "DIR-12 Deadline ⚠️", date: dates.rocDeadline, note: "30 days from appointment", color: "bg-red-50 border-red-300 text-red-700" },
+                ...(isMdWtd ? [{ label: "MR-1 Deadline ⚠️", date: dates.mr1Deadline, note: "60 days — MD/WTD mandatory", color: "bg-orange-50 border-orange-300 text-orange-700" }] : []),
+              ].map(item => (
+                <div key={item.label} className={`rounded-xl border-2 p-3 text-center ${item.color}`}>
+                  <p className="text-xs font-bold mb-1 opacity-80">{item.label}</p>
+                  <p className="font-extrabold text-sm">{fmtDate(item.date)}</p>
+                  <p className="text-xs opacity-70 mt-1">{item.note}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </SectionCard>
       )}
       <SectionCard title={isGM ? "General Meeting Details" : "Board Meeting Details"}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label={isGM ? "EGM / General Meeting Date" : "Board Meeting Date"} req hint={isGM ? "EGM Notice will be 21 days before; DIR-12 deadline 30 days after" : "Notice will be 7 days before; DIR-12 deadline 30 days after"}>
+          <Field label="Board Meeting Date" req hint={f.meetingAction === "resign" ? "Date of board meeting where resignation is noted; DIR-12 deadline within 30 days" : isGM ? "EGM Notice will be 21 days before; DIR-12 deadline 30 days after" : "Notice will be 7 days before; DIR-12 deadline 30 days after"}>
             <input type="date" value={f.meetingDate} onChange={up("meetingDate")} className={INPUT} />
           </Field>
           <Field label="Meeting Time"><input type="time" value={f.meetingTime} onChange={up("meetingTime")} className={INPUT} /></Field>
-          <Field label={isGM ? "EGM Serial / Reference No." : "Board Meeting Serial No."} req hint="e.g. 3/2025-26 for 3rd Board meeting, or EGM/2025-26 for EGM">
+          <Field label={isGM && f.meetingAction !== "resign" ? "EGM Serial / Reference No." : "Board Meeting Serial No."} req hint="e.g. 3/2025-26 for 3rd Board meeting, or EGM/2025-26 for EGM">
             <input value={f.meetingSerial} onChange={up("meetingSerial")} className={INPUT} placeholder={isGM ? "e.g. EGM/2025-26" : "e.g. 3/2025-26"} />
           </Field>
           <Field label="Venue" hint="Defaults to registered office — edit if meeting is elsewhere">
@@ -1402,7 +1657,7 @@ export default function DirectorAppointmentPage() {
         </div>
         {f.meetingDate && (
           <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 text-xs text-sky-700 mt-4">
-            <strong>💡 Tip:</strong> If your company already has a {isGM ? "General" : "Board"} Meeting scheduled in <strong>{new Date(f.meetingDate + "T00:00:00").toLocaleString("en-IN", { month: "long", year: "numeric" })}</strong>, use that same date and add this appointment as an agenda item.
+            <strong>💡 Tip:</strong> If your company already has a {isGM && f.meetingAction !== "resign" ? "General" : "Board"} Meeting scheduled in <strong>{new Date(f.meetingDate + "T00:00:00").toLocaleString("en-IN", { month: "long", year: "numeric" })}</strong>, use that same date and add this {f.meetingAction === "resign" ? "resignation noting" : "appointment"} as an agenda item.
           </div>
         )}
       </SectionCard>
@@ -1578,10 +1833,10 @@ export default function DirectorAppointmentPage() {
           ))}
         </div>
         <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-          <button onClick={() => setStep(5)} className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50">← Edit Details</button>
+          <button onClick={() => setStep(f.meetingAction === "resign" ? 4 : 5)} className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50">← Edit Details</button>
           <button onClick={() => { setF({ ...DEFAULT, newDirectors: [makeNd()] }); setStep(1); try { localStorage.removeItem(DRAFT_KEY); } catch {} }}
             className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-500 hover:bg-slate-50">
-            🔄 New Appointment
+            🔄 {f.meetingAction === "resign" ? "New Action" : "New Appointment"}
           </button>
         </div>
       </SectionCard>
