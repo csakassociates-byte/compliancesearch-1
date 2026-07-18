@@ -49,6 +49,7 @@ interface SavedAuditor {
   fyRange: string | null;
   remuneration: string | null;
   partnerDesignation: string | null;
+  cin: string | null;
 }
 
 interface F {
@@ -868,11 +869,19 @@ export default function AuditorAppointmentPage() {
 
   // Fetch saved auditors for this CIN whenever CIN changes (logged-in only)
   const fetchSavedAuditors = useCallback(async (cin: string) => {
-    if (!session || !cin) { setSavedAuditors([]); return; }
+    if (!session) { setSavedAuditors([]); return; }
     try {
-      const res = await fetch(`/api/auditors?cin=${encodeURIComponent(cin)}`);
+      // Fetch ALL auditors for this user (not just company-specific)
+      // so the same CA firm saved for one company appears as suggestion for others too
+      const res = await fetch(`/api/auditors`);
       const data = await res.json() as { auditors?: SavedAuditor[] };
-      setSavedAuditors(data.auditors ?? []);
+      const all = data.auditors ?? [];
+      // Sort: this-company's auditors first, then the rest
+      const sorted = [
+        ...all.filter(a => a.cin === cin),
+        ...all.filter(a => a.cin !== cin),
+      ];
+      setSavedAuditors(sorted);
       setSelectedSavedAuditorId("");
     } catch {
       setSavedAuditors([]);
@@ -1402,7 +1411,7 @@ export default function AuditorAppointmentPage() {
                 {savedAuditors.length > 0 && (
                   <div className="bg-teal-50 border-2 border-teal-300 rounded-2xl p-4">
                     <label className="block text-xs font-bold text-teal-800 uppercase tracking-wider mb-2">
-                      💾 Select from Saved Auditors
+                      💾 Select from Saved Auditors ({savedAuditors.length})
                     </label>
                     <select
                       value={selectedSavedAuditorId}
@@ -1415,25 +1424,32 @@ export default function AuditorAppointmentPage() {
                         }
                       }}
                       className="w-full px-3 py-2.5 rounded-xl border-2 border-teal-200 bg-white text-sm text-slate-800 font-medium focus:outline-none focus:border-teal-500 transition-colors">
-                      <option value="">— Fill new auditor details manually —</option>
-                      {savedAuditors.map(a => (
-                        <option key={a.id} value={a.id}>
-                          {a.auditorType === "individual"
-                            ? `${a.firmName} (M.No. ${a.membershipNo})${a.auditorCity ? ` · ${a.auditorCity}` : ""}`
-                            : `${a.firmName}${a.frn ? ` · FRN ${a.frn}` : ""}${a.auditorCity ? ` · ${a.auditorCity}` : ""}`}
-                          {a.fyRange ? ` · ${a.fyRange}` : ""}
-                        </option>
-                      ))}
+                      <option value="">— Select a saved auditor —</option>
+                      {savedAuditors.map(a => {
+                        const isThisCompany = a.cin === f.cin;
+                        const namepart = a.auditorType === "individual"
+                          ? `${a.firmName} (M.No. ${a.membershipNo})`
+                          : `${a.firmName}${a.frn ? ` · FRN ${a.frn}` : ""}`;
+                        const citypart = a.auditorCity ? ` · ${a.auditorCity}` : "";
+                        const marker = isThisCompany ? " ★" : "";
+                        return (
+                          <option key={a.id} value={a.id}>
+                            {marker}{namepart}{citypart}
+                          </option>
+                        );
+                      })}
                     </select>
-                    {selectedSavedAuditorId ? (
-                      <p className="text-xs text-teal-700 mt-2 font-medium">
-                        ✓ Details auto-filled below — edit if needed before generating documents.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-teal-600 mt-2">
-                        Select a saved auditor to auto-fill all details, or fill manually below to save for future use.
-                      </p>
-                    )}
+                    <div className="flex items-center justify-between mt-2">
+                      {selectedSavedAuditorId ? (
+                        <p className="text-xs text-teal-700 font-medium">
+                          ✓ All details auto-filled below — edit if needed.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-teal-600">
+                          ★ = previously used for this company
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
