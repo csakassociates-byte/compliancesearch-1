@@ -689,6 +689,7 @@ export default function AuditorAppointmentPage() {
   const { data: session } = useSession();
   const [step, setStep] = useState(1);
   const [f, setF] = useState<F>(DEFAULT);
+  const [companySearchVal, setCompanySearchVal] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [previewLabel, setPreviewLabel] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -852,13 +853,20 @@ export default function AuditorAppointmentPage() {
               <div className="space-y-5">
                 <SectionCard title="Search Company (MCA Database)">
                   <div className="mb-4">
-                    <CompanySearch onSelect={(c: CompanyData) => setF(p => ({
-                      ...p,
-                      companyName: c.company_name || "",
-                      cin: c.cin || "",
-                      regAddress: [c.registered_address, c.city, c.state].filter(Boolean).join(", "),
-                      entityType: (c.company_category || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
-                    }))} />
+                    <CompanySearch
+                      value={companySearchVal}
+                      onChange={setCompanySearchVal}
+                      onSelect={(c: CompanyData) => {
+                        setCompanySearchVal(c.company_name || "");
+                        setF(p => ({
+                          ...p,
+                          companyName: c.company_name || "",
+                          cin: c.cin || "",
+                          regAddress: [c.registered_address, c.city, c.state].filter(Boolean).join(", "),
+                          entityType: (c.company_category || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
+                        }));
+                      }}
+                    />
                   </div>
                   <p className="text-xs text-slate-400 text-center">Or fill the details manually below</p>
                 </SectionCard>
@@ -894,7 +902,7 @@ export default function AuditorAppointmentPage() {
                 </SectionCard>
 
                 <SectionCard title="">
-                  <CompanyExcelUpload onSelect={(c: CompanyData) => setF(p => ({
+                  <CompanyExcelUpload onFill={(c: CompanyData) => setF(p => ({
                     ...p,
                     companyName: c.company_name || "",
                     cin: c.cin || "",
