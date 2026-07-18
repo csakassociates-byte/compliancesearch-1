@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import CompanySearch from "@/components/CompanySearch";
@@ -29,6 +29,26 @@ interface DocEntry {
   emoji: string;
   gen: (withLH: boolean) => string;
   auditorDoc?: boolean;
+}
+
+interface SavedAuditor {
+  id: string;
+  firmName: string;
+  frn: string;
+  partnerName: string;
+  membershipNo: string;
+  place: string | null;
+  auditorType: string | null;
+  auditorAddress: string | null;
+  auditorCity: string | null;
+  auditorEmail: string | null;
+  auditorMobile: string | null;
+  appointmentType: string | null;
+  agmFrom: string | null;
+  agmTo: string | null;
+  fyRange: string | null;
+  remuneration: string | null;
+  partnerDesignation: string | null;
 }
 
 interface F {
@@ -841,6 +861,111 @@ export default function AuditorAppointmentPage() {
   const [lhPending, setLhPending] = useState<{ docKey: string; action: "print" | "word" | "all" } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  // ── Saved-auditor autofill state ──
+  const [savedAuditors, setSavedAuditors] = useState<SavedAuditor[]>([]);
+  const [savedAuditorDismissed, setSavedAuditorDismissed] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // Fetch saved auditors for this CIN whenever CIN changes (logged-in only)
+  const fetchSavedAuditors = useCallback(async (cin: string) => {
+    if (!session || !cin) { setSavedAuditors([]); return; }
+    try {
+      const res = await fetch(`/api/auditors?cin=${encodeURIComponent(cin)}`);
+      const data = await res.json() as { auditors?: SavedAuditor[] };
+      setSavedAuditors(data.auditors ?? []);
+      setSavedAuditorDismissed(false);
+    } catch {
+      setSavedAuditors([]);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    fetchSavedAuditors(f.cin);
+  }, [f.cin, fetchSavedAuditors]);
+
+  // Fetch saved company contact (email/mobile) when CIN changes
+  useEffect(() => {
+    if (!session || !f.cin) return;
+    fetch(`/api/companies/my?cin=${encodeURIComponent(f.cin)}`)
+      .then(r => r.json())
+      .then((data: { company?: { email?: string | null; mobile?: string | null } | null }) => {
+        if (data.company) {
+          setF(p => ({
+            ...p,
+            companyEmail: p.companyEmail || data.company?.email || "",
+            companyMobile: p.companyMobile || data.company?.mobile || "",
+          }));
+        }
+      })
+      .catch(() => {});
+  }, [f.cin, session]);
+
+  function applySavedAuditor(a: SavedAuditor) {
+    const isIndividual = a.auditorType === "individual";
+    setF(p => ({
+      ...p,
+      auditorType: (a.auditorType as AuditorType) || "firm",
+      firmName: isIndividual ? "" : (a.firmName || ""),
+      firmRegNo: isIndividual ? "" : (a.frn || ""),
+      partnerName: isIndividual ? "" : (a.partnerName || ""),
+      partnerMembershipNo: isIndividual ? "" : (a.membershipNo || ""),
+      partnerDesignation: a.partnerDesignation || "Partner",
+      auditorName: isIndividual ? a.firmName : "",
+      membershipNo: isIndividual ? a.membershipNo : "",
+      auditorAddress: a.auditorAddress || "",
+      auditorCity: a.auditorCity || a.place || "",
+      auditorEmail: a.auditorEmail || "",
+      auditorMobile: a.auditorMobile || "",
+      remuneration: a.remuneration || "",
+    }));
+    setSavedAuditorDismissed(true);
+  }
+
+  async function handleSaveAuditor() {
+    if (!session || !f.cin) return;
+    setSaveStatus("saving");
+    try {
+      const payload = {
+        firmName: f.auditorType === "individual" ? f.auditorName : f.firmName,
+        frn: f.firmRegNo || "",
+        partnerName: f.auditorType === "individual" ? f.auditorName : f.partnerName,
+        membershipNo: f.auditorType === "individual" ? f.membershipNo : f.partnerMembershipNo,
+        place: f.auditorCity,
+        cin: f.cin,
+        auditorType: f.auditorType,
+        auditorAddress: f.auditorAddress,
+        auditorCity: f.auditorCity,
+        auditorEmail: f.auditorEmail,
+        auditorMobile: f.auditorMobile,
+        appointmentType: f.appointmentType,
+        agmFrom: f.agmOrdinal,
+        agmTo: sixthAgm(f.agmOrdinal),
+        fyRange: fyRange(f.meetingDate),
+        remuneration: f.remuneration,
+        isActive: true,
+        partnerDesignation: f.partnerDesignation,
+      };
+      const res = await fetch("/api/auditors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("save failed");
+      // Also save company email/mobile if filled
+      if (f.companyEmail || f.companyMobile) {
+        await fetch("/api/companies/my", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cin: f.cin, email: f.companyEmail, mobile: f.companyMobile }),
+        }).catch(() => {});
+      }
+      setSaveStatus("saved");
+      await fetchSavedAuditors(f.cin);
+    } catch {
+      setSaveStatus("error");
+    }
+  }
+
   const docs: DocEntry[] = useMemo(() => {
     if (f.appointmentType === "first_auditor") {
       return [
@@ -1044,13 +1169,13 @@ export default function AuditorAppointmentPage() {
                 </button>
               )}
               {step < 5 && (
-                <button onClick={() => setStep(step + 1)}
+                <button onClick={() => { setStep(step + 1); setSaveStatus("idle"); }}
                   className="px-6 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all shadow-sm">
                   Continue →
                 </button>
               )}
               {step === 5 && (
-                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setCompanySearchVal(""); }}
+                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setCompanySearchVal(""); setSavedAuditors([]); setSaveStatus("idle"); }}
                   className="px-4 py-2 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 hover:border-slate-300 transition-colors">
                   🔄 New Appointment
                 </button>
@@ -1272,6 +1397,56 @@ export default function AuditorAppointmentPage() {
             {/* ─ STEP 3: Auditor Details ─ */}
             {step === 3 && (
               <div className="space-y-5">
+
+                {/* Saved auditor banner */}
+                {savedAuditors.length > 0 && !savedAuditorDismissed && (
+                  <div className="bg-teal-50 border-2 border-teal-300 rounded-2xl p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl flex-shrink-0">💾</span>
+                        <div>
+                          <p className="font-bold text-teal-800 text-sm">Saved auditor found for this company</p>
+                          <p className="text-xs text-teal-600 mt-0.5">
+                            {savedAuditors[0].auditorType === "individual"
+                              ? `${savedAuditors[0].firmName} (M.No. ${savedAuditors[0].membershipNo})`
+                              : `${savedAuditors[0].firmName} · FRN ${savedAuditors[0].frn}`}
+                            {savedAuditors[0].auditorCity ? ` · ${savedAuditors[0].auditorCity}` : ""}
+                          </p>
+                          {savedAuditors[0].fyRange && (
+                            <p className="text-xs text-teal-500 mt-0.5">Last appointment: {savedAuditors[0].fyRange}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => applySavedAuditor(savedAuditors[0])}
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors">
+                          Use This
+                        </button>
+                        <button
+                          onClick={() => setSavedAuditorDismissed(true)}
+                          className="px-3 py-1.5 rounded-lg border border-teal-300 text-teal-600 text-xs font-bold hover:bg-teal-100 transition-colors">
+                          Enter New
+                        </button>
+                      </div>
+                    </div>
+                    {savedAuditors.length > 1 && (
+                      <div className="mt-3 pt-3 border-t border-teal-200">
+                        <p className="text-xs text-teal-600 font-semibold mb-2">Other saved auditors for this company:</p>
+                        <div className="space-y-1">
+                          {savedAuditors.slice(1).map(a => (
+                            <button key={a.id} onClick={() => applySavedAuditor(a)}
+                              className="w-full text-left px-3 py-1.5 rounded-lg bg-white border border-teal-200 text-xs text-teal-700 hover:bg-teal-50 transition-colors">
+                              {a.firmName} {a.frn ? `(FRN ${a.frn})` : `(M.No. ${a.membershipNo})`}
+                              {a.auditorCity ? ` · ${a.auditorCity}` : ""}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <SectionCard title="Auditor Type">
                   <div className="flex gap-3">
                     {([
@@ -1585,6 +1760,36 @@ export default function AuditorAppointmentPage() {
                         Opens each document in a separate print dialog
                       </p>
                     </SectionCard>
+
+                    {/* Save auditor for future use */}
+                    {session && f.cin && (
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Save for Future Use</p>
+                        <button
+                          onClick={handleSaveAuditor}
+                          disabled={saveStatus === "saving" || saveStatus === "saved"}
+                          className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
+                            saveStatus === "saved"
+                              ? "bg-emerald-50 border-2 border-emerald-400 text-emerald-700"
+                              : saveStatus === "error"
+                              ? "bg-red-50 border-2 border-red-300 text-red-600 hover:bg-red-100"
+                              : saveStatus === "saving"
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : "bg-gradient-to-br from-slate-700 to-slate-800 text-white hover:from-slate-600 hover:to-slate-700"
+                          }`}>
+                          {saveStatus === "saving"
+                            ? "Saving..."
+                            : saveStatus === "saved"
+                            ? "✓ Auditor Saved for Future Use"
+                            : saveStatus === "error"
+                            ? "Save Failed — Try Again"
+                            : "💾 Save Auditor Details for Future Use"}
+                        </button>
+                        <p className="text-xs text-slate-400 text-center mt-2">
+                          Auto-fills in future appointments and annual filings for this company
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
