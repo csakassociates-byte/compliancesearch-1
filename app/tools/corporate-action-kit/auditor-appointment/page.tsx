@@ -723,7 +723,7 @@ export default function AuditorAppointmentPage() {
   }, [f]);
 
   function openPreview(label: string, html: string) {
-    const final = session ? injectPreviewWatermark(html, session.user?.email || "preview") : html;
+    const final = session ? html : injectPreviewWatermark(html);
     setPreviewLabel(label);
     setPreview(final);
   }
