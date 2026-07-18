@@ -904,10 +904,10 @@ export default function AuditorAppointmentPage() {
                 <SectionCard title="">
                   <CompanyExcelUpload onFill={(c: CompanyData) => setF(p => ({
                     ...p,
-                    companyName: c.company_name || "",
+                    companyName: c.companyName || "",
                     cin: c.cin || "",
-                    regAddress: [c.registered_address, c.city, c.state].filter(Boolean).join(", "),
-                    entityType: (c.company_category || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
+                    regAddress: c.regAddress || "",
+                    entityType: (c.classOfCompany || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
                   }))} />
                 </SectionCard>
               </div>
