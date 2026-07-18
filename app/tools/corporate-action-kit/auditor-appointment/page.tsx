@@ -863,7 +863,7 @@ export default function AuditorAppointmentPage() {
 
   // ── Saved-auditor autofill state ──
   const [savedAuditors, setSavedAuditors] = useState<SavedAuditor[]>([]);
-  const [savedAuditorDismissed, setSavedAuditorDismissed] = useState(false);
+  const [selectedSavedAuditorId, setSelectedSavedAuditorId] = useState<string>("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   // Fetch saved auditors for this CIN whenever CIN changes (logged-in only)
@@ -873,7 +873,7 @@ export default function AuditorAppointmentPage() {
       const res = await fetch(`/api/auditors?cin=${encodeURIComponent(cin)}`);
       const data = await res.json() as { auditors?: SavedAuditor[] };
       setSavedAuditors(data.auditors ?? []);
-      setSavedAuditorDismissed(false);
+      setSelectedSavedAuditorId("");
     } catch {
       setSavedAuditors([]);
     }
@@ -881,6 +881,7 @@ export default function AuditorAppointmentPage() {
 
   useEffect(() => {
     fetchSavedAuditors(f.cin);
+    setSaveStatus("idle");
   }, [f.cin, fetchSavedAuditors]);
 
   // Fetch saved company contact (email/mobile) when CIN changes
@@ -918,7 +919,6 @@ export default function AuditorAppointmentPage() {
       auditorMobile: a.auditorMobile || "",
       remuneration: a.remuneration || "",
     }));
-    setSavedAuditorDismissed(true);
   }
 
   async function handleSaveAuditor() {
@@ -1398,51 +1398,41 @@ export default function AuditorAppointmentPage() {
             {step === 3 && (
               <div className="space-y-5">
 
-                {/* Saved auditor banner */}
-                {savedAuditors.length > 0 && !savedAuditorDismissed && (
+                {/* Saved auditor dropdown */}
+                {savedAuditors.length > 0 && (
                   <div className="bg-teal-50 border-2 border-teal-300 rounded-2xl p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl flex-shrink-0">💾</span>
-                        <div>
-                          <p className="font-bold text-teal-800 text-sm">Saved auditor found for this company</p>
-                          <p className="text-xs text-teal-600 mt-0.5">
-                            {savedAuditors[0].auditorType === "individual"
-                              ? `${savedAuditors[0].firmName} (M.No. ${savedAuditors[0].membershipNo})`
-                              : `${savedAuditors[0].firmName} · FRN ${savedAuditors[0].frn}`}
-                            {savedAuditors[0].auditorCity ? ` · ${savedAuditors[0].auditorCity}` : ""}
-                          </p>
-                          {savedAuditors[0].fyRange && (
-                            <p className="text-xs text-teal-500 mt-0.5">Last appointment: {savedAuditors[0].fyRange}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => applySavedAuditor(savedAuditors[0])}
-                          className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors">
-                          Use This
-                        </button>
-                        <button
-                          onClick={() => setSavedAuditorDismissed(true)}
-                          className="px-3 py-1.5 rounded-lg border border-teal-300 text-teal-600 text-xs font-bold hover:bg-teal-100 transition-colors">
-                          Enter New
-                        </button>
-                      </div>
-                    </div>
-                    {savedAuditors.length > 1 && (
-                      <div className="mt-3 pt-3 border-t border-teal-200">
-                        <p className="text-xs text-teal-600 font-semibold mb-2">Other saved auditors for this company:</p>
-                        <div className="space-y-1">
-                          {savedAuditors.slice(1).map(a => (
-                            <button key={a.id} onClick={() => applySavedAuditor(a)}
-                              className="w-full text-left px-3 py-1.5 rounded-lg bg-white border border-teal-200 text-xs text-teal-700 hover:bg-teal-50 transition-colors">
-                              {a.firmName} {a.frn ? `(FRN ${a.frn})` : `(M.No. ${a.membershipNo})`}
-                              {a.auditorCity ? ` · ${a.auditorCity}` : ""}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                    <label className="block text-xs font-bold text-teal-800 uppercase tracking-wider mb-2">
+                      💾 Select from Saved Auditors
+                    </label>
+                    <select
+                      value={selectedSavedAuditorId}
+                      onChange={e => {
+                        const id = e.target.value;
+                        setSelectedSavedAuditorId(id);
+                        if (id) {
+                          const found = savedAuditors.find(a => a.id === id);
+                          if (found) applySavedAuditor(found);
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border-2 border-teal-200 bg-white text-sm text-slate-800 font-medium focus:outline-none focus:border-teal-500 transition-colors">
+                      <option value="">— Fill new auditor details manually —</option>
+                      {savedAuditors.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.auditorType === "individual"
+                            ? `${a.firmName} (M.No. ${a.membershipNo})${a.auditorCity ? ` · ${a.auditorCity}` : ""}`
+                            : `${a.firmName}${a.frn ? ` · FRN ${a.frn}` : ""}${a.auditorCity ? ` · ${a.auditorCity}` : ""}`}
+                          {a.fyRange ? ` · ${a.fyRange}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedSavedAuditorId ? (
+                      <p className="text-xs text-teal-700 mt-2 font-medium">
+                        ✓ Details auto-filled below — edit if needed before generating documents.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-teal-600 mt-2">
+                        Select a saved auditor to auto-fill all details, or fill manually below to save for future use.
+                      </p>
                     )}
                   </div>
                 )}
