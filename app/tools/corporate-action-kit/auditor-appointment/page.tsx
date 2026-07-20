@@ -1212,22 +1212,36 @@ export default function AuditorAppointmentPage() {
               {step < 5 && (
                 <button onClick={() => {
                   // Auto-save company to DB when leaving Step 1 (so it appears in future searches)
-                  if (step === 1 && session && f.cin && f.companyName) {
-                    fetch("/api/companies/upsert", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        cin: f.cin,
-                        companyName: f.companyName,
-                        regAddress: f.regAddress || null,
-                        entityType: f.entityType || null,
-                        incorporationDate: f.incorporationDate || null,
-                        directors: f.directors.filter(d => d.name).map(d => ({
-                          name: d.name, din: d.din, designation: d.designation, isActive: true,
-                        })),
-                        charges: [],
-                      }),
-                    }).catch(() => {});
+                  if (step === 1 && session?.user && f.companyName) {
+                    if (f.cin) {
+                      fetch("/api/companies/upsert", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          cin: f.cin,
+                          companyName: f.companyName,
+                          regAddress: f.regAddress || null,
+                          entityType: f.entityType || null,
+                          incorporationDate: f.incorporationDate || null,
+                          directors: f.directors.filter(d => d.name).map(d => ({
+                            name: d.name, din: d.din, designation: d.designation, isActive: true,
+                          })),
+                          charges: [],
+                        }),
+                      }).catch(() => {});
+                    } else {
+                      // No CIN — simple save by name only
+                      fetch("/api/clients", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          companyName: f.companyName,
+                          entityType: f.entityType || null,
+                          regAddress: f.regAddress || null,
+                          incorporationDate: f.incorporationDate || null,
+                        }),
+                      }).catch(() => {});
+                    }
                   }
                   setStep(step + 1);
                   setSaveStatus("idle");

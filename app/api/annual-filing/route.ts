@@ -1,8 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTeamMemberIds } from "@/lib/team";
+
+async function syncCompanyToClientList(userId: string, companyName: string, cin?: string) {
+  try {
+    const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM csi_companies
+       WHERE "userId" = $1 AND (
+         LOWER("companyName") = LOWER($2)
+         OR ($3::text IS NOT NULL AND cin = $3)
+       ) LIMIT 1`,
+      userId, companyName, cin || null
+    );
+    if (existing.length) {
+      if (cin) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE csi_companies SET cin = $3, "updatedAt" = NOW() WHERE id = $1 AND "userId" = $2 AND cin IS NULL`,
+          existing[0].id, userId, cin
+        );
+      }
+    } else {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO csi_companies (id, "userId", "companyName", cin, "updatedAt") VALUES ($1,$2,$3,$4,NOW())`,
+        randomUUID(), userId, companyName, cin || null
+      );
+    }
+  } catch { /* non-fatal — search sync */ }
+}
 
 // Ensure csi_documents has all columns needed for annual filing
 async function ensureColumns() {
@@ -60,6 +87,7 @@ export async function POST(req: NextRequest) {
         body.financialYear,
         body.formDataJson,
       );
+      syncCompanyToClientList(userId, body.companyName, body.cin);
       return NextResponse.json({ success: true, id: body.id });
     }
 
@@ -75,6 +103,7 @@ export async function POST(req: NextRequest) {
       body.formDataJson,
     );
 
+    syncCompanyToClientList(userId, body.companyName, body.cin);
     return NextResponse.json({ success: true, id: rows[0]?.id });
   } catch (err) {
     console.error("[annual-filing POST]", err);
