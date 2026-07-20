@@ -887,7 +887,6 @@ export default function AuditorAppointmentPage() {
   const { data: session } = useSession();
   const [step, setStep] = useState(1);
   const [f, setF] = useState<F>(DEFAULT);
-  const [companySearchVal, setCompanySearchVal] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [previewLabel, setPreviewLabel] = useState("");
   const [previewKey, setPreviewKey] = useState<string>("");
@@ -898,6 +897,31 @@ export default function AuditorAppointmentPage() {
   const [savedAuditors, setSavedAuditors] = useState<SavedAuditor[]>([]);
   const [selectedSavedAuditorId, setSelectedSavedAuditorId] = useState<string>("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // Shared company fill — used by both CompanySearch onSelect AND CompanyExcelUpload onFill
+  function fillCompany(c: CompanyData) {
+    const incDate = c.incorporationDate || "";
+    const suggested = suggestAppointmentType(incDate);
+    const mcaDirs = (c.directors || [])
+      .filter((d) => d.isActive !== false)
+      .map((d) => ({
+        id: `dir-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: d.name || "", din: d.din || "",
+        designation: d.designation || "Director", isPresent: true,
+      }));
+    setF(p => ({
+      ...p,
+      companyName: c.companyName || "",
+      cin: c.cin || "",
+      regAddress: c.regAddress || "",
+      entityType: (c.classOfCompany || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
+      incorporationDate: incDate,
+      appointmentType: suggested ?? p.appointmentType,
+      directors: mcaDirs.length >= 1
+        ? (mcaDirs.length >= 2 ? mcaDirs : [...mcaDirs, makeDir()])
+        : p.directors,
+    }));
+  }
 
   // Fetch saved auditors for this CIN whenever CIN changes (logged-in only)
   const fetchSavedAuditors = useCallback(async (cin: string) => {
@@ -1251,7 +1275,7 @@ export default function AuditorAppointmentPage() {
                 </button>
               )}
               {step === 5 && (
-                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setCompanySearchVal(""); setSavedAuditors([]); setSaveStatus("idle"); }}
+                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setSavedAuditors([]); setSaveStatus("idle"); }}
                   className="px-4 py-2 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 hover:border-slate-300 transition-colors">
                   🔄 New Appointment
                 </button>
@@ -1265,50 +1289,30 @@ export default function AuditorAppointmentPage() {
             {/* ─ STEP 1: Company ─ */}
             {step === 1 && (
               <div className="space-y-5">
-                <SectionCard title="Search Company (MCA Database)">
-                  <div className="mb-4">
-                    <CompanySearch
-                      value={companySearchVal}
-                      onChange={setCompanySearchVal}
-                      className={ic()}
-                      onSelect={(c: CompanyData) => {
-                        setCompanySearchVal(c.companyName || "");
-                        const incDate = c.incorporationDate || "";
-                        const suggested = suggestAppointmentType(incDate);
-                        // Populate directors from MCA data (active directors only)
-                        const mcaDirs = (c.directors || [])
-                          .filter((d) => d.isActive !== false)
-                          .map((d) => ({
-                            id: `dir-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                            name: d.name || "",
-                            din: d.din || "",
-                            designation: d.designation || "Director",
-                            isPresent: true,
-                          }));
-                        setF(p => ({
-                          ...p,
-                          companyName: c.companyName || "",
-                          cin: c.cin || "",
-                          regAddress: c.regAddress || "",
-                          entityType: (c.classOfCompany || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
-                          incorporationDate: incDate,
-                          appointmentType: suggested ?? p.appointmentType,
-                          directors: mcaDirs.length >= 1
-                            ? (mcaDirs.length >= 2 ? mcaDirs : [...mcaDirs, makeDir()])
-                            : p.directors,
-                        }));
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-400 text-center">Or fill the details manually below</p>
+                {/* Excel upload — FIRST, matching all other tools */}
+                <SectionCard title="Auto-fill from MCA Excel">
+                  <CompanyExcelUpload
+                    onFill={fillCompany}
+                    accent="blue"
+                    note="Company details + Directors auto-filled from MCA master data." />
                 </SectionCard>
+
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-slate-200" />
+                  <span className="text-xs font-medium text-slate-400">or fill manually</span>
+                  <div className="h-px flex-1 bg-slate-200" />
+                </div>
 
                 <SectionCard title="Company Details">
                   <div className="space-y-4">
-                    <Field label="Company Name">
-                      <input className={ic()} value={f.companyName}
-                        onChange={e => setF(p => ({ ...p, companyName: e.target.value }))}
-                        placeholder="XYZ Private Limited" />
+                    <Field label="Company Name" hint="Type to search saved companies or fill manually">
+                      <CompanySearch
+                        value={f.companyName}
+                        onChange={v => setF(p => ({ ...p, companyName: v }))}
+                        onSelect={fillCompany}
+                        className={ic()}
+                        placeholder="e.g. ABC Private Limited"
+                      />
                     </Field>
                     <div className="grid grid-cols-2 gap-4">
                       <Field label="CIN">
@@ -1343,34 +1347,6 @@ export default function AuditorAppointmentPage() {
                       </Field>
                     </div>
                   </div>
-                </SectionCard>
-
-                <SectionCard title="">
-                  <CompanyExcelUpload onFill={(c: CompanyData) => {
-                    const incDate = c.incorporationDate || "";
-                    const suggested = suggestAppointmentType(incDate);
-                    const mcaDirs = (c.directors || [])
-                      .filter((d) => d.isActive !== false)
-                      .map((d) => ({
-                        id: `dir-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                        name: d.name || "",
-                        din: d.din || "",
-                        designation: d.designation || "Director",
-                        isPresent: true,
-                      }));
-                    setF(p => ({
-                      ...p,
-                      companyName: c.companyName || "",
-                      cin: c.cin || "",
-                      regAddress: c.regAddress || "",
-                      entityType: (c.classOfCompany || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
-                      incorporationDate: incDate,
-                      appointmentType: suggested ?? p.appointmentType,
-                      directors: mcaDirs.length >= 1
-                        ? (mcaDirs.length >= 2 ? mcaDirs : [...mcaDirs, makeDir()])
-                        : p.directors,
-                    }));
-                  }} />
                 </SectionCard>
               </div>
             )}
