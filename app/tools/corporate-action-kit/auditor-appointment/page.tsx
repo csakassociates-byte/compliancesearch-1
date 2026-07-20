@@ -59,6 +59,8 @@ interface F {
   entityType: string;
   companyEmail: string;
   companyMobile: string;
+  incorporationDate: string;
+  fy: string;
   appointmentType: AppointmentType;
   auditorType: AuditorType;
   auditorName: string;
@@ -97,6 +99,7 @@ function makeDir(): MeetingDirector {
 const DEFAULT: F = {
   companyName: "", cin: "", regAddress: "", entityType: "pvt_ltd",
   companyEmail: "", companyMobile: "",
+  incorporationDate: "", fy: "",
   appointmentType: "first_auditor",
   auditorType: "firm",
   auditorName: "", membershipNo: "",
@@ -220,6 +223,35 @@ function sixthAgm(ordinal: string): string {
   const n = parseInt(m[1]) + 5;
   const suf = n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th";
   return `${n}${suf}`;
+}
+
+function ordinal(n: number): string {
+  if (n === 1) return "1st"; if (n === 2) return "2nd"; if (n === 3) return "3rd";
+  return `${n}th`;
+}
+
+function calcAgmOrdinal(incorporationDate: string, fy: string): string {
+  if (!incorporationDate || !fy) return "";
+  const parts = fy.split("-");
+  if (parts.length < 2) return "";
+  const fyEndYear = parseInt(parts[0]) + 1;
+  if (isNaN(fyEndYear)) return "";
+  const inc = new Date(incorporationDate);
+  if (isNaN(inc.getTime())) return "";
+  const incMonth = inc.getMonth() + 1;
+  const incYear = inc.getFullYear();
+  // First FY ends: if inc is Jan-Mar → same year March; Apr-Dec → next year March
+  const firstFYEnd = incMonth <= 3 ? incYear : incYear + 1;
+  const agmNum = fyEndYear - firstFYEnd + 1;
+  return agmNum >= 1 ? ordinal(agmNum) : "1st";
+}
+
+function suggestAppointmentType(incorporationDate: string): AppointmentType | null {
+  if (!incorporationDate) return null;
+  const inc = new Date(incorporationDate);
+  if (isNaN(inc.getTime())) return null;
+  const days = (Date.now() - inc.getTime()) / 86400000;
+  return days <= 45 ? "first_auditor" : "subsequent";
 }
 
 function companyLH(f: F): string {
@@ -1203,14 +1235,32 @@ export default function AuditorAppointmentPage() {
                     <CompanySearch
                       value={companySearchVal}
                       onChange={setCompanySearchVal}
+                      className={ic()}
                       onSelect={(c: CompanyData) => {
                         setCompanySearchVal(c.companyName || "");
+                        const incDate = c.incorporationDate || "";
+                        const suggested = suggestAppointmentType(incDate);
+                        // Populate directors from MCA data (active directors only)
+                        const mcaDirs = (c.directors || [])
+                          .filter((d) => d.isActive !== false)
+                          .map((d) => ({
+                            id: `dir-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                            name: d.name || "",
+                            din: d.din || "",
+                            designation: d.designation || "Director",
+                            isPresent: true,
+                          }));
                         setF(p => ({
                           ...p,
                           companyName: c.companyName || "",
                           cin: c.cin || "",
                           regAddress: c.regAddress || "",
                           entityType: (c.classOfCompany || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
+                          incorporationDate: incDate,
+                          appointmentType: suggested ?? p.appointmentType,
+                          directors: mcaDirs.length >= 1
+                            ? (mcaDirs.length >= 2 ? mcaDirs : [...mcaDirs, makeDir()])
+                            : p.directors,
                         }));
                       }}
                     />
@@ -1275,6 +1325,36 @@ export default function AuditorAppointmentPage() {
             {/* ─ STEP 2: Appointment Type ─ */}
             {step === 2 && (
               <div className="space-y-5">
+                {/* Auto-suggestion based on incorporation date */}
+                {f.incorporationDate && (() => {
+                  const suggested = suggestAppointmentType(f.incorporationDate);
+                  if (!suggested) return null;
+                  const days = Math.round((Date.now() - new Date(f.incorporationDate).getTime()) / 86400000);
+                  return suggested === "first_auditor" ? (
+                    <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-3 flex items-start gap-3">
+                      <span className="text-xl flex-shrink-0">💡</span>
+                      <div>
+                        <p className="text-sm font-bold text-amber-800">New company — First Auditor suggested</p>
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          Incorporated {days} days ago. Board should appoint First Auditor within 30 days of incorporation (Section 139(6)).
+                          <span className="font-semibold"> You can still change below.</span>
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+                      <span className="text-xl flex-shrink-0">💡</span>
+                      <div>
+                        <p className="text-sm font-bold text-blue-800">Subsequent Auditor suggested</p>
+                        <p className="text-xs text-blue-600 mt-0.5">
+                          Company incorporated {days} days ago. Members appoint at AGM for 5-year term.
+                          <span className="font-semibold"> You can still change below.</span>
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <SectionCard title="Select Appointment Type">
                   <div className="space-y-3">
                     {([
@@ -1373,20 +1453,45 @@ export default function AuditorAppointmentPage() {
                 )}
 
                 {f.appointmentType === "subsequent" && (
-                  <SectionCard title="AGM Number">
-                    <Field label="This is the ___ Annual General Meeting" hint="Auditor holds office from this AGM to the 5th subsequent AGM.">
-                      <select className={ic()} value={f.agmOrdinal}
-                        onChange={e => setF(p => ({ ...p, agmOrdinal: e.target.value }))}>
-                        {["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"].map(n => (
-                          <option key={n} value={n}>{n} AGM</option>
-                        ))}
-                      </select>
-                    </Field>
-                    {f.agmOrdinal && (
-                      <p className="text-xs text-teal-700 bg-teal-50 rounded-lg px-3 py-2 mt-3">
-                        Auditor will hold office from conclusion of <strong>{f.agmOrdinal} AGM</strong> to conclusion of <strong>{sixthAgm(f.agmOrdinal)} AGM</strong> (five years).
-                      </p>
-                    )}
+                  <SectionCard title="AGM Details">
+                    <div className="space-y-4">
+                      <Field label="Financial Year of AGM" hint="e.g., 2025-26 means AGM will be held by Sep 30, 2026">
+                        <input
+                          className={ic()}
+                          value={f.fy}
+                          onChange={e => {
+                            const fy = e.target.value.trim();
+                            const auto = calcAgmOrdinal(f.incorporationDate, fy);
+                            setF(p => ({ ...p, fy, agmOrdinal: auto || p.agmOrdinal }));
+                          }}
+                          placeholder="2025-26"
+                          maxLength={7}
+                        />
+                        {f.fy && /^\d{4}-\d{2}$/.test(f.fy) && (
+                          <p className="text-xs text-teal-600 mt-1.5">
+                            AGM for FY {f.fy} must be held by <strong>30 September {parseInt(f.fy) + 1}</strong>
+                          </p>
+                        )}
+                      </Field>
+                      <Field label="AGM Serial Number" hint="Auto-calculated from incorporation date — type to override (e.g., 3rd, 15th, 50th)">
+                        <input
+                          className={ic()}
+                          value={f.agmOrdinal}
+                          onChange={e => setF(p => ({ ...p, agmOrdinal: e.target.value }))}
+                          placeholder="e.g., 3rd"
+                        />
+                        {f.incorporationDate && !f.fy && (
+                          <p className="text-xs text-slate-400 mt-1">Enter FY above to auto-calculate AGM number</p>
+                        )}
+                      </Field>
+                      {f.agmOrdinal && (
+                        <div className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-3">
+                          <p className="text-xs text-teal-700">
+                            Auditor will hold office from conclusion of <strong>{f.agmOrdinal} AGM</strong> to conclusion of <strong>{sixthAgm(f.agmOrdinal)} AGM</strong> (five years).
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </SectionCard>
                 )}
 
