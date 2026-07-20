@@ -20,30 +20,60 @@ export async function GET(req: NextRequest) {
     // ── Logged-in: search companies visible to the whole team ──
     if (userId) {
       const memberIds = await getTeamMemberIds(userId);
+
+      // Search CompanyProfile (Excel-uploaded / MCA data) — has directors too
       const [byName, byCin] = await Promise.all([
         prisma.companyProfile.findMany({
-          where: {
-            uploadedBy: { in: memberIds },
-            companyName: { contains: q, mode: "insensitive" },
-          },
+          where: { uploadedBy: { in: memberIds }, companyName: { contains: q, mode: "insensitive" } },
           take: 8, include,
         }),
         prisma.companyProfile.findMany({
-          where: {
-            uploadedBy: { in: memberIds },
-            cin: { contains: q, mode: "insensitive" },
-          },
+          where: { uploadedBy: { in: memberIds }, cin: { contains: q, mode: "insensitive" } },
           take: 5, include,
         }),
       ]);
 
-      // Deduplicate
+      // Also search csi_companies (user's own client list — even if not in CompanyProfile)
+      const [csiByName, csiByCin] = await Promise.all([
+        prisma.company.findMany({
+          where: { userId: { in: memberIds }, companyName: { contains: q, mode: "insensitive" } },
+          take: 8,
+        }),
+        prisma.company.findMany({
+          where: { userId: { in: memberIds }, cin: { contains: q, mode: "insensitive" } },
+          take: 5,
+        }),
+      ]);
+
+      // Deduplicate: CompanyProfile takes priority (has directors); csi_companies fills gaps
       const seen = new Set<string>();
-      const results = [];
+      const results: Record<string, unknown>[] = [];
+
+      // Add CompanyProfile results first
       for (const c of [...byName, ...byCin]) {
-        if (!seen.has(c.id)) {
-          seen.add(c.id);
+        const key = c.cin || c.id;
+        if (!seen.has(key)) {
+          seen.add(key);
           results.push({ ...c, _source: "my_companies" });
+        }
+      }
+
+      // Add csi_companies results that aren't already present
+      for (const c of [...csiByName, ...csiByCin]) {
+        const key = c.cin || c.id;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            id: c.id,
+            cin: c.cin || "",
+            companyName: c.companyName,
+            regAddress: c.regAddress || null,
+            entityType: c.entityType || null,
+            incorporationDate: c.incorporationDate || null,
+            directors: [],
+            charges: [],
+            _source: "my_companies",
+          });
         }
       }
 

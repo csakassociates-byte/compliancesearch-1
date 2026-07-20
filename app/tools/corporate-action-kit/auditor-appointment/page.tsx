@@ -1311,13 +1311,31 @@ export default function AuditorAppointmentPage() {
                 </SectionCard>
 
                 <SectionCard title="">
-                  <CompanyExcelUpload onFill={(c: CompanyData) => setF(p => ({
-                    ...p,
-                    companyName: c.companyName || "",
-                    cin: c.cin || "",
-                    regAddress: c.regAddress || "",
-                    entityType: (c.classOfCompany || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
-                  }))} />
+                  <CompanyExcelUpload onFill={(c: CompanyData) => {
+                    const incDate = c.incorporationDate || "";
+                    const suggested = suggestAppointmentType(incDate);
+                    const mcaDirs = (c.directors || [])
+                      .filter((d) => d.isActive !== false)
+                      .map((d) => ({
+                        id: `dir-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        name: d.name || "",
+                        din: d.din || "",
+                        designation: d.designation || "Director",
+                        isPresent: true,
+                      }));
+                    setF(p => ({
+                      ...p,
+                      companyName: c.companyName || "",
+                      cin: c.cin || "",
+                      regAddress: c.regAddress || "",
+                      entityType: (c.classOfCompany || "").toLowerCase().includes("public") ? "pub_ltd" : "pvt_ltd",
+                      incorporationDate: incDate,
+                      appointmentType: suggested ?? p.appointmentType,
+                      directors: mcaDirs.length >= 1
+                        ? (mcaDirs.length >= 2 ? mcaDirs : [...mcaDirs, makeDir()])
+                        : p.directors,
+                    }));
+                  }} />
                 </SectionCard>
               </div>
             )}
