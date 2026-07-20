@@ -1210,7 +1210,28 @@ export default function AuditorAppointmentPage() {
                 </button>
               )}
               {step < 5 && (
-                <button onClick={() => { setStep(step + 1); setSaveStatus("idle"); }}
+                <button onClick={() => {
+                  // Auto-save company to DB when leaving Step 1 (so it appears in future searches)
+                  if (step === 1 && session && f.cin && f.companyName) {
+                    fetch("/api/companies/upsert", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        cin: f.cin,
+                        companyName: f.companyName,
+                        regAddress: f.regAddress || null,
+                        entityType: f.entityType || null,
+                        incorporationDate: f.incorporationDate || null,
+                        directors: f.directors.filter(d => d.name).map(d => ({
+                          name: d.name, din: d.din, designation: d.designation, isActive: true,
+                        })),
+                        charges: [],
+                      }),
+                    }).catch(() => {});
+                  }
+                  setStep(step + 1);
+                  setSaveStatus("idle");
+                }}
                   className="px-6 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all shadow-sm">
                   Continue →
                 </button>
