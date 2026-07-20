@@ -5,8 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { getTeamMemberIds } from "@/lib/team";
 
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q")?.trim() || "";
-  if (q.length < 2) return NextResponse.json([]);
+  const raw = req.nextUrl.searchParams.get("q") ?? "";
+  const q = raw.trim();
+  // Require at least 1 character (space = "show all" trigger from onFocus)
+  if (raw.length < 1) return NextResponse.json([]);
 
   const session = await getServerSession(authOptions);
   const userId = session?.user ? (session.user as { id: string }).id : null;
@@ -22,7 +24,7 @@ export async function GET(req: NextRequest) {
       const memberIds = await getTeamMemberIds(userId);
 
       // Search CompanyProfile (Excel-uploaded / MCA data) — has directors too
-      const [byName, byCin] = await Promise.all([
+      const [byName, byCin] = q ? await Promise.all([
         prisma.companyProfile.findMany({
           where: { uploadedBy: { in: memberIds }, companyName: { contains: q, mode: "insensitive" } },
           take: 8, include,
@@ -31,33 +33,39 @@ export async function GET(req: NextRequest) {
           where: { uploadedBy: { in: memberIds }, cin: { contains: q, mode: "insensitive" } },
           take: 5, include,
         }),
+      ]) : await Promise.all([
+        prisma.companyProfile.findMany({
+          where: { uploadedBy: { in: memberIds } },
+          take: 8, include, orderBy: { updatedAt: "desc" },
+        }),
+        Promise.resolve([]),
       ]);
 
       // Also search csi_companies (user's own client list — even if not in CompanyProfile)
-      const [csiByName, csiByCin] = await Promise.all([
-        prisma.$queryRawUnsafe<Array<{
-          id: string; cin: string | null; companyName: string;
-          entityType: string | null; regAddress: string | null; incorporationDate: string | null;
-        }>>(
-          `SELECT id, cin, "companyName", "entityType", "regAddress", "incorporationDate"
-           FROM csi_companies
-           WHERE "userId" = ANY($1::text[])
-             AND LOWER("companyName") LIKE '%' || LOWER($2) || '%'
-           LIMIT 8`,
-          memberIds, q
-        ),
-        prisma.$queryRawUnsafe<Array<{
-          id: string; cin: string | null; companyName: string;
-          entityType: string | null; regAddress: string | null; incorporationDate: string | null;
-        }>>(
-          `SELECT id, cin, "companyName", "entityType", "regAddress", "incorporationDate"
-           FROM csi_companies
-           WHERE "userId" = ANY($1::text[])
-             AND cin IS NOT NULL AND LOWER(cin) LIKE '%' || LOWER($2) || '%'
-           LIMIT 5`,
-          memberIds, q
-        ),
-      ]);
+      const csiRows = q
+        ? await prisma.$queryRawUnsafe<Array<{
+            id: string; cin: string | null; companyName: string;
+            entityType: string | null; regAddress: string | null; incorporationDate: string | null;
+          }>>(
+            `SELECT id, cin, "companyName", "entityType", "regAddress", "incorporationDate"
+             FROM csi_companies
+             WHERE "userId" = ANY($1::text[])
+               AND (LOWER("companyName") LIKE '%' || LOWER($2) || '%'
+                    OR (cin IS NOT NULL AND LOWER(cin) LIKE '%' || LOWER($2) || '%'))
+             ORDER BY "updatedAt" DESC LIMIT 10`,
+            memberIds, q
+          )
+        : await prisma.$queryRawUnsafe<Array<{
+            id: string; cin: string | null; companyName: string;
+            entityType: string | null; regAddress: string | null; incorporationDate: string | null;
+          }>>(
+            `SELECT id, cin, "companyName", "entityType", "regAddress", "incorporationDate"
+             FROM csi_companies
+             WHERE "userId" = ANY($1::text[])
+             ORDER BY "updatedAt" DESC LIMIT 10`,
+            memberIds
+          );
+      const [csiByName, csiByCin] = [csiRows, []] as [typeof csiRows, typeof csiRows];
 
       // Deduplicate: CompanyProfile takes priority (has directors); csi_companies fills gaps
       const seen = new Set<string>();
@@ -92,19 +100,24 @@ export async function GET(req: NextRequest) {
       }
 
       // Also search csi_documents (Annual Filing / Board Minutes) for distinct company names
-      // This ensures past-session companies appear in search even if not in csi_companies yet
-      const docsMatches = await prisma.$queryRawUnsafe<Array<{
-        companyName: string; cin: string | null;
-      }>>(
-        `SELECT DISTINCT "companyName",
-          (formDataJson::jsonb #>> '{data,cin}') AS cin
-         FROM csi_documents
-         WHERE "userId" = ANY($1::text[])
-           AND "companyName" IS NOT NULL
-           AND LOWER("companyName") LIKE '%' || LOWER($2) || '%'
-         LIMIT 5`,
-        memberIds, q
-      );
+      const docsMatches = q
+        ? await prisma.$queryRawUnsafe<Array<{ companyName: string; cin: string | null }>>(
+            `SELECT DISTINCT "companyName", NULL::text AS cin
+             FROM csi_documents
+             WHERE "userId" = ANY($1::text[])
+               AND "companyName" IS NOT NULL
+               AND LOWER("companyName") LIKE '%' || LOWER($2) || '%'
+             LIMIT 5`,
+            memberIds, q
+          )
+        : await prisma.$queryRawUnsafe<Array<{ companyName: string; cin: string | null }>>(
+            `SELECT DISTINCT "companyName", NULL::text AS cin
+             FROM csi_documents
+             WHERE "userId" = ANY($1::text[])
+               AND "companyName" IS NOT NULL
+             ORDER BY "companyName" LIMIT 10`,
+            memberIds
+          );
 
       for (const d of docsMatches) {
         if (!d.companyName) continue;

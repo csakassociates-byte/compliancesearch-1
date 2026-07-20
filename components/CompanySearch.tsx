@@ -84,31 +84,43 @@ export default function CompanySearch({
     }
   }, [value]);
 
+  async function doSearch(val: string) {
+    try {
+      const res  = await fetch(`/api/companies/search?q=${encodeURIComponent(val)}`);
+      const data = await res.json();
+      const all = Array.isArray(data) ? data : [];
+      setResults(all.filter((r: Record<string, unknown>) => r._source === "my_companies"));
+    } catch { setResults([]); }
+    setLoading(false);
+  }
+
   function handleInput(val: string) {
     onChange(val);
     setUserTyped(true);
-    prevValue.current = val; // prevent useEffect from clearing on this change
+    prevValue.current = val;
     if (timer.current) clearTimeout(timer.current);
 
-    // Not logged in — show popup, no search
     if (authStatus !== "loading" && !session?.user) {
       if (val.length >= 1) setShowLoginPopup(true);
       setResults([]);
       return;
     }
 
-    if (val.length < 2) { setResults([]); return; }
+    if (val.length < 1) { setResults([]); return; }
     setLoading(true);
-    timer.current = setTimeout(async () => {
-      try {
-        const res  = await fetch(`/api/companies/search?q=${encodeURIComponent(val)}`);
-        const data = await res.json();
-        // Show only MY companies (not MCA database)
-        const all = Array.isArray(data) ? data : [];
-        setResults(all.filter(r => r._source === "my_companies"));
-      } catch { setResults([]); }
-      setLoading(false);
-    }, 300);
+    timer.current = setTimeout(() => doSearch(val), 300);
+  }
+
+  function handleFocus() {
+    if (authStatus !== "loading" && !session?.user) {
+      if (value.length >= 1) setShowLoginPopup(true);
+      return;
+    }
+    // Show all saved companies on focus (even if field is empty)
+    if (session?.user && results.length === 0) {
+      setLoading(true);
+      doSearch(value || " ");
+    }
   }
 
   function handleSelect(company: Record<string, unknown>) {
@@ -128,11 +140,7 @@ export default function CompanySearch({
           className={className + " pr-8"}
           value={value}
           onChange={e => handleInput(e.target.value)}
-          onFocus={() => {
-            if (authStatus !== "loading" && !session?.user && value.length >= 1) {
-              setShowLoginPopup(true);
-            }
-          }}
+          onFocus={handleFocus}
           onBlur={() => setTimeout(() => setResults([]), 200)}
           placeholder={placeholder}
           autoComplete="off"
@@ -186,7 +194,7 @@ export default function CompanySearch({
         )}
 
         {/* No results found (logged in but no match) — only show when user actively typed */}
-        {results.length === 0 && loading === false && session?.user && value.length >= 2 && userTyped && (
+        {results.length === 0 && loading === false && session?.user && value.length >= 1 && userTyped && (
           <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-md px-4 py-3">
             <p className="text-sm text-slate-500">No company found — <span className="text-slate-700 font-medium">enter name manually</span> or <Link href="/dashboard/clients" className="text-blue-600 underline">upload Excel</Link> to add companies.</p>
           </div>
