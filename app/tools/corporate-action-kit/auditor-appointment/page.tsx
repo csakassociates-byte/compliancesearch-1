@@ -100,13 +100,14 @@ function makeDir(): MeetingDirector {
 const DEFAULT: F = {
   companyName: "", cin: "", regAddress: "", entityType: "pvt_ltd",
   companyEmail: "", companyMobile: "",
-  incorporationDate: "", fy: "",
+  incorporationDate: "",
   appointmentType: "first_auditor",
   auditorType: "firm",
   auditorName: "", membershipNo: "",
   firmName: "", firmRegNo: "", partnerName: "", partnerMembershipNo: "", partnerDesignation: "Partner",
   auditorAddress: "", auditorCity: "", auditorEmail: "", auditorMobile: "",
   remuneration: "",
+  fy: currentCompletedFY(),
   agmOrdinal: "1st",
   meetingDate: "", meetingTime: "", meetingSerial: "", venue: "",
   boardRecommDate: "",
@@ -198,6 +199,23 @@ function fyRange(dateStr: string): string {
   const startYear = month <= 3 ? year - 1 : year;
   const fmt = (y: number) => `${y}-${String(y + 1).slice(-2)}`;
   return `FY ${fmt(startYear)} to FY ${fmt(startYear + 4)}`;
+}
+
+function currentCompletedFY(): string {
+  const now = new Date();
+  const month = now.getMonth(); // 0-indexed; April = 3
+  const year = now.getFullYear();
+  // FY starts April: if Jan-Mar we're in prev FY
+  const fyStart = month >= 3 ? year : year - 1;
+  // Most recently COMPLETED FY = fyStart - 1
+  return `${fyStart - 1}-${String(fyStart).slice(-2)}`;
+}
+
+function fyStartYear(): number {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  return month >= 3 ? year : year - 1;
 }
 
 function auditorLabel(f: F): string {
@@ -1480,9 +1498,10 @@ export default function AuditorAppointmentPage() {
                         >
                           <option value="">— Select Financial Year —</option>
                           {(() => {
-                            const cur = new Date().getFullYear();
+                            const start = fyStartYear(); // current FY start year
                             const opts = [];
-                            for (let y = cur + 10; y >= cur - 15; y--) {
+                            // Show current FY down to 15 years back — no future years
+                            for (let y = start; y >= start - 15; y--) {
                               const label = `${y}-${String(y + 1).slice(-2)}`;
                               opts.push(<option key={label} value={label}>{label}</option>);
                             }
