@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import CompanySearch from "@/components/CompanySearch";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -923,6 +924,7 @@ function downloadWord(html: string, filename: string) {
 ═══════════════════════════════════════════════ */
 export default function AuditorAppointmentPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
   const [f, setF] = useState<F>(DEFAULT);
   const [preview, setPreview] = useState<string | null>(null);
@@ -934,6 +936,10 @@ export default function AuditorAppointmentPage() {
   const [savedAuditors, setSavedAuditors] = useState<SavedAuditor[]>([]);
   const [selectedSavedAuditorId, setSelectedSavedAuditorId] = useState<string>("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // ── Document save state ──
+  const [docSaveStatus, setDocSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
 
   // Shared company fill — used by both CompanySearch onSelect AND CompanyExcelUpload onFill
   function fillCompany(c: CompanyData) {
@@ -1002,6 +1008,56 @@ export default function AuditorAppointmentPage() {
       })
       .catch(() => {});
   }, [f.cin, session]);
+
+  // Load saved document from ?load=<id>
+  useEffect(() => {
+    const loadId = searchParams.get("load");
+    if (!loadId || !session) return;
+    fetch(`/api/auditor-appointment?id=${loadId}`)
+      .then(r => r.json())
+      .then((data: { doc?: { id: string; formDataJson: string } }) => {
+        if (data.doc?.formDataJson) {
+          try {
+            const saved = JSON.parse(data.doc.formDataJson) as F;
+            setF({ ...DEFAULT, ...saved });
+            setSavedDocId(data.doc.id);
+            setStep(5);
+          } catch { /* ignore parse errors */ }
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
+  async function handleSaveDocument() {
+    if (!session) return;
+    setDocSaveStatus("saving");
+    try {
+      const auditorLabel_ = f.auditorType === "firm"
+        ? (f.firmName || "Unknown Firm")
+        : (f.auditorName || "Unknown Auditor");
+      const title = `Auditor Appointment — ${f.companyName || "Company"} — ${auditorLabel_} — FY ${f.fy}`;
+      const res = await fetch("/api/auditor-appointment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: savedDocId || undefined,
+          companyName: f.companyName,
+          cin: f.cin,
+          financialYear: f.fy,
+          meetingDate: f.meetingDate || undefined,
+          title,
+          formDataJson: JSON.stringify(f),
+        }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      const data = await res.json() as { id?: string };
+      if (data.id) setSavedDocId(data.id);
+      setDocSaveStatus("saved");
+    } catch {
+      setDocSaveStatus("error");
+    }
+  }
 
   function applySavedAuditor(a: SavedAuditor) {
     const isIndividual = a.auditorType === "individual";
@@ -1268,7 +1324,7 @@ export default function AuditorAppointmentPage() {
                 </button>
               )}
               {step === 5 && (
-                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setSavedAuditors([]); setSaveStatus("idle"); }}
+                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setSavedAuditors([]); setSaveStatus("idle"); setDocSaveStatus("idle"); setSavedDocId(null); }}
                   className="px-4 py-2 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 hover:border-slate-300 transition-colors">
                   🔄 New Appointment
                 </button>
@@ -1975,6 +2031,39 @@ export default function AuditorAppointmentPage() {
                         <p className="text-xs text-slate-400 text-center mt-2">
                           Auto-fills in future appointments and annual filings for this company
                         </p>
+                      </div>
+                    )}
+
+                    {/* Save document to My Documents / Company Profile */}
+                    {session && (
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Save Appointment Record</p>
+                        <p className="text-xs text-slate-400 mb-3">
+                          Save this appointment to your records — reprint anytime from My Clients or Documents.
+                        </p>
+                        <button
+                          onClick={handleSaveDocument}
+                          disabled={docSaveStatus === "saving"}
+                          className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
+                            docSaveStatus === "saved"
+                              ? "bg-teal-50 border-2 border-teal-400 text-teal-700"
+                              : docSaveStatus === "error"
+                              ? "bg-red-50 border-2 border-red-300 text-red-600 hover:bg-red-100"
+                              : docSaveStatus === "saving"
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : "bg-gradient-to-br from-teal-600 to-teal-700 text-white hover:from-teal-500 hover:to-teal-600 shadow-sm"
+                          }`}>
+                          {docSaveStatus === "saving"   ? "Saving..."
+                           : docSaveStatus === "saved"  ? `✓ ${savedDocId ? "Record Updated" : "Appointment Saved"}`
+                           : docSaveStatus === "error"  ? "Save Failed — Try Again"
+                           : savedDocId                 ? "🔄 Update Saved Record"
+                           : "📁 Save to My Records"}
+                        </button>
+                        {docSaveStatus === "saved" && (
+                          <p className="text-xs text-teal-600 text-center mt-2">
+                            Visible in My Clients → {f.companyName || "Company"} → Documents
+                          </p>
+                        )}
                       </div>
                     )}
                   </>

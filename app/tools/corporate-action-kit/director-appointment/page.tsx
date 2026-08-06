@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import CompanySearch from "@/components/CompanySearch";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -1179,9 +1180,12 @@ function NewDirectorForm({ nd, designation, onChange }: {
 ═══════════════════════════════════════════════════════════════════ */
 export default function DirectorAppointmentPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const [f, setF] = useState<F>({ ...DEFAULT, newDirectors: [makeNd()] });
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState(1);
+  const [docSaveStatus, setDocSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [savedDocId, setSavedDocId] = useState<string | null>(null);
   const [activeNdTab, setActiveNdTab] = useState(0);
   const [activeDocKey, setActiveDocKey] = useState("notice");
   const [companySearchVal, setCompanySearchVal] = useState("");
@@ -1200,6 +1204,54 @@ export default function DirectorAppointmentPage() {
     if (!hydrated) return;
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(f)); } catch {}
   }, [f, hydrated]);
+
+  // Load saved document from ?load=<id>
+  useEffect(() => {
+    const loadId = searchParams.get("load");
+    if (!loadId || !session) return;
+    fetch(`/api/director-appointment?id=${loadId}`)
+      .then(r => r.json())
+      .then((data: { doc?: { id: string; formDataJson: string } }) => {
+        if (data.doc?.formDataJson) {
+          try {
+            const saved = JSON.parse(data.doc.formDataJson) as F;
+            setF({ ...DEFAULT, ...saved, newDirectors: saved.newDirectors?.length ? saved.newDirectors : [makeNd()] });
+            setSavedDocId(data.doc.id);
+            setHydrated(true);
+            setStep(6);
+          } catch { /* ignore parse errors */ }
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
+  async function handleSaveDocument() {
+    if (!session) return;
+    setDocSaveStatus("saving");
+    try {
+      const dirNames = f.newDirectors.map(d => d.name).filter(Boolean).join(", ");
+      const title = `Director Appointment — ${f.companyName || "Company"} — ${dirNames || "Directors"} — ${f.meetingDate || ""}`;
+      const res = await fetch("/api/director-appointment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: savedDocId || undefined,
+          companyName: f.companyName,
+          cin: f.cin,
+          meetingDate: f.meetingDate || undefined,
+          title,
+          formDataJson: JSON.stringify(f),
+        }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      const data = await res.json() as { id?: string };
+      if (data.id) setSavedDocId(data.id);
+      setDocSaveStatus("saved");
+    } catch {
+      setDocSaveStatus("error");
+    }
+  }
 
   // Auto-fill effectiveDate for directors that don't have one
   useEffect(() => {
@@ -1870,12 +1922,44 @@ export default function DirectorAppointmentPage() {
         </div>
         <div className="flex items-center justify-between pt-4 border-t border-slate-100">
           <button onClick={() => setStep(f.meetingAction === "resign" ? 4 : 5)} className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50">← Edit Details</button>
-          <button onClick={() => { setF({ ...DEFAULT, newDirectors: [makeNd()] }); setStep(1); try { localStorage.removeItem(DRAFT_KEY); } catch {} }}
+          <button onClick={() => { setF({ ...DEFAULT, newDirectors: [makeNd()] }); setStep(1); setDocSaveStatus("idle"); setSavedDocId(null); try { localStorage.removeItem(DRAFT_KEY); } catch {} }}
             className="px-5 py-2.5 rounded-xl text-sm font-bold border-2 border-slate-200 text-slate-500 hover:bg-slate-50">
             🔄 {f.meetingAction === "resign" ? "New Action" : "New Appointment"}
           </button>
         </div>
       </SectionCard>
+
+      {session && (
+        <SectionCard title="">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Save Appointment Record</p>
+          <p className="text-xs text-slate-400 mb-3">
+            Save this appointment to your records — reprint anytime from My Clients or Documents.
+          </p>
+          <button
+            onClick={handleSaveDocument}
+            disabled={docSaveStatus === "saving"}
+            className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
+              docSaveStatus === "saved"
+                ? "bg-teal-50 border-2 border-teal-400 text-teal-700"
+                : docSaveStatus === "error"
+                ? "bg-red-50 border-2 border-red-300 text-red-600 hover:bg-red-100"
+                : docSaveStatus === "saving"
+                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                : "bg-gradient-to-br from-teal-600 to-teal-700 text-white hover:from-teal-500 hover:to-teal-600 shadow-sm"
+            }`}>
+            {docSaveStatus === "saving"   ? "Saving..."
+             : docSaveStatus === "saved"  ? `✓ ${savedDocId ? "Record Updated" : "Appointment Saved"}`
+             : docSaveStatus === "error"  ? "Save Failed — Try Again"
+             : savedDocId                 ? "🔄 Update Saved Record"
+             : "📁 Save to My Records"}
+          </button>
+          {docSaveStatus === "saved" && (
+            <p className="text-xs text-teal-600 text-center mt-2">
+              Visible in My Clients → {f.companyName || "Company"} → Documents
+            </p>
+          )}
+        </SectionCard>
+      )}
     </>
   );
 

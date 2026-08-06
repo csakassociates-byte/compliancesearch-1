@@ -11,7 +11,7 @@ interface Doc {
 export default function DocumentsClient() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'agm_minutes' | 'board_minutes' | 'annual_filing'>('all');
+  const [filter, setFilter] = useState<string>('all');
   const [deleting, setDeleting] = useState<string | null>(null);
 
   async function loadDocs() {
@@ -33,20 +33,39 @@ export default function DocumentsClient() {
 
   const filtered = filter === 'all' ? docs : docs.filter(d => d.type === filter);
   const typeLabel: Record<string, string> = {
-    agm_minutes:   "AGM Minutes",
-    board_minutes: "Board Minutes",
-    annual_filing: "Annual Filing",
+    agm_minutes:          "AGM Minutes",
+    board_minutes:        "Board Minutes",
+    egm_minutes:          "EGM Minutes",
+    committee_minutes:    "Committee Meeting",
+    annual_filing:        "Annual Filing",
+    auditor_appointment:  "Auditor Appointment",
+    director_appointment: "Director Appointment",
   };
   const typeIcon: Record<string, string> = {
-    agm_minutes:   "🏛️",
-    board_minutes: "📋",
-    annual_filing: "📑",
+    agm_minutes:          "🏛️",
+    board_minutes:        "📋",
+    egm_minutes:          "⚡",
+    committee_minutes:    "👥",
+    annual_filing:        "📊",
+    auditor_appointment:  "🔍",
+    director_appointment: "👤",
   };
   const typeBadge: Record<string, string> = {
-    agm_minutes:   "bg-purple-100 text-purple-700",
-    board_minutes: "bg-blue-100 text-blue-700",
-    annual_filing: "bg-emerald-100 text-emerald-700",
+    agm_minutes:          "bg-purple-100 text-purple-700",
+    board_minutes:        "bg-blue-100 text-blue-700",
+    egm_minutes:          "bg-amber-100 text-amber-700",
+    committee_minutes:    "bg-emerald-100 text-emerald-700",
+    annual_filing:        "bg-teal-100 text-teal-700",
+    auditor_appointment:  "bg-green-100 text-green-700",
+    director_appointment: "bg-indigo-100 text-indigo-700",
   };
+
+  function docHref(doc: Doc): string {
+    if (doc.type === 'annual_filing')        return `/tools/documents/annual-filing?load=${doc.id}`;
+    if (doc.type === 'auditor_appointment')  return `/tools/corporate-action-kit/auditor-appointment?load=${doc.id}`;
+    if (doc.type === 'director_appointment') return `/tools/corporate-action-kit/director-appointment?load=${doc.id}`;
+    return `/dashboard/documents/${doc.id}`;
+  }
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -59,17 +78,23 @@ export default function DocumentsClient() {
 
         {/* Filter tabs */}
         <div className="flex gap-2 mb-5 flex-wrap">
-          {(['all', 'agm_minutes', 'board_minutes', 'annual_filing'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
+          {[
+            { key: 'all',                 label: `All (${docs.length})` },
+            { key: 'board_minutes',        label: `📋 Board (${docs.filter(d=>d.type==='board_minutes').length})` },
+            { key: 'agm_minutes',          label: `🏛️ AGM (${docs.filter(d=>d.type==='agm_minutes').length})` },
+            { key: 'egm_minutes',          label: `⚡ EGM (${docs.filter(d=>d.type==='egm_minutes').length})` },
+            { key: 'committee_minutes',    label: `👥 Committee (${docs.filter(d=>d.type==='committee_minutes').length})` },
+            { key: 'annual_filing',        label: `📊 Annual Filing (${docs.filter(d=>d.type==='annual_filing').length})` },
+            { key: 'auditor_appointment',  label: `🔍 Auditor Appt (${docs.filter(d=>d.type==='auditor_appointment').length})` },
+            { key: 'director_appointment', label: `👤 Director Appt (${docs.filter(d=>d.type==='director_appointment').length})` },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setFilter(key)}
               className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
-                filter === f
+                filter === key
                   ? 'bg-blue-600 text-white border-blue-600'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
               }`}>
-              {f === 'all'           ? `All (${docs.length})` :
-               f === 'agm_minutes'   ? `🏛️ AGM (${docs.filter(d=>d.type==='agm_minutes').length})` :
-               f === 'board_minutes' ? `📋 Board (${docs.filter(d=>d.type==='board_minutes').length})` :
-               `📑 Annual Filing (${docs.filter(d=>d.type==='annual_filing').length})`}
+              {label}
             </button>
           ))}
         </div>
@@ -102,9 +127,7 @@ export default function DocumentsClient() {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Link
-                    href={doc.type === 'annual_filing'
-                      ? `/tools/documents/annual-filing?load=${doc.id}`
-                      : `/dashboard/documents/${doc.id}`}
+                    href={docHref(doc)}
                     className="text-xs font-semibold text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50">
                     Open →
                   </Link>

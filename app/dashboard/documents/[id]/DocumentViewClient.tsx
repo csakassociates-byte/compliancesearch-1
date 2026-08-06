@@ -30,9 +30,17 @@ export default function DocumentViewClient({ docId }: { docId: string }) {
 
   function handleReOpen() {
     if (!doc) return;
-    // Annual filing uses ?load=<id> — no sessionStorage needed
+    // Tools that support ?load=<id> directly
     if (doc.type === 'annual_filing') {
       router.push(`/tools/documents/annual-filing?load=${doc.id}`);
+      return;
+    }
+    if (doc.type === 'auditor_appointment') {
+      router.push(`/tools/corporate-action-kit/auditor-appointment?load=${doc.id}`);
+      return;
+    }
+    if (doc.type === 'director_appointment') {
+      router.push(`/tools/corporate-action-kit/director-appointment?load=${doc.id}`);
       return;
     }
     // Other tools restore via sessionStorage
@@ -42,6 +50,10 @@ export default function DocumentViewClient({ docId }: { docId: string }) {
       ? '/tools/documents/minutes/agm'
       : doc.type === 'board_minutes'
       ? '/tools/documents/minutes/board'
+      : doc.type === 'egm_minutes'
+      ? '/tools/documents/minutes/egm'
+      : doc.type === 'committee_minutes'
+      ? '/tools/documents/minutes/committee'
       : doc.type === 'bank_resolution'
       ? '/tools/documents/bank-resolution'
       : doc.type === 'share_certificate'
@@ -50,8 +62,16 @@ export default function DocumentViewClient({ docId }: { docId: string }) {
     router.push(`${path}?restore=1`);
   }
 
-  const typeLabel: Record<string, string> = { agm_minutes: "AGM Minutes", board_minutes: "Board Minutes", annual_filing: "Annual Filing" };
-  const typeIcon: Record<string, string> = { agm_minutes: "🏛️", board_minutes: "📋", annual_filing: "📑" };
+  const typeLabel: Record<string, string> = {
+    agm_minutes: "AGM Minutes", board_minutes: "Board Minutes",
+    egm_minutes: "EGM Minutes", committee_minutes: "Committee Meeting",
+    annual_filing: "Annual Filing",
+    auditor_appointment: "Auditor Appointment", director_appointment: "Director Appointment",
+  };
+  const typeIcon: Record<string, string> = {
+    agm_minutes: "🏛️", board_minutes: "📋", egm_minutes: "⚡", committee_minutes: "👥",
+    annual_filing: "📊", auditor_appointment: "🔍", director_appointment: "👤",
+  };
 
   if (loading) return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center">

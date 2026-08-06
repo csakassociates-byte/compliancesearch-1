@@ -26,29 +26,45 @@ interface GapAlert {
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  agm_minutes:       'AGM',
-  board_minutes:     'Board Meeting',
-  egm_minutes:       'EGM',
-  committee_minutes: 'Committee Meeting',
-  bank_resolution:   'Bank Resolution',
-  share_certificate: 'Share Certificate',
+  agm_minutes:          'AGM',
+  board_minutes:        'Board Meeting',
+  egm_minutes:          'EGM',
+  committee_minutes:    'Committee Meeting',
+  bank_resolution:      'Bank Resolution',
+  share_certificate:    'Share Certificate',
+  annual_filing:        'Annual Filing',
+  auditor_appointment:  'Auditor Appointment',
+  director_appointment: 'Director Appointment',
 };
 const TYPE_ICON: Record<string, string> = {
-  agm_minutes:       '🏛️',
-  board_minutes:     '📋',
-  egm_minutes:       '⚡',
-  committee_minutes: '👥',
-  bank_resolution:   '🏦',
-  share_certificate: '📜',
+  agm_minutes:          '🏛️',
+  board_minutes:        '📋',
+  egm_minutes:          '⚡',
+  committee_minutes:    '👥',
+  bank_resolution:      '🏦',
+  share_certificate:    '📜',
+  annual_filing:        '📊',
+  auditor_appointment:  '🔍',
+  director_appointment: '👤',
 };
 const TYPE_COLOR: Record<string, string> = {
-  agm_minutes:       'bg-purple-100 text-purple-700 border-purple-200',
-  board_minutes:     'bg-blue-100 text-blue-700 border-blue-200',
-  egm_minutes:       'bg-amber-100 text-amber-700 border-amber-200',
-  committee_minutes: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  bank_resolution:   'bg-cyan-100 text-cyan-700 border-cyan-200',
-  share_certificate: 'bg-rose-100 text-rose-700 border-rose-200',
+  agm_minutes:          'bg-purple-100 text-purple-700 border-purple-200',
+  board_minutes:        'bg-blue-100 text-blue-700 border-blue-200',
+  egm_minutes:          'bg-amber-100 text-amber-700 border-amber-200',
+  committee_minutes:    'bg-emerald-100 text-emerald-700 border-emerald-200',
+  bank_resolution:      'bg-cyan-100 text-cyan-700 border-cyan-200',
+  share_certificate:    'bg-rose-100 text-rose-700 border-rose-200',
+  annual_filing:        'bg-teal-100 text-teal-700 border-teal-200',
+  auditor_appointment:  'bg-green-100 text-green-700 border-green-200',
+  director_appointment: 'bg-indigo-100 text-indigo-700 border-indigo-200',
 };
+
+function docOpenHref(doc: { id: string; type: string }): string {
+  if (doc.type === 'annual_filing')        return `/tools/documents/annual-filing?load=${doc.id}`;
+  if (doc.type === 'auditor_appointment')  return `/tools/corporate-action-kit/auditor-appointment?load=${doc.id}`;
+  if (doc.type === 'director_appointment') return `/tools/corporate-action-kit/director-appointment?load=${doc.id}`;
+  return `/dashboard/documents/${doc.id}`;
+}
 
 // All unique FYs from docs
 function extractFYs(docs: Doc[]): string[] {
@@ -186,6 +202,9 @@ function EditDocModal({
               <option value="committee_minutes">Committee Meeting</option>
               <option value="bank_resolution">Bank Resolution</option>
               <option value="share_certificate">Share Certificate</option>
+              <option value="annual_filing">Annual Filing</option>
+              <option value="auditor_appointment">Auditor Appointment</option>
+              <option value="director_appointment">Director Appointment</option>
             </select>
           </div>
           <div>
@@ -3527,9 +3546,15 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
                           <div key={doc.id}>
                             <div className="flex gap-4 items-start">
                               <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center flex-shrink-0 z-10 text-base ${
-                                doc.type==='agm_minutes'   ? 'bg-purple-50 border-purple-300' :
-                                doc.type==='board_minutes' ? 'bg-blue-50 border-blue-300' :
-                                doc.type==='bank_resolution' ? 'bg-cyan-50 border-cyan-300' :
+                                doc.type==='agm_minutes'          ? 'bg-purple-50 border-purple-300' :
+                                doc.type==='board_minutes'        ? 'bg-blue-50 border-blue-300' :
+                                doc.type==='egm_minutes'          ? 'bg-amber-50 border-amber-300' :
+                                doc.type==='committee_minutes'    ? 'bg-emerald-50 border-emerald-300' :
+                                doc.type==='bank_resolution'      ? 'bg-cyan-50 border-cyan-300' :
+                                doc.type==='share_certificate'    ? 'bg-rose-50 border-rose-300' :
+                                doc.type==='annual_filing'        ? 'bg-teal-50 border-teal-300' :
+                                doc.type==='auditor_appointment'  ? 'bg-green-50 border-green-300' :
+                                doc.type==='director_appointment' ? 'bg-indigo-50 border-indigo-300' :
                                 'bg-slate-50 border-slate-300'
                               }`}>
                                 {TYPE_ICON[doc.type] || '📄'}
@@ -3562,7 +3587,7 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
                                       ✏️
                                     </button>
                                     {/* Open button */}
-                                    <Link href={`/dashboard/documents/${doc.id}`}
+                                    <Link href={docOpenHref(doc)}
                                       className="text-xs font-semibold text-blue-600 border border-blue-200 px-2.5 py-1 rounded-lg hover:bg-blue-50">
                                       Open
                                     </Link>

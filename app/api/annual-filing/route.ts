@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTeamMemberIds } from "@/lib/team";
 
-async function syncCompanyToClientList(userId: string, companyName: string, cin?: string) {
+async function syncCompanyToClientList(userId: string, companyName: string, cin?: string): Promise<string | null> {
   try {
     const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `SELECT id FROM csi_companies
@@ -22,13 +22,16 @@ async function syncCompanyToClientList(userId: string, companyName: string, cin?
           existing[0].id, userId, cin
         );
       }
+      return existing[0].id;
     } else {
+      const newId = randomUUID();
       await prisma.$executeRawUnsafe(
         `INSERT INTO csi_companies (id, "userId", "companyName", cin, "updatedAt") VALUES ($1,$2,$3,$4,NOW())`,
-        randomUUID(), userId, companyName, cin || null
+        newId, userId, companyName, cin || null
       );
+      return newId;
     }
-  } catch { /* non-fatal — search sync */ }
+  } catch { return null; /* non-fatal */ }
 }
 
 // Ensure csi_documents has all columns needed for annual filing
@@ -71,6 +74,8 @@ export async function POST(req: NextRequest) {
 
     await ensureColumns();
 
+    const companyId = await syncCompanyToClientList(userId, body.companyName, body.cin);
+
     if (body.id) {
       await prisma.$executeRawUnsafe(
         `UPDATE csi_documents SET
@@ -78,6 +83,7 @@ export async function POST(req: NextRequest) {
           "companyName" = $4,
           "financialYear" = $5,
           "formDataJson" = $6,
+          "companyId" = COALESCE("companyId", $7),
           "updatedAt" = NOW()
          WHERE id = $1 AND "userId" = $2`,
         body.id,
@@ -86,24 +92,24 @@ export async function POST(req: NextRequest) {
         body.companyName,
         body.financialYear,
         body.formDataJson,
+        companyId,
       );
-      syncCompanyToClientList(userId, body.companyName, body.cin);
       return NextResponse.json({ success: true, id: body.id });
     }
 
     const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `INSERT INTO csi_documents
-        (id, "userId", type, title, "companyName", "financialYear", "formDataJson", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::TEXT, $1, 'annual_filing', $2, $3, $4, $5, NOW(), NOW())
+        (id, "userId", "companyId", type, title, "companyName", "financialYear", "formDataJson", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::TEXT, $1, $2, 'annual_filing', $3, $4, $5, $6, NOW(), NOW())
        RETURNING id`,
       userId,
+      companyId,
       `Annual Filing — ${body.companyName} — FY ${body.financialYear}`,
       body.companyName,
       body.financialYear,
       body.formDataJson,
     );
 
-    syncCompanyToClientList(userId, body.companyName, body.cin);
     return NextResponse.json({ success: true, id: rows[0]?.id });
   } catch (err) {
     console.error("[annual-filing POST]", err);

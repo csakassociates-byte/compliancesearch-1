@@ -26,9 +26,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }>>(
     `SELECT id, type, title, "financialYear", "meetingDate", "createdAt"
      FROM csi_documents
-     WHERE "companyId" = $1 AND "userId" = $2
+     WHERE "userId" = $2
+       AND ("companyId" = $1
+            OR ("companyId" IS NULL AND LOWER("companyName") = LOWER($3)))
      ORDER BY "meetingDate" DESC NULLS LAST, "createdAt" DESC`,
-    id, userId
+    id, userId, companies[0].companyName
   );
 
   return NextResponse.json({ company: companies[0], documents });
