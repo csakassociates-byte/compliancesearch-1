@@ -3338,10 +3338,17 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
   }
 
   const alerts = company ? computeGapAlerts(docs, company.entityType) : [];
-  const boardCount = docs.filter(d => d.type === 'board_minutes').length;
-  const agmCount   = docs.filter(d => d.type === 'agm_minutes').length;
-  const dangerCount  = alerts.filter(a => a.level === 'danger').length;
-  const warningCount = alerts.filter(a => a.level === 'warning').length;
+  const boardCount     = docs.filter(d => d.type === 'board_minutes').length;
+  const agmCount       = docs.filter(d => d.type === 'agm_minutes').length;
+  const egmCount       = docs.filter(d => d.type === 'egm_minutes').length;
+  const committeeCount = docs.filter(d => d.type === 'committee_minutes').length;
+  const annualCount    = docs.filter(d => d.type === 'annual_filing').length;
+  const auditorCount   = docs.filter(d => d.type === 'auditor_appointment').length;
+  const directorCount  = docs.filter(d => d.type === 'director_appointment').length;
+  const shareXferCount = docs.filter(d => d.type === 'share_transfer').length;
+  const shareCertCount = docs.filter(d => d.type === 'share_certificate').length;
+  const dangerCount    = alerts.filter(a => a.level === 'danger').length;
+  const warningCount   = alerts.filter(a => a.level === 'warning').length;
 
   // Sorted docs (newest first)
   const sortedDocs = [...docs].sort((a, b) => {
@@ -3404,16 +3411,23 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
                 </div>
               </div>
             </div>
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
               {[
-                { label:'Board Meetings', value:boardCount, icon:'📋' },
-                { label:'AGMs', value:agmCount, icon:'🏛️' },
-                { label:'Alerts', value:dangerCount+warningCount, icon:dangerCount>0?'🚨':warningCount>0?'⚠️':'✅', danger:dangerCount>0 },
-              ].map(s => (
-                <div key={s.label} className={`bg-white/10 backdrop-blur border ${s.danger?'border-red-400/50 bg-red-500/20':'border-white/20'} rounded-xl px-4 py-3 text-center min-w-[80px]`}>
-                  <div className="text-xl">{s.icon}</div>
-                  <div className="text-xl font-black text-white">{s.value}</div>
-                  <div className="text-xs text-blue-200 font-medium">{s.label}</div>
+                { label:'Board', value:boardCount,     icon:'📋', show: true },
+                { label:'AGM',   value:agmCount,       icon:'🏛️', show: true },
+                { label:'EGM',   value:egmCount,       icon:'⚡', show: egmCount > 0 },
+                { label:'Committee', value:committeeCount, icon:'👥', show: committeeCount > 0 },
+                { label:'Annual Filing', value:annualCount,   icon:'📊', show: annualCount > 0 },
+                { label:'Auditor Appt', value:auditorCount,  icon:'🔍', show: auditorCount > 0 },
+                { label:'Director Appt', value:directorCount, icon:'👤', show: directorCount > 0 },
+                { label:'Share Transfer', value:shareXferCount, icon:'🔄', show: shareXferCount > 0 },
+                { label:'Share Cert', value:shareCertCount, icon:'📜', show: shareCertCount > 0 },
+                { label:'Alerts', value:dangerCount+warningCount, icon:dangerCount>0?'🚨':warningCount>0?'⚠️':'✅', show: true, danger:dangerCount>0 },
+              ].filter(s => s.show).map(s => (
+                <div key={s.label} className={`bg-white/10 backdrop-blur border ${s.danger?'border-red-400/50 bg-red-500/20':'border-white/20'} rounded-xl px-3 py-2.5 text-center min-w-[72px]`}>
+                  <div className="text-lg">{s.icon}</div>
+                  <div className="text-lg font-black text-white leading-tight">{s.value}</div>
+                  <div className="text-xs text-blue-200 font-medium leading-tight mt-0.5">{s.label}</div>
                 </div>
               ))}
             </div>
