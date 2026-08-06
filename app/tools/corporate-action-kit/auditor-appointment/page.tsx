@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import CompanySearch from "@/components/CompanySearch";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -924,7 +923,6 @@ function downloadWord(html: string, filename: string) {
 ═══════════════════════════════════════════════ */
 export default function AuditorAppointmentPage() {
   const { data: session } = useSession();
-  const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
   const [f, setF] = useState<F>(DEFAULT);
   const [preview, setPreview] = useState<string | null>(null);
@@ -1011,7 +1009,7 @@ export default function AuditorAppointmentPage() {
 
   // Load saved document from ?load=<id>
   useEffect(() => {
-    const loadId = searchParams.get("load");
+    const loadId = new URLSearchParams(window.location.search).get("load");
     if (!loadId || !session) return;
     fetch(`/api/auditor-appointment?id=${loadId}`)
       .then(r => r.json())

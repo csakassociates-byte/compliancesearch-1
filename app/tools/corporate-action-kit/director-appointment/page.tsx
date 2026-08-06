@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import CompanySearch from "@/components/CompanySearch";
 import CompanyExcelUpload from "@/components/CompanyExcelUpload";
@@ -1180,7 +1179,6 @@ function NewDirectorForm({ nd, designation, onChange }: {
 ═══════════════════════════════════════════════════════════════════ */
 export default function DirectorAppointmentPage() {
   const { data: session } = useSession();
-  const searchParams = useSearchParams();
   const [f, setF] = useState<F>({ ...DEFAULT, newDirectors: [makeNd()] });
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState(1);
@@ -1207,7 +1205,7 @@ export default function DirectorAppointmentPage() {
 
   // Load saved document from ?load=<id>
   useEffect(() => {
-    const loadId = searchParams.get("load");
+    const loadId = new URLSearchParams(window.location.search).get("load");
     if (!loadId || !session) return;
     fetch(`/api/director-appointment?id=${loadId}`)
       .then(r => r.json())
