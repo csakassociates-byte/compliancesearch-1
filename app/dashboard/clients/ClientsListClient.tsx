@@ -104,7 +104,7 @@ export default function ClientsListClient() {
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900">My Clients</h1>
             <p className="text-slate-500 text-sm mt-0.5">
-              Manage your client companies and track their compliance meetings
+              Manage your client companies and track all documents — minutes, filings, appointments
             </p>
           </div>
         </div>
@@ -204,7 +204,9 @@ export default function ClientsListClient() {
                   </div>
                   <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-500">
-                      {c.docCount} meeting{c.docCount !== 1 ? 's' : ''} saved
+                      {c.docCount === 0
+                        ? 'No documents saved'
+                        : `${c.docCount} document${c.docCount !== 1 ? 's' : ''} saved`}
                     </span>
                     <span className="text-xs font-bold text-blue-600 group-hover/card:translate-x-1 transition-transform inline-block">
                       View →
@@ -248,7 +250,7 @@ export default function ClientsListClient() {
                 {modal.company.cin && <p className="text-xs text-slate-500 font-mono mt-0.5">{modal.company.cin}</p>}
                 {modal.company.docCount > 0 && (
                   <p className="text-xs text-amber-600 font-semibold mt-2">
-                    ⚠️ {modal.company.docCount} saved meeting{modal.company.docCount !== 1 ? 's' : ''} will become unlinked
+                    ⚠️ {modal.company.docCount} saved document{modal.company.docCount !== 1 ? 's' : ''} will become unlinked
                   </p>
                 )}
               </div>
