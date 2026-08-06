@@ -87,6 +87,7 @@ interface F {
   vacancyReason: VacancyReason;
   previousAuditorName: string;
   vacancyDate: string;
+  useLetterHead: boolean;
 }
 
 function makeDir(): MeetingDirector {
@@ -112,6 +113,7 @@ const DEFAULT: F = {
   chairmanName: "", chairmanDin: "",
   directors: [makeDir(), makeDir()],
   vacancyReason: "resignation", previousAuditorName: "", vacancyDate: "",
+  useLetterHead: true,
 };
 
 /* ═══════════════════════════════════════════════
@@ -845,6 +847,24 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
+function Toggle({ label, value, onChange, hint }: { label: string; value: boolean; onChange: (v: boolean) => void; hint?: string }) {
+  return (
+    <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+      <button
+        type="button"
+        onClick={() => onChange(!value)}
+        className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors ${value ? "bg-emerald-500" : "bg-slate-300"}`}
+      >
+        <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-1"}`} />
+      </button>
+      <div>
+        <p className="text-sm font-semibold text-slate-700">{label}</p>
+        {hint && <p className="text-xs text-slate-500 mt-0.5">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
 function ic(extra = "") {
   return `w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 focus:border-teal-500 focus:outline-none transition-colors bg-white ${extra}`;
 }
@@ -890,7 +910,6 @@ export default function AuditorAppointmentPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [previewLabel, setPreviewLabel] = useState("");
   const [previewKey, setPreviewKey] = useState<string>("");
-  const [lhPending, setLhPending] = useState<{ docKey: string; action: "print" | "word" | "all" } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // ── Saved-auditor autofill state ──
@@ -1072,70 +1091,26 @@ export default function AuditorAppointmentPage() {
     setPreview(final);
   }
 
-  function handleLHChoice(withLH: boolean) {
-    if (!lhPending) return;
-    if (lhPending.action === "all") {
-      docs.forEach((doc, i) => {
-        setTimeout(() => {
-          const html = doc.gen(withLH && !doc.auditorDoc);
-          const final = session ? html : injectPreviewWatermark(html);
-          printDoc(final);
-        }, i * 900);
-      });
-      setLhPending(null);
-      return;
-    }
-    const doc = docs.find(d => d.key === lhPending.docKey);
-    if (!doc) { setLhPending(null); return; }
+  function requestAction(docKey: string, action: "print" | "word") {
+    const withLH = f.useLetterHead !== false;
+    const doc = docs.find(d => d.key === docKey);
+    if (!doc) return;
     const effectiveLH = withLH && !doc.auditorDoc;
     const html = doc.gen(effectiveLH);
     const final = session ? html : injectPreviewWatermark(html);
-    if (lhPending.action === "print") {
+    if (action === "print") {
       printDoc(final);
     } else {
       downloadWord(final, doc.label);
     }
-    setLhPending(null);
-  }
-
-  function requestAction(docKey: string, action: "print" | "word") {
-    setLhPending({ docKey, action });
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
       <Navbar />
 
-      {/* ── LETTERHEAD MODAL ── */}
-      {lhPending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 border border-slate-200">
-            <div className="text-3xl mb-3 text-center">🖨️</div>
-            <h3 className="font-black text-xl text-slate-900 mb-1 text-center">Company Letterhead?</h3>
-            <p className="text-sm text-slate-500 mb-6 text-center">
-              {lhPending.action === "all"
-                ? "Print all documents — with or without company letterhead?"
-                : `${lhPending.action === "word" ? "Download Word" : "Print"} — with or without company letterhead?`}
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => handleLHChoice(true)}
-                className="flex-1 py-3 rounded-xl bg-teal-600 text-white font-bold text-sm hover:bg-teal-700 transition-colors shadow-sm">
-                With Letterhead
-              </button>
-              <button onClick={() => handleLHChoice(false)}
-                className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-700 font-bold text-sm hover:border-teal-400 transition-colors">
-                Without Letterhead
-              </button>
-            </div>
-            <button onClick={() => setLhPending(null)}
-              className="w-full mt-3 text-xs text-slate-400 hover:text-slate-600 transition-colors py-1">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
-      <div className="flex flex-1 overflow-hidden" style={{ height: "calc(100vh - 56px)" }}>
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* ── SIDEBAR ── */}
         <aside className="w-72 flex-shrink-0 flex flex-col"
@@ -1348,6 +1323,15 @@ export default function AuditorAppointmentPage() {
                     </div>
                   </div>
                 </SectionCard>
+
+                <SectionCard title="Document Preferences">
+                  <Toggle
+                    label="Print Company Letter Head on Documents"
+                    value={f.useLetterHead !== false}
+                    onChange={v => setF(p => ({ ...p, useLetterHead: v }))}
+                    hint="Turn OFF if the company has its own printed letter head paper — documents will show only title, not company branding"
+                  />
+                </SectionCard>
               </div>
             )}
 
@@ -1484,19 +1468,28 @@ export default function AuditorAppointmentPage() {
                 {f.appointmentType === "subsequent" && (
                   <SectionCard title="AGM Details">
                     <div className="space-y-4">
-                      <Field label="Financial Year of AGM" hint="e.g., 2025-26 means AGM will be held by Sep 30, 2026">
-                        <input
+                      <Field label="Financial Year of AGM" hint="Select the FY for which the AGM is being held">
+                        <select
                           className={ic()}
                           value={f.fy}
                           onChange={e => {
-                            const fy = e.target.value.trim();
+                            const fy = e.target.value;
                             const auto = calcAgmOrdinal(f.incorporationDate, fy);
                             setF(p => ({ ...p, fy, agmOrdinal: auto || p.agmOrdinal }));
                           }}
-                          placeholder="2025-26"
-                          maxLength={7}
-                        />
-                        {f.fy && /^\d{4}-\d{2}$/.test(f.fy) && (
+                        >
+                          <option value="">— Select Financial Year —</option>
+                          {(() => {
+                            const cur = new Date().getFullYear();
+                            const opts = [];
+                            for (let y = cur + 10; y >= cur - 15; y--) {
+                              const label = `${y}-${String(y + 1).slice(-2)}`;
+                              opts.push(<option key={label} value={label}>{label}</option>);
+                            }
+                            return opts;
+                          })()}
+                        </select>
+                        {f.fy && (
                           <p className="text-xs text-teal-600 mt-1.5">
                             AGM for FY {f.fy} must be held by <strong>30 September {parseInt(f.fy) + 1}</strong>
                           </p>
@@ -1892,7 +1885,16 @@ export default function AuditorAppointmentPage() {
 
                     <SectionCard title="">
                       <button
-                        onClick={() => setLhPending({ docKey: "all", action: "all" })}
+                        onClick={() => {
+                          const withLH = f.useLetterHead !== false;
+                          docs.forEach((doc, i) => {
+                            setTimeout(() => {
+                              const html = doc.gen(withLH && !doc.auditorDoc);
+                              const final = session ? html : injectPreviewWatermark(html);
+                              printDoc(final);
+                            }, i * 900);
+                          });
+                        }}
                         className="w-full py-3 rounded-xl text-white font-bold text-sm bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all shadow-sm">
                         🖨️ Print All {docs.length} Documents
                       </button>
