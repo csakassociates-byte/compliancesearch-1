@@ -1024,7 +1024,7 @@ export default function AuditorAppointmentPage() {
   }
 
   async function handleSaveAuditor() {
-    if (!session || !f.cin) return;
+    if (!session) return;
     setSaveStatus("saving");
     try {
       const payload = {
@@ -1704,6 +1704,32 @@ export default function AuditorAppointmentPage() {
                     </Field>
                   </div>
                 </SectionCard>
+
+                {session && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Add to My CA List</p>
+                    <p className="text-xs text-slate-400 mb-3">
+                      Save this auditor/firm to your master list — will auto-appear in the saved auditors dropdown for all future appointments across all companies.
+                    </p>
+                    <button
+                      onClick={handleSaveAuditor}
+                      disabled={saveStatus === "saving" || saveStatus === "saved"}
+                      className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
+                        saveStatus === "saved"
+                          ? "bg-emerald-50 border-2 border-emerald-400 text-emerald-700"
+                          : saveStatus === "error"
+                          ? "bg-red-50 border-2 border-red-300 text-red-600 hover:bg-red-100"
+                          : saveStatus === "saving"
+                          ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                          : "bg-gradient-to-br from-teal-600 to-teal-700 text-white hover:from-teal-500 hover:to-teal-600 shadow-sm"
+                      }`}>
+                      {saveStatus === "saving" ? "Saving..."
+                        : saveStatus === "saved" ? "✓ CA Added to Your List"
+                        : saveStatus === "error" ? "Save Failed — Try Again"
+                        : "💾 Add to My CA List"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
