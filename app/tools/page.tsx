@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { SUPER_USER_EMAIL } from "@/lib/tools-config";
 
 export const metadata: Metadata = {
   title: "Free Compliance Tools for CAs & CSs — ComplianceSearch.in",
@@ -29,6 +32,13 @@ export const metadata: Metadata = {
     type: "website",
   },
 };
+
+const TOOLS_LOCKED_HREFS = new Set([
+  "/tools/documents/minutes/agm",
+  "/tools/documents/minutes/board",
+  "/tools/business-valuation",
+  "/tools/penalty-calculator",
+]);
 
 const tools = [
   {
@@ -134,6 +144,19 @@ const tools = [
     borderColor: "#fecaca",
   },
   {
+    icon: "📑",
+    title: "Prepare Balance Sheet",
+    subtitle: "Schedule III Division I",
+    desc: "Prepare a complete Balance Sheet, P&L, and Cash Flow Statement under Schedule III Division I (Non-Ind AS). All 2021 MCA amendments — ageing, ratios, promoter table — auto-generated. Print with or without letterhead.",
+    href: "/tools/documents/balance-sheet",
+    badge: "New",
+    badgeColor: "#059669",
+    tags: ["Schedule III", "Div I", "Non-Ind AS", "FY 2025-26"],
+    color: "from-green-500 to-emerald-600",
+    bgLight: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+  {
     icon: "✅",
     title: "Compliance Checker",
     subtitle: "77+ Rules, 11 Categories",
@@ -149,7 +172,9 @@ const tools = [
   },
 ];
 
-export default function ToolsPage() {
+export default async function ToolsPage() {
+  const session = await getServerSession(authOptions);
+  const isSuperUser = session?.user?.email === SUPER_USER_EMAIL;
   return (
     <main style={{ fontFamily: "system-ui, -apple-system, sans-serif", color: "#1e293b" }}>
 
@@ -157,7 +182,7 @@ export default function ToolsPage() {
       <section style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%)", padding: "64px 20px 56px", textAlign: "center" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ display: "inline-block", background: "rgba(255,255,255,0.1)", borderRadius: 99, padding: "4px 16px", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 20 }}>
-            10 Free Tools
+            11 Free Tools
           </div>
           <h1 style={{ fontSize: "clamp(26px, 5vw, 44px)", fontWeight: 900, color: "#fff", margin: "0 0 16px", lineHeight: 1.15 }}>
             Free Compliance Tools<br />
@@ -167,7 +192,7 @@ export default function ToolsPage() {
             Professional-grade compliance tools — all free, no subscription. Generate documents, calculate penalties, value businesses, and check compliance requirements instantly.
           </p>
           <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap" }}>
-            {[["10", "Free Tools"], ["9+", "Document Types"], ["2 min", "Per Filing"], ["500+", "Professionals"]].map(([val, label]) => (
+            {[["11", "Free Tools"], ["9+", "Document Types"], ["2 min", "Per Filing"], ["500+", "Professionals"]].map(([val, label]) => (
               <div key={label} style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 26, fontWeight: 900, color: "#7dd3fc" }}>{val}</div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>{label}</div>
@@ -181,48 +206,61 @@ export default function ToolsPage() {
       <section style={{ padding: "64px 20px", background: "#f8fafc" }}>
         <div style={{ maxWidth: 1080, margin: "0 auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 24 }}>
-            {tools.map((tool) => (
-              <div key={tool.href} style={{ background: "#fff", borderRadius: 20, border: `1.5px solid ${tool.borderColor}`, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column" }}>
-                {/* Card header */}
-                <div style={{ background: tool.bgLight, padding: "22px 22px 18px", borderBottom: `1px solid ${tool.borderColor}` }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ fontSize: 32 }}>{tool.icon}</div>
-                      <div>
-                        <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a", lineHeight: 1.2 }}>{tool.title}</div>
-                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{tool.subtitle}</div>
+            {tools.map((tool) => {
+              const isLocked = !isSuperUser && TOOLS_LOCKED_HREFS.has(tool.href);
+              return (
+                <div key={tool.href} style={{ background: "#fff", borderRadius: 20, border: `1.5px solid ${isLocked ? "#e2e8f0" : tool.borderColor}`, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", opacity: isLocked ? 0.72 : 1 }}>
+                  {/* Card header */}
+                  <div style={{ background: isLocked ? "#f8fafc" : tool.bgLight, padding: "22px 22px 18px", borderBottom: `1px solid ${isLocked ? "#e2e8f0" : tool.borderColor}` }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ fontSize: 32, filter: isLocked ? "grayscale(0.6)" : "none" }}>{tool.icon}</div>
+                        <div>
+                          <div style={{ fontWeight: 900, fontSize: 16, color: isLocked ? "#64748b" : "#0f172a", lineHeight: 1.2 }}>{tool.title}</div>
+                          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{tool.subtitle}</div>
+                        </div>
                       </div>
+                      {isLocked ? (
+                        <span style={{ background: "#f1f5f9", color: "#94a3b8", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 99, textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0, marginLeft: 8 }}>
+                          🔒 Coming Soon
+                        </span>
+                      ) : tool.badge ? (
+                        <span style={{ background: tool.badgeColor, color: "#fff", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 99, textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0, marginLeft: 8 }}>
+                          {tool.badge}
+                        </span>
+                      ) : null}
                     </div>
-                    {tool.badge && (
-                      <span style={{ background: tool.badgeColor, color: "#fff", fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 99, textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0, marginLeft: 8 }}>
-                        {tool.badge}
-                      </span>
-                    )}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {tool.tags.map(t => (
+                        <span key={t} style={{ background: "rgba(0,0,0,0.06)", color: "#475569", fontSize: 11, padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>{t}</span>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {tool.tags.map(t => (
-                      <span key={t} style={{ background: "rgba(0,0,0,0.06)", color: "#475569", fontSize: 11, padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>{t}</span>
-                    ))}
+                  {/* Card body */}
+                  <div style={{ padding: "18px 22px 20px", flex: 1, display: "flex", flexDirection: "column" }}>
+                    <p style={{ fontSize: 14, color: "#475569", lineHeight: 1.65, margin: "0 0 18px", flex: 1 }}>{tool.desc}</p>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      {isLocked ? (
+                        <span style={{ flex: 1, display: "block", textAlign: "center", background: "#f1f5f9", color: "#94a3b8", fontWeight: 700, fontSize: 13, padding: "10px 16px", borderRadius: 10, cursor: "default" }}>
+                          🔒 Coming Soon
+                        </span>
+                      ) : (
+                        <Link href={tool.href}
+                          style={{ flex: 1, display: "block", textAlign: "center", background: "linear-gradient(135deg,#1e40af,#1d4ed8)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px 16px", borderRadius: 10, textDecoration: "none" }}>
+                          Open Tool →
+                        </Link>
+                      )}
+                      {!isLocked && tool.landingHref && (
+                        <Link href={tool.landingHref}
+                          style={{ display: "block", textAlign: "center", background: "#f1f5f9", color: "#475569", fontWeight: 600, fontSize: 13, padding: "10px 14px", borderRadius: 10, textDecoration: "none" }}>
+                          Learn More
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
-                {/* Card body */}
-                <div style={{ padding: "18px 22px 20px", flex: 1, display: "flex", flexDirection: "column" }}>
-                  <p style={{ fontSize: 14, color: "#475569", lineHeight: 1.65, margin: "0 0 18px", flex: 1 }}>{tool.desc}</p>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <Link href={tool.href}
-                      style={{ flex: 1, display: "block", textAlign: "center", background: "linear-gradient(135deg,#1e40af,#1d4ed8)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px 16px", borderRadius: 10, textDecoration: "none" }}>
-                      Open Tool →
-                    </Link>
-                    {tool.landingHref && (
-                      <Link href={tool.landingHref}
-                        style={{ display: "block", textAlign: "center", background: "#f1f5f9", color: "#475569", fontWeight: 600, fontSize: 13, padding: "10px 14px", borderRadius: 10, textDecoration: "none" }}>
-                        Learn More
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

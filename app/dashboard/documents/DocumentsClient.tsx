@@ -40,6 +40,7 @@ export default function DocumentsClient() {
     annual_filing:        "Annual Filing",
     auditor_appointment:  "Auditor Appointment",
     director_appointment: "Director Appointment",
+    balance_sheet:        "Balance Sheet",
   };
   const typeIcon: Record<string, string> = {
     agm_minutes:          "🏛️",
@@ -49,6 +50,7 @@ export default function DocumentsClient() {
     annual_filing:        "📊",
     auditor_appointment:  "🔍",
     director_appointment: "👤",
+    balance_sheet:        "📑",
   };
   const typeBadge: Record<string, string> = {
     agm_minutes:          "bg-purple-100 text-purple-700",
@@ -58,12 +60,14 @@ export default function DocumentsClient() {
     annual_filing:        "bg-teal-100 text-teal-700",
     auditor_appointment:  "bg-green-100 text-green-700",
     director_appointment: "bg-indigo-100 text-indigo-700",
+    balance_sheet:        "bg-sky-100 text-sky-700",
   };
 
   function docHref(doc: Doc): string {
     if (doc.type === 'annual_filing')        return `/tools/documents/annual-filing?load=${doc.id}`;
     if (doc.type === 'auditor_appointment')  return `/tools/corporate-action-kit/auditor-appointment?load=${doc.id}`;
     if (doc.type === 'director_appointment') return `/tools/corporate-action-kit/director-appointment?load=${doc.id}`;
+    if (doc.type === 'balance_sheet')        return `/tools/documents/balance-sheet/schedule-iii-div1?load=${doc.id}`;
     return `/dashboard/documents/${doc.id}`;
   }
 
@@ -87,6 +91,7 @@ export default function DocumentsClient() {
             { key: 'annual_filing',        label: `📊 Annual Filing (${docs.filter(d=>d.type==='annual_filing').length})` },
             { key: 'auditor_appointment',  label: `🔍 Auditor Appt (${docs.filter(d=>d.type==='auditor_appointment').length})` },
             { key: 'director_appointment', label: `👤 Director Appt (${docs.filter(d=>d.type==='director_appointment').length})` },
+            { key: 'balance_sheet',        label: `📑 Balance Sheet (${docs.filter(d=>d.type==='balance_sheet').length})` },
           ].map(({ key, label }) => (
             <button key={key} onClick={() => setFilter(key)}
               className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
