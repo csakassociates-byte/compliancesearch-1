@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import {
@@ -65,7 +65,7 @@ function computeBalance(d: BalanceSheetData): { totalLiabilities: number; totalA
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function ScheduleIIIDivIPage() {
+function ScheduleIIIDivIInner() {
   const searchParams = useSearchParams();
   const loadId = searchParams.get("load");
 
@@ -308,5 +308,13 @@ export default function ScheduleIIIDivIPage() {
 
       </div>
     </>
+  );
+}
+
+export default function ScheduleIIIDivIPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>Loading...</div>}>
+      <ScheduleIIIDivIInner />
+    </Suspense>
   );
 }
