@@ -27,7 +27,7 @@ function computeTotals(d: BalanceSheetData) {
 
   // Reserves
   const generalReserveClose = n(d.note2ReservesSurplus.generalReserveOpen) + n(d.note2ReservesSurplus.generalReserveAdditions);
-  const surplusClose = n(d.note2ReservesSurplus.surplusOpeningBalance) + n(d.note2ReservesSurplus.surplusNetProfit) - n(d.note2ReservesSurplus.surplusDividend) - n(d.note2ReservesSurplus.surplusTransferToGeneral);
+  const surplusClose = n(d.note2ReservesSurplus.surplusOpeningBalance) + n(d.note2ReservesSurplus.surplusNetProfit) - n(d.note2ReservesSurplus.surplusDividend) - n(d.note2ReservesSurplus.surplusTransferToReserve);
   const reserves = n(d.note2ReservesSurplus.capitalReserve) + n(d.note2ReservesSurplus.securitiesPremium) + generalReserveClose + surplusClose;
 
   // LT Borrowings
