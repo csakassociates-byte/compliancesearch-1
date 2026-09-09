@@ -68,6 +68,7 @@ function Card({ title, icon, children }: { title: string; icon: string; children
 
 export default function Step0Setup({ data, update }: Props) {
   const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   function applyCompanyData(c: CompanyData) {
     const fyOpt = FY_OPTIONS.find(f => f.value === data.financialYear) || FY_OPTIONS[0];
@@ -109,7 +110,7 @@ export default function Step0Setup({ data, update }: Props) {
 
         {showSearch && (
           <div style={{ marginBottom: 16 }}>
-            <CompanySearch onSelect={applyCompanyData} />
+            <CompanySearch value={searchQuery} onChange={setSearchQuery} onSelect={applyCompanyData} />
           </div>
         )}
 

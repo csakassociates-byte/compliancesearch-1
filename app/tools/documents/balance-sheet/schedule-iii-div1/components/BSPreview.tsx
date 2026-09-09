@@ -32,43 +32,43 @@ function computeTotals(d: BalanceSheetData) {
 
   // LT Borrowings
   const ltBorrow = d.note3LTBorrowings.items.reduce((s, i) => s + n(i.amount), 0);
-  const deferredTax = n(d.note4DeferredTax.dtl) - n(d.note4DeferredTax.dta);
-  const ltProvisions = n(d.note5LTProvisions.gratuity) + n(d.note5LTProvisions.leaveEncashment) + n(d.note5LTProvisions.others);
+  const deferredTax = n(d.note4DeferredTax.deferredTaxLiability) - n(d.note4DeferredTax.deferredTaxAsset);
+  const ltProvisions = n(d.note5LTProvisions.provisionForGratuity) + n(d.note5LTProvisions.provisionForLeaveEncashment) + n(d.note5LTProvisions.otherProvisions);
   const stBorrow = d.note6STBorrowings.items.reduce((s, i) => s + n(i.amount), 0);
   const tradePay = n(d.note7TradePayables.msmeAmount) + n(d.note7TradePayables.othersAmount);
   const otherCL = n(d.note8OtherCurrentLiabilities.currentMaturitiesLTBorrowings) + n(d.note8OtherCurrentLiabilities.interestAccrued) + n(d.note8OtherCurrentLiabilities.advancesFromCustomers) + n(d.note8OtherCurrentLiabilities.statutoryDues) + n(d.note8OtherCurrentLiabilities.otherPayables);
-  const stProvisions = n(d.note9STProvisions.provisionForTax) + n(d.note9STProvisions.proposedDividend) + n(d.note9STProvisions.others);
+  const stProvisions = n(d.note9STProvisions.provisionForTax) + n(d.note9STProvisions.proposedDividend) + n(d.note9STProvisions.otherProvisions);
 
   // Assets — Fixed Assets
-  const tangibleNBV = d.note10FixedAssets.tangible.reduce((s, r) => s + (n(r.gbClosingBalance) - n(r.depClosingBalance)), 0);
-  const intangibleNBV = d.note10FixedAssets.intangible.reduce((s, r) => s + (n(r.gbClosingBalance) - n(r.depClosingBalance)), 0);
+  const tangibleNBV = d.note10FixedAssets.tangibleAssets.reduce((s, r) => s + (n(r.gbClosingBalance) - n(r.depClosingBalance)), 0);
+  const intangibleNBV = d.note10FixedAssets.intangibleAssets.reduce((s, r) => s + (n(r.gbClosingBalance) - n(r.depClosingBalance)), 0);
   const cwip = n(d.note10FixedAssets.cwip);
   const goodwill = n(d.note10FixedAssets.goodwill);
   const totalFixedAssets = tangibleNBV + intangibleNBV + cwip + goodwill;
 
-  const ncInvestments = d.note11NCInvestments.items.reduce((s, i) => s + n(i.amount), 0);
+  const ncInvestments = [...d.note11NonCurrentInvestments.quotedItems, ...d.note11NonCurrentInvestments.unquotedItems].reduce((s, i) => s + n(i.amount), 0);
   const ltLoans = n(d.note12LTLoansAdvances.capitalAdvances) + n(d.note12LTLoansAdvances.securityDeposits) + n(d.note12LTLoansAdvances.otherLoansAdvances);
-  const otherNCA = n(d.note13OtherNonCurrentAssets.longTermTradeReceivables) + n(d.note13OtherNonCurrentAssets.others);
+  const otherNCA = n(d.note13OtherNonCurrentAssets.longTermTradeReceivables) + n(d.note13OtherNonCurrentAssets.otherNonCurrentAssets);
 
-  const currentInv = n(d.note14CurrentInvestments.mutualFunds) + n(d.note14CurrentInvestments.fixedDepositsMaturing12m) + n(d.note14CurrentInvestments.others);
-  const inventories = n(d.note15Inventories.rawMaterials) + n(d.note15Inventories.workInProgress) + n(d.note15Inventories.finishedGoods) + n(d.note15Inventories.stockInTrade) + n(d.note15Inventories.storesConsumables) + n(d.note15Inventories.looseTools);
+  const currentInv = n(d.note14CurrentInvestments.mutualFunds) + n(d.note14CurrentInvestments.fixedDepositsMaturing12m) + n(d.note14CurrentInvestments.otherCurrentInvestments);
+  const inventories = n(d.note15Inventories.rawMaterials) + n(d.note15Inventories.workInProgress) + n(d.note15Inventories.finishedGoods) + n(d.note15Inventories.stockInTrade) + n(d.note15Inventories.storesSpares) + n(d.note15Inventories.looseTool);
   const tradeRec = n(d.note16TradeReceivables.outstandingMore6mSecured) + n(d.note16TradeReceivables.outstandingMore6mUnsecured) + n(d.note16TradeReceivables.outstandingMore6mDoubtful) + n(d.note16TradeReceivables.outstandingLess6mSecured) + n(d.note16TradeReceivables.outstandingLess6mUnsecured);
-  const cash = n(d.note17CashEquivalents.cashOnHand) + n(d.note17CashEquivalents.balancesWithBanks) + n(d.note17CashEquivalents.fixedDepositsMaturing3m) + n(d.note17CashEquivalents.chequesInHand);
-  const stLoans = n(d.note18STLoansAdvances.prepaidExpenses) + n(d.note18STLoansAdvances.advancesToSuppliers) + n(d.note18STLoansAdvances.balanceWithGovernment) + n(d.note18STLoansAdvances.others);
-  const otherCA = n(d.note19OtherCurrentAssets.interestAccruedOnDeposits) + n(d.note19OtherCurrentAssets.unbilledRevenue) + n(d.note19OtherCurrentAssets.others);
+  const cash = n(d.note17CashEquivalents.cashOnHand) + n(d.note17CashEquivalents.balancesWithBanks) + n(d.note17CashEquivalents.fixedDepositsWithin3m) + n(d.note17CashEquivalents.chequesDraftsOnHand);
+  const stLoans = n(d.note18STLoansAdvances.prepaidExpenses) + n(d.note18STLoansAdvances.advancesToSuppliers) + n(d.note18STLoansAdvances.balanceWithGovernment) + n(d.note18STLoansAdvances.otherAdvances);
+  const otherCA = n(d.note19OtherCurrentAssets.interestAccruedOnDeposits) + n(d.note19OtherCurrentAssets.otherCurrentAssets);
 
   // P&L
   const revenue = n(d.note20Revenue.saleOfProducts) + n(d.note20Revenue.saleOfServices) + n(d.note20Revenue.otherOperatingRevenue) - n(d.note20Revenue.lessExciseDuty);
   const otherIncome = n(d.note21OtherIncome.interestIncome) + n(d.note21OtherIncome.dividendIncome) + n(d.note21OtherIncome.profitOnSaleOfAssets) + n(d.note21OtherIncome.miscIncome);
   const totalRevenue = revenue + otherIncome;
 
-  const materialsConsumed = n(d.note22MaterialsConsumed.openingStock) + n(d.note22MaterialsConsumed.purchases) - n(d.note22MaterialsConsumed.closingStock);
+  const materialsConsumed = n(d.note22Materials.openingStock) + n(d.note22Materials.purchases) - n(d.note22Materials.closingStock);
   const purchases = n(d.note23PurchasesStockInTrade.purchases);
-  const invChange = n(d.note24InventoryChanges.openingFG) + n(d.note24InventoryChanges.openingWIP) + n(d.note24InventoryChanges.openingSIT) - n(d.note24InventoryChanges.closingFG) - n(d.note24InventoryChanges.closingWIP) - n(d.note24InventoryChanges.closingSIT);
-  const employee = n(d.note25EmployeeBenefits.salariesWages) + n(d.note25EmployeeBenefits.pfContribution) + n(d.note25EmployeeBenefits.gratuity) + n(d.note25EmployeeBenefits.staffWelfare) + n(d.note25EmployeeBenefits.esiContribution) + n(d.note25EmployeeBenefits.directorRemuneration);
+  const invChange = n(d.note24InventoryChanges.openingFinishedGoods) + n(d.note24InventoryChanges.openingWIP) + n(d.note24InventoryChanges.openingStockInTrade) - n(d.note24InventoryChanges.closingFinishedGoods) - n(d.note24InventoryChanges.closingWIP) - n(d.note24InventoryChanges.closingStockInTrade);
+  const employee = n(d.note25EmployeeBenefits.salariesWages) + n(d.note25EmployeeBenefits.providentFund) + n(d.note25EmployeeBenefits.gratuity) + n(d.note25EmployeeBenefits.staffWelfare) + n(d.note25EmployeeBenefits.bonuses) + n(d.note25EmployeeBenefits.directorRemuneration);
   const finCosts = n(d.note26FinanceCosts.interestOnBorrowings) + n(d.note26FinanceCosts.bankCharges) + n(d.note26FinanceCosts.otherFinanceCosts);
   const depreciation = n(d.note27Depreciation.depreciation) + n(d.note27Depreciation.amortization);
-  const otherExp = n(d.note28OtherExpenses.powerFuel) + n(d.note28OtherExpenses.rentCharges) + n(d.note28OtherExpenses.repairsMaintenance) + n(d.note28OtherExpenses.advertisingMarketing) + n(d.note28OtherExpenses.travelConveyance) + n(d.note28OtherExpenses.legalProfessional) + n(d.note28OtherExpenses.auditFees) + n(d.note28OtherExpenses.insurancePremium) + n(d.note28OtherExpenses.miscExpenses);
+  const otherExp = n(d.note28OtherExpenses.powerFuel) + n(d.note28OtherExpenses.rent) + n(d.note28OtherExpenses.repairsMaintenance) + n(d.note28OtherExpenses.advertisingMarketing) + n(d.note28OtherExpenses.travellingConveyance) + n(d.note28OtherExpenses.legalProfessional) + n(d.note28OtherExpenses.auditFees) + n(d.note28OtherExpenses.insurancePremium) + n(d.note28OtherExpenses.miscExpenses);
   const totalExpenses = materialsConsumed + purchases + invChange + employee + finCosts + depreciation + otherExp;
 
   const pbt = totalRevenue - totalExpenses;

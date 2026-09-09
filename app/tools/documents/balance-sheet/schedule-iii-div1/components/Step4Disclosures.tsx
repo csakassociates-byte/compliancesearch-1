@@ -49,7 +49,7 @@ function computeAutoRatios(data: BalanceSheetData): Partial<FinancialRatios> {
     n(data.note18STLoansAdvances.prepaidExpenses) + n(data.note18STLoansAdvances.advancesToSuppliers) + n(data.note18STLoansAdvances.balanceWithGovernment);
 
   const currentLiabilities =
-    n(data.note6STBorrowings.items.reduce((s, i) => s + n(i.amount), 0)) +
+    data.note6STBorrowings.items.reduce((s, i) => s + n(i.amount), 0) +
     n(data.note7TradePayables.msmeAmount) + n(data.note7TradePayables.othersAmount) +
     n(data.note8OtherCurrentLiabilities.currentMaturitiesLTBorrowings) + n(data.note8OtherCurrentLiabilities.interestAccrued) + n(data.note8OtherCurrentLiabilities.advancesFromCustomers) + n(data.note8OtherCurrentLiabilities.statutoryDues) + n(data.note8OtherCurrentLiabilities.otherPayables) +
     n(data.note9STProvisions.provisionForTax) + n(data.note9STProvisions.proposedDividend);
