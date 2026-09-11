@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { BalanceSheetData } from "@/lib/balance-sheet/types";
 import { n } from "@/lib/balance-sheet/types";
+import AmountInput from "./AmountInput";
 
 interface Props {
   data: BalanceSheetData;
@@ -55,8 +56,12 @@ function Row({ label, v1, v2, onChange1, onChange2, showHeaders, bold, autoVal }
         )}
         {label}
       </div>
-      <input type="number" style={autoVal ? S.auto : S.num} readOnly={autoVal} value={v1} onChange={e => onChange1(e.target.value)} placeholder="0" />
-      <input type="number" style={autoVal ? S.auto : S.num} readOnly={autoVal} value={v2} onChange={e => onChange2(e.target.value)} placeholder="0" />
+      {autoVal
+        ? <input type="number" style={S.auto} readOnly value={v1} />
+        : <AmountInput style={S.num} value={v1} onChange={onChange1} placeholder="0" />}
+      {autoVal
+        ? <input type="number" style={S.auto} readOnly value={v2} />
+        : <AmountInput style={S.num} value={v2} onChange={onChange2} placeholder="0" />}
     </div>
   );
 }
@@ -350,13 +355,13 @@ function PLSummary({ data, update }: { data: BalanceSheetData; update: Props["up
           <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>Tax Expense</div>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, alignItems: "end", marginBottom: 8 }}>
             <div style={{ fontSize: 13, color: "#374151" }}>Current Tax</div>
-            <input type="number" style={S.num} value={data.currentTax} onChange={e => update({ currentTax: e.target.value })} placeholder="0" />
-            <input type="number" style={S.num} value={data.currentTaxPrev} onChange={e => update({ currentTaxPrev: e.target.value })} placeholder="0" />
+            <AmountInput style={S.num} value={data.currentTax} onChange={v => update({ currentTax: v })} placeholder="0" />
+            <AmountInput style={S.num} value={data.currentTaxPrev} onChange={v => update({ currentTaxPrev: v })} placeholder="0" />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, alignItems: "end" }}>
             <div style={{ fontSize: 13, color: "#374151" }}>Deferred Tax Charge / (Credit)</div>
-            <input type="number" style={S.num} value={data.deferredTaxCharge} onChange={e => update({ deferredTaxCharge: e.target.value })} placeholder="0" />
-            <input type="number" style={S.num} value={data.deferredTaxChargePrev} onChange={e => update({ deferredTaxChargePrev: e.target.value })} placeholder="0" />
+            <AmountInput style={S.num} value={data.deferredTaxCharge} onChange={v => update({ deferredTaxCharge: v })} placeholder="0" />
+            <AmountInput style={S.num} value={data.deferredTaxChargePrev} onChange={v => update({ deferredTaxChargePrev: v })} placeholder="0" />
           </div>
         </div>
 

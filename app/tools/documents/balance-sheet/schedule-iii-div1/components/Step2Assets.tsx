@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { BalanceSheetData, FixedAssetRow, InvestmentItem } from "@/lib/balance-sheet/types";
 import { makeEmptyFixedAssetRow, n } from "@/lib/balance-sheet/types";
+import AmountInput from "./AmountInput";
 
 interface Props {
   data: BalanceSheetData;
@@ -49,8 +50,8 @@ function TwoCol({ label1, v1, v2, onChange1, onChange2, showHeaders }: { label1:
         {showHeaders && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 4 }}><span style={S.label}>Current Yr</span><span style={S.label}>Prev Yr</span></div>}
         {label1}
       </div>
-      <input type="number" style={S.num} value={v1} onChange={e => onChange1(e.target.value)} placeholder="0" />
-      <input type="number" style={S.num} value={v2} onChange={e => onChange2(e.target.value)} placeholder="0" />
+      <AmountInput style={S.num} value={v1} onChange={onChange1} placeholder="0" />
+      <AmountInput style={S.num} value={v2} onChange={onChange2} placeholder="0" />
     </div>
   );
 }
@@ -122,17 +123,17 @@ function FARTable({ rows, onChange, title }: { rows: FixedAssetRow[]; onChange: 
                   <TD>
                     <input style={{ ...S.input, minWidth: 120 }} value={row.assetClass} onChange={e => updateRow(idx, { assetClass: e.target.value })} />
                   </TD>
-                  <TD><input type="number" style={S.num} value={row.gbOpeningBalance}   onChange={e => updateRow(idx, { gbOpeningBalance: e.target.value })} /></TD>
-                  <TD><input type="number" style={S.num} value={row.gbAdditions}        onChange={e => updateRow(idx, { gbAdditions: e.target.value })} /></TD>
-                  <TD><input type="number" style={S.num} value={row.gbDisposals}        onChange={e => updateRow(idx, { gbDisposals: e.target.value })} /></TD>
+                  <TD><AmountInput style={S.num} value={row.gbOpeningBalance}   onChange={v => updateRow(idx, { gbOpeningBalance: v })} /></TD>
+                  <TD><AmountInput style={S.num} value={row.gbAdditions}        onChange={v => updateRow(idx, { gbAdditions: v })} /></TD>
+                  <TD><AmountInput style={S.num} value={row.gbDisposals}        onChange={v => updateRow(idx, { gbDisposals: v })} /></TD>
                   <TD><input style={S.numAuto} readOnly value={row.gbClosingBalance} /></TD>
-                  <TD><input type="number" style={S.num} value={row.depOpeningBalance}  onChange={e => updateRow(idx, { depOpeningBalance: e.target.value })} /></TD>
-                  <TD><input type="number" style={S.num} value={row.depForYear}         onChange={e => updateRow(idx, { depForYear: e.target.value })} /></TD>
-                  <TD><input type="number" style={S.num} value={row.depOnDisposals}     onChange={e => updateRow(idx, { depOnDisposals: e.target.value })} /></TD>
+                  <TD><AmountInput style={S.num} value={row.depOpeningBalance}  onChange={v => updateRow(idx, { depOpeningBalance: v })} /></TD>
+                  <TD><AmountInput style={S.num} value={row.depForYear}         onChange={v => updateRow(idx, { depForYear: v })} /></TD>
+                  <TD><AmountInput style={S.num} value={row.depOnDisposals}     onChange={v => updateRow(idx, { depOnDisposals: v })} /></TD>
                   <TD><input style={S.numAuto} readOnly value={row.depClosingBalance} /></TD>
                   <TD><div style={{ ...S.numAuto, padding: "7px 8px" }}>{nbClose.toFixed(2)}</div></TD>
-                  <TD><input type="number" style={S.num} value={row.gbPrevClosing}      onChange={e => updateRow(idx, { gbPrevClosing: e.target.value })} /></TD>
-                  <TD><input type="number" style={S.num} value={row.depPrevClosing}     onChange={e => updateRow(idx, { depPrevClosing: e.target.value })} /></TD>
+                  <TD><AmountInput style={S.num} value={row.gbPrevClosing}      onChange={v => updateRow(idx, { gbPrevClosing: v })} /></TD>
+                  <TD><AmountInput style={S.num} value={row.depPrevClosing}     onChange={v => updateRow(idx, { depPrevClosing: v })} /></TD>
                   <TD><div style={{ ...S.numAuto, padding: "7px 8px" }}>{nbPrev.toFixed(2)}</div></TD>
                   <TD><button style={S.delBtn} onClick={() => removeRow(idx)}>×</button></TD>
                 </tr>
@@ -191,11 +192,11 @@ function Note10({ data, updateNote }: { data: BalanceSheetData; updateNote: Prop
       <div style={S.row2}>
         <div>
           <label style={S.label}>CWIP Amount — Current Yr</label>
-          <input type="number" style={S.num} value={d.cwip} onChange={e => u({ cwip: e.target.value })} />
+          <AmountInput style={S.num} value={d.cwip} onChange={v => u({ cwip: v })} />
         </div>
         <div>
           <label style={S.label}>CWIP Amount — Prev Yr</label>
-          <input type="number" style={S.num} value={d.cwipPrev} onChange={e => u({ cwipPrev: e.target.value })} />
+          <AmountInput style={S.num} value={d.cwipPrev} onChange={v => u({ cwipPrev: v })} />
         </div>
       </div>
 
@@ -212,7 +213,7 @@ function Note10({ data, updateNote }: { data: BalanceSheetData; updateNote: Prop
             ].map(b => (
               <div key={b.key}>
                 <label style={S.label}>{b.label}</label>
-                <input type="number" style={S.num} value={d[b.key]} onChange={e => u({ [b.key]: e.target.value } as Partial<typeof d>)} placeholder="0" />
+                <AmountInput style={S.num} value={d[b.key]} onChange={v => u({ [b.key]: v } as Partial<typeof d>)} placeholder="0" />
               </div>
             ))}
           </div>
@@ -223,11 +224,11 @@ function Note10({ data, updateNote }: { data: BalanceSheetData; updateNote: Prop
       <div style={{ marginTop: 14, ...S.row2 }}>
         <div>
           <label style={S.label}>Goodwill — Current Yr</label>
-          <input type="number" style={S.num} value={d.goodwill} onChange={e => u({ goodwill: e.target.value })} />
+          <AmountInput style={S.num} value={d.goodwill} onChange={v => u({ goodwill: v })} />
         </div>
         <div>
           <label style={S.label}>Goodwill — Prev Yr</label>
-          <input type="number" style={S.num} value={d.goodwillPrev} onChange={e => u({ goodwillPrev: e.target.value })} />
+          <AmountInput style={S.num} value={d.goodwillPrev} onChange={v => u({ goodwillPrev: v })} />
         </div>
       </div>
 
@@ -267,15 +268,15 @@ function Note11({ data, updateNote }: { data: BalanceSheetData; updateNote: Prop
             </div>
             <div>
               {idx === 0 && <label style={S.label}>Units</label>}
-              <input type="number" style={S.num} value={item.units} onChange={e => updateItem(type, idx, { units: e.target.value })} />
+              <AmountInput style={S.num} value={item.units} onChange={v => updateItem(type, idx, { units: v })} />
             </div>
             <div>
               {idx === 0 && <label style={S.label}>Amount (Cur)</label>}
-              <input type="number" style={S.num} value={item.amount} onChange={e => updateItem(type, idx, { amount: e.target.value })} />
+              <AmountInput style={S.num} value={item.amount} onChange={v => updateItem(type, idx, { amount: v })} />
             </div>
             <div>
               {idx === 0 && <label style={S.label}>Amount (Prev)</label>}
-              <input type="number" style={S.num} value={item.amountPrev} onChange={e => updateItem(type, idx, { amountPrev: e.target.value })} />
+              <AmountInput style={S.num} value={item.amountPrev} onChange={v => updateItem(type, idx, { amountPrev: v })} />
             </div>
             <div>
               {idx === 0 && <label style={S.label}>Valued At</label>}

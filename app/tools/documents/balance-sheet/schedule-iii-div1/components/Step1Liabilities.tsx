@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { BalanceSheetData, Note1ShareCapital, Note2ReservesSurplus, Note3LTBorrowings, Note6STBorrowings } from "@/lib/balance-sheet/types";
 import { makeEmptyShareCapitalClass, makeEmptyBorrowingItem, n } from "@/lib/balance-sheet/types";
+import AmountInput from "./AmountInput";
 
 interface Props {
   data: BalanceSheetData;
@@ -49,11 +50,11 @@ function TwoCol({ label1, label2, v1, v2, onChange1, onChange2, bold }: { label1
       <div style={{ fontSize: 13, fontWeight: bold ? 700 : 400, color: "#374151", paddingBottom: 8 }}>{label1}</div>
       <div>
         {label2 && <label style={S.label}>Current Yr</label>}
-        <input type="number" style={S.numInput} value={v1} onChange={e => onChange1(e.target.value)} placeholder="0" />
+        <AmountInput style={S.numInput} value={v1} onChange={onChange1} placeholder="0" />
       </div>
       <div>
         {label2 && <label style={S.label}>Prev Yr</label>}
-        <input type="number" style={S.numInput} value={v2} onChange={e => onChange2(e.target.value)} placeholder="0" />
+        <AmountInput style={S.numInput} value={v2} onChange={onChange2} placeholder="0" />
       </div>
     </div>
   );
@@ -96,31 +97,31 @@ function Note1({ data, updateNote }: { data: BalanceSheetData; updateNote: Props
               </div>
               <div>
                 <label style={S.label}>Authorised (No. of shares)</label>
-                <input type="number" style={S.numInput} value={cls.authorisedShares} onChange={e => updateClass(idx, { authorisedShares: e.target.value })} />
+                <AmountInput style={S.numInput} value={cls.authorisedShares} onChange={v => updateClass(idx, { authorisedShares: v })} />
               </div>
             </div>
             <div style={S.row3}>
               <div>
                 <label style={S.label}>Issued Shares</label>
-                <input type="number" style={S.numInput} value={cls.issuedShares} onChange={e => updateClass(idx, { issuedShares: e.target.value })} />
+                <AmountInput style={S.numInput} value={cls.issuedShares} onChange={v => updateClass(idx, { issuedShares: v })} />
               </div>
               <div>
                 <label style={S.label}>Subscribed Shares</label>
-                <input type="number" style={S.numInput} value={cls.subscribedShares} onChange={e => updateClass(idx, { subscribedShares: e.target.value })} />
+                <AmountInput style={S.numInput} value={cls.subscribedShares} onChange={v => updateClass(idx, { subscribedShares: v })} />
               </div>
               <div>
                 <label style={S.label}>Paid-up Shares</label>
-                <input type="number" style={S.numInput} value={cls.paidUpShares} onChange={e => updateClass(idx, { paidUpShares: e.target.value })} />
+                <AmountInput style={S.numInput} value={cls.paidUpShares} onChange={v => updateClass(idx, { paidUpShares: v })} />
               </div>
             </div>
             <div style={S.row2}>
               <div>
                 <label style={S.label}>Paid-up Amount (₹) — Current Yr</label>
-                <input type="number" style={S.numInput} value={cls.paidUpAmount} onChange={e => updateClass(idx, { paidUpAmount: e.target.value })} />
+                <AmountInput style={S.numInput} value={cls.paidUpAmount} onChange={v => updateClass(idx, { paidUpAmount: v })} />
               </div>
               <div>
                 <label style={S.label}>Paid-up Amount (₹) — Prev Yr</label>
-                <input type="number" style={S.numInput} value={cls.prevPaidUpAmount} onChange={e => updateClass(idx, { prevPaidUpAmount: e.target.value })} />
+                <AmountInput style={S.numInput} value={cls.prevPaidUpAmount} onChange={v => updateClass(idx, { prevPaidUpAmount: v })} />
               </div>
             </div>
           </div>
@@ -145,8 +146,8 @@ function Note1({ data, updateNote }: { data: BalanceSheetData; updateNote: Props
             </div>
             <div>
               {idx === 0 && <label style={S.label}>Shares (Cur)</label>}
-              <input type="number" style={S.numInput} value={sh.shares} onChange={e => {
-                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, shares: e.target.value } : s);
+              <AmountInput style={S.numInput} value={sh.shares} onChange={v => {
+                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, shares: v } : s);
                 updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
               }} />
             </div>
@@ -159,8 +160,8 @@ function Note1({ data, updateNote }: { data: BalanceSheetData; updateNote: Props
             </div>
             <div>
               {idx === 0 && <label style={S.label}>Shares (Prev)</label>}
-              <input type="number" style={S.numInput} value={sh.prevShares} onChange={e => {
-                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, prevShares: e.target.value } : s);
+              <AmountInput style={S.numInput} value={sh.prevShares} onChange={v => {
+                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, prevShares: v } : s);
                 updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
               }} />
             </div>
@@ -267,11 +268,11 @@ function BorrowingsNote({ noteNo, title, note, onChange }: {
               <div style={{ display: "flex", gap: 8 }}>
                 <div style={{ flex: 1 }}>
                   <label style={S.label}>Amount (₹) — Cur</label>
-                  <input type="number" style={S.numInput} value={item.amount} onChange={e => onChange({ items: note.items.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x) })} />
+                  <AmountInput style={S.numInput} value={item.amount} onChange={v => onChange({ items: note.items.map((x, i) => i === idx ? { ...x, amount: v } : x) })} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={S.label}>Amount (₹) — Prev</label>
-                  <input type="number" style={S.numInput} value={item.amountPrev} onChange={e => onChange({ items: note.items.map((x, i) => i === idx ? { ...x, amountPrev: e.target.value } : x) })} />
+                  <AmountInput style={S.numInput} value={item.amountPrev} onChange={v => onChange({ items: note.items.map((x, i) => i === idx ? { ...x, amountPrev: v } : x) })} />
                 </div>
               </div>
             </div>
@@ -363,7 +364,7 @@ function Note7({ data, updateNote }: { data: BalanceSheetData; updateNote: Props
                 <td style={{ padding: "8px 10px", fontWeight: 600, border: "1px solid #e2e8f0" }}>{row.label}</td>
                 {(["outstanding1yr", "outstanding13yr", "outstanding23yr", "moreThan3yr"] as const).map(field => (
                   <td key={field} style={{ border: "1px solid #e2e8f0", padding: 4 }}>
-                    <input type="number" style={{ ...S.numInput, border: "none", background: "transparent" }} value={d[row.key][field]} onChange={e => u({ [row.key]: { ...d[row.key], [field]: e.target.value } } as Partial<typeof d>)} placeholder="0" />
+                    <AmountInput style={{ ...S.numInput, border: "none", background: "transparent" }} value={d[row.key][field]} onChange={v => u({ [row.key]: { ...d[row.key], [field]: v } } as Partial<typeof d>)} placeholder="0" />
                   </td>
                 ))}
               </tr>
