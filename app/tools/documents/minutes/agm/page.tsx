@@ -2353,6 +2353,43 @@ _________________    _____________    _______________    ___________` : "";
         </div>
       </div>
 
+      {/* FAQ Section */}
+      <section className="border-t border-slate-100 bg-slate-50 px-4 py-10">
+        <div className="max-w-3xl mx-auto">
+          <p className="text-center text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">FAQ</p>
+          <h2 className="text-center text-xl font-extrabold text-slate-900 mb-6">AGM Minutes — Frequently Asked Questions</h2>
+          <div className="space-y-3">
+            {([
+              {
+                q: "When must the AGM be held each year?",
+                a: "Under Section 96 of the Companies Act 2013, every company (except OPC) must hold an Annual General Meeting every year. The AGM must be held within 6 months from the close of the financial year. For FY 2025-26 (ending 31 March 2026), the AGM must be held by 30 September 2026. The first AGM after incorporation must be held within 9 months from the close of the first financial year.",
+              },
+              {
+                q: "What is SS-2 compliance for AGM minutes?",
+                a: "SS-2 is the Secretarial Standard for General Meetings issued by ICSI. It is mandatory for all companies under Section 118(10). SS-2 requires: AGM notice must be sent at least 21 clear days before the meeting (shorter notice possible with 95% shareholder consent), the notice must include the explanatory statement for special business, quorum must be present, and minutes must be signed by the chairman within 30 days of the AGM.",
+              },
+              {
+                q: "What business is mandatory at every AGM?",
+                a: "Ordinary business mandatory at every AGM includes: (1) Adoption of financial statements, (2) Declaration of dividend (if any), (3) Retirement and re-appointment of directors liable to retire by rotation (Section 152), (4) Appointment/re-appointment of statutory auditor (Section 139). Any other business transacted at AGM is 'special business' and requires an explanatory statement under Section 102.",
+              },
+              {
+                q: "What is the quorum for an AGM?",
+                a: "For a private limited company, the quorum for AGM is 2 members personally present. For a public company, quorum is 5 members for companies with up to 1,000 members; 15 members for companies with 1,000–5,000 members; and 30 members for companies with more than 5,000 members, as per Section 103 of the Companies Act 2013.",
+              },
+              {
+                q: "What is the AGM notice period and can it be shortened?",
+                a: "AGM notice must be given at least 21 clear days before the date of the meeting under Section 101. It can be shortened with written consent of at least 95% of the members entitled to vote (for listed companies, SEBI regulations apply additionally). The notice must be sent to all members, directors, and auditors of the company.",
+              },
+            ] as { q: string; a: string }[]).map(({ q, a }) => (
+              <div key={q} className="rounded-xl border border-slate-200 bg-white p-4">
+                <h3 className="font-extrabold text-slate-800 text-sm mb-1.5">{q}</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">{a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="border-t border-slate-200 py-5 px-4 mt-4 bg-white">
         <div className="max-w-5xl mx-auto text-center text-xs text-slate-400">

@@ -83,11 +83,19 @@ interface F {
   boardRecommDate: string;
   chairmanName: string;
   chairmanDin: string;
+  csName: string;
+  csMembershipNo: string;
   directors: MeetingDirector[];
   vacancyReason: VacancyReason;
   previousAuditorName: string;
   vacancyDate: string;
+  gmRatificationDate: string;
   useLetterHead: boolean;
+  // AGM-specific (subsequent only)
+  dividendDeclared: boolean;
+  dividendPerShare: string;
+  dividendFaceValue: string;
+  retiringDirectors: { id: string; name: string; din: string }[];
 }
 
 function makeDir(): MeetingDirector {
@@ -95,6 +103,9 @@ function makeDir(): MeetingDirector {
     id: `dir-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: "", din: "", designation: "Director", isPresent: true,
   };
+}
+function makeRetDir() {
+  return { id: `rd-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: "", din: "" };
 }
 
 const DEFAULT: F = {
@@ -111,10 +122,12 @@ const DEFAULT: F = {
   agmOrdinal: "1st",
   meetingDate: "", meetingTime: "", meetingSerial: "", venue: "",
   boardRecommDate: "",
-  chairmanName: "", chairmanDin: "",
+  chairmanName: "", chairmanDin: "", csName: "", csMembershipNo: "",
   directors: [makeDir(), makeDir()],
-  vacancyReason: "resignation", previousAuditorName: "", vacancyDate: "",
+  vacancyReason: "resignation", previousAuditorName: "", vacancyDate: "", gmRatificationDate: "",
   useLetterHead: true,
+  dividendDeclared: false, dividendPerShare: "", dividendFaceValue: "10",
+  retiringDirectors: [],
 };
 
 /* ═══════════════════════════════════════════════
@@ -324,6 +337,7 @@ ${label !== "" ? `<p class="bold">${label ?? "Certified True Copy"}</p><p>For <s
 </td>
 </tr>
 </table>
+${f.csName ? `<p style="margin-top:20px;">_______________________<br/><strong>${f.csName}</strong><br/>Company Secretary${f.csMembershipNo ? `<br/>M.No.: ${f.csMembershipNo}` : ""}</p>` : ""}
 <p style="margin-top:10px; font-size:11pt;">Place: ${f.venue || "[PLACE]"}<br/>Date: ${useDate}</p>
 </div>`;
 }
@@ -335,7 +349,9 @@ ${label !== "" ? `<p class="bold">${label ?? "Certified True Copy"}</p><p>For <s
 /* 1 — Proposal Letter (company to auditor, before AGM) */
 function genProposalLetter(f: F, withLH: boolean): string {
   const isFirst = f.appointmentType === "first_auditor";
-  const propDate = f.boardRecommDate || f.meetingDate;
+  // Proposal letter is sent before the meeting — use board recomm date or today's date
+  const today = new Date().toISOString().split("T")[0];
+  const propDate = f.boardRecommDate || today;
   const dirs = f.directors.filter(d => d.isPresent);
   const sigDir = dirs[0];
 
@@ -408,7 +424,7 @@ ${isFirst
 <div class="section">
 <p class="bold">NOTES:</p>
 <ol>
-<li>This notice is issued at least 7 clear days prior to the meeting in compliance with Section 173(3) and SS-1.</li>
+<li>This notice is issued at least 7 days prior to the meeting in compliance with Section 173(3) and SS-1.</li>
 <li>The written consent and certificate of eligibility of the proposed auditor under Rule 4(1) is attached for the Board's consideration.</li>
 ${!isFirst && f.vacancyReason === "resignation" ? `<li><strong>Important:</strong> The Board appointment is subject to ratification by members at a General Meeting to be convened within 3 months [Section 139(8)].</li>` : ""}
 </ol>
@@ -418,6 +434,53 @@ ${!isFirst && f.vacancyReason === "resignation" ? `<li><strong>Important:</stron
 <p>By Order of the Board of Directors,<br/>For <strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
 <p style="margin-top:50px;">_______________________<br/>${f.chairmanName || "[DIRECTOR / CS NAME]"}<br/>Director / Company Secretary</p>
 <p style="margin-top:8px; font-size:11pt;">Place: ${f.venue || "[CITY]"}<br/>Date: ${subDays(f.meetingDate, 7)}</p>
+</div>
+</body></html>`;
+}
+
+/* 2b — Board Notice for Recommendation Meeting (Subsequent Auditor only) */
+function genBoardNoticeRecommendation(f: F, withLH: boolean): string {
+  const agm = f.agmOrdinal || "1st";
+  const noticeDate = subDays(f.boardRecommDate || f.meetingDate, 7);
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Board Notice — Auditor Recommendation</title><style>${DOC_CSS}</style></head><body>
+${withLH ? companyLH(f) : plainHeader(f)}
+<h3 class="center">NOTICE OF MEETING OF THE BOARD OF DIRECTORS</h3>
+<p class="center italic">Pursuant to Section 173 of the Companies Act, 2013 and Secretarial Standard-1 (SS-1)</p>
+
+<div class="section">
+<p class="para">Date of Notice: ${noticeDate}</p>
+<p class="para">To,<br/>All the Directors,<br/><strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
+<p class="para">Dear Director(s),</p>
+<p class="para">Notice is hereby given that a Meeting of the Board of Directors of <strong>${f.companyName || "[COMPANY NAME]"}</strong> is scheduled to be held on <strong>${fmtDate(f.boardRecommDate || f.meetingDate)} (${fmtDay(f.boardRecommDate || f.meetingDate)})</strong> at <strong>${f.meetingTime || "[TIME]"}</strong> at <strong>${f.venue || "[VENUE]"}</strong> to transact the following business:</p>
+</div>
+
+<div class="section">
+<h3>AGENDA</h3>
+<table>
+<thead><tr><th style="width:8%">Item</th><th>Business</th><th style="width:22%">Type</th><th style="width:22%">Section</th></tr></thead>
+<tbody>
+<tr><td>1.</td><td>To take note of directors present and confirm quorum.</td><td>Procedural</td><td>Sec 174 / SS-1</td></tr>
+<tr><td>2.</td><td>To confirm the minutes of the previous Board Meeting.</td><td>Procedural</td><td>SS-1 Para 7.3</td></tr>
+<tr><td>3.</td><td><strong>Recommendation for Appointment of Statutory Auditor at ${agm} AGM</strong> — To recommend ${f.auditorType === "firm" ? `M/s. ${f.firmName || "[FIRM NAME]"}` : `${f.auditorName || "[AUDITOR NAME]"}`} for appointment as Statutory Auditor${f.auditorType === "firm" ? "s" : ""} of the Company for a term of five consecutive years pursuant to Section 139(1), subject to approval of members at the ensuing ${agm} Annual General Meeting.</td><td>Board Resolution</td><td>Sec 139(1) + 142</td></tr>
+<tr><td>4.</td><td>Any other matter with the permission of the Chair.</td><td>Procedural</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="section">
+<p class="bold">NOTES:</p>
+<ol>
+<li>This notice is issued at least 7 days prior to the meeting in compliance with Section 173(3) and SS-1.</li>
+<li>The written consent and certificate of eligibility of the proposed auditor under Rule 4(1) are attached for the Board's consideration.</li>
+<li>The Board's recommendation is a prerequisite to placing the matter before members at the ${agm} Annual General Meeting.</li>
+</ol>
+</div>
+
+<div class="sig-block">
+<p>By Order of the Board of Directors,<br/>For <strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
+<p style="margin-top:50px;">_______________________<br/>${f.chairmanName || "[DIRECTOR / CS NAME]"}<br/>Director / Company Secretary</p>
+<p style="margin-top:8px; font-size:11pt;">Place: ${f.venue || "[CITY]"}<br/>Date: ${noticeDate}</p>
 </div>
 </body></html>`;
 }
@@ -451,9 +514,9 @@ ${presentDirs.length > 0
 </div>
 
 <div class="section">
-<p class="para">The Chairman confirmed that requisite quorum as per Section 174 was present and declared the meeting duly convened.</p>
+<p class="para">The Chairman confirmed that <strong>${presentDirs.length}</strong> Director${presentDirs.length !== 1 ? "s" : ""} being present, the requisite quorum as per Section 174 of the Companies Act, 2013 was present, and declared the meeting duly convened.</p>
 ${isCasual ? `<p class="para">The Chairman placed before the Board that a casual vacancy has arisen in the office of the Statutory Auditor${f.vacancyReason === "resignation" ? ` due to the resignation of ${f.previousAuditorName || "[PREVIOUS AUDITOR]"} vide resignation letter dated ${fmtDate(f.vacancyDate)}` : ""}. The Board noted the same and, pursuant to Section 139(8), proceeded to fill the vacancy within the prescribed period of thirty days.</p>` : ""}
-${isFirst ? `<p class="para">The Chairman informed the Board that pursuant to Section 139(6), the Board is required to appoint the First Auditor within thirty days from the date of incorporation. The Board reviewed the written consent and eligibility certificate from the proposed auditor and proceeded to consider the appointment.</p>` : ""}
+${isFirst ? `<p class="para">The Chairman informed the Board that the Company was incorporated on <strong>${f.incorporationDate ? fmtDate(f.incorporationDate) : "[DATE OF INCORPORATION]"}</strong> and pursuant to Section 139(6) of the Companies Act, 2013, the Board is required to appoint the First Auditor within thirty days from the date of incorporation. The Board reviewed the written consent and eligibility certificate from the proposed auditor and proceeded to consider the appointment.</p>` : ""}
 </div>
 
 <div class="section">
@@ -526,48 +589,90 @@ ${twoSigBlock(f, fmtDate(recommDate))}
 function genAGMNotice(f: F, withLH: boolean): string {
   const agm = f.agmOrdinal || "1st";
   const sixth = sixthAgm(agm);
+  const noticeDate = subDays(f.meetingDate, 22);
+  const fyParts = (f.fy || "").split("-");
+  const fyEnd = fyParts[1] ? "20" + fyParts[1] : "____";
+  const fyLabel = f.fy || "____–____";
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AGM Notice — Auditor Appointment</title><style>${DOC_CSS}</style></head><body>
+  // ── Item 1: Adoption of Financial Statements ────────────────────────────
+  const item1 = `<p class="para"><strong>Item No. 1: Adoption of Financial Statements</strong></p>
+<p class="para">To receive, consider and adopt the Audited Financial Statements of the Company for the financial year ended 31<sup>st</sup> March, ${fyEnd}, comprising the Audited Balance Sheet as at 31<sup>st</sup> March, ${fyEnd}, the Statement of Profit and Loss for the year ended on that date, the Cash Flow Statement (if applicable), the Statement of Changes in Equity, and the Notes to Accounts, together with the Reports of the Board of Directors and the Statutory Auditors thereon.</p>`;
+
+  // ── Item 2: Dividend ────────────────────────────────────────────────────
+  const item2 = f.dividendDeclared
+    ? `<p class="para"><strong>Item No. 2: Declaration of Dividend</strong></p>
+<p class="para">To consider and, if thought fit, to pass the following as an <strong>Ordinary Resolution</strong>:</p>
+<div class="box"><p class="para"><strong>"RESOLVED THAT</strong> a dividend of <strong>Rs. ${f.dividendPerShare || "___"} per equity share</strong> of face value Rs. ${f.dividendFaceValue || "10"} each be and is hereby declared for the financial year ended 31<sup>st</sup> March, ${fyEnd}, out of the profits of the Company."</p></div>`
+    : `<p class="para"><strong>Item No. 2: Declaration of Dividend</strong></p>
+<p class="para">To consider the matter of declaration of dividend for the financial year ended 31<sup>st</sup> March, ${fyEnd}. The Board of Directors do not recommend any dividend for the said financial year in order to conserve resources for business operations.</p>`;
+
+  // ── Item 3: Retiring Directors ──────────────────────────────────────────
+  const retDirs = (f.retiringDirectors || []).filter(d => d.name.trim());
+  let item3Parts: string[] = [];
+  if (retDirs.length > 0) {
+    retDirs.forEach((d, i) => {
+      item3Parts.push(`<p class="para"><strong>Item No. ${3 + i}: Re-appointment of ${d.name}${d.din ? ` (DIN: ${d.din})` : ""} as Director</strong></p>
+<p class="para">To consider and, if thought fit, to pass the following as an <strong>Ordinary Resolution</strong>:</p>
+<div class="box"><p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 152(6) and other applicable provisions of the Companies Act, 2013, ${d.name}${d.din ? ` (DIN: ${d.din})` : ""}, who retires by rotation at this Annual General Meeting and being eligible, offers himself/herself for re-appointment, be and is hereby re-appointed as a Director of the Company."</p></div>`);
+    });
+  } else {
+    item3Parts.push(`<p class="para"><strong>Item No. 3: Re-appointment of Director retiring by rotation</strong></p>
+<p class="para">To consider re-appointment of ______________ (DIN: ____________), who retires by rotation at this Annual General Meeting and, being eligible, offers himself/herself for re-appointment as a Director of the Company.</p>`);
+  }
+  const item3 = item3Parts.join("\n");
+
+  // ── Item 4 (or later): Auditor Appointment ─────────────────────────────
+  const auditorItemNo = 3 + (retDirs.length > 0 ? retDirs.length : 1);
+  const item4 = `<p class="para"><strong>Item No. ${auditorItemNo}: Appointment of Statutory Auditor and Fixing of Remuneration</strong></p>
+<p class="para">To consider and, if thought fit, to pass the following as an <strong>Ordinary Resolution</strong>:</p>
+<div class="box">
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 139(1), Section 142 and other applicable provisions of the Companies Act, 2013 read with the Companies (Audit and Auditors) Rules, 2014, and pursuant to the recommendation of the Board of Directors, ${auditorLabel(f)}, who ${f.auditorType === "firm" ? "have" : "has"} given their written consent and furnished a Certificate under Rule 4(1) of the Companies (Audit and Auditors) Rules, 2014 confirming their eligibility under Section 141 of the Companies Act, 2013, be and ${f.auditorType === "firm" ? "are" : "is"} hereby appointed as the <strong>Statutory Auditor${f.auditorType === "firm" ? "s" : ""}</strong> of the Company, to hold office for a term of <strong>five consecutive years</strong> from the conclusion of this <strong>${agm} Annual General Meeting</strong> until the conclusion of the <strong>${sixth} Annual General Meeting</strong>, at such remuneration${f.remuneration ? ` of Rs. ${f.remuneration} per annum (exclusive of applicable taxes and reimbursement of out-of-pocket expenses),` : ", as may be mutually agreed between the Board of Directors and the Auditors,"} as shall be fixed by the Board of Directors of the Company.</p>
+<p class="para"><strong>RESOLVED FURTHER THAT</strong> the Board of Directors of the Company be and is hereby authorised to do all such acts, deeds and things, including filing of Form ADT-1 with the Registrar of Companies within fifteen (15) days from the conclusion of this Annual General Meeting, and to issue the Letter of Appointment, as may be necessary or desirable to give effect to this resolution."</p>
+</div>
+<p class="italic para" style="font-size:11pt;">Note: As per Section 139 of the Companies Act, 2013, as amended by the Companies (Amendment) Act, 2017, no ratification at subsequent Annual General Meetings is required during the five-year term of the Auditors.</p>`;
+
+  // ── Signatory ───────────────────────────────────────────────────────────
+  const sigName = f.csName || f.chairmanName || "[DIRECTOR / CS NAME]";
+  const sigDesig = f.csName ? `Company Secretary${f.csMembershipNo ? `\nMembership No.: ${f.csMembershipNo}` : ""}` : `Director\nDIN: ${f.chairmanDin || "[DIN]"}`;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AGM Notice — ${f.companyName || "Company"}</title><style>${DOC_CSS}</style></head><body>
 ${withLH ? companyLH(f) : plainHeader(f)}
 <h3 class="center">NOTICE OF THE ${agm.toUpperCase()} ANNUAL GENERAL MEETING</h3>
-<p class="center italic">Pursuant to Sections 96, 101, 102 and 139 of the Companies Act, 2013</p>
+<p class="center italic">Pursuant to Sections 96, 101, 102, 123, 139, 152 and other applicable provisions of the Companies Act, 2013</p>
 
 <div class="section">
-<p class="para">Date of Notice: ${subDays(f.meetingDate, 21)}</p>
-<p class="para">To,<br/>All Members / Shareholders,<br/><strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
+<p class="para">Date of Notice: ${noticeDate}</p>
+<p class="para">To,<br/>All Members / Shareholders of<br/><strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
 <p class="para">Dear Member(s),</p>
-<p class="para">Notice is hereby given that the <strong>${agm} Annual General Meeting</strong> of the members of <strong>${f.companyName || "[COMPANY NAME]"}</strong> will be held on <strong>${fmtDate(f.meetingDate)} (${fmtDay(f.meetingDate)})</strong> at <strong>${f.meetingTime || "[TIME]"}</strong> at <strong>${f.venue || "[VENUE]"}</strong> to transact the following business:</p>
+<p class="para">Notice is hereby given that the <strong>${agm} Annual General Meeting</strong> of the Members of <strong>${f.companyName || "[COMPANY NAME]"}</strong> (CIN: ${f.cin || "[CIN]"}) will be held on <strong>${fmtDate(f.meetingDate)} (${fmtDay(f.meetingDate)})</strong> at <strong>${f.meetingTime || "[TIME]"}</strong> at <strong>${f.venue || f.regAddress || "[VENUE / REGISTERED OFFICE]"}</strong> to transact the following business:</p>
 </div>
 
 <div class="section">
 <h3>ORDINARY BUSINESS</h3>
-<p class="para"><strong>Item 1:</strong> To receive, consider, and adopt the Audited Financial Statements for the financial year ended March 31, _____ together with the Reports of the Board of Directors and Auditors thereon.</p>
+${item1}
+<br/>
+${item2}
+<br/>
+${item3}
+<br/>
+${item4}
 </div>
 
 <div class="section">
-<h3>SPECIAL BUSINESS</h3>
-<p class="para"><strong>Item 2: Appointment of Statutory Auditor</strong></p>
-<p class="para">To consider and, if thought fit, to pass the following as an <strong>Ordinary Resolution</strong>:</p>
-<div class="box">
-<p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 139(1), Section 142 and other applicable provisions of the Companies Act, 2013 read with the Companies (Audit and Auditors) Rules, 2014, ${auditorLabel(f)}, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate under Rule 4(1) confirming eligibility under Section 141, be and ${f.auditorType === "firm" ? "are" : "is"} hereby appointed as the <strong>Statutory Auditor${f.auditorType === "firm" ? "s" : ""}</strong> of the Company, to hold office for a term of <strong>five consecutive years</strong> from the conclusion of this <strong>${agm} Annual General Meeting</strong> until the conclusion of the <strong>${sixth} Annual General Meeting</strong>, at such remuneration${f.remuneration ? ` of Rs. ${f.remuneration} per annum,` : ""} as shall be fixed by the Board in consultation with the Auditors.</p>
-<p class="para"><strong>RESOLVED FURTHER THAT</strong> the Board of Directors be and is hereby authorised to file Form ADT-1 with the Registrar of Companies within fifteen days, to issue the Letter of Appointment, and to do all such acts as may be required to give effect to this resolution."</p>
-</div>
-<div class="info-box" style="margin-top:10px;">
-<p style="font-size:11pt;"><em>Note: This appointment is for a five-year term. No annual ratification at subsequent AGMs is required [Companies (Amendment) Act, 2017].</em></p>
-</div>
-</div>
-
-<div class="section">
-<h3>EXPLANATORY STATEMENT</h3>
-<p class="italic" style="font-size:11pt;">(Pursuant to Section 102(1) of the Companies Act, 2013)</p>
-<p class="para">${auditorLabel(f)} has given written consent and furnished a certificate confirming eligibility. The Board of Directors recommends the Ordinary Resolution at Item No. 2 for approval by the Members.</p>
-<p class="para"><strong>None of the Directors or KMPs are concerned or interested, financially or otherwise, in this resolution.</strong></p>
+<h3>NOTES</h3>
+<ol style="padding-left:20px; line-height:2.2;">
+<li><strong>Proxy [Section 105]:</strong> A Member entitled to attend and vote at the Annual General Meeting is entitled to appoint a Proxy to attend and vote in his/her place. A Proxy need not be a Member of the Company. A person can act as Proxy on behalf of Members not exceeding fifty (50) and holding in the aggregate not more than ten percent of the total share capital of the Company carrying voting rights. Proxies, in order to be effective, must be deposited at the Registered Office of the Company not less than <strong>forty-eight (48) hours</strong> before the commencement of the Annual General Meeting.</li>
+<li><strong>Quorum [Section 103]:</strong> In case of a Private Limited Company, two (2) Members personally present shall constitute the quorum for the Annual General Meeting.</li>
+<li><strong>ADT-1 Filing [Section 139]:</strong> The Company shall file Form ADT-1 with the Registrar of Companies within fifteen (15) days from the conclusion of this Annual General Meeting reporting the appointment of Statutory Auditors made at Item No. ${auditorItemNo}.</li>
+<li><strong>Documents for Inspection:</strong> All documents referred to in this Notice including the Auditor's written consent and Certificate of Eligibility are open for inspection at the Registered Office of the Company on all working days (except Sundays and public holidays) between 11:00 A.M. and 1:00 P.M. up to the date of the Annual General Meeting.</li>
+<li><strong>Auditor Disclosure:</strong> ${auditorLabel(f)} ${f.auditorType === "firm" ? "have" : "has"} furnished their written consent and a Certificate of Eligibility confirming compliance with Sections 139 and 141 of the Companies Act, 2013. No Director or Key Managerial Personnel of the Company or their relatives is concerned or interested, financially or otherwise, in the resolution at Item No. ${auditorItemNo}.</li>
+</ol>
 </div>
 
 <div class="sig-block">
 <p>By Order of the Board of Directors,<br/>For <strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
-<p style="margin-top:50px;">_______________________<br/>${f.chairmanName || "[DIRECTOR / CS NAME]"}<br/>Director / Company Secretary<br/>DIN: ${f.chairmanDin || "[DIN]"}</p>
-<p style="margin-top:8px; font-size:11pt;">Place: ${f.venue || "[CITY]"}<br/>Date: ${subDays(f.meetingDate, 21)}</p>
+<p style="margin-top:50px; white-space:pre-line;">_______________________\n${sigName}\n${sigDesig}</p>
+<p style="margin-top:8px; font-size:11pt;">Place: ${f.venue || "[CITY]"}<br/>Date: ${noticeDate}</p>
 </div>
 </body></html>`;
 }
@@ -679,7 +784,7 @@ ${f.auditorType === "firm"
   : `<strong>${f.auditorName || "[AUDITOR NAME]"}</strong><br/>Chartered Accountant (M.No. ${f.membershipNo || "[M.No.]"})<br/>${f.auditorAddress || "[Address]"}${f.auditorCity ? `, ${f.auditorCity}` : ""}`}
 </p>` : ""}
 
-<p>Date: _______________</p>
+<p>Date: ${f.meetingDate ? fmtDate(f.meetingDate) : "_______________"}</p>
 
 <p class="para">To,<br/>The Board of Directors,<br/><strong>${f.companyName || "[COMPANY NAME]"}</strong><br/>${f.regAddress || "[Registered Address]"}</p>
 
@@ -771,8 +876,12 @@ function genADT1Guide(f: F, _withLH: boolean): string {
   const isCasual = f.appointmentType === "casual_vacancy";
   const isResignVacancy = isCasual && f.vacancyReason === "resignation";
 
-  const triggerDate = isResignVacancy ? "[Date of General Meeting — ratification]" : fmtDate(f.meetingDate);
-  const deadline = isResignVacancy ? "[15 days from General Meeting date]" : addDays(f.meetingDate, 15);
+  const triggerDate = isResignVacancy
+    ? (f.gmRatificationDate ? fmtDate(f.gmRatificationDate) : "[Date of General Meeting — enter in Step 4]")
+    : fmtDate(f.meetingDate);
+  const deadline = isResignVacancy
+    ? (f.gmRatificationDate ? addDays(f.gmRatificationDate, 15) : "[15 days from General Meeting — enter GM date in Step 4]")
+    : addDays(f.meetingDate, 15);
   const triggerLabel = isSubsequent ? "AGM" : isResignVacancy ? "General Meeting (ratification by members)" : "Board Meeting";
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ADT-1 ROC Filing Guide</title><style>${DOC_CSS}</style></head><body>
@@ -833,7 +942,7 @@ ${f.auditorType === "firm"
 <li>ADT-1 is filed by the <strong>Company</strong>, not the auditor.</li>
 ${isFirst ? `<li>Post July 14, 2025: ADT-1 filing is <strong>mandatory</strong> for first auditor appointments [Companies (Audit and Auditors) Amendment Rules, 2025].</li>` : ""}
 ${isSubsequent ? `<li>Appointment is for a <strong>5-year term</strong>. No annual ratification required [Companies (Amendment) Act, 2017].</li>` : ""}
-${f.entityType === "pvt_ltd" ? `<li>Private companies with paid-up capital below Rs. 50 crore are <strong>exempt from the rotation requirement</strong> under Section 139(2) [Rule 5, as amended 2017].</li>` : ""}
+${f.entityType === "pvt_ltd" ? `<li>Private companies with paid-up share capital below Rs. 10 crore AND borrowings from banks/FIs below Rs. 50 crore are <strong>exempt from mandatory auditor rotation</strong> under Section 139(2) [Rule 5, Companies (Audit and Auditors) Rules, 2014].</li>` : ""}
 </ul>
 </div>
 </body></html>`;
@@ -929,11 +1038,16 @@ export default function AuditorAppointmentPage() {
   const [previewLabel, setPreviewLabel] = useState("");
   const [previewKey, setPreviewKey] = useState<string>("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const membershipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Validation ──
+  const [validationError, setValidationError] = useState<string>("");
 
   // ── Saved-auditor autofill state ──
   const [savedAuditors, setSavedAuditors] = useState<SavedAuditor[]>([]);
   const [selectedSavedAuditorId, setSelectedSavedAuditorId] = useState<string>("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [membershipAutoFilled, setMembershipAutoFilled] = useState(false);
 
   // ── Document save state ──
   const [docSaveStatus, setDocSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -988,6 +1102,7 @@ export default function AuditorAppointmentPage() {
   useEffect(() => {
     fetchSavedAuditors(f.cin);
     setSaveStatus("idle");
+    setMembershipAutoFilled(false);
   }, [f.cin, fetchSavedAuditors]);
 
   // Fetch saved company contact (email/mobile) when CIN changes
@@ -1077,6 +1192,31 @@ export default function AuditorAppointmentPage() {
     }));
   }
 
+  async function tryAutoFillByMembership(mno: string) {
+    if (!mno.trim()) return;
+    // 1. Check own saved list first
+    const ownMatch = savedAuditors.find(a => a.membershipNo?.trim() === mno.trim());
+    if (ownMatch) {
+      applySavedAuditor(ownMatch);
+      setMembershipAutoFilled(true);
+      setSaveStatus("saved");
+      return;
+    }
+    // 2. Cross-user directory lookup
+    try {
+      const r = await fetch(`/api/auditors/lookup?membership=${encodeURIComponent(mno.trim())}`);
+      const d = await r.json() as { ca: SavedAuditor | null };
+      if (d.ca) {
+        applySavedAuditor(d.ca);
+        setMembershipAutoFilled(true);
+      } else {
+        setMembershipAutoFilled(false);
+      }
+    } catch {
+      setMembershipAutoFilled(false);
+    }
+  }
+
   async function handleSaveAuditor() {
     if (!session) return;
     setSaveStatus("saving");
@@ -1137,6 +1277,7 @@ export default function AuditorAppointmentPage() {
     if (f.appointmentType === "subsequent") {
       return [
         { key: "proposal", label: "Proposal Letter", emoji: "📩", gen: (lh) => genProposalLetter(f, lh) },
+        { key: "board_notice_recomm", label: "Board Meeting Notice (Recommendation)", emoji: "📬", gen: (lh) => genBoardNoticeRecommendation(f, lh) },
         { key: "board_recomm", label: "Board Resolution (Recommending)", emoji: "🏛️", gen: (lh) => genBoardRecommAGM(f, lh) },
         { key: "agm_notice", label: "AGM Notice", emoji: "📬", gen: (lh) => genAGMNotice(f, lh) },
         { key: "agm_ctc", label: "AGM Resolution CTC", emoji: "⚖️", gen: (lh) => genAGMCTC(f, lh) },
@@ -1273,15 +1414,37 @@ export default function AuditorAppointmentPage() {
                 {AUDIT_STEPS.find(s => s.id === step)?.label}
               </h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
+              {validationError && (
+                <span className="text-xs text-red-600 font-semibold bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl">
+                  ⚠ {validationError}
+                </span>
+              )}
               {step > 1 && (
-                <button onClick={() => { setStep(step - 1); setPreview(null); }}
+                <button onClick={() => { setStep(step - 1); setPreview(null); setValidationError(""); }}
                   className="px-4 py-2 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 hover:border-slate-300 transition-colors">
                   ← Back
                 </button>
               )}
               {step < 5 && (
                 <button onClick={() => {
+                  // Validate required fields before proceeding
+                  if (step === 1 && !f.companyName.trim()) {
+                    setValidationError("Company Name is required before continuing.");
+                    return;
+                  }
+                  if (step === 3) {
+                    const auditorOk = f.auditorType === "firm" ? !!f.firmName.trim() : !!f.auditorName.trim();
+                    if (!auditorOk) {
+                      setValidationError(f.auditorType === "firm" ? "Firm Name is required." : "CA Name is required.");
+                      return;
+                    }
+                  }
+                  if (step === 4 && !f.meetingDate) {
+                    setValidationError(f.appointmentType === "subsequent" ? "AGM Date is required." : "Board Meeting Date is required.");
+                    return;
+                  }
+                  setValidationError("");
                   // Auto-save company to DB when leaving Step 1 (so it appears in future searches)
                   if (step === 1 && session?.user && f.companyName) {
                     if (f.cin) {
@@ -1315,14 +1478,13 @@ export default function AuditorAppointmentPage() {
                     }
                   }
                   setStep(step + 1);
-                  setSaveStatus("idle");
                 }}
                   className="px-6 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all shadow-sm">
                   Continue →
                 </button>
               )}
               {step === 5 && (
-                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setSavedAuditors([]); setSaveStatus("idle"); setDocSaveStatus("idle"); setSavedDocId(null); }}
+                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setSavedAuditors([]); setSaveStatus("idle"); setDocSaveStatus("idle"); setSavedDocId(null); setMembershipAutoFilled(false); }}
                   className="px-4 py-2 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 hover:border-slate-300 transition-colors">
                   🔄 New Appointment
                 </button>
@@ -1533,6 +1695,17 @@ export default function AuditorAppointmentPage() {
                           </ol>
                         </div>
                       )}
+                      {f.vacancyReason === "resignation" && (
+                        <Field label="GM Ratification Date" hint="Date on which the General Meeting ratified this appointment [Section 139(8)] — ADT-1 deadline is 15 days from this date">
+                          <input type="date" className={ic()} value={f.gmRatificationDate}
+                            onChange={e => setF(p => ({ ...p, gmRatificationDate: e.target.value }))} />
+                          {f.gmRatificationDate && (
+                            <p className="text-xs text-amber-700 font-semibold mt-1">
+                              ADT-1 Deadline: {addDays(f.gmRatificationDate, 15)}
+                            </p>
+                          )}
+                        </Field>
+                      )}
                     </div>
                   </SectionCard>
                 )}
@@ -1587,6 +1760,26 @@ export default function AuditorAppointmentPage() {
                         </div>
                       )}
                     </div>
+                  </SectionCard>
+                )}
+
+                {f.appointmentType !== "subsequent" && (
+                  <SectionCard title="Financial Year">
+                    <Field label="Audit Financial Year" hint="FY for which the auditor is being appointed — used in documents">
+                      <select className={ic()} value={f.fy}
+                        onChange={e => setF(p => ({ ...p, fy: e.target.value }))}>
+                        <option value="">— Select Financial Year —</option>
+                        {(() => {
+                          const start = fyStartYear();
+                          const opts = [];
+                          for (let y = start; y >= start - 10; y--) {
+                            const label = `${y}-${String(y + 1).slice(-2)}`;
+                            opts.push(<option key={label} value={label}>{label}</option>);
+                          }
+                          return opts;
+                        })()}
+                      </select>
+                    </Field>
                   </SectionCard>
                 )}
 
@@ -1678,10 +1871,10 @@ export default function AuditorAppointmentPage() {
                           onChange={e => setF(p => ({ ...p, firmName: e.target.value }))}
                           placeholder="M/s. ABC & Associates" />
                       </Field>
-                      <Field label="Firm Registration Number (FRN)">
+                      <Field label="Firm Registration Number (FRN)" hint="Format varies by ICAI region: 123456W (West), 302468E (East), S200082 (South), N108013 (North)">
                         <input className={ic()} value={f.firmRegNo}
                           onChange={e => setF(p => ({ ...p, firmRegNo: e.target.value }))}
-                          placeholder="123456W" />
+                          placeholder="e.g. 123456W or S200082" />
                       </Field>
                       <div className="grid grid-cols-3 gap-4">
                         <div className="col-span-2">
@@ -1701,8 +1894,17 @@ export default function AuditorAppointmentPage() {
                       </div>
                       <Field label="Partner Membership No.">
                         <input className={ic()} value={f.partnerMembershipNo}
-                          onChange={e => setF(p => ({ ...p, partnerMembershipNo: e.target.value }))}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setF(p => ({ ...p, partnerMembershipNo: v }));
+                            setMembershipAutoFilled(false);
+                            if (membershipTimerRef.current) clearTimeout(membershipTimerRef.current);
+                            membershipTimerRef.current = setTimeout(() => tryAutoFillByMembership(v), 400);
+                          }}
                           placeholder="098765" />
+                        {membershipAutoFilled && (
+                          <p className="text-xs text-emerald-600 font-semibold mt-1">✓ Auto-filled from your CA list</p>
+                        )}
                       </Field>
                     </div>
                   </SectionCard>
@@ -1716,12 +1918,29 @@ export default function AuditorAppointmentPage() {
                           onChange={e => setF(p => ({ ...p, auditorName: e.target.value }))}
                           placeholder="CA Priya Sharma" />
                       </Field>
-                      <Field label="Membership Number">
-                        <input className={ic()} value={f.membershipNo}
-                          onChange={e => setF(p => ({ ...p, membershipNo: e.target.value }))}
-                          placeholder="123456" />
+                      <Field label="Designation">
+                        <select className={ic()} value={f.partnerDesignation}
+                          onChange={e => setF(p => ({ ...p, partnerDesignation: e.target.value }))}>
+                          <option value="Proprietor">Proprietor</option>
+                          <option value="Partner">Partner</option>
+                          <option value="Chartered Accountant">Chartered Accountant</option>
+                        </select>
                       </Field>
                     </div>
+                    <Field label="Membership Number">
+                      <input className={ic()} value={f.membershipNo}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setF(p => ({ ...p, membershipNo: v }));
+                          setMembershipAutoFilled(false);
+                          if (membershipTimerRef.current) clearTimeout(membershipTimerRef.current);
+                          membershipTimerRef.current = setTimeout(() => tryAutoFillByMembership(v), 400);
+                        }}
+                        placeholder="123456" />
+                      {membershipAutoFilled && (
+                        <p className="text-xs text-emerald-600 font-semibold mt-1">✓ Auto-filled from your CA list</p>
+                      )}
+                    </Field>
                   </SectionCard>
                 )}
 
@@ -1761,9 +1980,15 @@ export default function AuditorAppointmentPage() {
 
                 {session && (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Add to My CA List</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">My CA List</p>
+                      <a href="/dashboard/my-cas" target="_blank"
+                        className="text-xs text-teal-600 hover:underline font-medium">
+                        Manage My CAs →
+                      </a>
+                    </div>
                     <p className="text-xs text-slate-400 mb-3">
-                      Save this auditor/firm to your master list — will auto-appear in the saved auditors dropdown for all future appointments across all companies.
+                      Save this auditor to your list — auto-fills in all future appointments.
                     </p>
                     <button
                       onClick={handleSaveAuditor}
@@ -1778,7 +2003,7 @@ export default function AuditorAppointmentPage() {
                           : "bg-gradient-to-br from-teal-600 to-teal-700 text-white hover:from-teal-500 hover:to-teal-600 shadow-sm"
                       }`}>
                       {saveStatus === "saving" ? "Saving..."
-                        : saveStatus === "saved" ? "✓ CA Added to Your List"
+                        : saveStatus === "saved" ? "✓ Saved to My CA List"
                         : saveStatus === "error" ? "Save Failed — Try Again"
                         : "💾 Add to My CA List"}
                     </button>
@@ -1847,8 +2072,92 @@ export default function AuditorAppointmentPage() {
                           placeholder="8-digit DIN" />
                       </Field>
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Field label="Company Secretary Name" hint="Optional — if CS is certifying resolutions">
+                        <input className={ic()} value={f.csName}
+                          onChange={e => setF(p => ({ ...p, csName: e.target.value }))}
+                          placeholder="CS Ramesh Verma (leave blank if none)" />
+                      </Field>
+                      <Field label="CS Membership No." hint="ACS/FCS number">
+                        <input className={ic()} value={f.csMembershipNo}
+                          onChange={e => setF(p => ({ ...p, csMembershipNo: e.target.value }))}
+                          placeholder="ACS 12345" />
+                      </Field>
+                    </div>
                   </div>
                 </SectionCard>
+
+                {/* ── AGM Agenda Items (subsequent only) ── */}
+                {f.appointmentType === "subsequent" && (
+                  <SectionCard title="AGM Agenda Items">
+                    <p className="text-xs text-slate-500 mb-4">These items appear in the AGM Notice as Ordinary Business (Section 102). Fill accurately — they go directly into the generated notice.</p>
+
+                    {/* Dividend */}
+                    <div className="mb-5">
+                      <p className="text-sm font-semibold text-slate-700 mb-2">Item 2 — Dividend Declaration (Section 123)</p>
+                      <div className="flex gap-3 mb-2">
+                        {[{ v: false, l: "No Dividend" }, { v: true, l: "Dividend Declared" }].map(opt => (
+                          <button key={String(opt.v)}
+                            onClick={() => setF(p => ({ ...p, dividendDeclared: opt.v }))}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${f.dividendDeclared === opt.v ? "bg-teal-600 text-white border-teal-600" : "bg-white text-slate-600 border-slate-300 hover:border-teal-400"}`}>
+                            {opt.l}
+                          </button>
+                        ))}
+                      </div>
+                      {f.dividendDeclared && (
+                        <div className="grid grid-cols-2 gap-3 mt-2">
+                          <Field label="Dividend per share (₹)">
+                            <input className={ic()} value={f.dividendPerShare}
+                              onChange={e => setF(p => ({ ...p, dividendPerShare: e.target.value }))}
+                              placeholder="e.g. 5" />
+                          </Field>
+                          <Field label="Face value per share (₹)">
+                            <input className={ic()} value={f.dividendFaceValue}
+                              onChange={e => setF(p => ({ ...p, dividendFaceValue: e.target.value }))}
+                              placeholder="e.g. 10" />
+                          </Field>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Retiring directors */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold text-slate-700">Item 3 — Directors Retiring by Rotation (Section 152(6))</p>
+                        <button
+                          onClick={() => setF(p => ({ ...p, retiringDirectors: [...p.retiringDirectors, makeRetDir()] }))}
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors">
+                          + Add Director
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-400 mb-3">Add directors who retire by rotation at this AGM and offer themselves for re-appointment. Leave empty if no rotation this year.</p>
+                      {f.retiringDirectors.length === 0 && (
+                        <p className="text-xs text-slate-400 italic">No retiring directors added — Item 3 will show a placeholder in the notice.</p>
+                      )}
+                      <div className="space-y-2">
+                        {f.retiringDirectors.map((d, i) => (
+                          <div key={d.id} className="grid grid-cols-12 gap-2 items-center">
+                            <div className="col-span-6">
+                              <input className={ic("text-xs")} value={d.name}
+                                onChange={e => setF(p => ({ ...p, retiringDirectors: p.retiringDirectors.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))}
+                                placeholder="Director full name" />
+                            </div>
+                            <div className="col-span-5">
+                              <input className={ic("text-xs")} value={d.din}
+                                onChange={e => setF(p => ({ ...p, retiringDirectors: p.retiringDirectors.map((x, j) => j === i ? { ...x, din: e.target.value } : x) }))}
+                                placeholder="DIN" />
+                            </div>
+                            <div className="col-span-1">
+                              <button
+                                onClick={() => setF(p => ({ ...p, retiringDirectors: p.retiringDirectors.filter((_, j) => j !== i) }))}
+                                className="w-full py-2 rounded-lg text-xs text-red-400 hover:bg-red-50 transition-colors">✕</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </SectionCard>
+                )}
 
                 <SectionCard title="Directors / Members Attendance">
                   <div className="flex items-center justify-between mb-3">
@@ -1913,7 +2222,9 @@ export default function AuditorAppointmentPage() {
                     </p>
                     <p className={`text-xs ${f.appointmentType === "casual_vacancy" && f.vacancyReason === "resignation" ? "text-amber-600" : "text-teal-600"}`}>
                       {f.appointmentType === "casual_vacancy" && f.vacancyReason === "resignation"
-                        ? `Board fills vacancy first. Then convene General Meeting within 3 months of Board recommendation (from ${fmtDate(f.meetingDate)}). File ADT-1 within 15 days of the General Meeting.`
+                        ? (f.gmRatificationDate
+                            ? `ADT-1 must be filed by ${addDays(f.gmRatificationDate, 15)} (within 15 days of GM ratification on ${fmtDate(f.gmRatificationDate)}).`
+                            : `Board fills vacancy first. Then convene General Meeting within 3 months of Board Meeting (${fmtDate(f.meetingDate)}). Enter GM Ratification Date above to calculate ADT-1 deadline.`)
                         : `ADT-1 must be filed by ${addDays(f.meetingDate, 15)} (within 15 days of ${f.appointmentType === "subsequent" ? "AGM" : "Board meeting"} on ${fmtDate(f.meetingDate)}).`
                       }
                     </p>
@@ -1964,7 +2275,11 @@ export default function AuditorAppointmentPage() {
                               )}
                             </div>
                             <div className="flex gap-2 flex-shrink-0">
-                              <button onClick={() => openPreview(doc.key, doc.label, doc.gen(false))}
+                              <button onClick={() => {
+                                const withLH = f.useLetterHead !== false;
+                                const effectiveLH = withLH && !doc.auditorDoc;
+                                openPreview(doc.key, doc.label, doc.gen(effectiveLH));
+                              }}
                                 className="px-3 py-1.5 rounded-lg border-2 border-teal-200 text-teal-700 text-xs font-bold hover:bg-teal-50 transition-colors">
                                 Preview
                               </button>
@@ -2001,36 +2316,6 @@ export default function AuditorAppointmentPage() {
                         Opens each document in a separate print dialog
                       </p>
                     </SectionCard>
-
-                    {/* Save auditor for future use */}
-                    {session && f.cin && (
-                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Save for Future Use</p>
-                        <button
-                          onClick={handleSaveAuditor}
-                          disabled={saveStatus === "saving" || saveStatus === "saved"}
-                          className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
-                            saveStatus === "saved"
-                              ? "bg-emerald-50 border-2 border-emerald-400 text-emerald-700"
-                              : saveStatus === "error"
-                              ? "bg-red-50 border-2 border-red-300 text-red-600 hover:bg-red-100"
-                              : saveStatus === "saving"
-                              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                              : "bg-gradient-to-br from-slate-700 to-slate-800 text-white hover:from-slate-600 hover:to-slate-700"
-                          }`}>
-                          {saveStatus === "saving"
-                            ? "Saving..."
-                            : saveStatus === "saved"
-                            ? "✓ Auditor Saved for Future Use"
-                            : saveStatus === "error"
-                            ? "Save Failed — Try Again"
-                            : "💾 Save Auditor Details for Future Use"}
-                        </button>
-                        <p className="text-xs text-slate-400 text-center mt-2">
-                          Auto-fills in future appointments and annual filings for this company
-                        </p>
-                      </div>
-                    )}
 
                     {/* Save document to My Documents / Company Profile */}
                     {session && (

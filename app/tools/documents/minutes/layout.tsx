@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ToolLockGuard from "@/components/ToolLockGuard";
 
 export const metadata: Metadata = {
   title: "Free Meeting Minutes Generator — AGM & Board Meeting Minutes India",
@@ -38,7 +39,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function MinutesLayout({ children }: { children: React.ReactNode }) {
+export default async function MinutesLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <script
@@ -108,7 +109,7 @@ export default function MinutesLayout({ children }: { children: React.ReactNode 
           }),
         }}
       />
-      {children}
+      <ToolLockGuard toolName="Meeting Minutes Generator">{children}</ToolLockGuard>
     </>
   );
 }

@@ -70,11 +70,25 @@ export async function buildNotesOnAccountsDocx(data: AnnualFilingData): Promise<
     ? "Revenue is recognized on accrual basis. Revenue from operations includes income from procurement, processing, storage and marketing of produce on behalf of producer members. Revenue from Services including applicable taxes is excluded while recording Revenue from Operations. Patronage bonus to members, if declared, is recognised as an expenditure."
     : "Revenue is recognized on accrual basis. Income from Services is recognized as per the terms of the contract upon rendering of Services. Revenue from Services including service tax/GST is excluded while recording Revenue from Operations.";
 
-  const dirRemunerationText = data.directorRemunerationCurrent
-    ? `Details of Directors Remuneration: Rs. ${data.directorRemunerationCurrent} paid during the Financial Year ${fy}. (Previous Year: Rs. ${data.directorRemunerationPrev || "NIL"})`
-    : isOPC
-    ? `Details of Directors Remuneration: As per the terms of appointment, the sole director was paid a remuneration of Rs. __________ during the Financial Year ${fy}. (Previous Year: Rs. __________)`
-    : "Details of Directors Remuneration: NIL";
+  const validRems = (data.directorRemunerations || []).filter(r => r.directorName.trim());
+  let dirRemunerationText: string;
+  if (validRems.length > 0) {
+    const lines = validRems.map(r => {
+      const desig = r.designation ? ` (${r.designation})` : "";
+      const curr = r.current ? `Rs. ${r.current}` : "NIL";
+      const prev = r.prev ? `Rs. ${r.prev}` : "NIL";
+      return `${r.directorName}${desig}: ${curr} (Previous Year: ${prev})`;
+    });
+    const totalCurr = validRems.reduce((s, r) => s + (parseFloat((r.current || "0").replace(/,/g, "")) || 0), 0);
+    const totalPrev = validRems.reduce((s, r) => s + (parseFloat((r.prev || "0").replace(/,/g, "")) || 0), 0);
+    dirRemunerationText = `Details of Directors Remuneration: ${lines.join("; ")}. Total remuneration paid during FY ${fy}: Rs. ${totalCurr.toLocaleString("en-IN")} (Previous Year: Rs. ${totalPrev.toLocaleString("en-IN")}).`;
+  } else if (data.directorRemunerationCurrent) {
+    dirRemunerationText = `Details of Directors Remuneration: Rs. ${data.directorRemunerationCurrent} paid during the Financial Year ${fy}. (Previous Year: Rs. ${data.directorRemunerationPrev || "NIL"})`;
+  } else if (isOPC) {
+    dirRemunerationText = `Details of Directors Remuneration: As per the terms of appointment, the sole director was paid a remuneration of Rs. __________ during the Financial Year ${fy}. (Previous Year: Rs. __________)`;
+  } else {
+    dirRemunerationText = "Details of Directors Remuneration: NIL";
+  }
 
   let otherNote: string;
   if (isSection8) {

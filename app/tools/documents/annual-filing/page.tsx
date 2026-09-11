@@ -544,6 +544,11 @@ function AnnualFilingTool() {
   } | null>(null);
   const [prevFinFetching, setPrevFinFetching] = useState(false);
   const [prevFinFetched,  setPrevFinFetched]  = useState(false);
+  const [auditorImportDocs, setAuditorImportDocs] = useState<{
+    id: string; title: string; companyName: string | null; financialYear: string | null; updatedAt: string;
+  }[] | null>(null);
+  const [showAuditorImport, setShowAuditorImport] = useState(false);
+  const [importingAuditor, setImportingAuditor] = useState(false);
 
   // ── Load saved draft via ?load=<id> ──────────────────────────────────
   useEffect(() => {
@@ -1144,6 +1149,57 @@ function AnnualFilingTool() {
     } finally {
       setSavingCA(false);
     }
+  }
+
+  // ── Import auditor from saved Auditor Appointment document ───────────
+  async function openAuditorImport() {
+    setShowAuditorImport(true);
+    if (auditorImportDocs !== null) return; // already loaded
+    try {
+      const res = await fetch("/api/auditor-appointment");
+      const json = await res.json() as { docs?: { id: string; title: string; companyName: string | null; financialYear: string | null; updatedAt: string }[] };
+      const all = json.docs || [];
+      const cn = data.companyName?.toLowerCase();
+      const filtered = cn ? all.filter(d => d.companyName?.toLowerCase() === cn) : all;
+      setAuditorImportDocs(filtered.length ? filtered : all);
+    } catch {
+      setAuditorImportDocs([]);
+    }
+  }
+
+  async function importAuditorFromDoc(id: string) {
+    setImportingAuditor(true);
+    try {
+      const res = await fetch(`/api/auditor-appointment?id=${id}`);
+      const json = await res.json() as { doc?: { formDataJson: string } };
+      if (!json.doc) return;
+      const f = JSON.parse(json.doc.formDataJson) as {
+        auditorType?: string; auditorName?: string; membershipNo?: string;
+        firmName?: string; firmRegNo?: string; partnerName?: string; partnerMembershipNo?: string;
+        agmOrdinal?: string; meetingDate?: string; fy?: string;
+      };
+      const isFirm = f.auditorType === "firm";
+      const ordToNum = (s?: string) => {
+        if (!s) return undefined;
+        const n = parseInt(s);
+        return isNaN(n) ? undefined : n;
+      };
+      const agmYear = f.meetingDate ? new Date(f.meetingDate).getFullYear() : undefined;
+      patchAud({
+        firmType: isFirm ? "firm" : "proprietorship",
+        firmName: (isFirm ? f.firmName : f.auditorName) || "",
+        frn: isFirm ? (f.firmRegNo || "") : "",
+        partnerName: isFirm ? (f.partnerName || "") : (f.auditorName || ""),
+        membershipNo: isFirm ? (f.partnerMembershipNo || "") : (f.membershipNo || ""),
+        appointmentType: "agm",
+        appointmentAGMNo: ordToNum(f.agmOrdinal),
+        appointmentYear: agmYear,
+        appointmentAGMDate: f.meetingDate || undefined,
+        tenureYears: 5,
+      });
+      setShowAuditorImport(false);
+    } catch { /* ignore */ }
+    finally { setImportingAuditor(false); }
   }
 
   // ── Delete a saved CA ─────────────────────────────────────────────────
@@ -1783,7 +1839,51 @@ function AnnualFilingTool() {
 
           {/* Auditor Appointment Details — for Board Report Section 26 / 27 */}
           <div className="mt-5 pt-4 border-t border-blue-200">
-            <p className="text-xs font-bold text-slate-700 mb-3">Auditor Appointment Details <span className="font-normal text-slate-400">(used in Board Report — Section 26 / 27)</span></p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-slate-700">Auditor Appointment Details <span className="font-normal text-slate-400">(used in Board Report — Section 26 / 27)</span></p>
+              {session?.user && (
+                <button
+                  onClick={openAuditorImport}
+                  className="text-xs font-bold text-teal-700 border border-teal-300 px-3 py-1.5 rounded-lg hover:bg-teal-50 transition flex items-center gap-1"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  Import from Auditor Appointment
+                </button>
+              )}
+            </div>
+
+            {/* Import picker modal */}
+            {showAuditorImport && (
+              <div className="mb-4 bg-teal-50 border border-teal-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-bold text-teal-800">Select a saved Auditor Appointment to import</p>
+                  <button onClick={() => setShowAuditorImport(false)} className="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
+                </div>
+                {auditorImportDocs === null ? (
+                  <p className="text-xs text-slate-500">Loading…</p>
+                ) : auditorImportDocs.length === 0 ? (
+                  <p className="text-xs text-slate-500">No saved auditor appointment documents found for this company.</p>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                    {auditorImportDocs.map(d => (
+                      <button
+                        key={d.id}
+                        disabled={importingAuditor}
+                        onClick={() => importAuditorFromDoc(d.id)}
+                        className="w-full text-left px-3 py-2.5 bg-white border border-teal-200 rounded-lg hover:border-teal-500 hover:bg-teal-50 transition text-sm disabled:opacity-50"
+                      >
+                        <span className="font-semibold text-slate-800">{d.title}</span>
+                        <span className="text-xs text-slate-500 ml-2">
+                          {d.financialYear && `FY ${d.financialYear}`}
+                          {d.companyName && ` · ${d.companyName}`}
+                          {` · ${new Date(d.updatedAt).toLocaleDateString("en-IN")}`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Appointment Type</label>
@@ -2272,11 +2372,90 @@ function AnnualFilingTool() {
             <label className="block text-sm font-semibold text-slate-700 mb-1">
               Director Remuneration — Note (p)
             </label>
-            <p className="text-xs text-slate-400 mb-2">Leave blank if NIL. For OPC enter sole director salary; for Private/Section8/FPC enter MD / WTD remuneration if any.</p>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label={`FY ${data.financialYear} (₹)`} value={data.directorRemunerationCurrent || ""} onChange={v => patch({ directorRemunerationCurrent: v })} placeholder="Leave blank if NIL" />
-              <Field label="Previous Year (₹)" value={data.directorRemunerationPrev || ""} onChange={v => patch({ directorRemunerationPrev: v })} placeholder="Leave blank if NIL" />
-            </div>
+            <p className="text-xs text-slate-400 mb-2">Enter remuneration director-wise. Leave amount blank if NIL. Rows auto-filled from your directors list.</p>
+            {(() => {
+              const activeDirectors = data.directors.filter(d => d.isActive);
+              const dirRems = data.directorRemunerations ??
+                (activeDirectors.length > 0
+                  ? activeDirectors.map(d => ({ directorName: d.name, designation: d.designation, current: "", prev: "" }))
+                  : [{ directorName: "", designation: "", current: "", prev: "" }]);
+
+              const patchDirRem = (idx: number, field: string, val: string) => {
+                const updated = dirRems.map((r, i) => i === idx ? { ...r, [field]: val } : r);
+                patch({ directorRemunerations: updated });
+              };
+              const addRow = () => patch({ directorRemunerations: [...dirRems, { directorName: "", designation: "", current: "", prev: "" }] });
+              const removeRow = (idx: number) => patch({ directorRemunerations: dirRems.filter((_, i) => i !== idx) });
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="text-left text-xs font-semibold text-slate-500 px-2 py-1.5 border border-slate-200 w-5/12">Director Name</th>
+                        <th className="text-left text-xs font-semibold text-slate-500 px-2 py-1.5 border border-slate-200 w-3/12">Designation</th>
+                        <th className="text-left text-xs font-semibold text-slate-500 px-2 py-1.5 border border-slate-200 w-2/12">FY {data.financialYear} (₹)</th>
+                        <th className="text-left text-xs font-semibold text-slate-500 px-2 py-1.5 border border-slate-200 w-2/12">Prev Year (₹)</th>
+                        <th className="border border-slate-200 w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dirRems.map((row, idx) => (
+                        <tr key={idx}>
+                          <td className="border border-slate-200 p-1">
+                            <input
+                              list={`dir-names-${idx}`}
+                              value={row.directorName}
+                              onChange={e => patchDirRem(idx, "directorName", e.target.value)}
+                              placeholder="Director name"
+                              className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+                            />
+                            <datalist id={`dir-names-${idx}`}>
+                              {activeDirectors.map(d => <option key={d.din} value={d.name} />)}
+                            </datalist>
+                          </td>
+                          <td className="border border-slate-200 p-1">
+                            <input
+                              value={row.designation || ""}
+                              onChange={e => patchDirRem(idx, "designation", e.target.value)}
+                              placeholder="e.g. MD"
+                              className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+                            />
+                          </td>
+                          <td className="border border-slate-200 p-1">
+                            <input
+                              value={row.current}
+                              onChange={e => patchDirRem(idx, "current", e.target.value)}
+                              placeholder="NIL"
+                              className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+                            />
+                          </td>
+                          <td className="border border-slate-200 p-1">
+                            <input
+                              value={row.prev}
+                              onChange={e => patchDirRem(idx, "prev", e.target.value)}
+                              placeholder="NIL"
+                              className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+                            />
+                          </td>
+                          <td className="border border-slate-200 p-1 text-center">
+                            {dirRems.length > 1 && (
+                              <button onClick={() => removeRow(idx)} className="text-slate-400 hover:text-red-500 text-base leading-none">×</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button
+                    onClick={addRow}
+                    className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
+                  >
+                    <span className="text-base leading-none">+</span> Add Director
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </SectionCard>
       </>
@@ -4334,6 +4513,43 @@ function AnnualFilingTool() {
 
         </div>
       </div>
+
+      {/* ── FAQ Section ──────────────────────────────────────────────────── */}
+      <section className="border-t border-slate-100 bg-slate-50 px-4 py-10">
+        <div className="max-w-3xl mx-auto">
+          <p className="text-center text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">FAQ</p>
+          <h2 className="text-center text-xl font-extrabold text-slate-900 mb-6">Annual Filing (AOC-4 / MGT-7) — Frequently Asked Questions</h2>
+          <div className="space-y-3">
+            {([
+              {
+                q: "What is the due date for AOC-4 filing?",
+                a: "AOC-4 (financial statements) must be filed with ROC within 30 days from the date of the Annual General Meeting (AGM) under Section 137 of the Companies Act 2013. For FY 2025-26, if AGM is held on 30 September 2026, AOC-4 is due by 30 October 2026. Late filing attracts additional fees of ₹100 per day under Section 403.",
+              },
+              {
+                q: "What is the difference between MGT-7 and MGT-7A?",
+                a: "MGT-7 is the annual return filed by all companies except OPCs and small companies. MGT-7A is a simplified annual return for One Person Companies (OPCs) and small companies introduced from FY 2020-21. MGT-7A must be filed within 60 days from the end of the financial year (i.e., by 29 May for FY 2025-26). MGT-7 must be filed within 60 days from the date of AGM.",
+              },
+              {
+                q: "What documents are required as attachments for AOC-4?",
+                a: "AOC-4 attachments include: (1) Financial Statements (Balance Sheet, P&L, Cash Flow Statement), (2) Directors' Report with all annexures, (3) Auditor's Report (standalone and consolidated if applicable), (4) CARO 2020 report (if applicable), (5) AOC-1 for subsidiary/associate details, (6) AOC-2 for related party disclosures. ComplianceSearch.in generates all these documents in one step.",
+              },
+              {
+                q: "Is a Cash Flow Statement mandatory for all companies?",
+                a: "Cash Flow Statement is mandatory for all companies except OPCs (One Person Companies), small companies, and dormant companies. It must be prepared using the indirect method as per AS-3 or Ind AS-7. The Cash Flow Statement must be included as part of the financial statements filed with AOC-4.",
+              },
+              {
+                q: "What is CARO 2020 and which companies must comply?",
+                a: "CARO 2020 (Companies Auditor's Report Order 2020) requires auditors to report on specific matters in their audit report. It applies to all companies except: banking companies, insurance companies, Section 8 companies, OPCs, small companies, and private limited companies with paid-up capital ≤ ₹1 crore AND borrowings from banks/FIs ≤ ₹1 crore AND turnover ≤ ₹10 crore. This tool generates the CARO 2020 report where applicable.",
+              },
+            ] as { q: string; a: string }[]).map(({ q, a }) => (
+              <div key={q} className="rounded-xl border border-slate-200 bg-white p-4">
+                <h3 className="font-extrabold text-slate-800 text-sm mb-1.5">{q}</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">{a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ── Preview Modal ─────────────────────────────────────────────────── */}
       {previewModal && (

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { BalanceSheetData, Note1ShareCapital, Note2ReservesSurplus, Note3LTBorrowings, Note6STBorrowings } from "@/lib/balance-sheet/types";
 import { makeEmptyShareCapitalClass, makeEmptyBorrowingItem, n } from "@/lib/balance-sheet/types";
 import AmountInput from "./AmountInput";
@@ -62,20 +62,103 @@ function TwoCol({ label1, label2, v1, v2, onChange1, onChange2, bold }: { label1
 
 // ── Note 1 — Share Capital ────────────────────────────────────────────────────
 
+// Shareholder row from the share-register API
+interface RegisterShareholder {
+  personId?: string;
+  personName?: string;
+  numberOfShares?: number;
+  holdingPercent?: string;
+  certStatus?: string;
+}
+
 function Note1({ data, updateNote }: { data: BalanceSheetData; updateNote: Props["updateNote"] }) {
   const note = data.note1ShareCapital;
   const totalPaidUp = note.classes.reduce((s, c) => s + n(c.paidUpAmount), 0);
+  const totalPaidUpShares = note.classes.reduce((s, c) => s + n(c.paidUpShares), 0);
+
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
 
   function updateClass(idx: number, patch: Partial<typeof note.classes[0]>) {
-    const updated = note.classes.map((c, i) => i === idx ? { ...c, ...patch } : c);
+    const updated = note.classes.map((c, i) => {
+      if (i !== idx) return c;
+      const merged = { ...c, ...patch };
+      // Auto-compute paidUpAmount when face value or paid-up shares change
+      if ("faceValue" in patch || "paidUpShares" in patch) {
+        const fv = parseFloat(merged.faceValue) || 0;
+        const sh = parseFloat(merged.paidUpShares) || 0;
+        if (fv > 0 && sh > 0) {
+          merged.paidUpAmount = String(Math.round(fv * sh));
+        }
+      }
+      return merged;
+    });
     updateNote("note1ShareCapital", { classes: updated } as Partial<Note1ShareCapital>);
   }
+
   function addClass() {
     updateNote("note1ShareCapital", { classes: [...note.classes, makeEmptyShareCapitalClass()] } as Partial<Note1ShareCapital>);
   }
   function removeClass(idx: number) {
     updateNote("note1ShareCapital", { classes: note.classes.filter((_, i) => i !== idx) } as Partial<Note1ShareCapital>);
   }
+
+  // ── Load shareholders from share register ────────────────────────────────────
+  async function syncFromRegister(silent = false) {
+    if (!data._companyId) return;
+    if (!silent) setSyncing(true);
+    setSyncMsg("");
+    try {
+      const res = await fetch(`/api/shareholders?companyId=${data._companyId}`);
+      const json = await res.json() as { shareholders?: RegisterShareholder[]; totalShares?: number };
+      if (!json.shareholders?.length) {
+        if (!silent) setSyncMsg("No shareholders found in share register.");
+        return;
+      }
+
+      // Group by personId, sum active shares
+      const byPerson = new Map<string, { name: string; shares: number }>();
+      for (const sh of json.shareholders) {
+        if (sh.certStatus === "cancelled" || sh.certStatus === "split") continue;
+        const key = sh.personId ?? sh.personName ?? "";
+        const name = sh.personName ?? "";
+        const shares = sh.numberOfShares ?? 0;
+        const existing = byPerson.get(key);
+        if (existing) {
+          existing.shares += shares;
+        } else {
+          byPerson.set(key, { name, shares });
+        }
+      }
+
+      const total = json.totalShares ?? 0;
+      const above5 = Array.from(byPerson.values())
+        .map(p => ({
+          id: crypto.randomUUID(),
+          name: p.name,
+          shares: String(p.shares),
+          percent: total > 0 ? (p.shares / total * 100).toFixed(2) : "0",
+          prevShares: "",
+          prevPercent: "",
+        }))
+        .filter(p => parseFloat(p.percent) > 5);
+
+      updateNote("note1ShareCapital", { shareholdersAbove5: above5 } as Partial<Note1ShareCapital>);
+      if (!silent) setSyncMsg(`Loaded ${above5.length} shareholder(s) holding > 5% from share register.`);
+    } catch {
+      if (!silent) setSyncMsg("Failed to load from share register.");
+    } finally {
+      if (!silent) setSyncing(false);
+    }
+  }
+
+  // Auto-sync once on mount if company is linked and table is empty
+  useEffect(() => {
+    if (data._companyId && note.shareholdersAbove5.every(s => !s.name)) {
+      void syncFromRegister(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data._companyId]);
 
   return (
     <NoteCard noteNo="1" title="Share Capital">
@@ -134,47 +217,103 @@ function Note1({ data, updateNote }: { data: BalanceSheetData; updateNote: Props
 
       {/* Shareholders > 5% */}
       <div style={{ marginTop: 18 }}>
-        <div style={S.subhead}>Shareholders Holding More Than 5%</div>
-        {note.shareholdersAbove5.map((sh, idx) => (
-          <div key={sh.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr auto", gap: 8, alignItems: "end", marginBottom: 8 }}>
-            <div>
-              {idx === 0 && <label style={S.label}>Shareholder Name</label>}
-              <input style={S.input} value={sh.name} onChange={e => {
-                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, name: e.target.value } : s);
-                updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
-              }} />
-            </div>
-            <div>
-              {idx === 0 && <label style={S.label}>Shares (Cur)</label>}
-              <AmountInput style={S.numInput} value={sh.shares} onChange={v => {
-                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, shares: v } : s);
-                updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
-              }} />
-            </div>
-            <div>
-              {idx === 0 && <label style={S.label}>% (Cur)</label>}
-              <input type="number" style={S.numInput} value={sh.percent} onChange={e => {
-                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, percent: e.target.value } : s);
-                updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
-              }} />
-            </div>
-            <div>
-              {idx === 0 && <label style={S.label}>Shares (Prev)</label>}
-              <AmountInput style={S.numInput} value={sh.prevShares} onChange={v => {
-                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, prevShares: v } : s);
-                updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
-              }} />
-            </div>
-            <div>
-              {idx === 0 && <label style={S.label}>% (Prev)</label>}
-              <input type="number" style={S.numInput} value={sh.prevPercent} onChange={e => {
-                const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, prevPercent: e.target.value } : s);
-                updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
-              }} />
-            </div>
-            <button style={S.delBtn} onClick={() => updateNote("note1ShareCapital", { shareholdersAbove5: note.shareholdersAbove5.filter((_, i) => i !== idx) } as Partial<Note1ShareCapital>)}>×</button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={S.subhead}>Shareholders Holding More Than 5%</div>
+          {data._companyId && (
+            <button
+              onClick={() => void syncFromRegister(false)}
+              disabled={syncing}
+              style={{
+                background: syncing ? "#f1f5f9" : "#eff6ff",
+                border: "1px solid #93c5fd",
+                borderRadius: 7,
+                padding: "5px 12px",
+                fontSize: 12,
+                fontWeight: 700,
+                color: syncing ? "#94a3b8" : "#1d4ed8",
+                cursor: syncing ? "default" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {syncing ? "⟳ Syncing..." : "⟳ Sync from Share Register"}
+            </button>
+          )}
+        </div>
+
+        {syncMsg && (
+          <div style={{
+            background: syncMsg.includes("Failed") ? "#fef2f2" : "#f0fdf4",
+            border: `1px solid ${syncMsg.includes("Failed") ? "#fca5a5" : "#86efac"}`,
+            borderRadius: 7, padding: "8px 12px", fontSize: 12, color: "#374151",
+            marginBottom: 10,
+          }}>
+            {syncMsg}
           </div>
-        ))}
+        )}
+
+        {!data._companyId && (
+          <div style={{
+            background: "#fffbeb", border: "1px solid #fde68a",
+            borderRadius: 7, padding: "8px 12px", fontSize: 12, color: "#92400e", marginBottom: 10,
+          }}>
+            Select a company (Step 1 → Search Saved Companies or upload MCA data) to enable automatic sync from the share register.
+          </div>
+        )}
+
+        {note.shareholdersAbove5.map((sh, idx) => {
+          // Auto-compute current % from entered shares vs total paid-up shares
+          const autoPercent = totalPaidUpShares > 0 && n(sh.shares) > 0
+            ? (n(sh.shares) / totalPaidUpShares * 100).toFixed(2)
+            : sh.percent;
+
+          return (
+            <div key={sh.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr auto", gap: 8, alignItems: "end", marginBottom: 8 }}>
+              <div>
+                {idx === 0 && <label style={S.label}>Shareholder Name</label>}
+                <input style={S.input} value={sh.name} onChange={e => {
+                  const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, name: e.target.value } : s);
+                  updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
+                }} />
+              </div>
+              <div>
+                {idx === 0 && <label style={S.label}>Shares (Cur)</label>}
+                <AmountInput style={S.numInput} value={sh.shares} onChange={v => {
+                  const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, shares: v } : s);
+                  updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
+                }} />
+              </div>
+              <div>
+                {idx === 0 && <label style={S.label}>% (Cur)</label>}
+                <input
+                  type="number"
+                  style={{ ...S.numInput, background: totalPaidUpShares > 0 && n(sh.shares) > 0 ? "#f0fdf4" : "#fff" }}
+                  value={autoPercent}
+                  readOnly={totalPaidUpShares > 0 && n(sh.shares) > 0}
+                  onChange={e => {
+                    if (totalPaidUpShares > 0 && n(sh.shares) > 0) return;
+                    const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, percent: e.target.value } : s);
+                    updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
+                  }}
+                />
+              </div>
+              <div>
+                {idx === 0 && <label style={S.label}>Shares (Prev)</label>}
+                <AmountInput style={S.numInput} value={sh.prevShares} onChange={v => {
+                  const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, prevShares: v } : s);
+                  updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
+                }} />
+              </div>
+              <div>
+                {idx === 0 && <label style={S.label}>% (Prev)</label>}
+                <input type="number" style={S.numInput} value={sh.prevPercent} onChange={e => {
+                  const upd = note.shareholdersAbove5.map((s, i) => i === idx ? { ...s, prevPercent: e.target.value } : s);
+                  updateNote("note1ShareCapital", { shareholdersAbove5: upd } as Partial<Note1ShareCapital>);
+                }} />
+              </div>
+              <button style={S.delBtn} onClick={() => updateNote("note1ShareCapital", { shareholdersAbove5: note.shareholdersAbove5.filter((_, i) => i !== idx) } as Partial<Note1ShareCapital>)}>×</button>
+            </div>
+          );
+        })}
         <button style={S.addBtn} onClick={() => updateNote("note1ShareCapital", { shareholdersAbove5: [...note.shareholdersAbove5, { id: crypto.randomUUID(), name: "", shares: "", percent: "", prevShares: "", prevPercent: "" }] } as Partial<Note1ShareCapital>)}>
           + Add Shareholder
         </button>

@@ -1528,6 +1528,47 @@ export default function EgmMinutesPage() {
           )}
         </div>
       </div>
+
+      {/* ── FAQ Section ── */}
+      <section className="max-w-3xl mx-auto px-4 py-12">
+        <h2 className="text-2xl font-bold text-slate-800 mb-6 text-center">
+          Frequently Asked Questions — EGM Minutes
+        </h2>
+        <div className="space-y-4">
+          {[
+            {
+              q: "When should an EGM be called?",
+              a: "An Extraordinary General Meeting (EGM) must be called whenever urgent business arises that cannot wait until the next Annual General Meeting (AGM). Common reasons include passing a Special Resolution to amend the MOA or AOA, increasing authorised share capital, approving related-party transactions beyond Board powers, approving mergers or acquisitions, or removing a director under Section 169 of the Companies Act 2013.",
+            },
+            {
+              q: "What is the minimum notice period for an EGM?",
+              a: "Under Section 101 of the Companies Act 2013, a minimum of 21 clear days' written notice must be given to all members, directors, and auditors before an EGM. Shorter notice is permitted only if members holding at least 95% of paid-up voting capital consent in writing. The notice must include the agenda and explanatory statement under Section 102 for all special business items.",
+            },
+            {
+              q: "What is the difference between an Ordinary Resolution and a Special Resolution at an EGM?",
+              a: "An Ordinary Resolution is passed by a simple majority (more than 50% of votes cast). A Special Resolution requires at least 75% of votes cast in favour. Special Resolutions at EGMs are required for matters such as MOA/AOA amendment, reduction of share capital, voluntary winding up, and approval of related-party transactions above prescribed thresholds. The notice must clearly state that the resolution is being proposed as a Special Resolution.",
+            },
+            {
+              q: "What is the quorum for an EGM?",
+              a: "Under Section 103 of the Companies Act 2013, the quorum for an EGM of a private limited company is 2 members personally present. For a public company with up to 1,000 members the quorum is 5, up to 5,000 members it is 15, and above 5,000 members it is 30. If the quorum is not present within 30 minutes of the scheduled time, the meeting stands adjourned to the same day the following week at the same time and place.",
+            },
+            {
+              q: "When must EGM minutes be signed?",
+              a: "Under Section 118(1) of the Companies Act 2013 read with Secretarial Standard 2 (SS-2), EGM minutes must be entered in the Minutes Book and signed by the Chairman of the meeting or the Chairman of the next general meeting within 30 days of the conclusion of the EGM. Failure to sign within 30 days is a punishable offence under Section 118(11) — penalty of Rs. 25,000 for the company and Rs. 5,000 for every officer in default.",
+            },
+          ].map((item, i) => (
+            <details key={i} className="group bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none font-semibold text-slate-800 hover:bg-slate-50 transition-colors">
+                <span>{item.q}</span>
+                <span className="ml-4 text-slate-400 group-open:rotate-180 transition-transform text-lg">▾</span>
+              </summary>
+              <div className="px-5 pb-4 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+                {item.a}
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ToolLockGuard from "@/components/ToolLockGuard";
 
 export const metadata: Metadata = {
   title: "Free Business Valuation Calculator India — DCF, NAV & Earnings Method",
@@ -43,7 +44,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function BusinessValuationLayout({ children }: { children: React.ReactNode }) {
+export default async function BusinessValuationLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <script
@@ -116,7 +117,7 @@ export default function BusinessValuationLayout({ children }: { children: React.
           }),
         }}
       />
-      {children}
+      <ToolLockGuard toolName="Business Valuation">{children}</ToolLockGuard>
     </>
   );
 }

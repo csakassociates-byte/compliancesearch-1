@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ToolLockGuard from "@/components/ToolLockGuard";
 
 export const metadata: Metadata = {
   title: "Free MCA Penalty Calculator India — Companies Act 2013 Late Filing Fees",
@@ -40,7 +41,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function PenaltyCalculatorLayout({ children }: { children: React.ReactNode }) {
+export default async function PenaltyCalculatorLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <script
@@ -93,7 +94,7 @@ export default function PenaltyCalculatorLayout({ children }: { children: React.
           }),
         }}
       />
-      {children}
+      <ToolLockGuard toolName="MCA Penalty Calculator">{children}</ToolLockGuard>
     </>
   );
 }

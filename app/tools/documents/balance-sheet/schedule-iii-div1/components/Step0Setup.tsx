@@ -8,6 +8,10 @@ import type { BalanceSheetData, BSFinancialYear, BSCompanyType, DisplayUnit } fr
 interface Props {
   data: BalanceSheetData;
   update: (patch: Partial<BalanceSheetData>) => void;
+  fyLabels: { current: string; prev: string };
+  prevYearFound: boolean;
+  prevFYLabel: string;
+  onCarryForward: () => void;
 }
 
 interface SavedCA {
@@ -80,7 +84,7 @@ function Card({ title, icon, children }: { title: string; icon: string; children
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function Step0Setup({ data, update }: Props) {
+export default function Step0Setup({ data, update, fyLabels, prevYearFound, prevFYLabel, onCarryForward }: Props) {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [companyDirectors, setCompanyDirectors] = useState<DirectorData[]>([]);
@@ -132,6 +136,7 @@ export default function Step0Setup({ data, update }: Props) {
       gstin:        c.gstNumber   || data.gstin,
       fyStart:      fyOpt.start,
       fyEnd:        fyOpt.end,
+      _companyId:   c.id          || data._companyId,
       note1ShareCapital: { ...data.note1ShareCapital, classes: updatedClasses },
     });
     setShowSearch(false);
@@ -274,6 +279,28 @@ export default function Step0Setup({ data, update }: Props) {
               <input style={inp()} value={data.placeOfSigning} onChange={e => update({ placeOfSigning: e.target.value })} placeholder="Mumbai" />
             </div>
           </Row>
+          {/* FY year labels display */}
+          <div style={{
+            background: "#f0f9ff",
+            border: "1px solid #bae6fd",
+            borderRadius: 10,
+            padding: "12px 16px",
+            display: "flex",
+            gap: 24,
+            flexWrap: "wrap",
+          }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Current Year</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{fyLabels.current}</div>
+            </div>
+            {!data.isFirstYear && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Previous Year</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>{fyLabels.prev}</div>
+              </div>
+            )}
+          </div>
+
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <input type="checkbox" id="firstYear" checked={data.isFirstYear} onChange={e => update({ isFirstYear: e.target.checked })} style={{ width: 16, height: 16, cursor: "pointer" }} />
             <label htmlFor="firstYear" style={{ fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
@@ -282,6 +309,47 @@ export default function Step0Setup({ data, update }: Props) {
           </div>
         </div>
       </Card>
+
+      {/* ── Carry-Forward Banner ── */}
+      {prevYearFound && !data.isFirstYear && (
+        <div style={{
+          background: "#f0fdf4",
+          border: "1px solid #86efac",
+          borderRadius: 12,
+          padding: "16px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          marginBottom: 20,
+          flexWrap: "wrap",
+        }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#16a34a", marginBottom: 4 }}>
+              Previous Year Data Available — FY {prevFYLabel}
+            </div>
+            <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
+              A saved balance sheet for FY {prevFYLabel} was found for this company. Load it as previous year comparative figures — all amounts from {prevFYLabel} will auto-fill the previous year columns, and fixed asset opening balances will also be carried forward.
+            </div>
+          </div>
+          <button
+            onClick={onCarryForward}
+            style={{
+              background: "#16a34a",
+              color: "#fff",
+              border: "none",
+              borderRadius: 9,
+              padding: "10px 20px",
+              fontWeight: 800,
+              fontSize: 13,
+              cursor: "pointer",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Load FY {prevFYLabel} as Previous Year →
+          </button>
+        </div>
+      )}
 
       {/* ── Signatories ── */}
       <Card title="Signatories" icon="✍️">

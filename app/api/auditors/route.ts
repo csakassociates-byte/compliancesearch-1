@@ -82,7 +82,16 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ auditors: rows });
+  // Deduplicate by membershipNo (then frn) across team members — keep most recent
+  const seen = new Set<string>();
+  const deduped = rows.filter(r => {
+    const key = (r.membershipNo as string)?.trim() || (r.frn as string)?.trim() || (r.id as string);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return NextResponse.json({ auditors: deduped });
 }
 
 // POST — save / update an auditor record
@@ -120,29 +129,24 @@ export async function POST(req: NextRequest) {
 
   await ensureTable();
 
+  const memberIds = await getTeamMemberIds(userId);
   const frn = body.frn?.trim() || "";
   const membershipNo = body.membershipNo?.trim() || "";
   const cin = body.cin?.trim() || null;
 
-  // Upsert key: userId + cin (if provided) + frn + membershipNo
-  // This allows same auditor to be tracked per company separately
-  let existing: Array<{ id: string }>;
-  if (cin) {
-    existing = await prisma.$queryRawUnsafe(
-      `SELECT id FROM csi_auditors
-       WHERE "userId" = $1 AND cin = $2
-         AND (frn = $3 OR "membershipNo" = $4)
-       LIMIT 1`,
-      userId, cin, frn, membershipNo
-    );
-  } else {
-    existing = await prisma.$queryRawUnsafe(
-      `SELECT id FROM csi_auditors
-       WHERE "userId" = $1 AND frn = $2 AND "membershipNo" = $3
-       LIMIT 1`,
-      userId, frn, membershipNo
-    );
-  }
+  // Upsert key: check across all team members by frn OR membershipNo
+  // Prevents duplicates even when saved by different team members
+  const existing: Array<{ id: string }> = await prisma.$queryRawUnsafe(
+    `SELECT id FROM csi_auditors
+     WHERE "userId" = ANY($1::text[])
+       AND (
+         ($2 != '' AND frn = $2)
+         OR ($3 != '' AND "membershipNo" = $3)
+       )
+     ORDER BY "updatedAt" DESC
+     LIMIT 1`,
+    memberIds, frn, membershipNo
+  );
 
   if (existing.length > 0) {
     await prisma.$executeRawUnsafe(

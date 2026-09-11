@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { Scale } from "lucide-react";
 import SearchModal from "./SearchModal";
 import { useSession, signOut } from "next-auth/react";
 
@@ -155,12 +154,23 @@ export default function Navbar() {
 
           {/* ── Logo ── */}
           <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: "linear-gradient(135deg,#1e40af,#1d4ed8)" }}>
-              <Scale className="w-5 h-5 text-white" strokeWidth={2} />
+            {/* Document + Compliance Badge mark */}
+            <svg width="34" height="42" viewBox="0 0 52 74" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M 4,0 L 33,0 L 47,14 L 47,70 Q 47,74 43,74 L 4,74 Q 0,74 0,70 L 0,4 Q 0,0 4,0 Z" fill="#0f2d5c"/>
+              <path d="M 33,0 L 47,14 L 33,14 Z" fill="#1a3f72"/>
+              <line x1="8" y1="24" x2="38" y2="24" stroke="rgba(255,255,255,0.55)" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="8" y1="33" x2="38" y2="33" stroke="rgba(255,255,255,0.55)" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="8" y1="42" x2="27" y2="42" stroke="rgba(255,255,255,0.55)" strokeWidth="2.5" strokeLinecap="round"/>
+              <circle cx="41" cy="60" r="17" fill="white"/>
+              <circle cx="41" cy="60" r="14" fill="#059669"/>
+              <polyline points="33,61 39,67 49,53" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <div className="flex flex-col leading-none">
+              <span className="text-slate-900 font-bold text-base tracking-tight">
+                Compliance<span style={{ color: "#059669" }}>Search</span><span className="text-sm font-bold" style={{ color: "#059669" }}>.in</span>
+              </span>
+              <span className="text-xs tracking-widest font-medium" style={{ color: "#94a3b8", letterSpacing: "0.18em", fontSize: "9px" }}>CA · CS · COMPLIANCE</span>
             </div>
-            <span className="text-slate-900 font-bold text-lg tracking-tight">ComplianceSearch</span>
-            <span className="font-bold text-lg" style={{ color: "#d97706" }}>.in</span>
           </Link>
 
           {/* ── Desktop Nav ── */}

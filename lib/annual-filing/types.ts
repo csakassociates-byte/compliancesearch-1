@@ -66,6 +66,7 @@ export interface AuditorDetails {
   boardAppointmentDate?: string;      // YYYY-MM-DD — board meeting date (board type only)
   appointmentAGMNo?: number;          // ordinal AGM at which appointed (AGM type only)
   appointmentYear?: number;           // calendar year of that AGM
+  appointmentAGMDate?: string;        // YYYY-MM-DD — actual AGM date (if known)
   tenureYears?: number;               // tenure in years (default 5)
 }
 
@@ -97,6 +98,15 @@ export interface CommitteeMeeting {
   committeeName: string; // "Audit Committee" | "NRC" | "SRC" | "CSR Committee" | "Other"
   date: string;          // YYYY-MM-DD
   membersPresent: string[];
+}
+
+// ── Director Remuneration Entry ───────────────────────────────────────────────
+
+export interface DirectorRemunerationEntry {
+  directorName: string;
+  designation?: string;
+  current: string;   // amount in ₹, blank = NIL
+  prev: string;      // previous year amount, blank = NIL
 }
 
 // ── Director ─────────────────────────────────────────────────────────────────
@@ -270,9 +280,10 @@ export interface AnnualFilingData {
   auditFeesPrev?: string;         // Statutory audit fees — previous year (₹)
   taxAuditFeesPrev?: string;      // Tax audit fees — previous year (₹)
 
-  // ── Notes on Accounts — Director Remuneration (OPC) ─
-  directorRemunerationCurrent?: string;
-  directorRemunerationPrev?: string;
+  // ── Notes on Accounts — Director Remuneration ────────
+  directorRemunerations?: DirectorRemunerationEntry[];  // name-wise entries (new)
+  directorRemunerationCurrent?: string;                 // legacy single-value (kept for backward compat)
+  directorRemunerationPrev?: string;                    // legacy single-value (kept for backward compat)
 
   // ── Company Contact ────────────────────────
   companyEmail?: string;

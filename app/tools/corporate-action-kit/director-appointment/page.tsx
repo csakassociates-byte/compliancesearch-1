@@ -16,6 +16,23 @@ interface ExistingDirector {
   isResigning?: boolean; resignDate?: string; resignReason?: string;
 }
 
+interface OtherDirectorship {
+  id: string;
+  companyName: string;
+  cin: string;
+  designation: string;
+  sharePercent: string;
+}
+
+interface InterestEntry {
+  id: string;
+  entityName: string;
+  entityType: string;
+  natureOfInterest: string;
+  sharePercent: string;
+  dateOfInterest: string;
+}
+
 type DesignationType =
   | "additional_director" | "alternate_director" | "nominee_director"
   | "managing_director" | "whole_time_director" | "independent_director"
@@ -30,6 +47,10 @@ interface NewDirectorEntry {
   originalDirector: string; originalDin: string;
   nominatingBody: string;
   termYears: string;
+  isDirectorElsewhere: boolean;
+  otherDirectorships: OtherDirectorship[];
+  hasInterest: boolean;
+  interests: InterestEntry[];
 }
 
 type MeetingAction = "appoint" | "resign" | "both";
@@ -80,6 +101,10 @@ function makeNd(): NewDirectorEntry {
     effectiveDate: "",
     originalDirector: "", originalDin: "",
     nominatingBody: "", termYears: "5",
+    isDirectorElsewhere: false,
+    otherDirectorships: [],
+    hasInterest: false,
+    interests: [],
   };
 }
 
@@ -137,7 +162,7 @@ function ordinalDate(dateStr: string): string {
 function calcDates(meetingDate: string, isGM = false) {
   if (!meetingDate) return { noticeDate: "", rocDeadline: "", mr1Deadline: "" };
   return {
-    noticeDate:   addDays(meetingDate, isGM ? -21 : -7),
+    noticeDate:   addDays(meetingDate, isGM ? -22 : -7),
     rocDeadline:  addDays(meetingDate, 30),
     mr1Deadline:  addDays(meetingDate, 60),
   };
@@ -167,8 +192,9 @@ const DOC_CSS = `
   @media print{.page{padding:30px 40px;}body{font-size:11pt;}@page{size:A4;margin:15mm;}}
 `;
 
-function wrap(body: string, title: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>${DOC_CSS}</style></head><body><div class="page">${body}</div></body></html>`;
+function wrap(body: string, title: string, withLH = true): string {
+  const lhStyle = withLH ? "" : `.co-hdr { display: none !important; }`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>${DOC_CSS}${lhStyle}</style></head><body><div class="page">${body}</div></body></html>`;
 }
 function coHeader(f: F): string {
   return `<div class="co-hdr"><h1>${f.companyName || "[COMPANY NAME]"}</h1><p>CIN: ${f.cin || "___________________"}</p><p>${f.regAddress || "[Registered Office Address]"}</p></div>`;
@@ -178,7 +204,7 @@ function signBlock(name: string, din: string, dateStr: string): string {
 }
 
 /* ── 1. Board Notice ──────────────────────────────────────────── */
-function genBoardNotice(f: F, nds: NewDirectorEntry[]): string {
+function genBoardNotice(f: F, nds: NewDirectorEntry[], withLH = true): string {
   const { noticeDate } = calcDates(f.meetingDate);
   const presentDirs = f.directors.filter(d => d.isPresent);
   const needsEGM = f.ndDesignation === "director_gm";
@@ -219,11 +245,11 @@ function genBoardNotice(f: F, nds: NewDirectorEntry[]): string {
       <br>
       <p>Date: ${fmtDate(noticeDate)}<br>Place: ${f.venue || f.regAddress || "_______________"}</p>
     </div>`;
-  return wrap(body, "Board Notice — Director Appointment");
+  return wrap(body, "Board Notice — Director Appointment", withLH);
 }
 
 /* ── 2. Board Resolution (CTC Format) ────────────────────────── */
-function genBoardResolution(f: F, nds: NewDirectorEntry[]): string {
+function genBoardResolution(f: F, nds: NewDirectorEntry[], withLH = true): string {
   const presentDirs = f.directors.filter(d => d.isPresent);
   const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
   const isGMType = f.ndDesignation === "director_gm";
@@ -245,9 +271,9 @@ function genBoardResolution(f: F, nds: NewDirectorEntry[]): string {
     if (f.ndDesignation === "whole_time_director")
       return `pursuant to Sections 196, 197, 203 and all other applicable provisions of the Companies Act, 2013 read with Schedule V, and subject to shareholders&rsquo; approval at the next General Meeting, ${namedin}, who has submitted Form DIR-2 and Form DIR-8, be and is hereby appointed as <strong>Whole-time Director</strong> for a term of ${term} with effect from ${eff}.`;
     if (f.ndDesignation === "independent_director")
-      return `pursuant to Section 161(1) read with Section 149(4) &amp; (6) and Schedule IV of the Companies Act, 2013, ${namedin}, who has submitted Form DIR-2, Form DIR-8, and Declaration of Independence under Section 149(7), be and is hereby appointed as <strong>Additional Independent Director</strong> with effect from ${eff}, to hold office till the conclusion of the next AGM or 3 months from appointment, whichever is earlier.`;
+      return `pursuant to Section 161(1) read with Section 149(4) &amp; (6) and Schedule IV of the Companies Act, 2013, ${namedin}, who has submitted Form DIR-2, Form DIR-8, and Declaration of Independence under Section 149(7), be and is hereby appointed as <strong>Additional Independent Director</strong> with effect from ${eff}, to hold office up to the date of the next Annual General Meeting or the last date on which the Annual General Meeting should have been held, whichever is earlier, and subject to regularization by the shareholders at such AGM for a fixed term of 5 (Five) consecutive years under Section 149(10) of the Companies Act, 2013.`;
     // director_gm — Board recommends to EGM
-    return `pursuant to the provisions of Section 152 read with Rule 8, 9, and 14 of Companies (Appointment and Qualification of Directors) Rules, 2014 and other applicable provisions of the Companies Act, 2013 read with rules made thereunder (including any statutory modifications or re-enactment thereof for the time being in force) and provisions of the Articles of Associations of the Company, subject to consent of the shareholders of the Company in EGM be and are hereby accorded to ${nd.name || "___________"} having DIN ${nd.din || "________"}, will be appointed with effect from ${eff}`;
+    return `pursuant to the provisions of Section 161(1) and all other applicable provisions of the Companies Act, 2013 read with rules made thereunder and provisions of the Articles of Association of the Company, the Board hereby recommends to the shareholders for their approval at the Extra-Ordinary General Meeting the appointment of <strong>${nd.name || "___________"}</strong> having DIN ${nd.din || "________"} as <strong>Director</strong> of the Company liable to retire by rotation under Section 152 of the Companies Act, 2013, with effect from ${eff}, and that the Board be and is hereby authorised to take all necessary steps to convene an EGM for this purpose.`;
   }
 
   const filingClause = isMdWtd
@@ -270,23 +296,22 @@ function genBoardResolution(f: F, nds: NewDirectorEntry[]): string {
 
   const body = `
     ${coHeader(f)}
-    <div class="doc-title" style="font-size:12pt;">EXTRACT OF RESOLUTION PASSED IN THE BOARD MEETING OF BOARD OF DIRECTOR OF ${(f.companyName || "[COMPANY NAME]").toUpperCase()} HELD ON ${ordinalDate(f.meetingDate)} AT ${fmtTime(f.meetingTime)} AT THE REGISTERED OFFICE OF THE COMPANY AT ${(f.regAddress || "[ADDRESS]").toUpperCase()}</div>
+    <div class="doc-title" style="font-size:12pt;">EXTRACT OF RESOLUTION PASSED IN THE BOARD MEETING OF THE BOARD OF DIRECTORS OF ${(f.companyName || "[COMPANY NAME]").toUpperCase()} HELD ON ${ordinalDate(f.meetingDate)} AT ${fmtTime(f.meetingTime)} AT THE REGISTERED OFFICE OF THE COMPANY AT ${(f.regAddress || "[ADDRESS]").toUpperCase()}</div>
     <p style="font-weight:bold;text-decoration:underline;margin:18px 0 10px;">APPOINTMENT OF ${ndNamesTitle} AS ${desg.toUpperCase()} OF THE COMPANY</p>
     <div class="res-box">
       ${resolutionClauses}
       <p style="margin:12px 0;">"<strong>RESOLVED FURTHER THAT</strong>, ${filingClause}"</p>
     </div>
     <div class="sign-block" style="margin-top:40px;">
-      <p>Certified to Be True<br>For and on behalf of the Board of Directors</p>
-      <p>Place: - ${f.venue || (f.regAddress ? f.regAddress.split(",")[0] : "_______________")}</p>
+      <p>Certified to Be True<br>For and on behalf of the Board of Directors of <strong>${f.companyName || "[Company Name]"}</strong></p>
+      <p style="margin-bottom:4px;">Date: ${fmtDate(f.meetingDate)} &emsp; Place: ${f.venue || (f.regAddress ? f.regAddress.split(",")[0] : "_______________")}</p>
       ${dirsSignTable(presentDirs)}
-      <br><p>Date: - ${fmtDate(f.meetingDate)}</p>
     </div>`;
-  return wrap(body, "Board Resolution — Director Appointment");
+  return wrap(body, "Board Resolution — Director Appointment", withLH);
 }
 
 /* ── 3. EGM Notice + Explanatory Statement ────────────────────── */
-function genGMNotice(f: F, nds: NewDirectorEntry[]): string {
+function genGMNotice(f: F, nds: NewDirectorEntry[], withLH = true): string {
   const { noticeDate } = calcDates(f.meetingDate, true);
 
   const agendaItems = nds.map((nd, i) => {
@@ -346,7 +371,7 @@ function genGMNotice(f: F, nds: NewDirectorEntry[]): string {
         <tr style="background:#f0f0f0;"><th style="border:1px solid #555;padding:7px;text-align:center;width:8%;">Res. No.</th><th style="border:1px solid #555;padding:7px;text-align:left;">Resolution</th><th style="border:1px solid #555;padding:7px;text-align:center;width:18%;">Type</th><th style="border:1px solid #555;padding:7px;text-align:center;width:8%;">For</th><th style="border:1px solid #555;padding:7px;text-align:center;width:8%;">Against</th></tr>
         ${nds.map((nd, i) => `<tr><td style="border:1px solid #555;padding:7px;text-align:center;">${i+1}</td><td style="border:1px solid #555;padding:7px;">Appointment of ${nd.name || `[Director ${i+1}]`}${nd.din ? ` (DIN: ${nd.din})` : ""} as Director</td><td style="border:1px solid #555;padding:7px;text-align:center;">Ordinary</td><td style="border:1px solid #555;padding:7px;">&nbsp;</td><td style="border:1px solid #555;padding:7px;">&nbsp;</td></tr>`).join("")}
       </table>
-      <p>Signed this …………………………… day of ……………………… 2025-26.</p>
+      <p>Signed this …………………………… day of ……………………… ${(() => { if (!f.meetingDate) return "20__-__"; const y = new Date(f.meetingDate + "T00:00:00").getFullYear(); const m = new Date(f.meetingDate + "T00:00:00").getMonth(); return m >= 3 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`; })()}.</p>
       <table style="width:100%;"><tr>
         <td style="width:50%;text-align:center;">
           <div style="border:1px dashed #999;padding:20px 10px;margin:0 10px;font-size:10pt;">Affix Revenue Stamp of ₹ 1</div>
@@ -416,11 +441,11 @@ function genGMNotice(f: F, nds: NewDirectorEntry[]): string {
     </div>
     ${proxyForm}
     ${attendanceSlip}`;
-  return wrap(body, "EGM Notice — Director Appointment");
+  return wrap(body, "EGM Notice — Director Appointment", withLH);
 }
 
 /* ── 4. GM Resolution (EGM CTC Format) ───────────────────────── */
-function genGMResolution(f: F, nds: NewDirectorEntry[]): string {
+function genGMResolution(f: F, nds: NewDirectorEntry[], withLH = true): string {
   const presentDirs = f.directors.filter(d => d.isPresent);
 
   const ndNamesTitle = nds.map(nd => (nd.name || "___________").toUpperCase()).join(" AND ");
@@ -443,6 +468,7 @@ function genGMResolution(f: F, nds: NewDirectorEntry[]): string {
   }
 
   // Member Attendance Register (appended at end)
+  // EGM attendance register — blank rows for shareholders (not pre-filled with directors)
   const attendanceRegister = `
     <div class="page-break">
       <div class="doc-title">MEMBER ATTENDANCE REGISTER</div>
@@ -451,16 +477,16 @@ function genGMResolution(f: F, nds: NewDirectorEntry[]): string {
       <table style="width:100%;border-collapse:collapse;border:1px solid #555;margin:14px 0;font-size:10.5pt;">
         <tr style="background:#f0f0f0;">
           <th style="border:1px solid #555;padding:7px;text-align:center;width:8%;">Sl. No.</th>
-          <th style="border:1px solid #555;padding:7px;text-align:left;">Name of Member</th>
+          <th style="border:1px solid #555;padding:7px;text-align:left;">Name of Member / Proxy</th>
           <th style="border:1px solid #555;padding:7px;text-align:left;width:18%;">Folio No. / DP ID</th>
           <th style="border:1px solid #555;padding:7px;text-align:center;width:15%;">No. of Shares Held</th>
-          <th style="border:1px solid #555;padding:7px;text-align:center;width:18%;">Signature of Member</th>
+          <th style="border:1px solid #555;padding:7px;text-align:center;width:18%;">Signature</th>
           <th style="border:1px solid #555;padding:7px;text-align:center;width:12%;">Time of Entry</th>
         </tr>
-        ${presentDirs.map((d, i) => `<tr><td style="border:1px solid #555;padding:8px;text-align:center;">${i+1}.</td><td style="border:1px solid #555;padding:8px;">${d.name}</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td></tr>`).join("")}
-        ${Array.from({length: Math.max(0, 4 - presentDirs.length)}).map((_, i) => `<tr><td style="border:1px solid #555;padding:8px;text-align:center;">${presentDirs.length+i+1}.</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td><td style="border:1px solid #555;padding:8px;">&nbsp;</td></tr>`).join("")}
+        ${Array.from({length: 8}).map((_, i) => `<tr><td style="border:1px solid #555;padding:10px;text-align:center;">${i+1}.</td><td style="border:1px solid #555;padding:10px;">&nbsp;</td><td style="border:1px solid #555;padding:10px;">&nbsp;</td><td style="border:1px solid #555;padding:10px;">&nbsp;</td><td style="border:1px solid #555;padding:10px;">&nbsp;</td><td style="border:1px solid #555;padding:10px;">&nbsp;</td></tr>`).join("")}
       </table>
-      <p style="font-size:10.5pt;"><strong>CERTIFICATION</strong><br>I hereby certify that the above members were present at the Extra-Ordinary General Meeting of the Company held on ${fmtDate(f.meetingDate)}.</p>
+      <p style="font-size:9.5pt;font-style:italic;">Note: Members attending in person or through proxy should sign against their name. Proxy holders must produce the original proxy form.</p>
+      <p style="font-size:10.5pt;margin-top:14px;"><strong>CERTIFICATION</strong><br>I hereby certify that the above members / proxies were present at the Extra-Ordinary General Meeting of the Company held on ${fmtDate(f.meetingDate)}.</p>
       <div class="sign-block" style="margin-top:30px;">
         <p>For <strong>${f.companyName || "[Company Name]"}</strong></p>
         ${dirsSignTable(presentDirs)}
@@ -482,11 +508,11 @@ function genGMResolution(f: F, nds: NewDirectorEntry[]): string {
       <br><p>Date: - ${fmtDate(f.meetingDate)}</p>
     </div>
     ${attendanceRegister}`;
-  return wrap(body, "EGM Resolution — Director Appointment");
+  return wrap(body, "EGM Resolution — Director Appointment", withLH);
 }
 
 /* ── 5. DIR-2 ──────────────────────────────────────────────────── */
-function genDIR2(f: F, nd: NewDirectorEntry): string {
+function genDIR2(f: F, nd: NewDirectorEntry, withLH = true): string {
   const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
   const signDate = nd.effectiveDate || f.meetingDate;
   function fieldRow(label: string, val: string) {
@@ -509,7 +535,22 @@ function genDIR2(f: F, nd: NewDirectorEntry): string {
       ${fieldRow("Date of birth", nd.dob ? fmtDate(nd.dob) : "")}
       ${fieldRow("Nationality", nd.nationality || "INDIAN")}
     </table>
-    <p style="font-size:10.5pt;">No. of companies in which I am already a Director and such companies the names of the companies in which I am a Managing Director, Chief Executive Officer, Whole time Director, Secretary, Chief Financial Officer, Manager. <strong>NIL</strong></p>
+    ${(() => {
+      if (!nd.isDirectorElsewhere || !nd.otherDirectorships.length) {
+        return `<p style="font-size:10.5pt;">No. of companies in which I am already a Director and such companies the names of the companies in which I am a Managing Director, Chief Executive Officer, Whole time Director, Secretary, Chief Financial Officer, Manager: <strong>NIL</strong></p>`;
+      }
+      const kmpRoles = ["Managing Director", "Whole-time Director", "CEO", "CFO", "CS", "Manager"];
+      const kmpEntries = nd.otherDirectorships.filter(d => kmpRoles.includes(d.designation));
+      const rows = nd.otherDirectorships.map((d, i) =>
+        `<tr><td style="border:1px solid #999;padding:5px 8px;text-align:center;">${i+1}.</td><td style="border:1px solid #999;padding:5px 8px;">${d.companyName || "—"}</td><td style="border:1px solid #999;padding:5px 8px;">${d.cin || "—"}</td><td style="border:1px solid #999;padding:5px 8px;">${d.designation || "Director"}</td><td style="border:1px solid #999;padding:5px 8px;text-align:center;">${d.sharePercent ? d.sharePercent + "%" : "—"}</td></tr>`
+      ).join("");
+      return `<p style="font-size:10.5pt;">No. of companies in which I am already a Director: <strong>${nd.otherDirectorships.length}</strong></p>
+      <table style="width:100%;border-collapse:collapse;font-size:10pt;margin:8px 0 12px;">
+        <tr style="background:#f0f0f0;"><th style="border:1px solid #999;padding:5px 8px;">Sr.</th><th style="border:1px solid #999;padding:5px 8px;text-align:left;">Company / Body Corporate</th><th style="border:1px solid #999;padding:5px 8px;text-align:left;">CIN / LLPIN</th><th style="border:1px solid #999;padding:5px 8px;text-align:left;">Designation</th><th style="border:1px solid #999;padding:5px 8px;">% Shareholding</th></tr>
+        ${rows}
+      </table>
+      <p style="font-size:10.5pt;">Companies where appointed as Managing Director / CEO / Whole-time Director / Secretary / CFO / Manager: <strong>${kmpEntries.length ? kmpEntries.map(d => d.companyName).join(", ") : "NIL"}</strong></p>`;
+    })()}
     <p style="font-size:10.5pt;">Particulars of membership No. and Certificate of practice No. if the applicant is a member of any professional Institute. &nbsp;<strong>NIL</strong></p>
     <div class="decl-box">
       <p><strong>Declaration</strong></p>
@@ -524,11 +565,11 @@ function genDIR2(f: F, nd: NewDirectorEntry): string {
       <td style="text-align:right;vertical-align:top;">Designation: &nbsp;<strong>Proposed Director</strong></td>
     </tr></table>
     <p style="margin-top:20px;font-size:10.5pt;"><strong>Attachments:</strong><br>1. Proof of identity;<br>2. Proof of Residence;</p>`;
-  return wrap(body, `DIR-2 — ${nd.name || "Consent"}`);
+  return wrap(body, `DIR-2 — ${nd.name || "Consent"}`, withLH);
 }
 
 /* ── 6. DIR-8 ──────────────────────────────────────────────────── */
-function genDIR8(f: F, nd: NewDirectorEntry): string {
+function genDIR8(f: F, nd: NewDirectorEntry, withLH = true): string {
   const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
   const body = `
     <div class="mf-label">FORM DIR-8<br>[Pursuant to Section 164(2) and Rule 14(1) of the Companies (Appointment and Qualification of Directors) Rules, 2014]</div>
@@ -547,17 +588,31 @@ function genDIR8(f: F, nd: NewDirectorEntry): string {
     </ol>
     <p>I further undertake to immediately intimate the Company in writing about any subsequent event which may render me disqualified under Section 164 of the Companies Act, 2013.</p>
     <p>I am aware that any false statement made herein constitutes an offence punishable under Section 448 of the Companies Act, 2013.</p>
+    ${(() => {
+      if (!nd.isDirectorElsewhere || !nd.otherDirectorships.length) {
+        return `<p style="margin-top:14px;"><strong>Statement of Existing Directorship:</strong> I am <strong>not</strong> a Director in any other company or body corporate as on this date.</p>`;
+      }
+      const rows = nd.otherDirectorships.map((d, i) =>
+        `<tr><td style="border:1px solid #999;padding:5px 8px;text-align:center;">${i+1}.</td><td style="border:1px solid #999;padding:5px 8px;">${d.companyName || "—"}</td><td style="border:1px solid #999;padding:5px 8px;">${d.cin || "—"}</td><td style="border:1px solid #999;padding:5px 8px;">${d.designation || "Director"}</td></tr>`
+      ).join("");
+      return `<p style="margin-top:14px;"><strong>Statement of Existing Directorship (Section 164(2)):</strong> I am currently a Director / KMP in the following companies / bodies corporate:</p>
+      <table style="width:100%;border-collapse:collapse;font-size:10pt;margin:8px 0 10px;">
+        <tr style="background:#f0f0f0;"><th style="border:1px solid #999;padding:5px 8px;">Sr.</th><th style="border:1px solid #999;padding:5px 8px;text-align:left;">Company / Body Corporate</th><th style="border:1px solid #999;padding:5px 8px;text-align:left;">CIN / LLPIN</th><th style="border:1px solid #999;padding:5px 8px;text-align:left;">Designation</th></tr>
+        ${rows}
+      </table>
+      <p style="font-size:10.5pt;">I hereby declare that none of the above-mentioned companies has, as a company in which I am a Director, defaulted in filing of financial statements or annual returns for any continuous period of three financial years as referred to in Section 164(2)(a) of the Companies Act, 2013.</p>`;
+    })()}
     <div class="sign-block">
       <table><tr>
         <td style="width:55%;vertical-align:bottom;"><br><br>____________________________<br><strong>${nd.name || "[Name]"}</strong><br>DIN: ${nd.din || "________"}</td>
         <td style="text-align:right;vertical-align:bottom;">Date: ${fmtDate(nd.effectiveDate || f.meetingDate)}<br>Place: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
       </tr></table>
     </div>`;
-  return wrap(body, `DIR-8 — ${nd.name || "Declaration"}`);
+  return wrap(body, `DIR-8 — ${nd.name || "Declaration"}`, withLH);
 }
 
 /* ── 7. ROC Filing Guide ───────────────────────────────────────── */
-function genROCGuide(f: F, nds: NewDirectorEntry[]): string {
+function genROCGuide(f: F, nds: NewDirectorEntry[], withLH = true): string {
   const isGM = f.ndDesignation === "director_gm";
   const { rocDeadline, mr1Deadline } = calcDates(f.meetingDate);
   const isMdWtd   = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
@@ -613,7 +668,7 @@ function genROCGuide(f: F, nds: NewDirectorEntry[]): string {
     ${isAddit ? `<table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;"><tr><td style="padding:12px;"><strong>⚠️ Regularization at Next AGM Required</strong><br><br>Additional Director(s) hold office only till the next AGM. To regularize: pass an Ordinary Resolution at the next AGM under Section 152 for each director, and file fresh DIR-12 within 30 days of the AGM.</td></tr></table><br>` : ""}
     ${isAltern ? `<table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;"><tr><td style="padding:12px;"><strong>⚠️ Alternate Director — Key Conditions (Section 161(2))</strong><br><br><ul style="margin:8px 0;padding-left:20px;"><li>Original director must be absent from India for not less than 3 months.</li><li>Alternate Director vacates office automatically when original director returns to India.</li><li>On original director&rsquo;s return: file DIR-12 for cessation of Alternate Director within 30 days.</li></ul></td></tr></table><br>` : ""}
     ${isIndep ? `<table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;"><tr><td style="padding:12px;"><strong>⚠️ Independent Director — Annual Compliance</strong><br><br><ul style="margin:8px 0;padding-left:20px;"><li>Appointed as Additional Independent Director — must be regularized at next AGM for a fixed 5-year term.</li><li>Annual Declaration of Independence (Section 149(7)) — first Board meeting of every financial year.</li><li>Maximum 2 consecutive terms of 5 years each. 3-year cooling-off before re-appointment after 2 terms.</li></ul></td></tr></table><br>` : ""}
-    ${isMdWtd ? `<table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;"><tr><td style="padding:12px;"><strong>⚠️ ${desg} — Shareholder Approval Required</strong><br><br><ul style="margin:8px 0;padding-left:20px;"><li>Board has approved — shareholders must approve at next AGM/EGM within 3 months of Board meeting date (Section 196(4)).</li><li>File Form MR-1 within 60 days of Board approval (deadline: ${fmtDate(mr1Deadline)}).</li><li>If remuneration exceeds Schedule V limits and company has inadequate profits: file Form MR-2 for Central Government approval.</li></ul></td></tr></table><br>` : ""}
+    ${isMdWtd ? `<table style="width:100%;border-collapse:collapse;border:1.5px solid #e59a00;background:#fffbeb;"><tr><td style="padding:12px;"><strong>⚠️ ${desg} — Shareholder Approval Required</strong><br><br><ul style="margin:8px 0;padding-left:20px;"><li>Board has approved — shareholders must ratify/approve at the <strong>next General Meeting</strong> (AGM or EGM) under Section 196(4) of the Companies Act, 2013. There is no prescribed 3-month deadline in the statute; approval must be obtained at the earliest general meeting.</li><li>File Form MR-1 within 60 days of Board approval (deadline: ${fmtDate(mr1Deadline)}).</li><li>If remuneration exceeds Schedule V limits and company has inadequate profits: file Form MR-2 for Central Government approval.</li></ul></td></tr></table><br>` : ""}
     ${isGM ? `<table style="width:100%;border-collapse:collapse;border:1.5px solid #4ade80;background:#f0fdf4;"><tr><td style="padding:12px;"><strong>✅ Section 152 — Director at General Meeting</strong><br><br><ul style="margin:8px 0;padding-left:20px;"><li>Director(s) appointed by Ordinary Resolution at EGM — DIR-12 filing deadline runs from the EGM date (${fmtDate(f.meetingDate)}).</li><li>These director(s) are liable to retire by rotation unless specifically exempted.</li><li>EGM Notice must have been sent at least 21 clear days before the meeting (Section 101).</li></ul></td></tr></table><br>` : ""}
     <table style="width:100%;border-collapse:collapse;border:1.5px solid #ccc;background:#f9f9f9;">
       <tr><td style="padding:12px;"><strong>📌 Additional Compliance Checklist:</strong><br><br>
@@ -626,11 +681,11 @@ function genROCGuide(f: F, nds: NewDirectorEntry[]): string {
       </ul>
       </td></tr>
     </table>`;
-  return wrap(body, "ROC Filing Guide — Director Appointment");
+  return wrap(body, "ROC Filing Guide — Director Appointment", withLH);
 }
 
 /* ── 8a. Board Notice — Combined (Both scenario) ─────────────── */
-function genBoardNoticeBoth(f: F, nds: NewDirectorEntry[], resigningDirs: ExistingDirector[]): string {
+function genBoardNoticeBoth(f: F, nds: NewDirectorEntry[], resigningDirs: ExistingDirector[], withLH = true): string {
   const { noticeDate } = calcDates(f.meetingDate);
   const presentDirs = f.directors.filter(d => d.isPresent);
   const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
@@ -667,11 +722,50 @@ function genBoardNoticeBoth(f: F, nds: NewDirectorEntry[], resigningDirs: Existi
       <br>
       <p>Date: ${fmtDate(noticeDate)}<br>Place: ${f.venue || f.regAddress || "_______________"}</p>
     </div>`;
-  return wrap(body, "Board Notice — Director Change");
+  return wrap(body, "Board Notice — Director Change", withLH);
 }
 
-/* ── 8b. ROC Guide — Resign Only ──────────────────────────────── */
-function genROCGuideResign(f: F, resigningDirs: ExistingDirector[]): string {
+/* ── 8b. Board Notice — Resignation Meeting ───────────────────── */
+function genBoardNoticeResign(f: F, resigningDirs: ExistingDirector[], withLH = true): string {
+  const { noticeDate } = calcDates(f.meetingDate);
+  const presentDirs = f.directors.filter(d => d.isPresent);
+
+  function dirsSignTable(dirs: ExistingDirector[]): string {
+    const d = dirs.slice(0, 2);
+    if (!d.length) return `<table style="width:100%;"><tr><td><br><strong>[Director]</strong><br>Director</td></tr></table>`;
+    const cells = d.map(x => `<td style="width:50%;vertical-align:top;padding-right:12px;"><br><strong>${x.name}</strong><br>Director<br>DIN: ${x.din}</td>`).join("");
+    return `<table style="width:100%;"><tr>${cells}</tr></table>`;
+  }
+
+  const resignNames = resigningDirs.map(d =>
+    `<strong>${d.name || "___________"}</strong> (DIN: ${d.din || "________"}), ${d.designation || "Director"} — effective ${fmtDate(d.resignDate || f.meetingDate)}`
+  ).join("; ");
+
+  const agendaItems = `
+    <li>To take note of the resignation letter${resigningDirs.length > 1 ? "s" : ""} received from ${resignNames} from the office of Director of the Company pursuant to Section 168 of the Companies Act, 2013, and to consider acceptance thereof.</li>
+    <li>To authorise a Director of the Company to file e-Form DIR-12 with the Registrar of Companies within 30 days of acceptance of the resignation${resigningDirs.length > 1 ? "s" : ""}.</li>
+    <li>Any other business with the permission of the Chair.</li>`;
+
+  const body = `
+    <div style="text-align:center;font-weight:bold;font-size:14pt;margin-bottom:4px;">NOTICE OF BOARD MEETING</div>
+    <div style="text-align:center;font-size:11pt;margin-bottom:18px;">(Section 173 of Companies Act, 2013 read with SS-1)</div>
+    ${coHeader(f)}
+    <p style="font-weight:bold;font-size:13pt;margin:18px 0 8px;">NOTICE</p>
+    <p>Notice is hereby given that the <strong>${f.meetingSerial || "___"}</strong> Meeting of the Board of Directors of <strong>${f.companyName || "[Company Name]"}</strong> will be held on <strong>${fmtDay(f.meetingDate)}, ${ordinalDate(f.meetingDate)}</strong> at <strong>${fmtTime(f.meetingTime)}</strong> at ${f.venue || "the Registered Office of the Company"} to transact the following business:</p>
+    <p style="font-weight:bold;margin-top:18px;text-decoration:underline;">AGENDA</p>
+    <ol>${agendaItems}</ol>
+    <p style="font-size:10.5pt;margin-top:14px;">This notice is issued at least 7 days prior to the meeting in compliance with Section 173(3) and SS-1.</p>
+    <div class="sign-block" style="margin-top:40px;">
+      <p>By Order of the Board<br>For <strong>${f.companyName || "[Company Name]"}</strong></p>
+      ${dirsSignTable(presentDirs)}
+      <br>
+      <p>Date: ${fmtDate(noticeDate)}<br>Place: ${f.venue || f.regAddress || "_______________"}</p>
+    </div>`;
+  return wrap(body, "Board Notice — Director Resignation", withLH);
+}
+
+/* ── 8c. ROC Guide — Resign Only ──────────────────────────────── */
+function genROCGuideResign(f: F, resigningDirs: ExistingDirector[], withLH = true): string {
   const rocDeadline = addDays(f.meetingDate, 30);
   const isListed = f.entityType === "public_ltd";
 
@@ -686,7 +780,7 @@ function genROCGuideResign(f: F, resigningDirs: ExistingDirector[]): string {
     <table style="width:100%;border-collapse:collapse;border:1.5px solid #999;">
       <tr style="background:#f0f0f0;"><td style="padding:10px;font-weight:bold;border:1px solid #999;font-size:13pt;" colspan="2">Form DIR-12 — Cessation of Director(s)</td></tr>
       <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;width:200px;">Resigning Director(s):</td><td style="padding:8px 10px;border:1px solid #999;"><ul style="margin:0;padding-left:18px;">${dirList}</ul></td></tr>
-      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DIR-12 Deadline:</td><td style="padding:8px 10px;border:1px solid #999;"><strong>30 days from receipt of resignation letter → approx. ${fmtDate(rocDeadline)}</strong> ⚠️ Clock starts from date of RECEIPT of resignation letter OR effective date — whichever is EARLIER.</td></tr>
+      <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DIR-12 Deadline:</td><td style="padding:8px 10px;border:1px solid #999;"><strong>30 days from receipt of resignation letter</strong> ⚠️ The DIR-12 filing clock runs from the date the company <em>receives</em> the resignation letter (Rule 17(2)), not from the board meeting date. If the resignation was received before the board meeting, the actual deadline is earlier than shown. Deadline based on meeting date: <strong>${fmtDate(rocDeadline)}</strong> — verify the actual receipt date.</td></tr>
       <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">DSC Required:</td><td style="padding:8px 10px;border:1px solid #999;">DSC of any existing Director or Company Secretary</td></tr>
       <tr><td style="padding:8px 10px;font-weight:bold;border:1px solid #999;">Filing Portal:</td><td style="padding:8px 10px;border:1px solid #999;">MCA V3 — www.mca.gov.in → e-Filing → Company Forms → DIR-12</td></tr>
     </table>
@@ -732,11 +826,11 @@ function genROCGuideResign(f: F, resigningDirs: ExistingDirector[]): string {
       </ul>
       </td></tr>
     </table>`;
-  return wrap(body, "ROC Filing Guide — Director Resignation");
+  return wrap(body, "ROC Filing Guide — Director Resignation", withLH);
 }
 
 /* ── 8c. ROC Guide — Both (Combined) ─────────────────────────── */
-function genROCGuideBoth(f: F, nds: NewDirectorEntry[], resigningDirs: ExistingDirector[]): string {
+function genROCGuideBoth(f: F, nds: NewDirectorEntry[], resigningDirs: ExistingDirector[], withLH = true): string {
   const { rocDeadline, mr1Deadline } = calcDates(f.meetingDate);
   const isMdWtd = f.ndDesignation === "managing_director" || f.ndDesignation === "whole_time_director";
   const isListed = f.entityType === "public_ltd";
@@ -819,18 +913,36 @@ function genROCGuideBoth(f: F, nds: NewDirectorEntry[], resigningDirs: ExistingD
       </ul>
       </td></tr>
     </table>`;
-  return wrap(body, "ROC Filing Guide — Director Change");
+  return wrap(body, "ROC Filing Guide — Director Change", withLH);
 }
 
 /* ── 8. MBP-1 Notice of Interest ─────────────────────────────── */
-function genMBP1(f: F, nd: NewDirectorEntry): string {
+function genMBP1(f: F, nd: NewDirectorEntry, withLH = true): string {
   const addr = [nd.address, nd.city, nd.state, nd.pincode].filter(Boolean).join(", ");
   const signDate = nd.effectiveDate || f.meetingDate;
+  const hasFilledInterests = nd.hasInterest && nd.interests.length > 0;
+  const interestRows = (() => {
+    if (!nd.hasInterest) {
+      return `<tr><td colspan="5" style="border:1px solid #555;padding:14px;text-align:center;color:#555;font-style:italic;">NIL — I have no interest or concern in any company, body corporate, firm, or other association of individuals as on this date.</td></tr>`;
+    }
+    if (!nd.interests.length) {
+      return [1,2,3,4,5].map(i => `<tr><td style="border:1px solid #555;padding:10px 8px;text-align:center;">${i}.</td><td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td><td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td><td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td><td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td></tr>`).join("");
+    }
+    return nd.interests.map((ie, i) =>
+      `<tr>
+        <td style="border:1px solid #555;padding:8px;text-align:center;">${i+1}.</td>
+        <td style="border:1px solid #555;padding:8px;">${ie.entityName || "&nbsp;"}${ie.entityType ? ` <em>(${ie.entityType})</em>` : ""}</td>
+        <td style="border:1px solid #555;padding:8px;">${ie.natureOfInterest || "&nbsp;"}</td>
+        <td style="border:1px solid #555;padding:8px;text-align:center;">${ie.sharePercent ? ie.sharePercent + "%" : "&nbsp;"}</td>
+        <td style="border:1px solid #555;padding:8px;text-align:center;">${ie.dateOfInterest ? fmtDate(ie.dateOfInterest) : "&nbsp;"}</td>
+      </tr>`
+    ).join("");
+  })();
   const body = `
     <div class="mf-label">FORM MBP - 1<br>Notice of interest by director<br>[Pursuant to section 184 (1) and rule 9(1)]</div>
     <p>To<br>The Board of Directors<br><strong>${f.companyName || "[Company Name]"}</strong><br>Address: ${f.regAddress || "[Registered Office]"}</p>
     <p>Dear Sir(s),</p>
-    <p>I, <strong>${nd.name || "__________"}</strong> son of <strong>${nd.fatherName || "__________"}</strong>${addr ? ` resident of ${addr}` : ""} being a director in the company hereby give notice of my interest or concern in the following company or companies, bodies corporate, firms or other association of individuals:-</p>
+    <p>I, <strong>${nd.name || "__________"}</strong> son/daughter of <strong>${nd.fatherName || "__________"}</strong>${addr ? `, resident of ${addr},` : ""} being a director in the company, hereby ${hasFilledInterests ? "give notice of my interest or concern in the following company or companies, bodies corporate, firms or other association of individuals" : "declare that I have <strong>no</strong> interest or concern in any company, body corporate, firm, or other association of individuals as on this date"}:-</p>
     <table style="width:100%;border-collapse:collapse;border:1px solid #555;margin:16px 0;font-size:10.5pt;">
       <tr style="background:#f0f0f0;">
         <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:6%;">Sr. No.</th>
@@ -839,24 +951,18 @@ function genMBP1(f: F, nd: NewDirectorEntry): string {
         <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:15%;">Shareholding</th>
         <th style="border:1px solid #555;padding:7px 8px;text-align:center;width:18%;">Date on which interest or concern arose / changed</th>
       </tr>
-      ${[1,2,3,4,5].map(i => `<tr>
-        <td style="border:1px solid #555;padding:10px 8px;text-align:center;">${i}.</td>
-        <td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td>
-        <td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td>
-        <td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td>
-        <td style="border:1px solid #555;padding:10px 8px;">&nbsp;</td>
-      </tr>`).join("")}
+      ${interestRows}
     </table>
     <br>
     <table style="width:100%;"><tr>
       <td style="vertical-align:bottom;">Place: ${f.venue || (f.regAddress ? f.regAddress.split(",")[0] : "_______________")}&emsp;<br>Date: ${fmtDate(signDate)}</td>
       <td style="text-align:right;vertical-align:bottom;">Signature:<br>____________________________<br><strong>${nd.name || "[Name]"}</strong><br>DIN: ${nd.din || "________"}</td>
     </tr></table>`;
-  return wrap(body, `MBP-1 — ${nd.name || "Notice of Interest"}`);
+  return wrap(body, `MBP-1 — ${nd.name || "Notice of Interest"}`, withLH);
 }
 
 /* ── 9. Resignation Letter ────────────────────────────────────── */
-function genResignationLetter(f: F, dir: ExistingDirector): string {
+function genResignationLetter(f: F, dir: ExistingDirector, withLH = true): string {
   const resignDate = dir.resignDate || f.meetingDate;
   const body = `
     ${coHeader(f)}
@@ -879,11 +985,11 @@ function genResignationLetter(f: F, dir: ExistingDirector): string {
       <p>____________________________<br><strong>${dir.name || "[DIRECTOR NAME]"}</strong>${dir.din ? `<br>DIN: ${dir.din}` : ""}<br>(Signature)</p>
       <p>Date: ${fmtDate(resignDate)}</p>
     </div>`;
-  return wrap(body, `Resignation Letter — ${dir.name || "Director"}`);
+  return wrap(body, `Resignation Letter — ${dir.name || "Director"}`, withLH);
 }
 
 /* ── 10. Board Resolution CTC — Resignation ───────────────────── */
-function genResignBoardCTC(f: F, resigningDirs: ExistingDirector[]): string {
+function genResignBoardCTC(f: F, resigningDirs: ExistingDirector[], withLH = true): string {
   const presentNonResigning = f.directors.filter(d => d.isPresent && !d.isResigning);
   const signers = presentNonResigning.length
     ? presentNonResigning.slice(0, 2)
@@ -916,12 +1022,12 @@ function genResignBoardCTC(f: F, resigningDirs: ExistingDirector[]): string {
     <div class="res-box">
       ${resText}
       <p><strong>RESOLVED FURTHER THAT</strong> the Board hereby places on record its sincere appreciation for the valuable services rendered by the aforesaid Director${plural ? "s" : ""} during their tenure with the Company.</p>
-      <p><strong>RESOLVED FURTHER THAT</strong> any Director of the Company be and is hereby authorised to file e-Form DIR-12 and DIR-11 and all other necessary forms, documents and returns with the Registrar of Companies, and to do all such acts, deeds and things as may be necessary to give effect to this resolution.</p>
+      <p><strong>RESOLVED FURTHER THAT</strong> any Director of the Company be and is hereby authorised to file e-Form DIR-12 and all other necessary forms, documents and returns with the Registrar of Companies (the resigning Director shall separately file Form DIR-11 in their individual capacity if applicable), and to do all such acts, deeds and things as may be necessary to give effect to this resolution.</p>
     </div>
     <p style="margin-top:28px;"><strong>CERTIFIED TRUE COPY</strong><br>For <strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
     <table style="width:100%;margin-top:8px;"><tr>${sigCells}</tr></table>
     <p style="margin-top:20px;">Date: ${fmtDate(f.meetingDate)}<br>Place: ${cityLine}</p>`;
-  return wrap(body, "Board Resolution CTC — Director Resignation");
+  return wrap(body, "Board Resolution CTC — Director Resignation", withLH);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1119,13 +1225,39 @@ function SidebarContent({ step, collapsed, companyName, cin, meetingAction, onSt
 function NewDirectorForm({ nd, designation, onChange }: {
   nd: NewDirectorEntry;
   designation: DesignationType;
-  onChange: (key: keyof NewDirectorEntry, val: string) => void;
+  onChange: (key: keyof NewDirectorEntry, val: NewDirectorEntry[keyof NewDirectorEntry]) => void;
 }) {
+  function addDirectorship() {
+    const od: OtherDirectorship = { id: `od-${Date.now()}`, companyName: "", cin: "", designation: "Director", sharePercent: "" };
+    onChange("otherDirectorships", [...nd.otherDirectorships, od]);
+  }
+  function updateDirectorship(i: number, patch: Partial<OtherDirectorship>) {
+    const updated = nd.otherDirectorships.map((d, j) => j === i ? { ...d, ...patch } : d);
+    onChange("otherDirectorships", updated);
+  }
+  function removeDirectorship(i: number) {
+    onChange("otherDirectorships", nd.otherDirectorships.filter((_, j) => j !== i));
+  }
+  function addInterest() {
+    const ie: InterestEntry = { id: `ie-${Date.now()}`, entityName: "", entityType: "Company", natureOfInterest: "Director", sharePercent: "", dateOfInterest: "" };
+    onChange("interests", [...nd.interests, ie]);
+  }
+  function updateInterest(i: number, patch: Partial<InterestEntry>) {
+    const updated = nd.interests.map((e, j) => j === i ? { ...e, ...patch } : e);
+    onChange("interests", updated);
+  }
+  function removeInterest(i: number) {
+    onChange("interests", nd.interests.filter((_, j) => j !== i));
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <Field label="Full Name" req><input value={nd.name} onChange={e => onChange("name", e.target.value)} className={INPUT} placeholder="As per PAN / DIN records" /></Field>
       <Field label="Father's / Husband's Name" req hint="Required for DIR-2 and DIR-8"><input value={nd.fatherName} onChange={e => onChange("fatherName", e.target.value)} className={INPUT} placeholder="Father's or Husband's full name" /></Field>
-      <Field label="DIN" req hint="8-digit Director Identification Number"><input value={nd.din} onChange={e => onChange("din", e.target.value)} className={INPUT} placeholder="e.g. 01234567" maxLength={8} /></Field>
+      <Field label="DIN" req hint="8-digit Director Identification Number">
+        <input value={nd.din} onChange={e => onChange("din", e.target.value.replace(/\D/g, ""))} className={`${INPUT} ${nd.din && nd.din.length < 8 ? "border-red-400 focus:ring-red-300" : ""}`} placeholder="e.g. 01234567" maxLength={8} />
+        {nd.din && nd.din.length < 8 && <p className="text-[10px] text-red-500 mt-0.5">DIN must be 8 digits ({nd.din.length}/8)</p>}
+      </Field>
       <Field label="Date of Birth"><input type="date" value={nd.dob} onChange={e => onChange("dob", e.target.value)} className={INPUT} /></Field>
       <Field label="PAN"><input value={nd.pan} onChange={e => onChange("pan", e.target.value)} className={INPUT} placeholder="e.g. ABCDE1234F" maxLength={10} /></Field>
       <Field label="Nationality"><input value={nd.nationality} onChange={e => onChange("nationality", e.target.value)} className={INPUT} /></Field>
@@ -1170,6 +1302,162 @@ function NewDirectorForm({ nd, designation, onChange }: {
           <Field label="PIN Code"><input value={nd.pincode} onChange={e => onChange("pincode", e.target.value)} className={INPUT} maxLength={6} /></Field>
         </div>
       </div>
+
+      {/* ── Other Directorship Disclosure (DIR-2 & DIR-8) ── */}
+      <div className="col-span-2 rounded-xl bg-amber-50 border border-amber-200 p-4">
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <div>
+            <p className="text-xs font-bold text-amber-800">Other Directorships <span className="text-amber-600 font-normal">(for DIR-2 &amp; DIR-8)</span></p>
+            <p className="text-[10px] text-amber-600 mt-0.5">Is this person already a Director / KMP in any other company or body corporate?</p>
+          </div>
+          <div className="flex items-center gap-1 bg-white rounded-lg border border-amber-300 p-0.5 flex-shrink-0">
+            <button type="button" onClick={() => onChange("isDirectorElsewhere", true)}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${nd.isDirectorElsewhere ? "bg-amber-500 text-white shadow-sm" : "text-slate-500 hover:text-amber-700"}`}>
+              Yes
+            </button>
+            <button type="button" onClick={() => onChange("isDirectorElsewhere", false)}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${!nd.isDirectorElsewhere ? "bg-slate-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              No / NIL
+            </button>
+          </div>
+        </div>
+        {nd.isDirectorElsewhere && (
+          <div className="mt-3 space-y-2">
+            {nd.otherDirectorships.length > 0 && (
+              <div className="hidden sm:grid grid-cols-12 gap-2 px-1 mb-1">
+                <div className="col-span-1" />
+                <div className="col-span-4 text-[10px] font-bold text-amber-700 uppercase tracking-wide">Company / LLP Name</div>
+                <div className="col-span-3 text-[10px] font-bold text-amber-700 uppercase tracking-wide">CIN / LLPIN</div>
+                <div className="col-span-2 text-[10px] font-bold text-amber-700 uppercase tracking-wide">Role</div>
+                <div className="col-span-1 text-[10px] font-bold text-amber-700 uppercase tracking-wide">% Share</div>
+              </div>
+            )}
+            {nd.otherDirectorships.map((od, i) => (
+              <div key={od.id} className="grid grid-cols-12 gap-2 items-center bg-white rounded-lg border border-amber-200 p-2">
+                <div className="col-span-1 text-xs font-bold text-amber-700 text-center">{i + 1}.</div>
+                <div className="col-span-4">
+                  <input value={od.companyName} onChange={e => updateDirectorship(i, { companyName: e.target.value })}
+                    className={INPUT} placeholder="Company / LLP Name" />
+                </div>
+                <div className="col-span-3">
+                  <input value={od.cin} onChange={e => updateDirectorship(i, { cin: e.target.value })}
+                    className={INPUT} placeholder="CIN / LLPIN" maxLength={21} />
+                </div>
+                <div className="col-span-2">
+                  <select value={od.designation} onChange={e => updateDirectorship(i, { designation: e.target.value })} className={SELECT}>
+                    <option value="Director">Director</option>
+                    <option value="Managing Director">MD</option>
+                    <option value="Whole-time Director">WTD</option>
+                    <option value="CEO">CEO</option>
+                    <option value="CFO">CFO</option>
+                    <option value="CS">CS</option>
+                    <option value="Manager">Manager</option>
+                  </select>
+                </div>
+                <div className="col-span-1">
+                  <input value={od.sharePercent} onChange={e => updateDirectorship(i, { sharePercent: e.target.value })}
+                    className={INPUT} placeholder="%" />
+                </div>
+                <div className="col-span-1 flex justify-center">
+                  <button type="button" onClick={() => removeDirectorship(i)} className="text-red-400 hover:text-red-600 text-lg font-bold leading-none">×</button>
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={addDirectorship}
+              className="text-xs font-bold text-amber-700 border border-amber-300 rounded-lg px-3 py-1.5 hover:bg-amber-100 transition-colors flex items-center gap-1">
+              + Add Company
+            </button>
+          </div>
+        )}
+        {!nd.isDirectorElsewhere && (
+          <p className="text-[10px] text-amber-500 mt-1 italic">DIR-2 and DIR-8 will state "NIL" for other directorships.</p>
+        )}
+      </div>
+
+      {/* ── Interest / Concern Disclosure (MBP-1 Section 184) ── */}
+      <div className="col-span-2 rounded-xl bg-blue-50 border border-blue-200 p-4">
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <div>
+            <p className="text-xs font-bold text-blue-800">Interest / Concern in Other Entities <span className="text-blue-600 font-normal">(for MBP-1)</span></p>
+            <p className="text-[10px] text-blue-600 mt-0.5">Does this person have any interest or concern in any company, LLP, firm, or association? (Section 184)</p>
+          </div>
+          <div className="flex items-center gap-1 bg-white rounded-lg border border-blue-200 p-0.5 flex-shrink-0">
+            <button type="button" onClick={() => onChange("hasInterest", true)}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${nd.hasInterest ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:text-blue-700"}`}>
+              Yes
+            </button>
+            <button type="button" onClick={() => onChange("hasInterest", false)}
+              className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${!nd.hasInterest ? "bg-slate-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              No / NIL
+            </button>
+          </div>
+        </div>
+        {nd.hasInterest && (
+          <div className="mt-3 space-y-2">
+            {nd.interests.length > 0 && (
+              <div className="hidden sm:grid grid-cols-12 gap-2 px-1 mb-1">
+                <div className="col-span-1" />
+                <div className="col-span-3 text-[10px] font-bold text-blue-700 uppercase tracking-wide">Entity Name</div>
+                <div className="col-span-2 text-[10px] font-bold text-blue-700 uppercase tracking-wide">Type</div>
+                <div className="col-span-2 text-[10px] font-bold text-blue-700 uppercase tracking-wide">Nature of Interest</div>
+                <div className="col-span-1 text-[10px] font-bold text-blue-700 uppercase tracking-wide">%</div>
+                <div className="col-span-2 text-[10px] font-bold text-blue-700 uppercase tracking-wide">Date of Interest</div>
+              </div>
+            )}
+            {nd.interests.length === 0 && (
+              <p className="text-xs text-blue-500 italic">No interests added yet — click below to add.</p>
+            )}
+            {nd.interests.map((ie, i) => (
+              <div key={ie.id} className="grid grid-cols-12 gap-2 items-center bg-white rounded-lg border border-blue-200 p-2">
+                <div className="col-span-1 text-xs font-bold text-blue-700 text-center">{i + 1}.</div>
+                <div className="col-span-3">
+                  <input value={ie.entityName} onChange={e => updateInterest(i, { entityName: e.target.value })}
+                    className={INPUT} placeholder="Company / Firm Name" />
+                </div>
+                <div className="col-span-2">
+                  <select value={ie.entityType} onChange={e => updateInterest(i, { entityType: e.target.value })} className={SELECT}>
+                    <option value="Company">Company</option>
+                    <option value="LLP">LLP</option>
+                    <option value="Partnership Firm">Partnership</option>
+                    <option value="AOP / BOI">AOP / BOI</option>
+                    <option value="Trust">Trust</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <select value={ie.natureOfInterest} onChange={e => updateInterest(i, { natureOfInterest: e.target.value })} className={SELECT}>
+                    <option value="Director">Director</option>
+                    <option value="Shareholder / Member">Shareholder</option>
+                    <option value="Partner">Partner</option>
+                    <option value="Proprietor">Proprietor</option>
+                    <option value="Designated Partner">Desig. Partner</option>
+                    <option value="Trustee">Trustee</option>
+                    <option value="Key Managerial Personnel">KMP</option>
+                  </select>
+                </div>
+                <div className="col-span-1">
+                  <input value={ie.sharePercent} onChange={e => updateInterest(i, { sharePercent: e.target.value })}
+                    className={INPUT} placeholder="%" />
+                </div>
+                <div className="col-span-2">
+                  <input type="date" value={ie.dateOfInterest} onChange={e => updateInterest(i, { dateOfInterest: e.target.value })}
+                    className={INPUT} />
+                </div>
+                <div className="col-span-1 flex justify-center">
+                  <button type="button" onClick={() => removeInterest(i)} className="text-red-400 hover:text-red-600 text-lg font-bold leading-none">×</button>
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={addInterest}
+              className="text-xs font-bold text-blue-700 border border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition-colors flex items-center gap-1">
+              + Add Interest / Concern
+            </button>
+          </div>
+        )}
+        {!nd.hasInterest && (
+          <p className="text-[10px] text-blue-500 mt-1 italic">MBP-1 will state "NIL" — no interest or concern in any other entity.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -1192,9 +1480,16 @@ export default function DirectorAppointmentPage() {
   const chairInputRef = useRef<HTMLDivElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [useLetterHead, setUseLetterHead] = useState(true);
 
   useEffect(() => {
     try { const s = localStorage.getItem(DRAFT_KEY); if (s) setF(JSON.parse(s) as F); } catch {}
+    // Pre-select action from URL param — e.g. ?action=resign or ?action=both
+    const urlAction = new URLSearchParams(window.location.search).get("action") as MeetingAction | null;
+    if (urlAction && ["appoint", "resign", "both"].includes(urlAction)) {
+      setF(p => ({ ...p, meetingAction: urlAction }));
+      setStep(2);
+    }
     setHydrated(true);
   }, []);
 
@@ -1257,6 +1552,8 @@ export default function DirectorAppointmentPage() {
     setF(p => ({
       ...p,
       newDirectors: p.newDirectors.map(nd => nd.effectiveDate ? nd : { ...nd, effectiveDate: p.meetingDate }),
+      // Also auto-fill resignDate for directors that haven't had one set yet
+      directors: p.directors.map(d => (d.isResigning && !d.resignDate) ? { ...d, resignDate: p.meetingDate } : d),
     }));
   }, [f.meetingDate]);
 
@@ -1297,7 +1594,7 @@ export default function DirectorAppointmentPage() {
     });
   }
 
-  function updateNd(idx: number, key: keyof NewDirectorEntry, val: string) {
+  function updateNd(idx: number, key: keyof NewDirectorEntry, val: NewDirectorEntry[keyof NewDirectorEntry]) {
     setF(p => {
       const updated = [...p.newDirectors];
       if (updated[idx]) updated[idx] = { ...updated[idx], [key]: val };
@@ -1389,93 +1686,95 @@ export default function DirectorAppointmentPage() {
     const gm = f.ndDesignation === "director_gm";
     const resigningDirs = f.directors.filter(d => d.isResigning);
 
+    const lh = useLetterHead;
     if (f.meetingAction === "resign") {
       return [
+        { key: "board_notice_resign", label: "Board Notice", emoji: "📬", gen: () => genBoardNoticeResign(f, resigningDirs, lh) },
         ...resigningDirs.map((dir, i) => ({
           key: `resign_letter_${i}`,
           label: resigningDirs.length > 1 ? `Resign Letter ${i + 1}` : "Resignation Letter",
           emoji: "✉️",
-          gen: () => genResignationLetter(f, dir),
+          gen: () => genResignationLetter(f, dir, lh),
         })),
         ...(resigningDirs.length > 0 ? [{
           key: "resign_ctc",
           label: "Resignation CTC",
           emoji: "🚪",
-          gen: () => genResignBoardCTC(f, resigningDirs),
+          gen: () => genResignBoardCTC(f, resigningDirs, lh),
         }] : []),
-        { key: "roc_resign", label: "ROC Guide", emoji: "📋", gen: () => genROCGuideResign(f, resigningDirs) },
+        { key: "roc_resign", label: "ROC Guide", emoji: "📋", gen: () => genROCGuideResign(f, resigningDirs, lh) },
       ];
     }
 
     if (f.meetingAction === "appoint") {
       return [
         gm
-          ? { key: "gm_notice",     label: "EGM Notice",  emoji: "📬", gen: () => genGMNotice(f, nds) }
-          : { key: "notice",        label: "Board Notice", emoji: "📬", gen: () => genBoardNotice(f, nds) },
+          ? { key: "gm_notice",     label: "EGM Notice",  emoji: "📬", gen: () => genGMNotice(f, nds, lh) }
+          : { key: "notice",        label: "Board Notice", emoji: "📬", gen: () => genBoardNotice(f, nds, lh) },
         gm
-          ? { key: "gm_resolution", label: "EGM CTC",     emoji: "⚖️", gen: () => genGMResolution(f, nds) }
-          : { key: "resolution",    label: "Board CTC",    emoji: "⚖️", gen: () => genBoardResolution(f, nds) },
+          ? { key: "gm_resolution", label: "EGM CTC",     emoji: "⚖️", gen: () => genGMResolution(f, nds, lh) }
+          : { key: "resolution",    label: "Board CTC",    emoji: "⚖️", gen: () => genBoardResolution(f, nds, lh) },
         ...nds.map((nd, i) => ({
           key: `dir2_${i}`,
           label: nds.length > 1 ? `DIR-2 Dir ${i + 1}` : "DIR-2 Consent",
           emoji: "✅",
-          gen: () => genDIR2(f, nd),
+          gen: () => genDIR2(f, nd, lh),
         })),
         ...nds.map((nd, i) => ({
           key: `dir8_${i}`,
           label: nds.length > 1 ? `DIR-8 Dir ${i + 1}` : "DIR-8 Declaration",
           emoji: "📜",
-          gen: () => genDIR8(f, nd),
+          gen: () => genDIR8(f, nd, lh),
         })),
         ...nds.map((nd, i) => ({
           key: `mbp1_${i}`,
           label: nds.length > 1 ? `MBP-1 Dir ${i + 1}` : "MBP-1 Interest",
           emoji: "🔔",
-          gen: () => genMBP1(f, nd),
+          gen: () => genMBP1(f, nd, lh),
         })),
-        { key: "roc", label: "ROC Guide", emoji: "📋", gen: () => genROCGuide(f, nds) },
+        { key: "roc", label: "ROC Guide", emoji: "📋", gen: () => genROCGuide(f, nds, lh) },
       ];
     }
 
     // "both" — combined resignation + appointment in same meeting
     return [
-      { key: "notice_both", label: "Board Notice", emoji: "📬", gen: () => genBoardNoticeBoth(f, nds, resigningDirs) },
+      { key: "notice_both", label: "Board Notice", emoji: "📬", gen: () => genBoardNoticeBoth(f, nds, resigningDirs, lh) },
       ...resigningDirs.map((dir, i) => ({
         key: `resign_letter_${i}`,
         label: resigningDirs.length > 1 ? `Resign Letter ${i + 1}` : "Resignation Letter",
         emoji: "✉️",
-        gen: () => genResignationLetter(f, dir),
+        gen: () => genResignationLetter(f, dir, lh),
       })),
       ...(resigningDirs.length > 0 ? [{
         key: "resign_ctc",
         label: "Resignation CTC",
         emoji: "🚪",
-        gen: () => genResignBoardCTC(f, resigningDirs),
+        gen: () => genResignBoardCTC(f, resigningDirs, lh),
       }] : []),
       gm
-        ? { key: "gm_resolution", label: "EGM CTC",        emoji: "⚖️", gen: () => genGMResolution(f, nds) }
-        : { key: "resolution",    label: "Appointment CTC", emoji: "⚖️", gen: () => genBoardResolution(f, nds) },
+        ? { key: "gm_resolution", label: "EGM CTC",        emoji: "⚖️", gen: () => genGMResolution(f, nds, lh) }
+        : { key: "resolution",    label: "Appointment CTC", emoji: "⚖️", gen: () => genBoardResolution(f, nds, lh) },
       ...nds.map((nd, i) => ({
         key: `dir2_${i}`,
         label: nds.length > 1 ? `DIR-2 Dir ${i + 1}` : "DIR-2 Consent",
         emoji: "✅",
-        gen: () => genDIR2(f, nd),
+        gen: () => genDIR2(f, nd, lh),
       })),
       ...nds.map((nd, i) => ({
         key: `dir8_${i}`,
         label: nds.length > 1 ? `DIR-8 Dir ${i + 1}` : "DIR-8 Declaration",
         emoji: "📜",
-        gen: () => genDIR8(f, nd),
+        gen: () => genDIR8(f, nd, lh),
       })),
       ...nds.map((nd, i) => ({
         key: `mbp1_${i}`,
         label: nds.length > 1 ? `MBP-1 Dir ${i + 1}` : "MBP-1 Interest",
         emoji: "🔔",
-        gen: () => genMBP1(f, nd),
+        gen: () => genMBP1(f, nd, lh),
       })),
-      { key: "roc_both", label: "ROC Guide", emoji: "📋", gen: () => genROCGuideBoth(f, nds, resigningDirs) },
+      { key: "roc_both", label: "ROC Guide", emoji: "📋", gen: () => genROCGuideBoth(f, nds, resigningDirs, lh) },
     ];
-  }, [f]);
+  }, [f, useLetterHead]);
 
   // Keep activeDocKey valid when docs change
   useEffect(() => {
@@ -1490,8 +1789,20 @@ export default function DirectorAppointmentPage() {
   const chairSuggs = f.directors.filter(d => d.name && (!f.chairmanName || d.name.toLowerCase().includes(f.chairmanName.toLowerCase())));
   const chairDinError = f.chairmanDin.length > 0 && f.chairmanDin.length !== 8;
   const canStep3 = !!f.meetingDate && !!f.meetingSerial && !!f.chairmanName && !chairDinError;
-  const canStep4 = f.directors.filter(d => d.isPresent).length >= (f.entityType === "opc" ? 1 : 2);
-  const canStep5 = f.meetingAction === "resign" || (activeNds.length > 0 && activeNds.every(nd => !!nd.name && !!nd.din && !!nd.fatherName));
+  const resigningDirsForValidation = f.directors.filter(d => d.isResigning);
+  const needsResigner = f.meetingAction === "resign" || f.meetingAction === "both";
+  const quorumMet = f.directors.filter(d => d.isPresent).length >= (f.entityType === "opc" ? 1 : 2);
+  const resignerPresent = !needsResigner || resigningDirsForValidation.length > 0;
+  const resignersHaveDetails = !needsResigner || resigningDirsForValidation.every(d => !!d.name && d.din.length === 8);
+  const canStep4 = quorumMet && resignerPresent && resignersHaveDetails;
+  const step4BlockReason = !quorumMet
+    ? `Minimum ${f.entityType === "opc" ? 1 : 2} director${f.entityType === "opc" ? "" : "s"} must be present for quorum`
+    : !resignerPresent
+    ? "Please mark at least one director as resigning (tick the 'Resigning' checkbox)"
+    : !resignersHaveDetails
+    ? "Please enter Name and DIN for all resigning directors"
+    : "";
+  const canStep5 = f.meetingAction === "resign" || (activeNds.length > 0 && activeNds.every(nd => !!nd.name && nd.din.length === 8 && !!nd.fatherName));
   const canProceed = [true, canStep1, canStep2, canStep3, canStep4, canStep5][step] ?? false;
 
   // Smart step navigation — skip Step 5 (New Directors) when action is resign-only
@@ -1600,6 +1911,14 @@ export default function DirectorAppointmentPage() {
                 : <><strong>Board Route ({SECTION_REF[f.ndDesignation]}):</strong> Board Notice 7 days prior (SS-1) · Board CTC · DIR-12 within 30 days</>
               }
             </div>
+            {f.meetingAction === "both" && isGM && (
+              <div className="mt-2 rounded-xl p-3 text-xs bg-red-50 border border-red-300 text-red-700 flex items-start gap-2">
+                <span className="text-base mt-0.5">⚠️</span>
+                <span>
+                  <strong>Combination Not Recommended:</strong> "Director (at General Meeting)" requires an EGM/AGM under Section 152, whereas the resignation is noted at a Board Meeting under Section 168. These are two separate meetings — they cannot be combined into one. Please use <strong>Appoint Only</strong> (with an EGM) and <strong>Resign Only</strong> (with a Board Meeting) as two separate actions, or change the designation to a Board-appointed type (e.g. Additional Director) for the "Both in same meeting" flow.
+                </span>
+              </div>
+            )}
           </SectionCard>
           <SectionCard title="How many directors being appointed?">
             <div className="flex gap-2 flex-wrap items-end">
@@ -1770,7 +2089,7 @@ export default function DirectorAppointmentPage() {
                   className="w-5 h-5 rounded accent-blue-600 cursor-pointer flex-shrink-0" title="Present" />
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input value={d.name} onChange={e => updateExistingDir(d.id, "name", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white" placeholder={`Director ${i + 1} Name`} />
-                  <input value={d.din} onChange={e => updateExistingDir(d.id, "din", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white" placeholder="DIN (8 digits)" maxLength={8} />
+                  <input value={d.din} onChange={e => updateExistingDir(d.id, "din", e.target.value.replace(/\D/g, ""))} className={`border rounded-lg px-3 py-1.5 text-sm bg-white ${d.din && d.din.length < 8 ? "border-red-400" : "border-slate-300"}`} placeholder="DIN (8 digits)" maxLength={8} />
                   <input value={d.designation} onChange={e => updateExistingDir(d.id, "designation", e.target.value)} className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white" placeholder="Designation" />
                 </div>
                 {(f.meetingAction === "resign" || f.meetingAction === "both") && (
@@ -1857,6 +2176,26 @@ export default function DirectorAppointmentPage() {
   /* ── Step 6: Documents ── */
   const s6 = (
     <>
+      {/* Letterhead toggle */}
+      <div className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 mb-0">
+        <div>
+          <p className="text-xs font-bold text-slate-700">Letterhead</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Print / download with or without company letterhead</p>
+        </div>
+        <div className="flex items-center gap-1.5 bg-white rounded-lg border border-slate-200 p-0.5">
+          <button
+            onClick={() => setUseLetterHead(true)}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${useLetterHead ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            With Letterhead
+          </button>
+          <button
+            onClick={() => setUseLetterHead(false)}
+            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${!useLetterHead ? "bg-slate-700 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            Without
+          </button>
+        </div>
+      </div>
+
       <SectionCard title="Select Document">
         <div className="flex flex-wrap gap-2">
           {docs.map(d => (
@@ -2019,7 +2358,17 @@ export default function DirectorAppointmentPage() {
                 <h1 className="text-[15px] font-semibold text-slate-900 leading-tight">{DIR_STEPS[step - 1].label}</h1>
                 <p className="text-[11.5px] text-slate-500 mt-0.5 hidden sm:block">{DIR_STEPS[step - 1].desc}</p>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                {/* Inline validation hint for disabled Next button */}
+                {!canProceed && step < 6 && (
+                  <span className="text-[10px] text-red-500 font-semibold max-w-[160px] text-right leading-tight hidden sm:block">
+                    {step === 1 ? "Enter company name to continue"
+                      : step === 3 ? (!f.meetingDate ? "Select meeting date" : !f.meetingSerial ? "Enter meeting serial no." : !f.chairmanName ? "Enter chairman name" : "Fix DIN error")
+                      : step === 4 ? step4BlockReason
+                      : step === 5 ? "Enter Name, DIN and Father's Name for all directors"
+                      : ""}
+                  </span>
+                )}
                 {step > 1 && (
                   <button onClick={goBack} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
                     ← Back
@@ -2028,6 +2377,7 @@ export default function DirectorAppointmentPage() {
                 {step < 6 && (
                   <button
                     onClick={goNext}
+                    title={!canProceed && step === 4 ? step4BlockReason : undefined}
                     className={`flex items-center gap-1 px-4 py-1.5 text-xs font-bold rounded-lg text-white transition-all ${canProceed ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-300 cursor-not-allowed"}`}
                   >
                     {step === 4 && f.meetingAction === "resign" ? "Get Documents →" : "Next →"}

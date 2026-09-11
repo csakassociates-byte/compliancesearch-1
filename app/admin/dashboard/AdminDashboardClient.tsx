@@ -207,6 +207,9 @@ export default function AdminDashboardClient({ rules: initialRules }: { rules: R
             <a href="/admin/calendar" className="text-sm font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 transition">
               📅 Calendar
             </a>
+            <a href="/admin/enquiries" className="text-sm font-semibold text-orange-600 hover:text-orange-800 px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 transition">
+              📩 Enquiries
+            </a>
             <a href="/" className="text-gray-400 hover:text-pink-500 text-sm transition font-medium">
               ← Back to App
             </a>

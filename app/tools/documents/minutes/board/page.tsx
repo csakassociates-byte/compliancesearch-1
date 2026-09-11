@@ -2260,6 +2260,43 @@ export default function BoardMinutesPage() {
         </div>
       </div>
 
+      {/* FAQ Section */}
+      <section className="border-t border-slate-100 bg-slate-50 px-4 py-10">
+        <div className="max-w-3xl mx-auto">
+          <p className="text-center text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">FAQ</p>
+          <h2 className="text-center text-xl font-extrabold text-slate-900 mb-6">Board Meeting Minutes — Frequently Asked Questions</h2>
+          <div className="space-y-3">
+            {([
+              {
+                q: "What is SS-1 and why do board meeting minutes need to comply with it?",
+                a: "SS-1 is the Secretarial Standard for Board Meetings issued by the ICSI (Institute of Company Secretaries of India). It is mandatory for all companies under Section 118(10) of the Companies Act 2013. SS-1 prescribes how board meetings must be convened and conducted — notice must be given at least 7 days in advance, the agenda must accompany the notice, quorum must be maintained throughout, and minutes must be signed by the chairman within 30 days of the meeting.",
+              },
+              {
+                q: "Within how many days must board meeting minutes be signed?",
+                a: "Board meeting minutes must be entered in the Minutes Book and signed by the Chairman of the meeting (or the chairman of the next meeting) within 30 days of the conclusion of the meeting, as per Section 118(1) of the Companies Act 2013 and SS-1. Failure to maintain proper minutes is an offence under Section 118(11).",
+              },
+              {
+                q: "How many board meetings must a company hold in a year?",
+                a: "Every company must hold a minimum of 4 board meetings in a calendar year, with a maximum gap of 120 days between two consecutive meetings, as per Section 173 of the Companies Act 2013. Small companies and OPCs may hold at least 2 board meetings in a year.",
+              },
+              {
+                q: "What is a Certified True Copy (CTC) of a board resolution?",
+                a: "A Certified True Copy (CTC) is an extract of a resolution passed at a board meeting, certified as a true copy by a Director or Company Secretary of the company. CTCs are required for bank submissions, ROC filings, property registrations, and other third-party purposes. They must include the company header, resolution text, and certification signature with date.",
+              },
+              {
+                q: "What is the quorum required for a board meeting?",
+                a: "The quorum for a board meeting is one-third of the total strength of the Board or 2 directors, whichever is higher, as per Section 174 of the Companies Act 2013. For a company with 3 directors, quorum is 2. The quorum must be present throughout the meeting, not just at the commencement.",
+              },
+            ] as { q: string; a: string }[]).map(({ q, a }) => (
+              <div key={q} className="rounded-xl border border-slate-200 bg-white p-4">
+                <h3 className="font-extrabold text-slate-800 text-sm mb-1.5">{q}</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">{a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <footer className="border-t border-slate-200 py-5 px-4 mt-auto">
         <div className="max-w-3xl mx-auto text-center text-sm text-slate-400">
           <Link href="/tools/documents/minutes" className="text-blue-500 hover:underline text-xs">← Meeting Types</Link>

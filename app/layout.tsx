@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 import FooterWrapper from "@/components/FooterWrapper";
+import EnquiryDrawer from "@/components/EnquiryDrawer";
 
 const BASE_URL = "https://compliancesearch.in";
 
@@ -301,6 +302,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SessionProviderWrapper>
           {children}
           <FooterWrapper />
+          <EnquiryDrawer />
         </SessionProviderWrapper>
       </body>
     </html>

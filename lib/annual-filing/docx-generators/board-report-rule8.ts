@@ -69,7 +69,13 @@ function getStatutoryAuditorText(data: AnnualFilingData): string {
     const endAGMNo = a.appointmentAGMNo + tenure;
     const apptOrd = ordinalStr(a.appointmentAGMNo);
     const endOrd = ordinalStr(endAGMNo);
-    return `The Company at its ${apptOrd} Annual General Meeting held in ${a.appointmentYear}, appointed ${auditorName}, as the Statutory ${auditorWord} of the Company for a period of ${tenureWord} consecutive year${tenure > 1 ? "s" : ""}, to hold office from the conclusion of the ${apptOrd} Annual General Meeting until the conclusion of the ${endOrd} Annual General Meeting of the Company.`;
+    const fyEndYear = parseInt(data.financialYear.split("-")[0]) + 1;
+    const isEnsuing = a.appointmentYear >= fyEndYear;
+    if (isEnsuing) {
+      return `The Board of Directors of the Company recommends the appointment of ${auditorName}, as the Statutory ${auditorWord} of the Company for a period of ${tenureWord} consecutive year${tenure > 1 ? "s" : ""}, to hold office from the conclusion of the ${apptOrd} Annual General Meeting until the conclusion of the ${endOrd} Annual General Meeting of the Company, subject to ratification/approval by the Members at the ensuing Annual General Meeting. ${auditorName} ${isProp ? "has" : "have"} furnished the necessary consent and certificate confirming eligibility under Section 141 of the Companies Act, 2013.`;
+    }
+    const agmDateStr = a.appointmentAGMDate ? ` held on ${fmtDate(a.appointmentAGMDate)}` : ` held in ${a.appointmentYear}`;
+    return `The Company at its ${apptOrd} Annual General Meeting${agmDateStr}, appointed ${auditorName}, as the Statutory ${auditorWord} of the Company for a period of ${tenureWord} consecutive year${tenure > 1 ? "s" : ""}, to hold office from the conclusion of the ${apptOrd} Annual General Meeting until the conclusion of the ${endOrd} Annual General Meeting of the Company.`;
   }
   if (a.firmName) {
     return isProp

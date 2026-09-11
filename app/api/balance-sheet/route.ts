@@ -112,6 +112,23 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ doc: rows[0] });
     }
 
+    const companyName = url.searchParams.get("companyName");
+    const financialYear = url.searchParams.get("financialYear");
+    if (companyName && financialYear) {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        id: string; formDataJson: string; updatedAt: Date;
+      }>>(
+        `SELECT id, "formDataJson", "updatedAt"
+         FROM csi_documents
+         WHERE "userId" = ANY($1::text[]) AND type = 'balance_sheet'
+           AND LOWER("companyName") = LOWER($2) AND "financialYear" = $3
+         ORDER BY "updatedAt" DESC LIMIT 1`,
+        memberIds, companyName, financialYear
+      );
+      if (!rows.length) return NextResponse.json({ doc: null });
+      return NextResponse.json({ doc: rows[0] });
+    }
+
     const rows = await prisma.$queryRawUnsafe<Array<{
       id: string; title: string; companyName: string | null; financialYear: string | null; updatedAt: Date;
     }>>(

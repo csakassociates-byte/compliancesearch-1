@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import {
   BalanceSheetData,
+  BSFinancialYear,
   INITIAL_BALANCE_SHEET_DATA,
   n,
 } from "@/lib/balance-sheet/types";
@@ -25,6 +26,427 @@ const STEPS = [
   { id: 4, label: "Disclosures", icon: "📝" },
   { id: 5, label: "Preview",     icon: "👁️" },
 ];
+
+// ── FY helpers ────────────────────────────────────────────────────────────────
+
+function getPrevFY(fy: BSFinancialYear): BSFinancialYear | null {
+  if (fy === "2025-26") return "2024-25";
+  if (fy === "2024-25") return "2023-24";
+  return null;
+}
+
+export function getFYLabels(fy: BSFinancialYear): { current: string; prev: string } {
+  const endYear = 2000 + parseInt(fy.split("-")[1], 10);
+  return {
+    current: `Year ended 31st March ${endYear}`,
+    prev:    `Year ended 31st March ${endYear - 1}`,
+  };
+}
+
+// ── Carry-forward: maps every current-year field from prevData → prev-year fields ──
+
+function carryForwardToPrevYear(p: BalanceSheetData): Partial<BalanceSheetData> {
+  return {
+    // Note 1 — Share Capital
+    note1ShareCapital: {
+      ...INITIAL_BALANCE_SHEET_DATA.note1ShareCapital,
+      classes: p.note1ShareCapital.classes.map(c => ({
+        ...c,
+        authorisedShares: "",
+        issuedShares: "",
+        subscribedShares: "",
+        paidUpShares: "",
+        paidUpAmount: "",
+        prevPaidUpShares: c.paidUpShares,
+        prevPaidUpAmount: c.paidUpAmount,
+      })),
+      shareholdersAbove5: p.note1ShareCapital.shareholdersAbove5.map(s => ({
+        ...s,
+        shares: "",
+        percent: "",
+        prevShares: s.shares,
+        prevPercent: s.percent,
+      })),
+    },
+
+    // Note 2 — Reserves & Surplus
+    note2ReservesSurplus: {
+      capitalReserve: "",
+      capitalReservePrev: p.note2ReservesSurplus.capitalReserve,
+      securitiesPremium: "",
+      securitiesPremiumPrev: p.note2ReservesSurplus.securitiesPremium,
+      generalReserveOpen: p.note2ReservesSurplus.generalReserveClose,
+      generalReserveAdditions: "",
+      generalReserveClose: "",
+      generalReservePrev: p.note2ReservesSurplus.generalReserveClose,
+      surplusOpeningBalance: p.note2ReservesSurplus.surplusClosingBalance,
+      surplusNetProfit: "",
+      surplusDividend: "",
+      surplusTransferToReserve: "",
+      surplusClosingBalance: "",
+      surplusPrev: p.note2ReservesSurplus.surplusClosingBalance,
+      otherReserves: "",
+      otherReservesPrev: p.note2ReservesSurplus.otherReserves,
+    },
+
+    // Note 3 — LT Borrowings
+    note3LTBorrowings: {
+      items: p.note3LTBorrowings.items.map(i => ({ ...i, amount: "", amountPrev: i.amount })),
+    },
+
+    // Note 4 — Deferred Tax
+    note4DeferredTax: {
+      deferredTaxLiability: "",
+      deferredTaxLiabilityPrev: p.note4DeferredTax.deferredTaxLiability,
+      deferredTaxAsset: "",
+      deferredTaxAssetPrev: p.note4DeferredTax.deferredTaxAsset,
+    },
+
+    // Note 5 — LT Provisions
+    note5LTProvisions: {
+      provisionForGratuity: "",
+      provisionForGratuityPrev: p.note5LTProvisions.provisionForGratuity,
+      provisionForLeaveEncashment: "",
+      provisionForLeaveEncashmentPrev: p.note5LTProvisions.provisionForLeaveEncashment,
+      otherProvisions: "",
+      otherProvisionsPrev: p.note5LTProvisions.otherProvisions,
+    },
+
+    // Note 6 — ST Borrowings
+    note6STBorrowings: {
+      items: p.note6STBorrowings.items.map(i => ({ ...i, amount: "", amountPrev: i.amount })),
+    },
+
+    // Note 7 — Trade Payables
+    note7TradePayables: {
+      ...INITIAL_BALANCE_SHEET_DATA.note7TradePayables,
+      msmeAmount: "",
+      msmeAmountPrev: p.note7TradePayables.msmeAmount,
+      othersAmount: "",
+      othersAmountPrev: p.note7TradePayables.othersAmount,
+      disputedMsme: "",
+      disputedMsmePrev: p.note7TradePayables.disputedMsme,
+      disputedOthers: "",
+      disputedOthersPrev: p.note7TradePayables.disputedOthers,
+      msmeInterestProvided: "",
+      msmeInterestProvidedPrev: p.note7TradePayables.msmeInterestProvided,
+      hasUdyamRegistration: p.note7TradePayables.hasUdyamRegistration,
+    },
+
+    // Note 8 — Other Current Liabilities
+    note8OtherCurrentLiabilities: {
+      currentMaturitiesLTBorrowings: "",
+      currentMaturitiesLTBorrowingsPrev: p.note8OtherCurrentLiabilities.currentMaturitiesLTBorrowings,
+      interestAccrued: "",
+      interestAccruedPrev: p.note8OtherCurrentLiabilities.interestAccrued,
+      advancesFromCustomers: "",
+      advancesFromCustomersPrev: p.note8OtherCurrentLiabilities.advancesFromCustomers,
+      statutoryDues: "",
+      statutoryDuesPrev: p.note8OtherCurrentLiabilities.statutoryDues,
+      otherPayables: "",
+      otherPayablesPrev: p.note8OtherCurrentLiabilities.otherPayables,
+    },
+
+    // Note 9 — ST Provisions
+    note9STProvisions: {
+      provisionForTax: "",
+      provisionForTaxPrev: p.note9STProvisions.provisionForTax,
+      proposedDividend: "",
+      proposedDividendPrev: p.note9STProvisions.proposedDividend,
+      otherProvisions: "",
+      otherProvisionsPrev: p.note9STProvisions.otherProvisions,
+    },
+
+    // Note 10 — Fixed Assets (closing balances become new opening + prev cols)
+    note10FixedAssets: {
+      tangibleAssets: p.note10FixedAssets.tangibleAssets.map(row => ({
+        ...row,
+        gbOpeningBalance: row.gbClosingBalance,
+        gbAdditions: "",
+        gbDisposals: "",
+        gbClosingBalance: "",
+        gbPrevClosing: row.gbClosingBalance,
+        depOpeningBalance: row.depClosingBalance,
+        depForYear: "",
+        depOnDisposals: "",
+        depClosingBalance: "",
+        depPrevClosing: row.depClosingBalance,
+      })),
+      intangibleAssets: p.note10FixedAssets.intangibleAssets.map(row => ({
+        ...row,
+        gbOpeningBalance: row.gbClosingBalance,
+        gbAdditions: "",
+        gbDisposals: "",
+        gbClosingBalance: "",
+        gbPrevClosing: row.gbClosingBalance,
+        depOpeningBalance: row.depClosingBalance,
+        depForYear: "",
+        depOnDisposals: "",
+        depClosingBalance: "",
+        depPrevClosing: row.depClosingBalance,
+      })),
+      cwip: "",
+      cwipPrev: p.note10FixedAssets.cwip,
+      cwipLessThan1yr: "",
+      cwip1to2yr: "",
+      cwip2to3yr: "",
+      cwipMore3yr: "",
+      goodwill: "",
+      goodwillPrev: p.note10FixedAssets.goodwill,
+    },
+
+    // Note 11 — Non-current Investments
+    note11NonCurrentInvestments: {
+      quotedItems: p.note11NonCurrentInvestments.quotedItems.map(i => ({ ...i, units: "", amount: "", amountPrev: i.amount })),
+      unquotedItems: p.note11NonCurrentInvestments.unquotedItems.map(i => ({ ...i, units: "", amount: "", amountPrev: i.amount })),
+      provisionForDiminution: "",
+      provisionForDiminutionPrev: p.note11NonCurrentInvestments.provisionForDiminution,
+    },
+
+    // Note 12 — LT Loans & Advances
+    note12LTLoansAdvances: {
+      securityDeposits: "",
+      securityDepositsPrev: p.note12LTLoansAdvances.securityDeposits,
+      capitalAdvances: "",
+      capitalAdvancesPrev: p.note12LTLoansAdvances.capitalAdvances,
+      otherLoansAdvances: "",
+      otherLoansAdvancesPrev: p.note12LTLoansAdvances.otherLoansAdvances,
+      loansToRelatedParties: "",
+      loansToRelatedPartiesPrev: p.note12LTLoansAdvances.loansToRelatedParties,
+    },
+
+    // Note 13 — Other Non-current Assets
+    note13OtherNonCurrentAssets: {
+      longTermTradeReceivables: "",
+      longTermTradeReceivablesPrev: p.note13OtherNonCurrentAssets.longTermTradeReceivables,
+      otherNonCurrentAssets: "",
+      otherNonCurrentAssetsPrev: p.note13OtherNonCurrentAssets.otherNonCurrentAssets,
+    },
+
+    // Note 14 — Current Investments
+    note14CurrentInvestments: {
+      mutualFunds: "",
+      mutualFundsPrev: p.note14CurrentInvestments.mutualFunds,
+      fixedDepositsMaturing12m: "",
+      fixedDepositsMaturing12mPrev: p.note14CurrentInvestments.fixedDepositsMaturing12m,
+      otherCurrentInvestments: "",
+      otherCurrentInvestmentsPrev: p.note14CurrentInvestments.otherCurrentInvestments,
+    },
+
+    // Note 15 — Inventories
+    note15Inventories: {
+      ...INITIAL_BALANCE_SHEET_DATA.note15Inventories,
+      rawMaterials: "",
+      rawMaterialsPrev: p.note15Inventories.rawMaterials,
+      workInProgress: "",
+      workInProgressPrev: p.note15Inventories.workInProgress,
+      finishedGoods: "",
+      finishedGoodsPrev: p.note15Inventories.finishedGoods,
+      stockInTrade: "",
+      stockInTradePrev: p.note15Inventories.stockInTrade,
+      storesSpares: "",
+      storesSparesPrev: p.note15Inventories.storesSpares,
+      looseTool: "",
+      looseToolPrev: p.note15Inventories.looseTool,
+    },
+
+    // Note 16 — Trade Receivables
+    note16TradeReceivables: {
+      ...INITIAL_BALANCE_SHEET_DATA.note16TradeReceivables,
+      outstandingMore6mSecured: "",
+      outstandingMore6mUnsecured: "",
+      outstandingMore6mDoubtful: "",
+      outstandingLess6mSecured: "",
+      outstandingLess6mUnsecured: "",
+      outstandingMore6mSecuredPrev: p.note16TradeReceivables.outstandingMore6mSecured,
+      outstandingMore6mUnsecuredPrev: p.note16TradeReceivables.outstandingMore6mUnsecured,
+      outstandingMore6mDoubtfulPrev: p.note16TradeReceivables.outstandingMore6mDoubtful,
+      outstandingLess6mSecuredPrev: p.note16TradeReceivables.outstandingLess6mSecured,
+      outstandingLess6mUnsecuredPrev: p.note16TradeReceivables.outstandingLess6mUnsecured,
+      provisionForDoubtful: "",
+      provisionForDoubtfulPrev: p.note16TradeReceivables.provisionForDoubtful,
+    },
+
+    // Note 17 — Cash & Cash Equivalents
+    note17CashEquivalents: {
+      cashOnHand: "",
+      cashOnHandPrev: p.note17CashEquivalents.cashOnHand,
+      balancesWithBanks: "",
+      balancesWithBanksPrev: p.note17CashEquivalents.balancesWithBanks,
+      fixedDepositsWithin3m: "",
+      fixedDepositsWithin3mPrev: p.note17CashEquivalents.fixedDepositsWithin3m,
+      chequesDraftsOnHand: "",
+      chequesDraftsOnHandPrev: p.note17CashEquivalents.chequesDraftsOnHand,
+    },
+
+    // Note 18 — ST Loans & Advances
+    note18STLoansAdvances: {
+      prepaidExpenses: "",
+      prepaidExpensesPrev: p.note18STLoansAdvances.prepaidExpenses,
+      advancesToSuppliers: "",
+      advancesToSuppliersPrev: p.note18STLoansAdvances.advancesToSuppliers,
+      balanceWithGovernment: "",
+      balanceWithGovernmentPrev: p.note18STLoansAdvances.balanceWithGovernment,
+      otherAdvances: "",
+      otherAdvancesPrev: p.note18STLoansAdvances.otherAdvances,
+    },
+
+    // Note 19 — Other Current Assets
+    note19OtherCurrentAssets: {
+      interestAccruedOnDeposits: "",
+      interestAccruedOnDepositsPrev: p.note19OtherCurrentAssets.interestAccruedOnDeposits,
+      otherCurrentAssets: "",
+      otherCurrentAssetsPrev: p.note19OtherCurrentAssets.otherCurrentAssets,
+    },
+
+    // Note 20 — Revenue from Operations
+    note20Revenue: {
+      saleOfProducts: "",
+      saleOfProductsPrev: p.note20Revenue.saleOfProducts,
+      saleOfServices: "",
+      saleOfServicesPrev: p.note20Revenue.saleOfServices,
+      otherOperatingRevenue: "",
+      otherOperatingRevenuePrev: p.note20Revenue.otherOperatingRevenue,
+      lessExciseDuty: "",
+      lessExciseDutyPrev: p.note20Revenue.lessExciseDuty,
+    },
+
+    // Note 21 — Other Income
+    note21OtherIncome: {
+      interestIncome: "",
+      interestIncomePrev: p.note21OtherIncome.interestIncome,
+      dividendIncome: "",
+      dividendIncomePrev: p.note21OtherIncome.dividendIncome,
+      profitOnSaleOfAssets: "",
+      profitOnSaleOfAssetsPrev: p.note21OtherIncome.profitOnSaleOfAssets,
+      miscIncome: "",
+      miscIncomePrev: p.note21OtherIncome.miscIncome,
+    },
+
+    // Note 22 — Cost of Materials (closing stock → new opening stock)
+    note22Materials: {
+      openingStock: p.note22Materials.closingStock,
+      openingStockPrev: p.note22Materials.openingStock,
+      purchases: "",
+      purchasesPrev: p.note22Materials.purchases,
+      closingStock: "",
+      closingStockPrev: p.note22Materials.closingStock,
+    },
+
+    // Note 23 — Purchases of Stock-in-Trade
+    note23PurchasesStockInTrade: {
+      purchases: "",
+      purchasesPrev: p.note23PurchasesStockInTrade.purchases,
+    },
+
+    // Note 24 — Changes in Inventories (closing → new opening)
+    note24InventoryChanges: {
+      openingFinishedGoods: p.note24InventoryChanges.closingFinishedGoods,
+      openingFinishedGoodsPrev: p.note24InventoryChanges.openingFinishedGoods,
+      openingWIP: p.note24InventoryChanges.closingWIP,
+      openingWIPPrev: p.note24InventoryChanges.openingWIP,
+      openingStockInTrade: p.note24InventoryChanges.closingStockInTrade,
+      openingStockInTradePrev: p.note24InventoryChanges.openingStockInTrade,
+      closingFinishedGoods: "",
+      closingFinishedGoodsPrev: p.note24InventoryChanges.closingFinishedGoods,
+      closingWIP: "",
+      closingWIPPrev: p.note24InventoryChanges.closingWIP,
+      closingStockInTrade: "",
+      closingStockInTradePrev: p.note24InventoryChanges.closingStockInTrade,
+    },
+
+    // Note 25 — Employee Benefits Expense
+    note25EmployeeBenefits: {
+      salariesWages: "",
+      salariesWagesPrev: p.note25EmployeeBenefits.salariesWages,
+      bonuses: "",
+      bonusesPrev: p.note25EmployeeBenefits.bonuses,
+      providentFund: "",
+      providentFundPrev: p.note25EmployeeBenefits.providentFund,
+      gratuity: "",
+      gratuityPrev: p.note25EmployeeBenefits.gratuity,
+      staffWelfare: "",
+      staffWelfarePrev: p.note25EmployeeBenefits.staffWelfare,
+      directorRemuneration: "",
+      directorRemunerationPrev: p.note25EmployeeBenefits.directorRemuneration,
+    },
+
+    // Note 26 — Finance Costs
+    note26FinanceCosts: {
+      interestOnBorrowings: "",
+      interestOnBorrowingsPrev: p.note26FinanceCosts.interestOnBorrowings,
+      bankCharges: "",
+      bankChargesPrev: p.note26FinanceCosts.bankCharges,
+      otherFinanceCosts: "",
+      otherFinanceCostsPrev: p.note26FinanceCosts.otherFinanceCosts,
+    },
+
+    // Note 27 — Depreciation & Amortization
+    note27Depreciation: {
+      depreciation: "",
+      depreciationPrev: p.note27Depreciation.depreciation,
+      amortization: "",
+      amortizationPrev: p.note27Depreciation.amortization,
+    },
+
+    // Note 28 — Other Expenses
+    note28OtherExpenses: {
+      powerFuel: "",
+      powerFuelPrev: p.note28OtherExpenses.powerFuel,
+      rent: "",
+      rentPrev: p.note28OtherExpenses.rent,
+      repairsMaintenance: "",
+      repairsMaintenancePrev: p.note28OtherExpenses.repairsMaintenance,
+      advertisingMarketing: "",
+      advertisingMarketingPrev: p.note28OtherExpenses.advertisingMarketing,
+      travellingConveyance: "",
+      travellingConveyancePrev: p.note28OtherExpenses.travellingConveyance,
+      legalProfessional: "",
+      legalProfessionalPrev: p.note28OtherExpenses.legalProfessional,
+      auditFees: "",
+      auditFeesPrev: p.note28OtherExpenses.auditFees,
+      insurancePremium: "",
+      insurancePremiumPrev: p.note28OtherExpenses.insurancePremium,
+      miscExpenses: "",
+      miscExpensesPrev: p.note28OtherExpenses.miscExpenses,
+    },
+
+    // Top-level Tax fields
+    currentTax: "",
+    currentTaxPrev: p.currentTax,
+    deferredTaxCharge: "",
+    deferredTaxChargePrev: p.deferredTaxCharge,
+
+    // Additional Disclosures — Financial Ratios
+    additionalDisclosures: {
+      ...INITIAL_BALANCE_SHEET_DATA.additionalDisclosures,
+      ratios: {
+        currentRatio: "",
+        debtEquityRatio: "",
+        debtServiceCoverageRatio: "",
+        returnOnEquity: "",
+        inventoryTurnoverRatio: "",
+        tradeReceivablesTurnover: "",
+        tradePayablesTurnover: "",
+        netCapitalTurnoverRatio: "",
+        netProfitRatio: "",
+        returnOnCapitalEmployed: "",
+        returnOnInvestment: "",
+        currentRatioPrev: p.additionalDisclosures.ratios.currentRatio,
+        debtEquityRatioPrev: p.additionalDisclosures.ratios.debtEquityRatio,
+        debtServiceCoverageRatioPrev: p.additionalDisclosures.ratios.debtServiceCoverageRatio,
+        returnOnEquityPrev: p.additionalDisclosures.ratios.returnOnEquity,
+        inventoryTurnoverRatioPrev: p.additionalDisclosures.ratios.inventoryTurnoverRatio,
+        tradeReceivablesTurnoverPrev: p.additionalDisclosures.ratios.tradeReceivablesTurnover,
+        tradePayablesTurnoverPrev: p.additionalDisclosures.ratios.tradePayablesTurnover,
+        netCapitalTurnoverRatioPrev: p.additionalDisclosures.ratios.netCapitalTurnoverRatio,
+        netProfitRatioPrev: p.additionalDisclosures.ratios.netProfitRatio,
+        returnOnCapitalEmployedPrev: p.additionalDisclosures.ratios.returnOnCapitalEmployed,
+        returnOnInvestmentPrev: p.additionalDisclosures.ratios.returnOnInvestment,
+      },
+    },
+  };
+}
 
 // ── Balance check ──────────────────────────────────────────────────────────────
 
@@ -75,6 +497,8 @@ function ScheduleIIIDivIInner() {
   const [loading, setLoading] = useState(!!loadId);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [prevYearData, setPrevYearData] = useState<BalanceSheetData | null>(null);
+  const [prevYearChecked, setPrevYearChecked] = useState(false);
 
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoggedIn = useRef(false);
@@ -104,9 +528,41 @@ function ScheduleIIIDivIInner() {
     }).catch(() => {});
   }, []);
 
+  // ── Check if prev FY balance sheet exists for same company ─────────────────
+  useEffect(() => {
+    const prevFY = getPrevFY(data.financialYear);
+    if (!data.companyName || !prevFY || data.isFirstYear) {
+      setPrevYearData(null);
+      setPrevYearChecked(false);
+      return;
+    }
+    setPrevYearChecked(false);
+    const params = new URLSearchParams({ companyName: data.companyName, financialYear: prevFY });
+    fetch(`/api/balance-sheet?${params.toString()}`)
+      .then(r => r.json())
+      .then((j: { doc?: { formDataJson: string } | null }) => {
+        if (j.doc?.formDataJson) {
+          const parsed = JSON.parse(j.doc.formDataJson) as BalanceSheetData;
+          setPrevYearData(parsed);
+        } else {
+          setPrevYearData(null);
+        }
+      })
+      .catch(() => setPrevYearData(null))
+      .finally(() => setPrevYearChecked(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.companyName, data.financialYear, data.isFirstYear]);
+
   const update = useCallback((patch: Partial<BalanceSheetData>) => {
     setData(prev => ({ ...prev, ...patch }));
   }, []);
+
+  function applyCarryForward() {
+    if (!prevYearData) return;
+    const patch = carryForwardToPrevYear(prevYearData);
+    setData(prev => ({ ...prev, ...patch }));
+    setPrevYearData(null); // dismiss banner after applying
+  }
 
   const updateNote = useCallback(<K extends keyof BalanceSheetData>(key: K, patch: Partial<BalanceSheetData[K]>) => {
     setData(prev => ({ ...prev, [key]: { ...(prev[key] as object), ...(patch as object) } }));
@@ -482,7 +938,16 @@ function ScheduleIIIDivIInner() {
           {/* Scrollable step content */}
           <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px" }}>
 
-            {step === 0 && <Step0Setup data={data} update={update} />}
+            {step === 0 && (
+              <Step0Setup
+                data={data}
+                update={update}
+                fyLabels={getFYLabels(data.financialYear)}
+                prevYearFound={prevYearChecked && !!prevYearData}
+                prevFYLabel={getPrevFY(data.financialYear) ?? ""}
+                onCarryForward={applyCarryForward}
+              />
+            )}
             {step === 1 && <Step1Liabilities data={data} update={update} updateNote={updateNote} />}
             {step === 2 && <Step2Assets data={data} update={update} updateNote={updateNote} />}
             {step === 3 && <Step3PL data={data} update={update} updateNote={updateNote} />}

@@ -17,7 +17,7 @@ export default function AnnualFilingSplash() {
     if (!visible) return;
     // Progress bar drains over 4 seconds
     const start = Date.now();
-    const duration = 4000;
+    const duration = 2000;
     const raf = () => {
       const elapsed = Date.now() - start;
       const pct = Math.max(0, 100 - (elapsed / duration) * 100);
