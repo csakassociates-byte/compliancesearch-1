@@ -135,15 +135,16 @@ function NCEFinancialsInner() {
   const fyLabels = getFYLabels(data.financialYear);
 
   return (
-    <>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "system-ui,-apple-system,sans-serif" }}>
       <Navbar />
-      <div style={{ display: "flex", minHeight: "calc(100vh - 64px)", background: "#f8fafc", fontFamily: "system-ui,-apple-system,sans-serif" }}>
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", background: "#f8fafc" }}>
 
-        {/* Sidebar */}
+        {/* Sidebar — frozen, doesn't scroll with content */}
         <aside style={{
           width: sidebarOpen ? 230 : 60, flexShrink: 0, background: "#162032", color: "#fff",
           display: "flex", flexDirection: "column", transition: "width 0.2s ease",
           borderRight: "1px solid rgba(255,255,255,0.08)", overflow: "hidden",
+          height: "100%",
         }}>
           <div style={{ padding: "18px 14px 12px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -178,30 +179,34 @@ function NCEFinancialsInner() {
             ))}
           </nav>
 
-          {sidebarOpen && (
-            <div style={{ padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-              <button onClick={save} disabled={saving} style={{
-                width: "100%", background: saving ? "#1e3a5f" : "#0ea5e9", color: "#fff", border: "none",
-                borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer",
-              }}>
-                {saving ? "Saving…" : "💾 Save"}
-              </button>
-              {saveMsg && <div style={{ fontSize: 11, marginTop: 6, color: saveMsg.includes("success") ? "#4ade80" : "#fca5a5", textAlign: "center" }}>{saveMsg}</div>}
-            </div>
-          )}
         </aside>
 
-        {/* Main content */}
-        <main style={{ flex: 1, overflow: "auto", padding: "24px 28px" }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        {/* Main content — scrolls independently */}
+        <main style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-            {/* Breadcrumb */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, fontSize: 12, color: "#64748b" }}>
+          {/* Sticky top bar with Save button */}
+          <div style={{ flexShrink: 0, background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "10px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#64748b" }}>
               <a href="/tools/documents/balance-sheet" style={{ color: "#94a3b8", textDecoration: "none" }}>Financial Statements</a>
               <span>›</span>
               <span style={{ color: "#374151", fontWeight: 600 }}>NCE Financials</span>
-              {data.entityName && <><span>›</span><span style={{ color: "#0ea5e9" }}>{data.entityName}</span></>}
+              {data.entityName && <><span>›</span><span style={{ color: "#0ea5e9", fontWeight: 600 }}>{data.entityName}</span></>}
             </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {saveMsg && <span style={{ fontSize: 12, color: saveMsg.includes("success") ? "#059669" : "#dc2626", fontWeight: 600 }}>{saveMsg}</span>}
+              <button onClick={save} disabled={saving} style={{
+                background: saving ? "#94a3b8" : "#0ea5e9", color: "#fff", border: "none",
+                borderRadius: 9, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                {saving ? "Saving…" : "💾 Save Progress"}
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable content area */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
 
             {/* Step header */}
             <div style={{ marginBottom: 22 }}>
@@ -236,12 +241,9 @@ function NCEFinancialsInner() {
                 ← Previous
               </button>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <button onClick={save} disabled={saving} style={{ background: "#f0fdf4", color: "#059669", border: "1px solid #86efac", borderRadius: 10, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  {saving ? "Saving…" : "💾 Save Progress"}
-                </button>
                 {step < STEPS.length - 1 && (
                   <button
-                    onClick={() => setStep(s => Math.min(STEPS.length - 1, s + 1))}
+                    onClick={() => { void save(); setStep(s => Math.min(STEPS.length - 1, s + 1)); }}
                     style={{ background: "linear-gradient(135deg,#0ea5e9,#0369a1)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
                   >
                     Next →
@@ -251,9 +253,10 @@ function NCEFinancialsInner() {
             </div>
 
           </div>
+          </div>{/* end scrollable */}
         </main>
       </div>
-    </>
+    </div>
   );
 }
 
