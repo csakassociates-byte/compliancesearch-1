@@ -37,6 +37,7 @@ const TYPE_LABEL: Record<string, string> = {
   director_appointment: 'Director Appointment',
   balance_sheet:        'Balance Sheet',
   nce_financials:       'NCE Financials',
+  itr_filing:           'ITR Filing',
 };
 const TYPE_ICON: Record<string, string> = {
   agm_minutes:          '🏛️',
@@ -50,6 +51,7 @@ const TYPE_ICON: Record<string, string> = {
   director_appointment: '👤',
   balance_sheet:        '📑',
   nce_financials:       '🤝',
+  itr_filing:           '🗂️',
 };
 const TYPE_COLOR: Record<string, string> = {
   agm_minutes:          'bg-purple-100 text-purple-700 border-purple-200',
@@ -63,6 +65,7 @@ const TYPE_COLOR: Record<string, string> = {
   director_appointment: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   balance_sheet:        'bg-sky-100 text-sky-700 border-sky-200',
   nce_financials:       'bg-violet-100 text-violet-700 border-violet-200',
+  itr_filing:           'bg-orange-100 text-orange-700 border-orange-200',
 };
 
 function docOpenHref(doc: { id: string; type: string }): string {
@@ -71,6 +74,7 @@ function docOpenHref(doc: { id: string; type: string }): string {
   if (doc.type === 'director_appointment') return `/tools/corporate-action-kit/director-appointment?load=${doc.id}`;
   if (doc.type === 'balance_sheet')        return `/tools/documents/balance-sheet/schedule-iii-div1?load=${doc.id}`;
   if (doc.type === 'nce_financials')       return `/tools/documents/nce-financials?load=${doc.id}`;
+  if (doc.type === 'itr_filing')           return `/tools/itr?load=${doc.id}`;
   return `/dashboard/documents/${doc.id}`;
 }
 
