@@ -35,6 +35,8 @@ const TYPE_LABEL: Record<string, string> = {
   annual_filing:        'Annual Filing',
   auditor_appointment:  'Auditor Appointment',
   director_appointment: 'Director Appointment',
+  balance_sheet:        'Balance Sheet',
+  nce_financials:       'NCE Financials',
 };
 const TYPE_ICON: Record<string, string> = {
   agm_minutes:          '🏛️',
@@ -46,6 +48,8 @@ const TYPE_ICON: Record<string, string> = {
   annual_filing:        '📊',
   auditor_appointment:  '🔍',
   director_appointment: '👤',
+  balance_sheet:        '📑',
+  nce_financials:       '🤝',
 };
 const TYPE_COLOR: Record<string, string> = {
   agm_minutes:          'bg-purple-100 text-purple-700 border-purple-200',
@@ -57,12 +61,16 @@ const TYPE_COLOR: Record<string, string> = {
   annual_filing:        'bg-teal-100 text-teal-700 border-teal-200',
   auditor_appointment:  'bg-green-100 text-green-700 border-green-200',
   director_appointment: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  balance_sheet:        'bg-sky-100 text-sky-700 border-sky-200',
+  nce_financials:       'bg-violet-100 text-violet-700 border-violet-200',
 };
 
 function docOpenHref(doc: { id: string; type: string }): string {
   if (doc.type === 'annual_filing')        return `/tools/documents/annual-filing?load=${doc.id}`;
   if (doc.type === 'auditor_appointment')  return `/tools/corporate-action-kit/auditor-appointment?load=${doc.id}`;
   if (doc.type === 'director_appointment') return `/tools/corporate-action-kit/director-appointment?load=${doc.id}`;
+  if (doc.type === 'balance_sheet')        return `/tools/documents/balance-sheet/schedule-iii-div1?load=${doc.id}`;
+  if (doc.type === 'nce_financials')       return `/tools/documents/nce-financials?load=${doc.id}`;
   return `/dashboard/documents/${doc.id}`;
 }
 
@@ -3257,6 +3265,172 @@ function ShareholdersTab({ companyId, company }: { companyId: string; company: C
   );
 }
 
+// ── Company History Tab ───────────────────────────────────
+function CompanyHistoryTab({ docs, company }: { docs: Doc[]; company: Company }) {
+  const TYPE_META: Record<string, { label: string; icon: string; color: string; bg: string }> = {
+    board_minutes:        { label: 'Board Meeting',       icon: '📋', color: 'text-blue-700',   bg: 'bg-blue-50 border-blue-200' },
+    agm_minutes:          { label: 'AGM',                 icon: '🏛️', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
+    egm_minutes:          { label: 'EGM',                 icon: '⚡', color: 'text-amber-700',  bg: 'bg-amber-50 border-amber-200' },
+    committee_minutes:    { label: 'Committee Meeting',   icon: '👥', color: 'text-emerald-700',bg: 'bg-emerald-50 border-emerald-200' },
+    annual_filing:        { label: 'Annual Filing',       icon: '📊', color: 'text-teal-700',   bg: 'bg-teal-50 border-teal-200' },
+    auditor_appointment:  { label: 'Auditor Appointment', icon: '🔍', color: 'text-green-700',  bg: 'bg-green-50 border-green-200' },
+    director_appointment: { label: 'Director Appointment',icon: '👤', color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200' },
+    share_transfer:       { label: 'Share Transfer',      icon: '🔄', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200' },
+    share_certificate:    { label: 'Share Certificate',   icon: '📜', color: 'text-rose-700',   bg: 'bg-rose-50 border-rose-200' },
+    bank_resolution:      { label: 'Bank Resolution',     icon: '🏦', color: 'text-cyan-700',   bg: 'bg-cyan-50 border-cyan-200' },
+  };
+
+  function docHref(doc: Doc): string {
+    if (doc.type === 'annual_filing')        return `/tools/documents/annual-filing?load=${doc.id}`;
+    if (doc.type === 'auditor_appointment')  return `/tools/corporate-action-kit/auditor-appointment?load=${doc.id}`;
+    if (doc.type === 'director_appointment') return `/tools/corporate-action-kit/director-appointment?load=${doc.id}`;
+    return `/dashboard/documents/${doc.id}`;
+  }
+
+  function fmtDate(s: string): string {
+    try { return new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
+    catch { return s; }
+  }
+
+  // Build unified event list
+  type HistoryEvent = {
+    date: string;       // ISO date string for sorting
+    dateDisplay: string;
+    year: number;
+    type: string;
+    icon: string;
+    label: string;
+    title: string;
+    href?: string;
+    meta?: string;      // FY or extra info
+    isFoundation?: boolean;
+  };
+
+  const events: HistoryEvent[] = [];
+
+  // Incorporation event
+  if (company.incorporationDate) {
+    events.push({
+      date: company.incorporationDate,
+      dateDisplay: fmtDate(company.incorporationDate),
+      year: new Date(company.incorporationDate).getFullYear(),
+      type: 'incorporation',
+      icon: '🏢',
+      label: 'Incorporation',
+      title: `${company.companyName} incorporated`,
+      meta: company.cin || undefined,
+      isFoundation: true,
+    });
+  }
+
+  // All saved documents
+  docs.forEach(doc => {
+    const rawDate = doc.meetingDate || doc.createdAt;
+    const dateObj = new Date(rawDate);
+    const meta = TYPE_META[doc.type];
+    events.push({
+      date: rawDate,
+      dateDisplay: fmtDate(rawDate),
+      year: dateObj.getFullYear(),
+      type: doc.type,
+      icon: meta?.icon || '📄',
+      label: meta?.label || doc.type,
+      title: doc.title,
+      href: docHref(doc),
+      meta: doc.financialYear ? `FY ${doc.financialYear}` : undefined,
+    });
+  });
+
+  // Sort newest first
+  events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Group by year
+  const byYear = new Map<number, HistoryEvent[]>();
+  events.forEach(e => {
+    if (!byYear.has(e.year)) byYear.set(e.year, []);
+    byYear.get(e.year)!.push(e);
+  });
+  const years = Array.from(byYear.keys()).sort((a, b) => b - a);
+
+  if (events.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
+        <div className="text-5xl mb-4">📭</div>
+        <p className="text-slate-500 font-medium">No history yet.</p>
+        <p className="text-xs text-slate-400 mt-1">Start generating documents — they will appear here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-slate-800">Company History</h2>
+        <span className="text-xs text-slate-400 bg-slate-100 px-3 py-1 rounded-full font-semibold">{events.length} events</span>
+      </div>
+
+      {years.map(year => (
+        <div key={year}>
+          {/* Year divider */}
+          <div className="flex items-center gap-3 mb-3 mt-5 first:mt-0">
+            <div className="text-lg font-black text-slate-300">{year}</div>
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="text-xs text-slate-400 font-semibold">{byYear.get(year)!.length} event{byYear.get(year)!.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          <div className="space-y-2 ml-2">
+            {byYear.get(year)!.map((ev, i) => {
+              const meta = TYPE_META[ev.type];
+              const card = (
+                <div className={`flex items-start gap-4 p-4 rounded-xl border transition-all ${
+                  ev.isFoundation
+                    ? 'bg-gradient-to-r from-slate-800 to-slate-700 border-slate-600 text-white'
+                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                } ${ev.href ? 'cursor-pointer' : ''}`}>
+                  {/* Date column */}
+                  <div className={`text-xs font-bold w-24 flex-shrink-0 pt-0.5 ${ev.isFoundation ? 'text-slate-300' : 'text-slate-400'}`}>
+                    {ev.dateDisplay}
+                  </div>
+                  {/* Icon */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm border ${
+                    ev.isFoundation ? 'bg-white/10 border-white/20' : (meta?.bg || 'bg-slate-50 border-slate-200')
+                  }`}>
+                    {ev.icon}
+                  </div>
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+                        ev.isFoundation ? 'bg-white/10 border-white/20 text-slate-200' : (meta ? `${meta.bg} ${meta.color}` : 'bg-slate-100 text-slate-600 border-slate-200')
+                      }`}>
+                        {ev.label}
+                      </span>
+                      {ev.meta && (
+                        <span className={`text-xs font-medium ${ev.isFoundation ? 'text-slate-400' : 'text-slate-400'}`}>{ev.meta}</span>
+                      )}
+                    </div>
+                    <p className={`text-sm font-semibold mt-1 leading-tight truncate ${ev.isFoundation ? 'text-white' : 'text-slate-800'}`}>
+                      {ev.title}
+                    </p>
+                  </div>
+                  {/* Open arrow */}
+                  {ev.href && (
+                    <div className="text-xs font-bold text-blue-500 flex-shrink-0 self-center">Open →</div>
+                  )}
+                </div>
+              );
+
+              return ev.href
+                ? <a key={i} href={ev.href}>{card}</a>
+                : <div key={i}>{card}</div>;
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────────────
 export default function ClientDetailClient({ companyId }: { companyId: string }) {
   const router = useRouter();
@@ -3268,7 +3442,7 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
     typedName: string; otp: string; maskedEmail: string; error: string; busy: boolean;
   } | null>(null);
   const deleteOtpRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<'timeline' | 'directors' | 'shareholders' | 'transfers' | 'analysis'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'directors' | 'shareholders' | 'transfers' | 'analysis' | 'history'>('timeline');
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Company>>({});
   const [showMasterData, setShowMasterData] = useState(false);
@@ -3433,12 +3607,13 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
             </div>
           </div>
           <div className="flex gap-1 mt-6 border-b border-white/10 overflow-x-auto">
-            {(['timeline', 'directors', 'shareholders', 'transfers', 'analysis'] as const).map(tab => (
+            {(['timeline', 'history', 'directors', 'shareholders', 'transfers', 'analysis'] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`px-5 py-2.5 text-sm font-semibold whitespace-nowrap transition-all border-b-2 ${
                   activeTab===tab ? 'text-white border-white' : 'text-blue-300 border-transparent hover:text-white'
                 }`}>
                 {tab === 'timeline'     ? '📅 Meeting Timeline' :
+                 tab === 'history'      ? '🕐 Company History' :
                  tab === 'directors'    ? '👥 Directors' :
                  tab === 'shareholders' ? '📜 Shareholders' :
                  tab === 'transfers'    ? '🔄 Transfers' :
@@ -3713,6 +3888,10 @@ export default function ClientDetailClient({ companyId }: { companyId: string })
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'history' && (
+          <CompanyHistoryTab docs={docs} company={company!} />
         )}
 
         {activeTab === 'directors' && (

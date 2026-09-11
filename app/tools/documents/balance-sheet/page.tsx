@@ -111,6 +111,24 @@ const FORMATS = [
     accentColor: "#64748b",
     gradient: "linear-gradient(135deg,#64748b,#475569)",
   },
+  {
+    id: "nce",
+    icon: "🏠",
+    title: "NCE Financials",
+    subtitle: "Non-Corporate Entities",
+    desc: "For Proprietorship, Partnership Firms, LLPs, HUFs, Trusts, and Associations. Based on ICAI Guidance Note on Financial Statements for Non-Corporate Entities.",
+    applicableTo: ["Proprietorship Firms", "Partnership Firms", "LLPs", "HUF", "Trusts", "Associations / BOI"],
+    standard: "ICAI Guidance Note — Non-Corporate Entities",
+    amendment: "As per ICAI Guidance Note 2023",
+    href: "/tools/documents/nce-financials",
+    active: true,
+    badge: "Available",
+    badgeColor: "#7c3aed",
+    bgColor: "#f5f3ff",
+    borderColor: "#c4b5fd",
+    accentColor: "#7c3aed",
+    gradient: "linear-gradient(135deg,#7c3aed,#6d28d9)",
+  },
 ];
 
 export default function BalanceSheetLandingPage() {
@@ -227,7 +245,7 @@ export default function BalanceSheetLandingPage() {
                         color: "#fff", fontWeight: 700, fontSize: 14, padding: "12px 20px",
                         borderRadius: 12, textDecoration: "none",
                       }}>
-                        Prepare Balance Sheet →
+                        {fmt.id === "nce" ? "Prepare NCE Financials →" : "Prepare Balance Sheet →"}
                       </Link>
                     ) : (
                       <div style={{
