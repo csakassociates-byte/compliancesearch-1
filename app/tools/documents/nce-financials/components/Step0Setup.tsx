@@ -1,10 +1,40 @@
 "use client";
+import { useRef } from "react";
 import { NCEFinancialsData, NCEEntityType, NCEFinancialYear } from "@/lib/nce-financials/types";
 
 interface Props {
   data: NCEFinancialsData;
   update: (patch: Partial<NCEFinancialsData>) => void;
   fyLabels: { current: string; prev: string };
+}
+
+function parsePrefillForNCE(raw: Record<string, unknown>): Partial<NCEFinancialsData> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pi = (raw.personalInfo ?? {}) as any;
+  const addr = pi.address ?? {};
+  const name = pi.assesseeName ?? {};
+
+  const firstName: string = name.firstName ?? "";
+  const middle: string = name.middleName ?? "";
+  const last: string = name.surNameOrOrgName ?? "";
+  const fullName = [firstName, middle, last].filter(Boolean).join(" ");
+
+  const pan: string = pi.assesseVerPAN ?? pi.pan ?? "";
+
+  const addrParts: string[] = [
+    addr.residenceNo, addr.roadOrStreet, addr.localityOrArea,
+    addr.cityOrTownOrDistrict,
+  ].filter(Boolean) as string[];
+  const address = addrParts.join(", ");
+  const city: string = addr.cityOrTownOrDistrict ?? "";
+
+  return {
+    pan,
+    address,
+    signatoryName: fullName,
+    signatoryPlace: city,
+    prefillLoaded: true,
+  };
 }
 
 const inp = { width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 13, boxSizing: "border-box" as const, outline: "none" };
@@ -31,6 +61,25 @@ const SIGNATORY_LABELS: Record<NCEEntityType, string> = {
 };
 
 export default function Step0Setup({ data, update, fyLabels }: Props) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function handlePrefillUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string) as Record<string, unknown>;
+        const patch = parsePrefillForNCE(raw);
+        update(patch);
+      } catch {
+        alert("Invalid JSON file. Please upload the prefill JSON downloaded from the Income Tax portal.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
   function field(key: keyof NCEFinancialsData, label_: string, placeholder?: string, type = "text") {
     return (
       <div>
@@ -48,6 +97,26 @@ export default function Step0Setup({ data, update, fyLabels }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+      {/* Prefill JSON Upload */}
+      <div style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%)", borderRadius: 16, padding: "20px 24px", color: "#fff", display: "flex", alignItems: "center", gap: 20 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Auto-fill from IT Portal Prefill JSON</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
+            Upload the JSON downloaded from incometax.gov.in — PAN, address, and signatory name will be filled automatically.
+            {data.prefillLoaded && (
+              <span style={{ marginLeft: 10, color: "#4ade80", fontWeight: 700 }}>✓ Loaded ({data.pan})</span>
+            )}
+          </div>
+        </div>
+        <input type="file" accept=".json" ref={fileRef} onChange={handlePrefillUpload} style={{ display: "none" }} />
+        <button
+          onClick={() => fileRef.current?.click()}
+          style={{ background: data.prefillLoaded ? "rgba(74,222,128,0.2)" : "#3b82f6", color: "#fff", border: data.prefillLoaded ? "1px solid rgba(74,222,128,0.5)" : "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const }}
+        >
+          {data.prefillLoaded ? "✓ Re-upload JSON" : "📂 Upload Prefill JSON"}
+        </button>
+      </div>
 
       {/* Entity Information */}
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "22px 24px" }}>

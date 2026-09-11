@@ -286,6 +286,7 @@ export interface NCEFinancialsData {
   registrationNumber: string;
   financialYear: NCEFinancialYear;
   isFirstYear: boolean;
+  prefillLoaded?: boolean;
 
   // Auditor
   auditorName: string;
