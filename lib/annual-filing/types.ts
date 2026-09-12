@@ -307,6 +307,8 @@ export interface AnnualFilingData {
   };
   placeOfSigning: string;
   dateOfReport: string;   // YYYY-MM-DD
+  agmDateCurrentYear: string;   // YYYY-MM-DD — AGM held for current FY
+  agmDatePreviousYear: string;  // YYYY-MM-DD — AGM held for previous FY
 
   // ── Step 6: Shareholders ────────────────────
   shareholders: ShareholderRecord[];
@@ -398,6 +400,8 @@ export const INITIAL_FILING_DATA: AnnualFilingData = {
   },
   placeOfSigning: "",
   dateOfReport: "",
+  agmDateCurrentYear: "",
+  agmDatePreviousYear: "",
   shareholders: [],
   totalShares: 0,
   nominalValuePerShare: "10",

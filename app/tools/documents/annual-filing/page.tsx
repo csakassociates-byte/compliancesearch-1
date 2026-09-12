@@ -1662,7 +1662,100 @@ function AnnualFilingTool() {
                 </p>
               )}
             </div>
+
+            {/* AGM Date — Current Year */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                AGM Date — Current Year ({data.financialYear})
+              </label>
+              <p className="text-xs text-slate-500 mb-1">Annual General Meeting date for FY {data.financialYear}</p>
+              <input
+                type="date"
+                value={data.agmDateCurrentYear}
+                onChange={e => patch({ agmDateCurrentYear: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            {/* AGM Date — Previous Year */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                AGM Date — Previous Year ({(() => { const [y1, y2] = data.financialYear.split("-"); return `${parseInt(y1)-1}-${parseInt(y2)-1 < 10 ? "0"+(parseInt(y2)-1) : parseInt(y2)-1}`; })()})
+              </label>
+              <p className="text-xs text-slate-500 mb-1">For reference and due-date tracking of prior year filing</p>
+              <input
+                type="date"
+                value={data.agmDatePreviousYear}
+                onChange={e => patch({ agmDatePreviousYear: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
           </div>
+
+          {/* ── Due Date Alert Panel ── */}
+          {(data.agmDateCurrentYear || data.dateOfReport) && (() => {
+            const addDays = (dateStr: string, days: number): string => {
+              const d = new Date(dateStr);
+              d.setDate(d.getDate() + days);
+              return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+            };
+            const computeDays = (base: string, plus: number): number => {
+              const d = new Date(base);
+              d.setDate(d.getDate() + plus);
+              return Math.ceil((d.getTime() - Date.now()) / 86400000);
+            };
+            const colorFor = (days: number) =>
+              days < 0    ? "bg-red-50 border-red-400 text-red-700"
+              : days <= 7  ? "bg-orange-50 border-orange-400 text-orange-700"
+              : days <= 30 ? "bg-yellow-50 border-yellow-400 text-yellow-700"
+              : "bg-emerald-50 border-emerald-400 text-emerald-700";
+            const badgeColor = (days: number) =>
+              days < 0    ? "bg-red-100 border-red-400 text-red-800"
+              : days <= 7  ? "bg-orange-100 border-orange-400 text-orange-800"
+              : days <= 30 ? "bg-yellow-100 border-yellow-400 text-yellow-800"
+              : "bg-emerald-100 border-emerald-400 text-emerald-800";
+            const badgeFor = (days: number) =>
+              days < 0 ? `OVERDUE by ${Math.abs(days)} days`
+              : days === 0 ? "Due TODAY"
+              : `${days} days left`;
+
+            const agm = data.agmDateCurrentYear;
+            const report = data.dateOfReport;
+
+            type DueItem = { label: string; dueDate: string; rule: string; days: number };
+            const finalItems: DueItem[] = [
+              ...(agm ? [
+                { label: "AOC-4 Filing Due",  dueDate: addDays(agm, 30), rule: "30 days from AGM date",              days: computeDays(agm, 30) },
+                { label: "MGT-7A Filing Due", dueDate: addDays(agm, 60), rule: "60 days from AGM date",              days: computeDays(agm, 60) },
+              ] : []),
+              ...(report ? [
+                { label: "UDIN Generation Due", dueDate: addDays(report, 60), rule: "60 days from Audit / Board Report date", days: computeDays(report, 60) },
+              ] : []),
+            ];
+
+            return (
+              <div className="mt-2 mb-4 rounded-xl border border-slate-200 overflow-hidden">
+                <div className="bg-slate-800 px-4 py-2 flex items-center gap-2">
+                  <span className="text-white font-semibold text-sm">Due Date Tracker</span>
+                  <span className="text-slate-400 text-xs">— auto-calculated from AGM & Report dates</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {finalItems.map(item => (
+                    <div key={item.label} className={`flex items-center justify-between px-4 py-3 ${colorFor(item.days)} border-l-4`}>
+                      <div>
+                        <p className="text-sm font-semibold">{item.label}</p>
+                        <p className="text-xs opacity-70">{item.rule} → <strong>{item.dueDate}</strong></p>
+                      </div>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full border ${badgeColor(item.days)}`}>
+                        {badgeFor(item.days)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-semibold text-slate-700">State of Affairs / Business Operations <span className="text-slate-400 font-normal">(for Board Report)</span></label>
