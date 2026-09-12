@@ -1088,8 +1088,10 @@ function AnnualFilingTool() {
       const formData = new FormData();
       formData.append("file", file);
       const res  = await fetch("/api/annual-filing/parse-financials", { method: "POST", body: formData });
-      const json = await res.json() as { fields?: FinExtracted[]; error?: string };
+      const json = await res.json() as { fields?: FinExtracted[]; error?: string; rawTextSample?: string };
       if (!res.ok || json.error) { setFinDocError(json.error ?? "Parse failed."); return; }
+      // Log raw PDF text for debugging pattern coverage
+      if (json.rawTextSample) console.log("[FinDoc] Raw PDF text (first 6000 chars):\n" + json.rawTextSample);
       setFinDocResult({ fields: json.fields!, fileName: file.name, applied: false });
     } catch (err) {
       console.error("parseFinancialDoc", err);
