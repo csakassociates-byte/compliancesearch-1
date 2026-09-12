@@ -373,16 +373,29 @@ export async function POST(req: NextRequest) {
     let fields: ExtractedField[];
 
     if (ext === "pdf") {
-      // Use pdf-parse/lib/pdf-parse.js to avoid the test-file ENOENT issue on Vercel
-      // The top-level pdf-parse module runs test code on import; the lib path skips it
+      // Use pdfjs-dist (Mozilla PDF.js) — more robust than pdf-parse for Indian accounting PDFs
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (
-        buf: Buffer,
-        opts?: { max?: number }
-      ) => Promise<{ text: string; numpages: number }>;
+      const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js") as typeof import("pdfjs-dist");
+      // Disable the worker — we're server-side, no window/Worker available
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (pdfjsLib as any).GlobalWorkerOptions.workerSrc = "";
 
-      const parsed = await pdfParse(buffer, { max: 0 }); // max:0 = all pages
-      fields = extractFieldsFromText(parsed.text);
+      const data = new Uint8Array(buffer);
+      const loadingTask = pdfjsLib.getDocument({ data, disableFontFace: true, useWorkerFetch: false, isEvalSupported: false });
+      const pdf = await loadingTask.promise;
+
+      let fullText = "";
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((item: any) => (item.str !== undefined ? item.str : ""))
+          .join(" ");
+        fullText += pageText + "\n";
+      }
+
+      fields = extractFieldsFromText(fullText);
 
     } else if (["xlsx", "xls", "csv", "ods"].includes(ext)) {
       const workbook = XLSX.read(buffer, { type: "buffer" });
