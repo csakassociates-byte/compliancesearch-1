@@ -550,6 +550,13 @@ function AnnualFilingTool() {
   const [showAuditorImport, setShowAuditorImport] = useState(false);
   const [importingAuditor, setImportingAuditor] = useState(false);
 
+  // ── Financial document auto-fill (Step 3) ────────────────────────────
+  type FinExtracted = { label: string; fKey: string; prevKey: string; currentValue: number|null; prevValue: number|null; found: boolean; };
+  const [finDocResult, setFinDocResult] = useState<{ fields: FinExtracted[]; fileName: string; applied: boolean; } | null>(null);
+  const [finDocParsing, setFinDocParsing] = useState(false);
+  const [finDocError, setFinDocError]     = useState<string|null>(null);
+  const finDocRef = useRef<HTMLInputElement>(null);
+
   // ── Load saved draft via ?load=<id> ──────────────────────────────────
   useEffect(() => {
     const id = searchParams.get("load");
@@ -1065,6 +1072,110 @@ function AnnualFilingTool() {
       }
     } catch { /* ignore */ }
     setPrevFinFetching(false);
+  }
+
+  // ── Financial document auto-fill: parse Excel / PDF / DOCX ──────────
+  const FIN_FIELD_PATTERNS = [
+    { patterns: [/revenue from operation/i, /net revenue/i, /net sales/i, /income from operation/i, /turnover/i], fKey: "revenueFromOperations", prevKey: "prevRevenueFromOperations", label: "Revenue from Operations" },
+    { patterns: [/other income/i], fKey: "otherIncome", prevKey: "prevOtherIncome", label: "Other Income" },
+    { patterns: [/total expenses/i, /total cost/i, /total expenditure/i, /cost.*production/i], fKey: "totalExpenses", prevKey: "prevTotalExpenses", label: "Total Expenses" },
+    { patterns: [/current tax/i, /income tax.*current/i, /tax.*for.*the.*year/i, /^income tax$/i], fKey: "currentTax", prevKey: "prevCurrentTax", label: "Current Tax" },
+    { patterns: [/deferred tax/i], fKey: "deferredTax", prevKey: "prevDeferredTax", label: "Deferred Tax" },
+    { patterns: [/authoris[ae]d.*capital/i, /authoris[ae]d.*share/i], fKey: "authorisedCapital", prevKey: "prevAuthorisedCapital", label: "Authorised Share Capital" },
+    { patterns: [/paid.?up.*capital/i, /subscribed.*paid/i, /issued.*subscribed.*paid/i, /paid.?up.*share/i], fKey: "paidUpCapital", prevKey: "prevPaidUpCapital", label: "Paid-up Share Capital" },
+    { patterns: [/reserves.*surplus/i, /reserves.*and.*surplus/i, /other.*equity/i, /retained.*earnings/i], fKey: "reservesAndSurplus", prevKey: "prevReservesAndSurplus", label: "Reserves & Surplus" },
+    { patterns: [/^total assets$/i, /total.*assets$/i], fKey: "totalAssets", prevKey: "prevTotalAssets", label: "Total Assets" },
+    { patterns: [/^total liabilit/i, /total.*liabilit/i, /^liabilit.*total/i], fKey: "totalLiabilities", prevKey: "prevTotalLiabilities", label: "Total Liabilities" },
+  ];
+
+  async function parseFinancialDoc(file: File) {
+    setFinDocParsing(true);
+    setFinDocError(null);
+    setFinDocResult(null);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (!["xlsx","xls","csv","ods"].includes(ext)) {
+        setFinDocError("Please upload an Excel file (.xlsx or .xls). PDF/Word support coming soon.");
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const XLSXMod = await import("xlsx") as any;
+      const XLSX = XLSXMod.default ?? XLSXMod;
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: "array", cellText: false, cellDates: false });
+
+      type CellEntry = { row: number; col: number; text: string; num: number|null; sheet: string };
+      const allCells: CellEntry[] = [];
+      for (const sheetName of (workbook.SheetNames as string[])) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sheet = workbook.Sheets[sheetName] as Record<string, any>;
+        const ref: string = sheet["!ref"] ?? "A1:A1";
+        const range = XLSX.utils.decode_range(ref) as { s: {r:number;c:number}; e: {r:number;c:number} };
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          for (let c = range.s.c; c <= range.e.c; c++) {
+            const addr: string = XLSX.utils.encode_cell({ r, c });
+            const cell = sheet[addr];
+            if (!cell) continue;
+            const text = String(cell.v ?? "").trim();
+            const num  = typeof cell.v === "number" ? cell.v : null;
+            if (text) allCells.push({ row: r, col: c, text, num, sheet: sheetName });
+          }
+        }
+      }
+
+      const fields: FinExtracted[] = FIN_FIELD_PATTERNS.map(fp => {
+        let currentValue: number|null = null;
+        let prevValue:    number|null = null;
+        let found = false;
+
+        for (const cell of allCells) {
+          const labelMatch = fp.patterns.some(p => p.test(cell.text));
+          if (!labelMatch) continue;
+
+          const sameRow = allCells
+            .filter(c => c.row === cell.row && c.sheet === cell.sheet && c.col > cell.col && c.num !== null)
+            .sort((a, b) => a.col - b.col);
+
+          // Filter out obvious year/ratio numbers (< 10000 and not in thousands)
+          const amounts = sameRow.filter(c => Math.abs(c.num!) >= 0);
+          // Prefer non-zero amounts; also support lakhs multiplier detection
+          const nonZero = amounts.filter(c => c.num !== 0);
+          const chosen  = nonZero.length ? nonZero : amounts;
+
+          if (chosen.length >= 2) {
+            currentValue = chosen[0].num;
+            prevValue    = chosen[1].num;
+            found = true;
+            break;
+          } else if (chosen.length === 1) {
+            currentValue = chosen[0].num;
+            found = true;
+            break;
+          }
+        }
+
+        return { label: fp.label, fKey: fp.fKey, prevKey: fp.prevKey, currentValue, prevValue, found };
+      });
+
+      setFinDocResult({ fields, fileName: file.name, applied: false });
+    } catch (err) {
+      console.error("parseFinancialDoc", err);
+      setFinDocError("Could not read the file. Ensure it is a valid Excel file.");
+    } finally {
+      setFinDocParsing(false);
+    }
+  }
+
+  function applyFinancialDoc() {
+    if (!finDocResult) return;
+    const patch: Record<string, string> = {};
+    for (const f of finDocResult.fields) {
+      if (f.found && f.currentValue !== null) patch[f.fKey]   = String(Math.round(f.currentValue));
+      if (f.found && f.prevValue    !== null) patch[f.prevKey] = String(Math.round(f.prevValue));
+    }
+    patchFin(patch as Partial<AnnualFilingData["financials"]>);
+    setFinDocResult(prev => prev ? { ...prev, applied: true } : null);
   }
 
   // ── Silent auto-save on step navigation (no confirm dialog) ──────────
@@ -2137,6 +2248,93 @@ function AnnualFilingTool() {
       <>
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
           Enter all amounts in <strong>absolute Rupees (₹)</strong> — no rounding, no lakhs/crores. MCA V3 requirement.
+        </div>
+
+        {/* ── Financial Document Auto-fill ── */}
+        <div className="mb-5 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+          {/* Header */}
+          <div style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%)" }} className="px-4 py-3 flex items-center gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-white mb-0.5">📂 Upload Financial Statements</div>
+              <div className="text-xs text-blue-200">Upload Balance Sheet &amp; P&amp;L in Excel (.xlsx / .xls) — figures auto-fill into the fields below.</div>
+            </div>
+            <input
+              type="file"
+              ref={finDocRef}
+              accept=".xlsx,.xls,.csv,.ods"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) void parseFinancialDoc(f); e.target.value = ""; }}
+            />
+            <button
+              onClick={() => finDocRef.current?.click()}
+              disabled={finDocParsing}
+              className="flex-shrink-0 px-4 py-2 text-xs font-bold rounded-lg transition-colors disabled:opacity-60"
+              style={{ background: finDocResult ? "#059669" : "#3b82f6", color: "#fff" }}
+            >
+              {finDocParsing ? "⏳ Reading…" : finDocResult ? "✓ Re-upload" : "📂 Choose File"}
+            </button>
+          </div>
+
+          {/* Error */}
+          {finDocError && (
+            <div className="px-4 py-2.5 bg-red-50 border-t border-red-200 text-xs text-red-700 flex items-center gap-2">
+              <span>⚠</span>{finDocError}
+            </div>
+          )}
+
+          {/* Results panel */}
+          {finDocResult && (
+            <div className="bg-white">
+              {/* Summary bar */}
+              <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-slate-600 min-w-0">
+                  <span>📄</span>
+                  <span className="font-medium truncate">{finDocResult.fileName}</span>
+                  <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: "#dcfce7", color: "#166534" }}>
+                    {finDocResult.fields.filter(f => f.found).length}/{finDocResult.fields.length} identified
+                  </span>
+                </div>
+                {finDocResult.applied ? (
+                  <span className="flex-shrink-0 text-xs font-bold text-emerald-600">✓ Applied to form</span>
+                ) : (
+                  <button
+                    onClick={applyFinancialDoc}
+                    className="flex-shrink-0 px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    Apply to Form ↓
+                  </button>
+                )}
+              </div>
+
+              {/* Field-by-field results */}
+              <div className="divide-y divide-slate-100">
+                {finDocResult.fields.map(f => (
+                  <div key={f.fKey} className={`flex items-center gap-3 px-4 py-2 ${f.found ? "bg-white" : "bg-slate-50/60"}`}>
+                    <span className="text-sm flex-shrink-0">{f.found ? "✅" : "❌"}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-slate-700 truncate">{f.label}</div>
+                    </div>
+                    {f.found ? (
+                      <div className="flex gap-5 text-right flex-shrink-0">
+                        <div>
+                          <div className="text-[10px] text-slate-400 mb-0.5">Current Year</div>
+                          <div className="text-xs font-bold text-emerald-700">₹{(f.currentValue ?? 0).toLocaleString("en-IN")}</div>
+                        </div>
+                        {f.prevValue !== null && (
+                          <div>
+                            <div className="text-[10px] text-slate-400 mb-0.5">Previous Year</div>
+                            <div className="text-xs font-bold text-slate-500">₹{f.prevValue.toLocaleString("en-IN")}</div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic flex-shrink-0">Not identified</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Validation alerts */}
