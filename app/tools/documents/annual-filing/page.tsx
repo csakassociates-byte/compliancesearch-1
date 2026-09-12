@@ -1074,94 +1074,26 @@ function AnnualFilingTool() {
     setPrevFinFetching(false);
   }
 
-  // ── Financial document auto-fill: parse Excel / PDF / DOCX ──────────
-  const FIN_FIELD_PATTERNS = [
-    { patterns: [/revenue from operation/i, /net revenue/i, /net sales/i, /income from operation/i, /turnover/i], fKey: "revenueFromOperations", prevKey: "prevRevenueFromOperations", label: "Revenue from Operations" },
-    { patterns: [/other income/i], fKey: "otherIncome", prevKey: "prevOtherIncome", label: "Other Income" },
-    { patterns: [/total expenses/i, /total cost/i, /total expenditure/i, /cost.*production/i], fKey: "totalExpenses", prevKey: "prevTotalExpenses", label: "Total Expenses" },
-    { patterns: [/current tax/i, /income tax.*current/i, /tax.*for.*the.*year/i, /^income tax$/i], fKey: "currentTax", prevKey: "prevCurrentTax", label: "Current Tax" },
-    { patterns: [/deferred tax/i], fKey: "deferredTax", prevKey: "prevDeferredTax", label: "Deferred Tax" },
-    { patterns: [/authoris[ae]d.*capital/i, /authoris[ae]d.*share/i], fKey: "authorisedCapital", prevKey: "prevAuthorisedCapital", label: "Authorised Share Capital" },
-    { patterns: [/paid.?up.*capital/i, /subscribed.*paid/i, /issued.*subscribed.*paid/i, /paid.?up.*share/i], fKey: "paidUpCapital", prevKey: "prevPaidUpCapital", label: "Paid-up Share Capital" },
-    { patterns: [/reserves.*surplus/i, /reserves.*and.*surplus/i, /other.*equity/i, /retained.*earnings/i], fKey: "reservesAndSurplus", prevKey: "prevReservesAndSurplus", label: "Reserves & Surplus" },
-    { patterns: [/^total assets$/i, /total.*assets$/i], fKey: "totalAssets", prevKey: "prevTotalAssets", label: "Total Assets" },
-    { patterns: [/^total liabilit/i, /total.*liabilit/i, /^liabilit.*total/i], fKey: "totalLiabilities", prevKey: "prevTotalLiabilities", label: "Total Liabilities" },
-  ];
-
+  // ── Financial document auto-fill: send to server API (handles PDF + Excel) ──
   async function parseFinancialDoc(file: File) {
     setFinDocParsing(true);
     setFinDocError(null);
     setFinDocResult(null);
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-      if (!["xlsx","xls","csv","ods"].includes(ext)) {
-        setFinDocError("Please upload an Excel file (.xlsx or .xls). PDF/Word support coming soon.");
+      if (!["pdf","xlsx","xls","csv","ods"].includes(ext)) {
+        setFinDocError("Please upload a PDF or Excel file (.pdf / .xlsx / .xls).");
         return;
       }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const XLSXMod = await import("xlsx") as any;
-      const XLSX = XLSXMod.default ?? XLSXMod;
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: "array", cellText: false, cellDates: false });
-
-      type CellEntry = { row: number; col: number; text: string; num: number|null; sheet: string };
-      const allCells: CellEntry[] = [];
-      for (const sheetName of (workbook.SheetNames as string[])) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sheet = workbook.Sheets[sheetName] as Record<string, any>;
-        const ref: string = sheet["!ref"] ?? "A1:A1";
-        const range = XLSX.utils.decode_range(ref) as { s: {r:number;c:number}; e: {r:number;c:number} };
-        for (let r = range.s.r; r <= range.e.r; r++) {
-          for (let c = range.s.c; c <= range.e.c; c++) {
-            const addr: string = XLSX.utils.encode_cell({ r, c });
-            const cell = sheet[addr];
-            if (!cell) continue;
-            const text = String(cell.v ?? "").trim();
-            const num  = typeof cell.v === "number" ? cell.v : null;
-            if (text) allCells.push({ row: r, col: c, text, num, sheet: sheetName });
-          }
-        }
-      }
-
-      const fields: FinExtracted[] = FIN_FIELD_PATTERNS.map(fp => {
-        let currentValue: number|null = null;
-        let prevValue:    number|null = null;
-        let found = false;
-
-        for (const cell of allCells) {
-          const labelMatch = fp.patterns.some(p => p.test(cell.text));
-          if (!labelMatch) continue;
-
-          const sameRow = allCells
-            .filter(c => c.row === cell.row && c.sheet === cell.sheet && c.col > cell.col && c.num !== null)
-            .sort((a, b) => a.col - b.col);
-
-          // Filter out obvious year/ratio numbers (< 10000 and not in thousands)
-          const amounts = sameRow.filter(c => Math.abs(c.num!) >= 0);
-          // Prefer non-zero amounts; also support lakhs multiplier detection
-          const nonZero = amounts.filter(c => c.num !== 0);
-          const chosen  = nonZero.length ? nonZero : amounts;
-
-          if (chosen.length >= 2) {
-            currentValue = chosen[0].num;
-            prevValue    = chosen[1].num;
-            found = true;
-            break;
-          } else if (chosen.length === 1) {
-            currentValue = chosen[0].num;
-            found = true;
-            break;
-          }
-        }
-
-        return { label: fp.label, fKey: fp.fKey, prevKey: fp.prevKey, currentValue, prevValue, found };
-      });
-
-      setFinDocResult({ fields, fileName: file.name, applied: false });
+      const formData = new FormData();
+      formData.append("file", file);
+      const res  = await fetch("/api/annual-filing/parse-financials", { method: "POST", body: formData });
+      const json = await res.json() as { fields?: FinExtracted[]; error?: string };
+      if (!res.ok || json.error) { setFinDocError(json.error ?? "Parse failed."); return; }
+      setFinDocResult({ fields: json.fields!, fileName: file.name, applied: false });
     } catch (err) {
       console.error("parseFinancialDoc", err);
-      setFinDocError("Could not read the file. Ensure it is a valid Excel file.");
+      setFinDocError("Could not read the file. Ensure it is a valid PDF or Excel file.");
     } finally {
       setFinDocParsing(false);
     }
@@ -2256,12 +2188,12 @@ function AnnualFilingTool() {
           <div style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%)" }} className="px-4 py-3 flex items-center gap-4">
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold text-white mb-0.5">📂 Upload Financial Statements</div>
-              <div className="text-xs text-blue-200">Upload Balance Sheet &amp; P&amp;L in Excel (.xlsx / .xls) — figures auto-fill into the fields below.</div>
+              <div className="text-xs text-blue-200">Upload Balance Sheet &amp; P&amp;L — PDF or Excel (.pdf / .xlsx / .xls) — figures auto-fill into the fields below.</div>
             </div>
             <input
               type="file"
               ref={finDocRef}
-              accept=".xlsx,.xls,.csv,.ods"
+              accept=".pdf,.xlsx,.xls,.csv,.ods"
               className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) void parseFinancialDoc(f); e.target.value = ""; }}
             />
