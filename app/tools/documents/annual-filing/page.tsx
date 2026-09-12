@@ -1088,10 +1088,21 @@ function AnnualFilingTool() {
       const formData = new FormData();
       formData.append("file", file);
       const res  = await fetch("/api/annual-filing/parse-financials", { method: "POST", body: formData });
-      const json = await res.json() as { fields?: FinExtracted[]; error?: string; rawTextSample?: string };
+      const json = await res.json() as { fields?: FinExtracted[]; error?: string; rawTextSample?: string; extractedCIN?: string | null };
       if (!res.ok || json.error) { setFinDocError(json.error ?? "Parse failed."); return; }
       // Log raw PDF text for debugging pattern coverage
       if (json.rawTextSample) console.log("[FinDoc] Raw PDF text (first 6000 chars):\n" + json.rawTextSample);
+      // CIN validation — if the document contains a CIN, it must match the company CIN
+      if (json.extractedCIN) {
+        const companyCIN = (data.cin ?? "").trim().toUpperCase();
+        const docCIN     = json.extractedCIN.trim().toUpperCase();
+        if (companyCIN && docCIN !== companyCIN) {
+          setFinDocError(
+            `CIN mismatch: Document contains CIN ${docCIN} but selected company CIN is ${companyCIN}. Please upload the correct Balance Sheet for this company.`
+          );
+          return;
+        }
+      }
       setFinDocResult({ fields: json.fields!, fileName: file.name, applied: false });
     } catch (err) {
       console.error("parseFinancialDoc", err);

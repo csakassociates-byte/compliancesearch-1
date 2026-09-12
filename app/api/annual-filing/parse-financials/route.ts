@@ -2,7 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// FIELD DEFINITIONS — covers Tally, Busy, Zoho, SAP, CompuOffice, Schedule III
+// CIN EXTRACTION
+// Format: L/U + 5 digits + 2 letters + 4 digits + 3 letters + 6 digits
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const CIN_RE = /\b([LU]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6})\b/;
+
+function extractCIN(text: string): string | null {
+  const m = text.match(CIN_RE);
+  return m ? m[1] : null;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FIELD DEFINITIONS — Tally, Busy, Zoho, SAP, CompuOffice, Schedule III
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const FIELD_DEFS = [
@@ -10,12 +22,13 @@ const FIELD_DEFS = [
     label: "Revenue from Operations",
     fKey: "revenueFromOperations",
     prevKey: "prevRevenueFromOperations",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /revenue\s+from\s+operation/i,
       /net\s+revenue\s+from\s+operation/i,
       /income\s+from\s+operation/i,
       /gross\s+revenue\s+from\s+operation/i,
-      /sales\s*[\/\\]\s*revenue\s+from\s+operation/i,
       /total\s+revenue\s+from\s+operation/i,
       /revenue\s+from\s+contracts\s+with\s+customer/i,
       /net\s+sales/i,
@@ -34,7 +47,6 @@ const FIELD_DEFS = [
       /operating\s+revenue/i,
       /receipts\s+from\s+patient/i,
       /patient\s+care\s+service/i,
-      // CompuOffice often labels hospital income as "OPD/IPD"
       /opd\s*[\/&]\s*ipd/i,
       /medical\s+service/i,
       /consultation\s+fee/i,
@@ -45,7 +57,9 @@ const FIELD_DEFS = [
     label: "Other Income",
     fKey: "otherIncome",
     prevKey: "prevOtherIncome",
-    allowNil: true, // OK if 0 / nil
+    // IMPORTANT: look at same line only — prevents context bleed from Revenue line
+    sameLineOnly: true,
+    allowNil: true,
     patterns: [
       /other\s+income/i,
       /non.?operating\s+income/i,
@@ -62,6 +76,8 @@ const FIELD_DEFS = [
     label: "Total Expenses",
     fKey: "totalExpenses",
     prevKey: "prevTotalExpenses",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /total\s+expenses/i,
       /total\s+expenditure/i,
@@ -70,8 +86,6 @@ const FIELD_DEFS = [
       /total\s+outgoing/i,
       /total\s+of\s+expense/i,
       /[iv]+\.\s*total\s+expenses/i,
-      /\bv\b.*total\s+expenses/i,
-      // CompuOffice sometimes labels as just "Total" in P&L expenses section
       /^total\s+(?:of\s+)?expenditure/i,
     ],
     exclude: [/other\s+expense/i, /finance\s+cost/i, /depreciation/i, /employee\s+benefit/i, /tax\s+expense/i],
@@ -80,6 +94,8 @@ const FIELD_DEFS = [
     label: "Current Tax",
     fKey: "currentTax",
     prevKey: "prevCurrentTax",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /current\s+tax/i,
       /income\s+tax\s*[-–:]\s*current/i,
@@ -98,6 +114,8 @@ const FIELD_DEFS = [
     label: "Deferred Tax",
     fKey: "deferredTax",
     prevKey: "prevDeferredTax",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /deferred\s+tax/i,
       /deferred\s+income\s+tax/i,
@@ -111,12 +129,12 @@ const FIELD_DEFS = [
     label: "Authorised Share Capital",
     fKey: "authorisedCapital",
     prevKey: "prevAuthorisedCapital",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /authoris[ae]d\s+(?:share\s+)?capital/i,
       /authoris[ae]d\s+share/i,
-      /authoris[ae]d:?\s*$/i,
       /authoris[ae]d\s+capital/i,
-      // CompuOffice / Schedule III: standalone "Authorised" header in Note 1
       /^\s*authoris[ae]d\s*:?\s*$/i,
       /authoris[ae]d\s+(?:but\s+unissued|equity)/i,
     ],
@@ -126,6 +144,8 @@ const FIELD_DEFS = [
     label: "Paid-up Share Capital",
     fKey: "paidUpCapital",
     prevKey: "prevPaidUpCapital",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /paid.?up\s+(?:share\s+)?capital/i,
       /issued\s*,?\s*subscribed\s*(?:and|&|,)\s*paid.?up/i,
@@ -136,10 +156,8 @@ const FIELD_DEFS = [
       /capital\s+account/i,
       /proprietor(?:'?s)?\s+(?:capital|fund)/i,
       /partner(?:'?s)?\s+capital/i,
-      // CompuOffice Note format: "Issued, Subscribed and Paid Up"
       /issued.*subscribed.*paid/i,
       /subscribed.*paid.?up/i,
-      // Simple label in balance sheet body
       /^\s*share\s+capital\s*$/i,
       /^\(a\)\s+share\s+capital/i,
     ],
@@ -149,6 +167,8 @@ const FIELD_DEFS = [
     label: "Reserves & Surplus",
     fKey: "reservesAndSurplus",
     prevKey: "prevReservesAndSurplus",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /reserves?\s*(?:and|&)\s*surplus/i,
       /other\s+equity/i,
@@ -160,8 +180,6 @@ const FIELD_DEFS = [
       /reserve\s+and\s+surplus/i,
       /net\s+profit.*carried/i,
       /^\(b\)\s+reserves?\s*(?:and|&)\s*surplus/i,
-      // CompuOffice sub-label
-      /opening\s+balance.*p\s*&?\s*l/i,
     ],
     exclude: [/share\s+capital/i, /total/i],
   },
@@ -169,40 +187,46 @@ const FIELD_DEFS = [
     label: "Total Assets",
     fKey: "totalAssets",
     prevKey: "prevTotalAssets",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /^total\s+assets$/i,
       /total\s+assets\b/i,
       /grand\s+total.*asset/i,
-      // CompuOffice / Schedule III: just "TOTAL" at end of assets section
-      // We match standalone "total" but only if in an assets context
       /total\s+(?:of\s+)?assets/i,
+      // CompuOffice: standalone "TOTAL" or "TOTAL (B)" at bottom of Assets section
+      /^\s*total\s*(?:\([ab12]\))?\s*$/i,
+      /^\s*grand\s+total\s*$/i,
     ],
-    exclude: [/non.?current\s+assets/i, /^current\s+assets/i, /net\s+assets/i, /fixed\s+assets/i, /tangible/i, /intangible/i],
+    exclude: [/non.?current\s+assets/i, /^current\s+assets/i, /net\s+assets/i, /fixed\s+assets/i, /tangible/i, /intangible/i, /liabilit/i, /equity/i],
   },
   {
     label: "Total Liabilities",
     fKey: "totalLiabilities",
     prevKey: "prevTotalLiabilities",
+    sameLineOnly: false,
+    allowNil: false,
     patterns: [
       /^total\s+liabilit/i,
       /total\s+liabilit/i,
       /total\s+equity\s*(?:and|&)\s*liabilit/i,
       /grand\s+total.*liabilit/i,
-      // CompuOffice Schedule III balance total — "Total" appears at bottom of L+E side
       /total\s+(?:equity\s+and\s+)?liabilit/i,
+      // CompuOffice: standalone "TOTAL" or "TOTAL (A)" at bottom of Equity+Liabilities section
+      /^\s*total\s*(?:\([ab12]\))?\s*$/i,
+      /^\s*grand\s+total\s*$/i,
     ],
-    exclude: [/^non.?current\s+liabilit/i, /^current\s+liabilit/i, /^other\s+liabilit/i],
+    exclude: [/^non.?current\s+liabilit/i, /^current\s+liabilit/i, /^other\s+liabilit/i, /assets/i],
   },
 ];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// NUMBER EXTRACTION — Indian rupee formats + nil markers
+// NUMBER EXTRACTION — Indian rupee formats
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function extractAmounts(text: string): number[] {
   const results: number[] = [];
-
-  // Indian comma-formatted numbers: 3,00,000 | (2,45,123) | 45,67,890.50
+  // Indian comma-formatted: 3,00,000 | (2,45,123) | 45,67,890.50
   const indianRe = /(\()(\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?)(\))|(\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?)/g;
   let m: RegExpExecArray | null;
   while ((m = indianRe.exec(text)) !== null) {
@@ -214,35 +238,31 @@ function extractAmounts(text: string): number[] {
       if (!isNaN(val)) results.push(val);
     }
   }
-
-  // Fallback: plain integers >= 100 (statements without commas)
+  // Fallback: plain large integers
   if (results.length === 0) {
     const plainRe = /\b(\d{4,12})\b/g;
     while ((m = plainRe.exec(text)) !== null) {
       const val = parseInt(m[1], 10);
-      if (!isNaN(val) && !(val >= 1900 && val <= 2100)) {
-        results.push(val);
-      }
+      if (!isNaN(val) && !(val >= 1900 && val <= 2100)) results.push(val);
     }
   }
-
   return results;
 }
 
-// Check if a line/context has explicit nil markers (dash, -, nil, zero)
 function hasNilMarker(text: string): boolean {
-  return /[\s\t]([-–—])\s*(?:[\s\t]|$)/.test(text) ||
+  // Detect "-", "–", "—", "nil", "N.A" as amount placeholders
+  return /(?:^|[\s\t])([-–—])(?:[\s\t]|$)/.test(text) ||
          /\bnil\b/i.test(text) ||
          /\bN\.?A\.?\b/i.test(text);
 }
 
-function detectMultiplier(headerText: string): number {
-  if (/(?:amount|figure|rs\.?|₹)\s*in\s+crore/i.test(headerText)) return 10_000_000;
-  if (/(?:amount|figure|rs\.?|₹)\s*in\s+lakh/i.test(headerText))  return 100_000;
-  if (/(?:amount|figure|rs\.?|₹)\s*in\s+thousand/i.test(headerText)) return 1_000;
-  if (/\(₹\s*in\s+crore/i.test(headerText)) return 10_000_000;
-  if (/\(₹\s*in\s+lakh/i.test(headerText))  return 100_000;
-  if (/\(rs\.\s*in\s+lakh/i.test(headerText)) return 100_000;
+function detectMultiplier(text: string): number {
+  if (/(?:amount|figure|rs\.?|₹)\s*in\s+crore/i.test(text)) return 10_000_000;
+  if (/(?:amount|figure|rs\.?|₹)\s*in\s+lakh/i.test(text))  return 100_000;
+  if (/(?:amount|figure|rs\.?|₹)\s*in\s+thousand/i.test(text)) return 1_000;
+  if (/\(₹\s*in\s+crore/i.test(text)) return 10_000_000;
+  if (/\(₹\s*in\s+lakh/i.test(text))  return 100_000;
+  if (/\(rs\.\s*in\s+lakh/i.test(text)) return 100_000;
   return 1;
 }
 
@@ -253,8 +273,18 @@ type ExtractedField = {
 
 type FieldDef = typeof FIELD_DEFS[number];
 
+// Remove leading note/schedule numbers (1–99) from amount list
+function removeLeadingNoteNumbers(amounts: number[]): number[] {
+  if (amounts.length <= 1) return amounts;
+  const first = amounts[0];
+  if (Number.isInteger(first) && first >= 1 && first <= 99) return amounts.slice(1);
+  return amounts;
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// EXTRACT FIELDS FROM RAW TEXT (PDF)
+// EXTRACT FIELDS FROM TEXT (PDF)
+// Strategy: try same-line amounts first; extend to next 3 lines only if needed
+// This prevents "Other Income" from inheriting "Revenue from Operations" amounts
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function extractFieldsFromText(rawText: string): ExtractedField[] {
@@ -267,31 +297,41 @@ function extractFieldsFromText(rawText: string): ExtractedField[] {
       if (fd.exclude.some((p: RegExp) => p.test(line))) continue;
       if (!fd.patterns.some((p: RegExp) => p.test(line))) continue;
 
-      // Aggregate context: this line + next 3 lines (amounts sometimes on next line in PDFs)
-      const context = [line, lines[i + 1] ?? "", lines[i + 2] ?? "", lines[i + 3] ?? ""].join("  ");
-      const rawAmounts = extractAmounts(context);
-      const amounts = removeLeadingNoteNumbers(rawAmounts).map(n => n * multiplier);
+      // Step 1: try same line only
+      const sameLineAmounts = removeLeadingNoteNumbers(extractAmounts(line)).map(n => n * multiplier);
 
-      if (amounts.length >= 2) {
-        return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: amounts[0], prevValue: amounts[1], found: true };
+      if (sameLineAmounts.length >= 2) {
+        return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: sameLineAmounts[0], prevValue: sameLineAmounts[1], found: true };
       }
-      if (amounts.length === 1) {
-        return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: amounts[0], prevValue: null, found: true };
+      if (sameLineAmounts.length === 1) {
+        return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: sameLineAmounts[0], prevValue: null, found: true };
       }
-      // Pattern matched but no amounts — could be nil (0) entry
-      if ((fd as FieldDef & { allowNil?: boolean }).allowNil || hasNilMarker(context)) {
-        return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: 0, prevValue: 0, found: true };
+
+      // Same line has nil marker → record as 0 (for allowNil fields) or skip
+      if (hasNilMarker(line)) {
+        if (fd.allowNil) {
+          return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: 0, prevValue: 0, found: true };
+        }
+        // Not allowNil but nil marker found — continue scanning other occurrences
+        continue;
+      }
+
+      // Step 2: if sameLineOnly, don't look further
+      if (fd.sameLineOnly) continue;
+
+      // Step 3: extend context to next 3 lines
+      const extContext = [lines[i + 1] ?? "", lines[i + 2] ?? "", lines[i + 3] ?? ""].join("  ");
+      const extAmounts = removeLeadingNoteNumbers(extractAmounts(extContext)).map(n => n * multiplier);
+
+      if (extAmounts.length >= 2) {
+        return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: extAmounts[0], prevValue: extAmounts[1], found: true };
+      }
+      if (extAmounts.length === 1) {
+        return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: extAmounts[0], prevValue: null, found: true };
       }
     }
     return { label: fd.label, fKey: fd.fKey, prevKey: fd.prevKey, currentValue: null, prevValue: null, found: false };
   });
-}
-
-function removeLeadingNoteNumbers(amounts: number[]): number[] {
-  if (amounts.length <= 1) return amounts;
-  const first = amounts[0];
-  if (Number.isInteger(first) && first >= 1 && first <= 99) return amounts.slice(1);
-  return amounts;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -346,7 +386,7 @@ function extractFieldsFromWorkbook(workbook: XLSX.WorkBook): ExtractedField[] {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// PDF TEXT EXTRACTION — reconstructs lines using y-coordinate grouping
+// PDF TEXT EXTRACTION — y-coordinate line reconstruction
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 async function extractPdfText(buffer: Buffer): Promise<{ text: string; pages: number }> {
@@ -356,43 +396,35 @@ async function extractPdfText(buffer: Buffer): Promise<{ text: string; pages: nu
   (pdfjsLib as any).GlobalWorkerOptions.workerSrc = "";
 
   const data = new Uint8Array(buffer);
-  const loadingTask = pdfjsLib.getDocument({
-    data,
-    disableFontFace: true,
-    useWorkerFetch: false,
-    isEvalSupported: false,
-  });
+  const loadingTask = pdfjsLib.getDocument({ data, disableFontFace: true, useWorkerFetch: false, isEvalSupported: false });
   const pdf = await loadingTask.promise;
 
   let fullText = "";
-
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
 
-    // Reconstruct lines by grouping items with same y-coordinate
-    // PDF y-axis is bottom-up; round to nearest 3px to cluster items on same visual line
+    // Group text items by y-coordinate (3pt clusters) — PDF y is bottom-up
     type TItem = { str: string; transform: number[] };
     const items = textContent.items as TItem[];
-
     const lineMap = new Map<number, { x: number; str: string }[]>();
+
     for (const item of items) {
       if (!item.str) continue;
-      const yRaw = item.transform[5];
-      const y = Math.round(yRaw / 3) * 3; // cluster within 3pt
+      const y = Math.round(item.transform[5] / 3) * 3;
       const x = item.transform[4];
       if (!lineMap.has(y)) lineMap.set(y, []);
       lineMap.get(y)!.push({ x, str: item.str });
     }
 
-    // Sort y descending (top of page first), then x ascending within each line
+    // Sort descending y (top-to-bottom), then ascending x within each line
     const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
     for (const y of sortedYs) {
       const lineItems = lineMap.get(y)!.sort((a, b) => a.x - b.x);
       const lineText = lineItems.map(i => i.str).join("  ");
       if (lineText.trim()) fullText += lineText + "\n";
     }
-    fullText += "\n"; // page separator
+    fullText += "\n";
   }
 
   return { text: fullText, pages: pdf.numPages };
@@ -416,16 +448,32 @@ export async function POST(req: NextRequest) {
 
     let fields: ExtractedField[];
     let rawTextSample = "";
+    let extractedCIN: string | null = null;
 
     if (ext === "pdf") {
-      const { text, pages } = await extractPdfText(buffer);
-      rawTextSample = text.slice(0, 6000); // first 6000 chars for debug
-      console.log(`[parse-financials] PDF pages=${pages} text_len=${text.length}`);
-      console.log(`[parse-financials] RAW TEXT SAMPLE:\n${rawTextSample}`);
+      const { text } = await extractPdfText(buffer);
+      rawTextSample = text.slice(0, 6000);
+      extractedCIN = extractCIN(text);
+      console.log(`[parse-financials] PDF len=${text.length} CIN=${extractedCIN ?? "not found"}`);
+      console.log(`[parse-financials] RAW TEXT:\n${rawTextSample}`);
       fields = extractFieldsFromText(text);
 
     } else if (["xlsx", "xls", "csv", "ods"].includes(ext)) {
       const workbook = XLSX.read(buffer, { type: "buffer" });
+      // Extract CIN from all cell text
+      const allText = workbook.SheetNames.flatMap(s => {
+        const sh = workbook.Sheets[s];
+        const rng = XLSX.utils.decode_range(sh["!ref"] ?? "A1:A1");
+        const texts: string[] = [];
+        for (let r = rng.s.r; r <= rng.e.r; r++)
+          for (let c = rng.s.c; c <= rng.e.c; c++) {
+            const cell = sh[XLSX.utils.encode_cell({ r, c })];
+            if (cell?.v) texts.push(String(cell.v));
+          }
+        return texts;
+      }).join(" ");
+      extractedCIN = extractCIN(allText);
+      rawTextSample = allText.slice(0, 6000);
       fields = extractFieldsFromWorkbook(workbook);
 
     } else if (ext === "docx" || ext === "doc") {
@@ -440,7 +488,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ fields, fileName: file.name, rawTextSample });
+    return NextResponse.json({ fields, fileName: file.name, extractedCIN, rawTextSample });
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -453,7 +501,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
     return NextResponse.json(
       { error: `Could not parse the file: ${msg.slice(0, 200)}` },
       { status: 500 }
