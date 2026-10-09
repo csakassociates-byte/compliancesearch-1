@@ -120,8 +120,8 @@ export default function ComplianceMonitorPage() {
   const [companyModal, setCompanyModal] = useState<ComplianceRow | null>(null);
   const [companyProfile, setCompanyProfile] = useState<{
     loading: boolean;
-    company?: { cin: string | null; entityType: string | null; regAddress: string | null; incorporationDate: string | null; email: string | null; paidUpCapital: string | null; authorisedCapital: string | null; registrationNumber: string | null; rocName: string | null };
-    mcaProfile?: { rocName: string | null; status: string | null; isListed: boolean; smallCompany: boolean; authorisedCapital: string | null; paidUpCapital: string | null; registrationNumber: string | null; dateOfLastAGM: string | null; dateOfBalanceSheet: string | null; categoryOfCompany: string | null; subcategory: string | null; classOfCompany: string | null } | null;
+    company?: { cin: string | null; entityType: string | null; regAddress: string | null; incorporationDate: string | null };
+    mcaProfile?: { rocName: string | null; status: string | null; isListed: boolean; smallCompany: boolean; authorisedCapital: string | null; paidUpCapital: string | null; registrationNumber: string | null; dateOfLastAGM: string | null; dateOfBalanceSheet: string | null; categoryOfCompany: string | null; subcategory: string | null; classOfCompany: string | null; email: string | null } | null;
     directors?: Array<{ name: string; din: string | null; designation: string | null; category: string | null; appointedAt: string | null; cessationAt: string | null; isActive: boolean; pan: string | null; mobile: string | null; email: string | null; source?: string }>;
     shareholderSummary?: Array<{ name: string; din?: string | null; pan: string | null; shares: number; percent: string; folioNo?: string; type?: string; isPromoter?: boolean }>;
     totalShares?: number;
@@ -984,11 +984,11 @@ export default function ComplianceMonitorPage() {
         const incDate = fmtDate(p?.company?.incorporationDate ?? c.incorporationDate);
 
         const mca = p?.mcaProfile;
-        const rocName = mca?.rocName ?? p?.company?.rocName ?? "—";
-        const regNum = mca?.registrationNumber ?? p?.company?.registrationNumber ?? (cin ? cin.slice(-6) : "—");
-        const authCap = mca?.authorisedCapital ?? p?.company?.authorisedCapital ?? "—";
-        const paidCap = mca?.paidUpCapital ?? p?.company?.paidUpCapital ?? "—";
-        const companyEmail = p?.company?.email ?? "—";
+        const rocName = mca?.rocName ?? "—";
+        const regNum = mca?.registrationNumber ?? (cin ? cin.slice(-6) : "—");
+        const authCap = mca?.authorisedCapital ?? "—";
+        const paidCap = mca?.paidUpCapital ?? "—";
+        const companyEmail = mca?.email ?? "—";
         const TABS = [
           { id: "info",     label: "Company Info" },
           { id: "dirs",     label: `Directors (${p?.directors?.length ?? "…"})` },

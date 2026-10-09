@@ -16,15 +16,13 @@ export async function GET(req: NextRequest) {
     const memberIds = await getTeamMemberIds(userId);
 
     // ── Company info ─────────────────────────────────────────────────────────
+    // csi_companies only has: id, companyName, cin, entityType, regAddress, incorporationDate
     const companies = await prisma.$queryRawUnsafe<Array<{
       id: string; companyName: string; cin: string | null;
       entityType: string | null; regAddress: string | null;
-      incorporationDate: string | null; email: string | null;
-      paidUpCapital: string | null; authorisedCapital: string | null;
-      registrationNumber: string | null; rocName: string | null;
+      incorporationDate: string | null;
     }>>(
-      `SELECT id, "companyName", cin, "entityType", "regAddress", "incorporationDate",
-              email, "paidUpCapital", "authorisedCapital", "registrationNumber", "rocName"
+      `SELECT id, "companyName", cin, "entityType", "regAddress", "incorporationDate"
        FROM csi_companies
        WHERE id = $1 AND "userId" = ANY($2::text[]) LIMIT 1`,
       companyId, memberIds
@@ -40,6 +38,7 @@ export async function GET(req: NextRequest) {
       registrationNumber: string | null; dateOfLastAGM: string | null;
       dateOfBalanceSheet: string | null; categoryOfCompany: string | null;
       subcategory: string | null; classOfCompany: string | null;
+      email: string | null;
     } | null = null;
 
     if (company.cin) {
@@ -50,11 +49,12 @@ export async function GET(req: NextRequest) {
         registrationNumber: string | null; dateOfLastAGM: string | null;
         dateOfBalanceSheet: string | null; categoryOfCompany: string | null;
         subcategory: string | null; classOfCompany: string | null;
+        email: string | null;
       }>>(
         `SELECT "rocName", status, "isListed", "smallCompany",
                 "authorisedCapital", "paidUpCapital", "registrationNumber",
                 "dateOfLastAGM", "dateOfBalanceSheet", "categoryOfCompany",
-                subcategory, "classOfCompany"
+                subcategory, "classOfCompany", email
          FROM "CompanyProfile" WHERE cin = $1 LIMIT 1`,
         company.cin
       );
