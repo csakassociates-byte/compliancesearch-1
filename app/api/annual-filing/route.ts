@@ -51,6 +51,10 @@ export async function POST(req: NextRequest) {
     if (!body.id && !body.cin) {
       return NextResponse.json({ skipped: true }, { status: 200 });
     }
+    // Block saves where company name looks like partial typing (< 10 chars)
+    if (!body.id && body.companyName.trim().length < 10) {
+      return NextResponse.json({ skipped: true }, { status: 200 });
+    }
     // Validate CIN format when provided
     if (body.cin) {
       const cinPattern = /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{2,4}[0-9]{6}$/;
