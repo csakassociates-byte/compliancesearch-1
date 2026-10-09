@@ -96,6 +96,17 @@ const BS_ROWS: FinRowConfig[] = [
   { label: "Net Worth",                fKey: "netWorth",           prevKey: "prevNetWorth",           isComputed: true, formula: "Paid-up Capital + Reserves & Surplus"       },
 ];
 
+// ── CIN validation ─────────────────────────────────────────────────────────
+// Format: L/U + 5 digits (industry) + 2 letters (state) + 4 digits (year) + 2-4 letters (type) + 6 digits
+const CIN_REGEX = /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{2,4}[0-9]{6}$/;
+function validateCIN(cin: string): { valid: boolean; error?: string } {
+  if (!cin) return { valid: false, error: "CIN is required" };
+  const c = cin.trim().toUpperCase();
+  if (c.length !== 21) return { valid: false, error: `CIN must be exactly 21 characters (currently ${c.length})` };
+  if (!CIN_REGEX.test(c)) return { valid: false, error: "Invalid CIN format — expected: L/U + 5 digits + 2 letters + 4 digits + 2-4 letters + 6 digits (e.g. U74999MH2020PTC123456)" };
+  return { valid: true };
+}
+
 // ── Company type detection from entityType ─────────────────────────────────
 function detectCompanyType(entityType: string, smallCompany?: boolean): CompanyType {
   const e = (entityType || "").toLowerCase();
@@ -257,6 +268,7 @@ interface SidebarInnerProps {
   collapsed: boolean;
   session: { user?: unknown } | null;
   saving: boolean;
+  autoSaving: boolean;
   saveId: string | null;
   savedMsg: { ok: boolean; text: string } | null;
   resetting: boolean;
@@ -267,7 +279,7 @@ interface SidebarInnerProps {
   patch: (val: Partial<AnnualFilingData>) => void;
 }
 
-function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg, resetting, onStepClick, onSave, onReset, onToggle, patch }: SidebarInnerProps) {
+function SidebarInner({ data, step, collapsed, session, saving, autoSaving, saveId, savedMsg, resetting, onStepClick, onSave, onReset, onToggle, patch }: SidebarInnerProps) {
   function isStepComplete(id: number) {
     if (id === 1) return !!(data.companyName && data.financialYear);
     return false;
@@ -471,7 +483,8 @@ function SidebarInner({ data, step, collapsed, session, saving, saveId, savedMsg
                   </button>
                 )}
               </div>
-              {saveId && !saving && <p className="mt-1.5 text-[10px] text-white/30 text-center">• Draft saved</p>}
+              {autoSaving && <p className="mt-1.5 text-[10px] text-white/40 text-center animate-pulse">↑ Auto-saving…</p>}
+              {saveId && !saving && !autoSaving && <p className="mt-1.5 text-[10px] text-white/30 text-center">• Draft saved</p>}
               {savedMsg && <p className={`mt-1.5 text-[10.5px] font-medium ${savedMsg.ok ? "text-emerald-400" : "text-red-400"}`}>{savedMsg.ok ? "✓" : "✗"} {savedMsg.text}</p>}
             </>
           ) : (
@@ -536,8 +549,18 @@ function AnnualFilingTool() {
   const [foundDraft, setFoundDraft] = useState<{
     id: string; companyName: string | null; financialYear: string | null;
     updatedAt: string; formDataJson: string;
+    isFinalized?: boolean; finalizedBy?: string | null; finalizedAt?: string | null;
   } | null>(null);
   const [resetting, setResetting]   = useState(false);
+  const [isLocked, setIsLocked]     = useState(false);
+  const [finalizedBy, setFinalizedBy]   = useState<string | null>(null);
+  const [finalizedAt, setFinalizedAt]   = useState<string | null>(null);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockStep, setUnlockStep] = useState(1);
+  const [unlockCheck1, setUnlockCheck1] = useState(false);
+  const [unlockCheck2, setUnlockCheck2] = useState(false);
+  const [unlockText, setUnlockText] = useState("");
+  const [unlocking, setUnlocking]   = useState(false);
   const [prevYearDraft, setPrevYearDraft] = useState<{
     id: string; companyName: string | null; financialYear: string | null;
     updatedAt: string; formDataJson: string;
@@ -556,6 +579,9 @@ function AnnualFilingTool() {
   const [finDocParsing, setFinDocParsing] = useState(false);
   const [finDocError, setFinDocError]     = useState<string|null>(null);
   const finDocRef = useRef<HTMLInputElement>(null);
+  const [autoSaving, setAutoSaving] = useState(false);
+  // Ref holding latest auto-save logic — avoids stale closures inside the debounce timer
+  const autoSaveFnRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   // ── Load saved draft via ?load=<id> ──────────────────────────────────
   useEffect(() => {
@@ -564,7 +590,7 @@ function AnnualFilingTool() {
     setLoadMsg("Loading saved draft…");
     fetch(`/api/annual-filing?id=${id}`)
       .then(r => r.json())
-      .then((json: { filing?: { formDataJson: string; id: string } }) => {
+      .then((json: { filing?: { formDataJson: string; id: string; isFinalized?: boolean; finalizedBy?: string | null; finalizedAt?: string | null } }) => {
         if (json.filing?.formDataJson) {
           const parsed = JSON.parse(json.filing.formDataJson) as {
             data: AnnualFilingData;
@@ -574,6 +600,11 @@ function AnnualFilingTool() {
           setAuditOpts(parsed.auditOpts);
           setSaveId(json.filing.id);
           setSaveIdFY(parsed.data.financialYear);
+          if (json.filing.isFinalized) {
+            setIsLocked(true);
+            setFinalizedBy(json.filing.finalizedBy ?? null);
+            setFinalizedAt(json.filing.finalizedAt ?? null);
+          }
           // Restore director signatures from csi_persons
           if (parsed.data._companyId) {
             setCompanyId(parsed.data._companyId);
@@ -632,6 +663,39 @@ function AnnualFilingTool() {
   const patchFin = useCallback((partial: Partial<AnnualFilingData["financials"]>) => {
     setData(prev => ({ ...prev, financials: { ...prev.financials, ...partial } }));
   }, []);
+
+  // ── Debounced auto-save — fires 1.5 s after the last data change ─────────
+  // autoSaveFnRef always holds the latest version (no stale closure)
+  autoSaveFnRef.current = async () => {
+    // Require both companyName AND cin — prevents saving partial/typed names without a real company selected
+    if (!session?.user || !data.companyName || !data.cin || isLocked) return;
+    const existingId = (saveId && saveIdFY === data.financialYear) ? saveId : null;
+    try {
+      setAutoSaving(true);
+      const res = await fetch("/api/annual-filing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(existingId ? { id: existingId } : {}),
+          companyName: data.companyName,
+          cin: data.cin,
+          financialYear: data.financialYear,
+          formDataJson: JSON.stringify({ data: stripImagesForSave(data), auditOpts }),
+        }),
+      });
+      const json = await res.json() as { id?: string };
+      if (json.id && !existingId) {
+        setSaveId(json.id);
+        setSaveIdFY(data.financialYear);
+      }
+    } catch { /* silent */ }
+    finally { setAutoSaving(false); }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => { void autoSaveFnRef.current?.(); }, 1500);
+    return () => clearTimeout(timer);
+  }, [data, auditOpts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-calculate Total Shares = Paid-up Capital / Nominal Value ───────
   useEffect(() => {
@@ -731,23 +795,22 @@ function AnnualFilingTool() {
       }));
       void loadPersonsForCompany(co.id, newDirs);
     }
-    // Check if a saved draft exists for this CIN + current FY
+    // Check if a saved draft exists for this CIN + current FY — auto-load it
     if (co.cin && session?.user) {
       setFoundDraft(null);
       setPrevYearDraft(null);
       setSaveId(null);
       setSaveIdFY(null);
-      // Check current FY draft
-      fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}&fy=${encodeURIComponent(data.financialYear)}`)
+      fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}&fy=${encodeURIComponent(data.financialYear)}&companyName=${encodeURIComponent(co.companyName)}`)
         .then(r => r.json())
-        .then((json: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string } | null }) => {
+        .then((json: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string; isFinalized?: boolean; finalizedBy?: string | null; finalizedAt?: string | null } | null }) => {
           if (json.filing) {
-            setFoundDraft(json.filing);
+            autoLoadFilingDraft(json.filing);
           } else {
             // No current FY draft — look for previous FY draft to offer carry-forward
-            const fyStart   = parseInt(data.financialYear.split("-")[0]);
-            const prevFY    = `${fyStart - 1}-${String(fyStart).slice(2)}`;
-            fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}&fy=${encodeURIComponent(prevFY)}`)
+            const fyStart = parseInt(data.financialYear.split("-")[0]);
+            const prevFY  = `${fyStart - 1}-${String(fyStart).slice(2)}`;
+            fetch(`/api/annual-filing?cin=${encodeURIComponent(co.cin)}&fy=${encodeURIComponent(prevFY)}&companyName=${encodeURIComponent(co.companyName)}`)
               .then(r2 => r2.json())
               .then((j2: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string } | null }) => {
                 if (j2.filing) setPrevYearDraft(j2.filing);
@@ -757,6 +820,39 @@ function AnnualFilingTool() {
         })
         .catch(() => {});
     }
+  }
+
+  // ── Auto-load a filing draft (replaces the manual "Load Draft" banner) ─
+  function autoLoadFilingDraft(filing: {
+    id: string; companyName: string | null; financialYear: string | null;
+    updatedAt: string; formDataJson: string;
+    isFinalized?: boolean; finalizedBy?: string | null; finalizedAt?: string | null;
+  }) {
+    try {
+      const parsed = JSON.parse(filing.formDataJson) as { data: AnnualFilingData; auditOpts: AuditReportOptions };
+      setData({ ...parsed.data, directors: deduplicateDirs(parsed.data.directors || []) });
+      setAuditOpts(parsed.auditOpts);
+      setSaveId(filing.id);
+      setSaveIdFY(filing.financialYear ?? null);
+      if (filing.isFinalized) {
+        setIsLocked(true);
+        setFinalizedBy(filing.finalizedBy ?? null);
+        setFinalizedAt(filing.finalizedAt ?? null);
+        setStep(8);
+      }
+      if (parsed.data._companyId) {
+        void loadPersonsForCompany(parsed.data._companyId, parsed.data.directors || []);
+      }
+      if (parsed.data.auditor._savedCAId) {
+        const ca = savedCAs.find(c => c.id === parsed.data.auditor._savedCAId);
+        if (ca) {
+          setData(prev => ({
+            ...prev,
+            auditor: { ...prev.auditor, signatureBase64: ca.signatureBase64 || undefined, sealBase64: ca.sealBase64 || undefined },
+          }));
+        }
+      }
+    } catch { /* silent */ }
   }
 
   // ── Core KYC load: fetch persons and merge into given dirs array ──────
@@ -956,6 +1052,9 @@ function AnnualFilingTool() {
       setFoundDraft(null);
       setSavedMsg(null);
       setCompanyId(null);
+      setIsLocked(false);
+      setFinalizedBy(null);
+      setFinalizedAt(null);
       setStep(1);
     } finally {
       setResetting(false);
@@ -1265,13 +1364,52 @@ function AnnualFilingTool() {
   }
 
   // ── Generate All ──────────────────────────────────────────────────────
-  function handleGenerate() {
+  async function handleGenerate() {
     setGenerating(true);
     try {
+      // Step 1: ensure draft is saved so we have a saveId to finalize
+      let currentSaveId = (saveId && saveIdFY === data.financialYear) ? saveId : null;
+      if (!currentSaveId && data.companyName && session?.user) {
+        try {
+          const res = await fetch("/api/annual-filing", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              companyName:   data.companyName,
+              cin:           data.cin,
+              financialYear: data.financialYear,
+              formDataJson:  JSON.stringify({ data: stripImagesForSave(data), auditOpts }),
+            }),
+          });
+          const saved = await res.json() as { id?: string };
+          if (saved.id) {
+            currentSaveId = saved.id;
+            setSaveId(saved.id);
+            setSaveIdFY(data.financialYear);
+          }
+        } catch { /* continue without save if it fails */ }
+      }
+
+      // Step 2: generate documents
       const cashFlowIncluded = data.companyType === "section8" || data.companyType === "fpc";
       const opts = { ...auditOpts, cashFlowIncluded };
       const docs = generateAllAttachments(data, opts);
       setGenerated(docs as unknown as Record<string, string>);
+
+      // Step 3: finalize (lock) the filing in DB
+      if (currentSaveId && session?.user) {
+        const email = (session.user as { email?: string }).email ?? "unknown";
+        try {
+          await fetch("/api/annual-filing", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: currentSaveId, action: "finalize" }),
+          });
+          setIsLocked(true);
+          setFinalizedBy(email);
+          setFinalizedAt(new Date().toISOString());
+        } catch { /* lock failed silently */ }
+      }
     } finally {
       setGenerating(false);
     }
@@ -1599,9 +1737,53 @@ function AnnualFilingTool() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <Field label="CIN" value={data.cin} onChange={v => {
-              patch({ cin: v, stateOfIncorporation: stateFromCIN(v) || data.stateOfIncorporation });
-            }} required placeholder="U12345MH2020PTC123456" hint="State auto-derives from CIN" />
+            {/* CIN field with format validation */}
+            {(() => {
+              const cinVal = data.cin?.trim().toUpperCase() ?? "";
+              const cinCheck = cinVal ? validateCIN(cinVal) : null;
+              return (
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    CIN <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <p className="text-xs text-slate-500 mb-1">State auto-derives from CIN</p>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={data.cin}
+                      onChange={e => {
+                        const v = e.target.value.toUpperCase();
+                        patch({ cin: v, stateOfIncorporation: stateFromCIN(v) || data.stateOfIncorporation });
+                      }}
+                      placeholder="U74999MH2020PTC123456"
+                      maxLength={21}
+                      className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 ${
+                        !cinVal
+                          ? "border-slate-300 focus:ring-emerald-500"
+                          : cinCheck?.valid
+                          ? "border-emerald-400 focus:ring-emerald-500 bg-emerald-50"
+                          : "border-red-300 focus:ring-red-400 bg-red-50"
+                      }`}
+                    />
+                    {cinVal && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold">
+                        {cinCheck?.valid ? (
+                          <span className="text-emerald-600">✓ Valid</span>
+                        ) : (
+                          <span className="text-slate-400">{cinVal.length}/21</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  {cinVal && !cinCheck?.valid && (
+                    <p className="mt-1 text-xs text-red-600 flex items-start gap-1">
+                      <span className="flex-shrink-0">⚠</span>
+                      <span>{cinCheck?.error}</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
             <Field label="PAN" value={data.pan} onChange={v => patch({ pan: v })} placeholder="AABCA1234A" />
             <Field label="ROC Name" value={data.rocName} onChange={v => patch({ rocName: v })} placeholder="Registrar of Companies, Mumbai" />
             {/* Incorporation Date — auto-filled from Excel / DB */}
@@ -1706,10 +1888,10 @@ function AnnualFilingTool() {
                     setSaveId(null);
                     setSaveIdFY(null);
                   }
-                  fetch(`/api/annual-filing?cin=${encodeURIComponent(data.cin)}&fy=${encodeURIComponent(newFY)}`)
+                  fetch(`/api/annual-filing?cin=${encodeURIComponent(data.cin)}&fy=${encodeURIComponent(newFY)}&companyName=${encodeURIComponent(data.companyName || "")}`)
                     .then(r => r.json())
-                    .then((json: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string } | null }) => {
-                      if (json.filing) setFoundDraft(json.filing);
+                    .then((json: { filing?: { id: string; companyName: string | null; financialYear: string | null; updatedAt: string; formDataJson: string; isFinalized?: boolean; finalizedBy?: string | null; finalizedAt?: string | null } | null }) => {
+                      if (json.filing) autoLoadFilingDraft(json.filing);
                     })
                     .catch(() => {});
                 }
@@ -2003,88 +2185,111 @@ function AnnualFilingTool() {
             <p className="text-xs font-bold text-slate-700 mb-3">Signature &amp; Firm Seal — appear in Auditor&apos;s Report &amp; Notes on Accounts</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Partner Signature */}
-              <div>
-                <p className="text-xs text-slate-500 mb-2 font-semibold">Partner / Proprietor Signature</p>
-                {data.auditor.signatureBase64 ? (
-                  <div className="p-2 border border-emerald-200 rounded-lg bg-emerald-50">
-                    <img src={`data:image/jpeg;base64,${data.auditor.signatureBase64}`} alt="Signature" className="h-12 object-contain mb-1" style={{ maxWidth: "140px" }} />
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-emerald-700 font-semibold">✓ Saved</span>
-                      <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
-                        Change
-                        <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
-                          const file = e.target.files?.[0]; if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = ev => {
-                            const b64 = (ev.target?.result as string).split(",")[1];
-                            patchAud({ signatureBase64: b64 });
-                            void persistCAImage("signatureBase64", b64);
-                          };
-                          reader.readAsDataURL(file);
-                        }} />
-                      </label>
+              {(() => {
+                // Detect PNG vs JPEG for correct transparency rendering
+                function imgSrc(b64: string) {
+                  return b64.startsWith("iVBOR") ? `data:image/png;base64,${b64}` : `data:image/jpeg;base64,${b64}`;
+                }
+                function readFileAsB64(file: File, onDone: (b64: string) => void) {
+                  const reader = new FileReader();
+                  reader.onload = ev => { const b64 = (ev.target?.result as string).split(",")[1]; onDone(b64); };
+                  reader.readAsDataURL(file);
+                }
+                function onPasteSig(e: React.ClipboardEvent) {
+                  const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith("image/"));
+                  if (!item) return;
+                  e.preventDefault();
+                  const file = item.getAsFile();
+                  if (!file) return;
+                  readFileAsB64(file, b64 => { patchAud({ signatureBase64: b64 }); void persistCAImage("signatureBase64", b64); });
+                }
+                function onPasteSeal(e: React.ClipboardEvent) {
+                  const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith("image/"));
+                  if (!item) return;
+                  e.preventDefault();
+                  const file = item.getAsFile();
+                  if (!file) return;
+                  readFileAsB64(file, b64 => { patchAud({ sealBase64: b64 }); void persistCAImage("sealBase64", b64); });
+                }
+                return (<>
+                <div>
+                  <p className="text-xs text-slate-500 mb-2 font-semibold">Partner / Proprietor Signature</p>
+                  {data.auditor.signatureBase64 ? (
+                    <div className="p-2 border border-emerald-200 rounded-lg" style={{ background: "repeating-conic-gradient(#e5e7eb 0% 25%, white 0% 50%) 0 0 / 10px 10px" }}>
+                      <img src={imgSrc(data.auditor.signatureBase64)} alt="Signature" className="h-14 object-contain mb-2" style={{ maxWidth: "160px" }} />
+                      <div className="flex items-center gap-3 bg-white/80 rounded px-1 py-0.5">
+                        <span className="text-xs text-emerald-700 font-semibold">✓ Saved</span>
+                        <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
+                          Change
+                          <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
+                            const file = e.target.files?.[0]; if (!file) return;
+                            readFileAsB64(file, b64 => { patchAud({ signatureBase64: b64 }); void persistCAImage("signatureBase64", b64); });
+                          }} />
+                        </label>
+                        <button type="button" className="text-xs text-red-500 hover:underline font-semibold"
+                          onClick={() => { patchAud({ signatureBase64: undefined }); void persistCAImage("signatureBase64", ""); }}>
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center gap-1.5 cursor-pointer border-2 border-dashed border-slate-200 rounded-lg p-3 hover:border-blue-300 hover:bg-blue-50 transition-colors">
-                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                    <span className="text-xs text-slate-500 font-semibold">Upload Signature</span>
-                    <span className="text-xs text-slate-400">JPEG / PNG</span>
-                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
-                      const file = e.target.files?.[0]; if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = ev => {
-                        const b64 = (ev.target?.result as string).split(",")[1];
-                        patchAud({ signatureBase64: b64 });
-                        void persistCAImage("signatureBase64", b64);
-                      };
-                      reader.readAsDataURL(file);
-                    }} />
-                  </label>
-                )}
-              </div>
+                  ) : (
+                    <div
+                      tabIndex={0}
+                      onPaste={onPasteSig}
+                      className="flex flex-col items-center gap-1.5 cursor-pointer border-2 border-dashed border-slate-200 rounded-lg p-3 hover:border-blue-300 hover:bg-blue-50 transition-colors focus:outline-none focus:border-blue-400 focus:bg-blue-50"
+                      onClick={e => { const inp = (e.currentTarget as HTMLElement).querySelector("input"); inp?.click(); }}
+                    >
+                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      <span className="text-xs text-slate-500 font-semibold">Click to Upload / Ctrl+V to Paste</span>
+                      <span className="text-xs text-slate-400">PNG (transparent) or JPEG</span>
+                      <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
+                        const file = e.target.files?.[0]; if (!file) return;
+                        readFileAsB64(file, b64 => { patchAud({ signatureBase64: b64 }); void persistCAImage("signatureBase64", b64); });
+                      }} />
+                    </div>
+                  )}
+                </div>
 
-              {/* Firm Seal */}
-              <div>
-                <p className="text-xs text-slate-500 mb-2 font-semibold">Firm Rubber Stamp / Seal</p>
-                {data.auditor.sealBase64 ? (
-                  <div className="p-2 border border-emerald-200 rounded-lg bg-emerald-50">
-                    <img src={`data:image/jpeg;base64,${data.auditor.sealBase64}`} alt="Firm Seal" className="h-14 object-contain mb-1" style={{ maxWidth: "140px" }} />
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-emerald-700 font-semibold">✓ Saved</span>
-                      <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
-                        Change
-                        <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
-                          const file = e.target.files?.[0]; if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = ev => {
-                            const b64 = (ev.target?.result as string).split(",")[1];
-                            patchAud({ sealBase64: b64 });
-                            void persistCAImage("sealBase64", b64);
-                          };
-                          reader.readAsDataURL(file);
-                        }} />
-                      </label>
+                {/* Firm Seal */}
+                <div>
+                  <p className="text-xs text-slate-500 mb-2 font-semibold">Firm Rubber Stamp / Seal</p>
+                  {data.auditor.sealBase64 ? (
+                    <div className="p-2 border border-emerald-200 rounded-lg" style={{ background: "repeating-conic-gradient(#e5e7eb 0% 25%, white 0% 50%) 0 0 / 10px 10px" }}>
+                      <img src={imgSrc(data.auditor.sealBase64)} alt="Firm Seal" className="h-14 object-contain mb-2" style={{ maxWidth: "160px" }} />
+                      <div className="flex items-center gap-3 bg-white/80 rounded px-1 py-0.5">
+                        <span className="text-xs text-emerald-700 font-semibold">✓ Saved</span>
+                        <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
+                          Change
+                          <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
+                            const file = e.target.files?.[0]; if (!file) return;
+                            readFileAsB64(file, b64 => { patchAud({ sealBase64: b64 }); void persistCAImage("sealBase64", b64); });
+                          }} />
+                        </label>
+                        <button type="button" className="text-xs text-red-500 hover:underline font-semibold"
+                          onClick={() => { patchAud({ sealBase64: undefined }); void persistCAImage("sealBase64", ""); }}>
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center gap-1.5 cursor-pointer border-2 border-dashed border-slate-200 rounded-lg p-3 hover:border-blue-300 hover:bg-blue-50 transition-colors">
-                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    <span className="text-xs text-slate-500 font-semibold">Upload Firm Seal</span>
-                    <span className="text-xs text-slate-400">JPEG / PNG</span>
-                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
-                      const file = e.target.files?.[0]; if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = ev => {
-                        const b64 = (ev.target?.result as string).split(",")[1];
-                        patchAud({ sealBase64: b64 });
-                        void persistCAImage("sealBase64", b64);
-                      };
-                      reader.readAsDataURL(file);
-                    }} />
-                  </label>
-                )}
-              </div>
+                  ) : (
+                    <div
+                      tabIndex={0}
+                      onPaste={onPasteSeal}
+                      className="flex flex-col items-center gap-1.5 cursor-pointer border-2 border-dashed border-slate-200 rounded-lg p-3 hover:border-blue-300 hover:bg-blue-50 transition-colors focus:outline-none focus:border-blue-400 focus:bg-blue-50"
+                      onClick={e => { const inp = (e.currentTarget as HTMLElement).querySelector("input"); inp?.click(); }}
+                    >
+                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      <span className="text-xs text-slate-500 font-semibold">Click to Upload / Ctrl+V to Paste</span>
+                      <span className="text-xs text-slate-400">PNG (transparent) or JPEG</span>
+                      <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
+                        const file = e.target.files?.[0]; if (!file) return;
+                        readFileAsB64(file, b64 => { patchAud({ sealBase64: b64 }); void persistCAImage("sealBase64", b64); });
+                      }} />
+                    </div>
+                  )}
+                </div>
+                </>);
+              })()}
             </div>
             <p className="text-xs text-slate-400 mt-2">Images are saved with this CA&apos;s record and auto-loaded in future years when you select this CA.</p>
           </div>
@@ -4516,7 +4721,7 @@ function AnnualFilingTool() {
 
           <button
             onClick={handleGenerate}
-            disabled={generating || !data.companyName}
+            disabled={generating || !data.companyName || isLocked}
             className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-xl text-base transition-colors flex items-center justify-center gap-2"
           >
             {generating ? (
@@ -4634,17 +4839,23 @@ function AnnualFilingTool() {
               <b>Preview</b> — opens HTML in a new tab.&nbsp;
               <b>↺</b> — re-creates a single document after making changes.
             </p>
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="w-full mt-3 py-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-emerald-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              {generating ? (
-                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Regenerating...</>
-              ) : (
-                <><span>↺</span> Regenerate All (after changes)</>
-              )}
-            </button>
+            {isLocked ? (
+              <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-center text-xs text-amber-700 font-semibold">
+                🔒 Unlock filing to regenerate documents (use "✏️ Edit Filing" button above)
+              </div>
+            ) : (
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="w-full mt-3 py-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-emerald-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {generating ? (
+                  <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Regenerating...</>
+                ) : (
+                  <><span>↺</span> Regenerate All (after changes)</>
+                )}
+              </button>
+            )}
 
             <button
               onClick={() => {
@@ -4689,6 +4900,114 @@ function AnnualFilingTool() {
   // ── Main render ───────────────────────────────────────────────────────
   return (
     <div className="h-screen overflow-hidden bg-slate-50">
+
+      {/* ── Unlock modal ──────────────────────────────────────────────────── */}
+      {showUnlockModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-2xl">🔓</span>
+              <h2 className="text-lg font-bold text-slate-900">Unlock Filing for Editing</h2>
+            </div>
+            <div className="flex gap-1 mb-5">
+              {[1,2,3].map(n => (
+                <div key={n} className={`flex-1 h-1.5 rounded-full ${n <= unlockStep ? "bg-amber-500" : "bg-slate-200"}`} />
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Step {unlockStep} of 3 — Complete all 3 steps to unlock.</p>
+
+            {unlockStep === 1 && (
+              <div className="space-y-3">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-sm font-semibold text-amber-800 mb-1">⚠ This filing has been finalized and locked.</p>
+                  <p className="text-sm text-amber-700">Editing will remove the finalized status. The lock will be restored only after you regenerate all documents again.</p>
+                </div>
+                <label className="flex items-start gap-3 cursor-pointer p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-amber-300 transition-colors">
+                  <input type="checkbox" checked={unlockCheck1} onChange={e => setUnlockCheck1(e.target.checked)} className="mt-0.5 w-4 h-4 accent-amber-500 flex-shrink-0" />
+                  <span className="text-sm text-slate-700">I understand this filing is finalized and locked. Editing will remove its finalized status.</span>
+                </label>
+              </div>
+            )}
+
+            {unlockStep === 2 && (
+              <div className="space-y-3">
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                  <p className="text-sm font-semibold text-orange-800 mb-1">📄 Previously generated documents will be outdated.</p>
+                  <p className="text-sm text-orange-700">Any documents already generated from this filing will no longer match the data after your edits. You must go to Step 8 and regenerate all documents.</p>
+                </div>
+                <label className="flex items-start gap-3 cursor-pointer p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-orange-300 transition-colors">
+                  <input type="checkbox" checked={unlockCheck2} onChange={e => setUnlockCheck2(e.target.checked)} className="mt-0.5 w-4 h-4 accent-orange-500 flex-shrink-0" />
+                  <span className="text-sm text-slate-700">I understand. I will regenerate all documents from Step 8 after making changes.</span>
+                </label>
+              </div>
+            )}
+
+            {unlockStep === 3 && (
+              <div className="space-y-3">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                  <p className="text-sm font-semibold text-red-800 mb-1">🔑 Final confirmation required.</p>
+                  <p className="text-sm text-red-700">Type <code className="bg-red-100 px-1.5 py-0.5 rounded font-mono font-bold text-red-800">UNLOCK</code> in the box below to confirm.</p>
+                </div>
+                <input
+                  type="text"
+                  value={unlockText}
+                  onChange={e => setUnlockText(e.target.value.toUpperCase())}
+                  placeholder="Type UNLOCK here"
+                  autoFocus
+                  className="w-full border-2 border-red-200 focus:border-red-400 rounded-lg px-3 py-2.5 text-sm font-mono font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-red-200 text-center"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => { setShowUnlockModal(false); setUnlockStep(1); setUnlockCheck1(false); setUnlockCheck2(false); setUnlockText(""); }}
+                className="flex-1 py-2.5 border border-slate-200 text-slate-600 text-sm font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={
+                  unlocking ||
+                  (unlockStep === 1 && !unlockCheck1) ||
+                  (unlockStep === 2 && !unlockCheck2) ||
+                  (unlockStep === 3 && unlockText !== "UNLOCK")
+                }
+                onClick={async () => {
+                  if (unlockStep < 3) {
+                    setUnlockStep(s => s + 1);
+                  } else {
+                    setUnlocking(true);
+                    try {
+                      if (saveId) {
+                        await fetch("/api/annual-filing", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: saveId, action: "unfinalize" }),
+                        });
+                      }
+                      setIsLocked(false);
+                      setFinalizedBy(null);
+                      setFinalizedAt(null);
+                      setGenerated({});
+                      setShowUnlockModal(false);
+                      setUnlockStep(1);
+                      setUnlockCheck1(false);
+                      setUnlockCheck2(false);
+                      setUnlockText("");
+                    } finally {
+                      setUnlocking(false);
+                    }
+                  }
+                }}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold rounded-xl transition-colors"
+              >
+                {unlocking ? "Unlocking…" : unlockStep < 3 ? "Next Step →" : "Unlock Filing"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <Navbar />
 
       {/* ── Mobile sidebar overlay ──────────────────────────────────────── */}
@@ -4698,7 +5017,7 @@ function AnnualFilingTool() {
           <aside className="relative w-[260px] bg-[#162032] flex flex-col overflow-y-auto z-10">
             <SidebarInner
               data={data} step={step} collapsed={false}
-              session={session} saving={saving} saveId={saveId} savedMsg={savedMsg} resetting={resetting}
+              session={session} saving={saving} autoSaving={autoSaving} saveId={saveId} savedMsg={savedMsg} resetting={resetting}
               onStepClick={(id) => { void silentSave(); setStep(id); setMobileSidebarOpen(false); }}
               onSave={handleSave} onReset={handleReset}
               onToggle={() => setMobileSidebarOpen(false)}
@@ -4717,7 +5036,7 @@ function AnnualFilingTool() {
         >
           <SidebarInner
             data={data} step={step} collapsed={sidebarCollapsed}
-            session={session} saving={saving} saveId={saveId} savedMsg={savedMsg} resetting={resetting}
+            session={session} saving={saving} autoSaving={autoSaving} saveId={saveId} savedMsg={savedMsg} resetting={resetting}
             onStepClick={(id) => { void silentSave(); setStep(id); }}
             onSave={handleSave} onReset={handleReset}
             onToggle={() => setSidebarCollapsed(c => !c)}
@@ -4788,63 +5107,45 @@ function AnnualFilingTool() {
                     </div>
                   )}
 
-                  {/* Found draft banner */}
-                  {foundDraft && (
-                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3">
-                      <div className="text-xs text-slate-700 min-w-0">
-                        <span className="font-bold text-blue-700">Saved draft found</span>
-                        {" — "}{foundDraft.companyName} · FY {foundDraft.financialYear}
-                        <span className="text-slate-400 ml-1">(last saved: {new Date(foundDraft.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})</span>
-                      </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => {
-                            try {
-                              const parsed = JSON.parse(foundDraft.formDataJson) as { data: AnnualFilingData; auditOpts: AuditReportOptions };
-                              setData({ ...parsed.data, directors: deduplicateDirs(parsed.data.directors || []) });
-                              setAuditOpts(parsed.auditOpts);
-                              setSaveId(foundDraft.id);
-                              setSaveIdFY(foundDraft.financialYear ?? null);
-                              setFoundDraft(null);
-                              setSavedMsg({ ok: true, text: "Draft loaded successfully" });
-                              setTimeout(() => setSavedMsg(null), 4000);
-                              if (companyId) void loadPersonsForCompany(companyId, parsed.data.directors);
-                              if (parsed.data.auditor._savedCAId) {
-                                const ca = savedCAs.find(c => c.id === parsed.data.auditor._savedCAId);
-                                if (ca) {
-                                  setData(prev => ({
-                                    ...prev,
-                                    auditor: {
-                                      ...prev.auditor,
-                                      signatureBase64: ca.signatureBase64 || undefined,
-                                      sealBase64: ca.sealBase64 || undefined,
-                                    },
-                                  }));
-                                }
-                              }
-                            } catch { setFoundDraft(null); }
-                          }}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
-                        >Load Draft</button>
-                        <button onClick={() => setFoundDraft(null)} className="px-3 py-1.5 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs font-semibold rounded-lg">Dismiss</button>
-                      </div>
-                    </div>
-                  )}
+                  {/* foundDraft is no longer used — drafts auto-load on company/FY select */}
                 </>
               );
             })()}
           </div>
 
+          {/* Lock banner */}
+          {isLocked && (
+            <div className="mx-4 md:mx-8 mt-4 p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between gap-3 flex-shrink-0">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-amber-800">🔒 Filing Locked — Finalized</p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  {finalizedAt && <>Generated on {new Date(finalizedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}{finalizedBy ? ` by ${finalizedBy}` : ""}. </>}
+                  All fields are read-only. Click "Edit Filing" to unlock.
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowUnlockModal(true); setUnlockStep(1); setUnlockCheck1(false); setUnlockCheck2(false); setUnlockText(""); }}
+                className="flex-shrink-0 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors"
+              >
+                ✏️ Edit Filing
+              </button>
+            </div>
+          )}
+
           {/* Step content */}
           <div className="flex-1 px-4 md:px-8 py-6">
             <div className="max-w-3xl mx-auto">
-              {step === 1 && renderStep1()}
-              {step === 2 && renderStep2()}
-              {step === 3 && renderStep3()}
-              {step === 4 && renderStep4()}
-              {step === 5 && renderStep5()}
-              {step === 6 && renderStep6()}
-              {step === 7 && renderStep7()}
+              {/* Steps 1-7: locked when filing is finalized */}
+              <fieldset disabled={isLocked} className="border-0 m-0 p-0 min-w-0 w-full">
+                {step === 1 && renderStep1()}
+                {step === 2 && renderStep2()}
+                {step === 3 && renderStep3()}
+                {step === 4 && renderStep4()}
+                {step === 5 && renderStep5()}
+                {step === 6 && renderStep6()}
+                {step === 7 && renderStep7()}
+              </fieldset>
+              {/* Step 8: never disabled — download/preview must always work */}
               {step === 8 && renderStep8()}
             </div>
           </div>

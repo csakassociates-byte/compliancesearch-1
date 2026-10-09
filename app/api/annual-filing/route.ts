@@ -206,7 +206,8 @@ export async function GET(req: NextRequest) {
     }
 
     if (cin) {
-      const fy = url.searchParams.get("fy");
+      const fy   = url.searchParams.get("fy");
+      const name = url.searchParams.get("companyName") ?? "";
       const rows = fy
         ? await prisma.$queryRawUnsafe<Array<{
             id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
@@ -216,9 +217,12 @@ export async function GET(req: NextRequest) {
              FROM csi_documents
              WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
                AND "financialYear" = $2
-               AND "formDataJson"::jsonb #>> '{data,cin}' = $3
-             ORDER BY "updatedAt" DESC LIMIT 1`,
-            memberIds, fy, cin
+               AND (
+                 "formDataJson"::jsonb #>> '{data,cin}' = $3
+                 OR ($4 <> '' AND UPPER(TRIM("companyName")) = UPPER(TRIM($4)))
+               )
+             ORDER BY "isFinalized" DESC, "updatedAt" DESC LIMIT 1`,
+            memberIds, fy, cin, name
           )
         : await prisma.$queryRawUnsafe<Array<{
             id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
@@ -227,9 +231,12 @@ export async function GET(req: NextRequest) {
             `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt", "isFinalized", "finalizedBy", "finalizedAt"
              FROM csi_documents
              WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
-               AND "formDataJson"::jsonb #>> '{data,cin}' = $2
-             ORDER BY "updatedAt" DESC LIMIT 1`,
-            memberIds, cin
+               AND (
+                 "formDataJson"::jsonb #>> '{data,cin}' = $2
+                 OR ($3 <> '' AND UPPER(TRIM("companyName")) = UPPER(TRIM($3)))
+               )
+             ORDER BY "isFinalized" DESC, "updatedAt" DESC LIMIT 1`,
+            memberIds, cin, name
           );
       return NextResponse.json({ filing: rows[0] ?? null });
     }
