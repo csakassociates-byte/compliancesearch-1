@@ -9,6 +9,9 @@ interface ComplianceRow {
   companyId: string;
   companyName: string;
   cin: string;
+  incorporationDate: string;
+  entityType: string;
+  regAddress: string;
   recordId: string | null;
   docStatus: string;
   docStatusRemarks: string;
@@ -114,6 +117,7 @@ export default function ComplianceMonitorPage() {
   const [reminderRow, setReminderRow] = useState<ComplianceRow | null>(null);
   const [reminderText, setReminderText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [companyModal, setCompanyModal] = useState<ComplianceRow | null>(null);
   const editRef = useRef<HTMLDivElement>(null);
   // Close modal on Escape key
   useEffect(() => {
@@ -746,9 +750,9 @@ export default function ComplianceMonitorPage() {
 
           {/* Table */}
           {rows.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-340px)] rounded-xl border border-slate-200 bg-white shadow-sm">
               <table className="min-w-[1260px] w-full text-sm border-collapse">
-                <thead>
+                <thead className="sticky top-0 z-30">
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="sticky left-0 z-20 bg-slate-50 px-2 py-2.5 text-center text-[10px] font-semibold text-slate-400 uppercase w-8">#</th>
                     <th className="sticky left-8 z-20 bg-slate-50 px-3 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase min-w-[160px] border-r border-slate-200">Company</th>
@@ -776,8 +780,13 @@ export default function ComplianceMonitorPage() {
                           {idx + 1}
                         </td>
                         <td className={`sticky left-8 z-10 px-3 py-2 border-r border-slate-100 ${isEditing ? "bg-blue-50/50" : "bg-white group-hover:bg-slate-50"}`}>
-                          <div className="font-medium text-slate-800 text-xs truncate max-w-[155px]" title={row.companyName}>{row.companyName}</div>
-                          {row.cin && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{row.cin}</div>}
+                          <button
+                            onClick={() => setCompanyModal(row)}
+                            className="text-left w-full group/name"
+                            title="Click to view company details">
+                            <div className="font-medium text-blue-700 hover:text-blue-900 text-xs truncate max-w-[155px] underline decoration-dotted underline-offset-2 cursor-pointer">{row.companyName}</div>
+                            {row.cin && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{row.cin}</div>}
+                          </button>
                         </td>
                         <td className="px-3 py-2">{cellDocStatus(row)}</td>
                         <td className="px-3 py-2">
@@ -937,6 +946,123 @@ export default function ComplianceMonitorPage() {
           </div>
         </div>
       )}
+      {/* ── Company Master Data Modal ────────────────────────────────────── */}
+      {companyModal && (() => {
+        const c = companyModal;
+        const entityLabel: Record<string, string> = {
+          pvt_ltd: "Private Limited", pub_ltd: "Public Limited",
+          opc: "OPC", llp: "LLP", section8: "Section 8",
+          nidhi: "Nidhi", producer: "Producer", unlimited: "Unlimited",
+        };
+        const incDate = c.incorporationDate
+          ? new Date(c.incorporationDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+          : null;
+        const cinParts = c.cin ? {
+          llpin: c.cin.startsWith("AAA"),
+          state: c.cin.slice(4, 6),
+          year:  c.cin.slice(6, 10),
+          activity: c.cin.slice(0, 1),
+        } : null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[3px]" onClick={() => setCompanyModal(null)} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+              {/* Hero banner */}
+              <div className="bg-gradient-to-br from-blue-700 to-blue-900 px-6 pt-6 pb-5 text-white">
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl font-bold shrink-0">
+                    {c.companyName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-bold leading-tight">{c.companyName}</h2>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {c.entityType && (
+                        <span className="text-[10px] bg-white/20 rounded px-2 py-0.5 font-semibold uppercase tracking-wide">
+                          {entityLabel[c.entityType] || c.entityType}
+                        </span>
+                      )}
+                      {c.cin && <span className="text-[11px] text-blue-200 font-mono">{c.cin}</span>}
+                      {incDate && <span className="text-[11px] text-blue-200">Est. {incDate}</span>}
+                    </div>
+                  </div>
+                  <button onClick={() => setCompanyModal(null)}
+                    className="ml-auto shrink-0 text-white/60 hover:text-white hover:bg-white/20 transition-colors rounded-full w-8 h-8 flex items-center justify-center text-xl leading-none">
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Details grid */}
+              <div className="px-6 py-5 space-y-4">
+                <div>
+                  <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-3">Company Information</div>
+                  <div className="space-y-3">
+                    {[
+                      { label: "CIN", value: c.cin, mono: true },
+                      { label: "Entity Type", value: entityLabel[c.entityType] || c.entityType || "—" },
+                      { label: "Date of Incorporation", value: incDate || "—" },
+                      { label: "Registered Address", value: c.regAddress || "—" },
+                    ].map(row => (
+                      <div key={row.label} className="flex gap-3">
+                        <div className="text-xs text-slate-400 w-36 shrink-0 pt-0.5">{row.label}</div>
+                        <div className={`text-xs text-slate-800 font-medium ${row.mono ? "font-mono" : ""}`}>
+                          {row.value || "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Compliance quick status for current FY */}
+                <div className="border-t border-slate-100 pt-4">
+                  <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-3">Compliance Status — FY {fy}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: "Work Status",     val: c.workStatus === "active" ? "✓ Active" : c.workStatus === "declined" ? "✕ Declined" : "⏳ Confirming",
+                        color: c.workStatus === "active" ? "text-emerald-700 bg-emerald-50" : c.workStatus === "declined" ? "text-slate-500 bg-slate-50" : "text-amber-700 bg-amber-50" },
+                      { label: "Doc Status",      val: c.docStatus === "received" ? "✓ Received" : c.docStatus === "partial" ? "⚠ Partial" : c.docStatus === "na" ? "N/A" : "⏳ Awaited",
+                        color: c.docStatus === "received" ? "text-emerald-700 bg-emerald-50" : c.docStatus === "na" ? "text-slate-500 bg-slate-50" : c.docStatus === "partial" ? "text-amber-700 bg-amber-50" : "text-blue-700 bg-blue-50" },
+                      { label: "Balance Sheet",   val: c.balanceSheetReady ? "✓ Ready" : "Pending",
+                        color: c.balanceSheetReady ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50" },
+                      { label: "INC-20A",         val: c.inc20aStatus === "filed" ? "✓ Filed" : c.inc20aStatus === "na" ? "N/A" : "Pending",
+                        color: c.inc20aStatus === "filed" ? "text-emerald-700 bg-emerald-50" : c.inc20aStatus === "na" ? "text-slate-500 bg-slate-50" : "text-red-700 bg-red-50" },
+                      { label: "AOC-4",           val: c.aoc4Srn ? `#${c.aoc4Srn}` : "Pending",
+                        color: c.aoc4Srn ? "text-blue-700 bg-blue-50" : "text-red-700 bg-red-50" },
+                      { label: "MGT-7/7A",        val: c.mgt7Srn ? `#${c.mgt7Srn}` : "Pending",
+                        color: c.mgt7Srn ? "text-blue-700 bg-blue-50" : "text-red-700 bg-red-50" },
+                    ].map(item => (
+                      <div key={item.label} className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                        <span className="text-[11px] text-slate-500">{item.label}</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${item.color}`}>{item.val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer actions */}
+                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                  {c.cin && (
+                    <a href={`https://www.mca.gov.in/mcafoportal/viewCompanyMasterData.do`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors flex items-center gap-1">
+                      🌐 MCA Master Data
+                    </a>
+                  )}
+                  <button
+                    onClick={() => { setReminderRow(c); setReminderText(generateReminder(c)); setCopied(false); setCompanyModal(null); }}
+                    className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1">
+                    📩 Send Reminder
+                  </button>
+                  <button onClick={() => setCompanyModal(null)}
+                    className="ml-auto px-4 py-2 rounded-lg bg-white border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 transition-colors">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }

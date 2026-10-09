@@ -52,11 +52,13 @@ export async function GET(req: NextRequest) {
     await ensureTable();
     const memberIds = await getTeamMemberIds(userId);
 
-    // All companies for this user/team (include incorporationDate for INC-20A auto-detect)
+    // All companies for this user/team
     const companies = await prisma.$queryRawUnsafe<Array<{
-      id: string; companyName: string; cin: string | null; incorporationDate: string | null;
+      id: string; companyName: string; cin: string | null;
+      incorporationDate: string | null; entityType: string | null; regAddress: string | null;
     }>>(
-      `SELECT id, "companyName", cin, "incorporationDate" FROM csi_companies
+      `SELECT id, "companyName", cin, "incorporationDate", "entityType", "regAddress"
+       FROM csi_companies
        WHERE "userId" = ANY($1::text[])
        ORDER BY LOWER("companyName") ASC`,
       memberIds
@@ -161,6 +163,9 @@ export async function GET(req: NextRequest) {
         companyId:            c.id,
         companyName:          c.companyName,
         cin:                  c.cin ?? "",
+        incorporationDate:    c.incorporationDate ?? "",
+        entityType:           c.entityType ?? "",
+        regAddress:           c.regAddress ?? "",
         recordId:             rec?.id ?? null,
         docStatus:            rec?.docStatus ?? "awaited",
         docStatusRemarks:     rec?.docStatusRemarks ?? "",
