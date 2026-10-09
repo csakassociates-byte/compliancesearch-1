@@ -2,23 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { syncCompany } from "@/lib/syncCompany";
 import { getTeamMemberIds } from "@/lib/team";
-
-async function resolveCompanyId(userId: string, entityName: string): Promise<string | null> {
-  try {
-    const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("companyName") = LOWER($2) LIMIT 1`,
-      userId, entityName
-    );
-    if (existing.length) return existing[0].id;
-    const newId = crypto.randomUUID();
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO csi_companies (id, "userId", "companyName", cin, "updatedAt") VALUES ($1,$2,$3,NULL,NOW())`,
-      newId, userId, entityName
-    );
-    return newId;
-  } catch { return null; }
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,7 +19,7 @@ export async function POST(req: NextRequest) {
       formDataJson: string;
     };
 
-    const companyId = await resolveCompanyId(userId, body.entityName);
+    const companyId = await syncCompany(userId, body.entityName);
 
     if (body.id) {
       await prisma.$executeRawUnsafe(

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTeamMemberIds } from "@/lib/team";
+import { syncCompany } from "@/lib/syncCompany";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,25 +20,7 @@ export async function POST(req: NextRequest) {
       formDataJson: string;
     };
 
-    // Try to resolve/create company by PAN + name
-    let companyId: string | null = null;
-    try {
-      const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-        `SELECT id FROM csi_companies WHERE "userId" = $1 AND (
-           LOWER("companyName") = LOWER($2) OR cin = $3
-         ) LIMIT 1`,
-        userId, body.assesseeName, body.pan
-      );
-      if (existing.length) {
-        companyId = existing[0].id;
-      } else {
-        companyId = crypto.randomUUID();
-        await prisma.$executeRawUnsafe(
-          `INSERT INTO csi_companies (id, "userId", "companyName", cin, "updatedAt") VALUES ($1,$2,$3,$4,NOW())`,
-          companyId, userId, body.assesseeName, body.pan
-        );
-      }
-    } catch { /* ignore */ }
+    const companyId = await syncCompany(userId, body.assesseeName, body.pan);
 
     if (body.id) {
       await prisma.$executeRawUnsafe(

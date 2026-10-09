@@ -2,36 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { randomUUID } from "crypto";
+import { syncCompany } from "@/lib/syncCompany";
 import { getTeamMemberIds } from "@/lib/team";
-
-async function resolveCompanyId(userId: string, companyName: string, cin?: string): Promise<string | null> {
-  try {
-    const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM csi_companies
-       WHERE "userId" = $1 AND (
-         LOWER("companyName") = LOWER($2)
-         OR ($3::text IS NOT NULL AND cin = $3)
-       ) LIMIT 1`,
-      userId, companyName, cin || null
-    );
-    if (existing.length) {
-      if (cin) {
-        await prisma.$executeRawUnsafe(
-          `UPDATE csi_companies SET cin = $3, "updatedAt" = NOW() WHERE id = $1 AND "userId" = $2 AND cin IS NULL`,
-          existing[0].id, userId, cin
-        );
-      }
-      return existing[0].id;
-    }
-    const newId = randomUUID();
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO csi_companies (id, "userId", "companyName", cin, "updatedAt") VALUES ($1,$2,$3,$4,NOW())`,
-      newId, userId, companyName, cin || null
-    );
-    return newId;
-  } catch { return null; }
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -49,7 +21,7 @@ export async function POST(req: NextRequest) {
       formDataJson: string;
     };
 
-    const companyId = await resolveCompanyId(userId, body.companyName, body.cin);
+    const companyId = await syncCompany(userId, body.companyName, body.cin);
 
     if (body.id) {
       await prisma.$executeRawUnsafe(

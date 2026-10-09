@@ -31,6 +31,7 @@ export default function DashboardClient({ userName }: { userName: string }) {
     { icon: "📑", title: "Annual Filing", desc: "AOC-4 & MGT-7/7A attachments generator", href: "/tools/documents/annual-filing", color: "from-emerald-50 to-emerald-100 border-emerald-200" },
     { icon: "🏦", title: "Bank Resolution", desc: "Bank account opening resolution", href: "/tools/documents/bank-resolution", color: "from-teal-50 to-teal-100 border-teal-200" },
     { icon: "⚖️", title: "Compliance Check", desc: "Check applicable compliance rules", href: "/check", color: "from-amber-50 to-amber-100 border-amber-200" },
+    { icon: "📊", title: "Compliance Monitor", desc: "Track annual compliance status for all clients", href: "/tools/compliance-monitor", color: "from-indigo-50 to-indigo-100 border-indigo-200" },
   ];
 
   const typeLabel: Record<string, string> = {

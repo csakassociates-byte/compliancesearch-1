@@ -147,13 +147,22 @@ export async function buildBoardReportRule8Docx(data: AnnualFilingData): Promise
     { fontSize: SZ10 }
   );
 
-  const activeDirectors = data.directors.filter(d => d.isActive);
-  const attendanceRows = activeDirectors.map(d => {
-    const attended = (data.boardMeetings || []).filter(m =>
+  // Include active directors + directors who left mid-year (changedDuringYear)
+  const attendanceDirectors = data.directors.filter(d => d.isActive || (d.changedDuringYear && d.dateOfCessation));
+  const attendanceRows = attendanceDirectors.map(d => {
+    // Meetings this director was entitled to attend = meetings held on/after appointment and before cessation
+    const entitledMeetings = (data.boardMeetings || []).filter(m => {
+      if (!m.date) return false;
+      if (d.dateOfAppointment && m.date < d.dateOfAppointment) return false;
+      if (d.dateOfCessation && m.date >= d.dateOfCessation) return false;
+      return true;
+    });
+    const entitled = entitledMeetings.length;
+    const attended = entitledMeetings.filter(m =>
       m.directorsPresent?.some(np => np.toLowerCase().includes(d.name.toLowerCase()))
     ).length;
-    const pct = totalMeetings > 0 ? `${Math.round((attended / totalMeetings) * 100)}%` : "—";
-    return [d.name, d.designation, String(totalMeetings), attended > 0 ? String(attended) : "—", attended > 0 ? pct : "—"];
+    const pct = entitled > 0 ? `${Math.round((attended / entitled) * 100)}%` : "—";
+    return [d.name, d.designation, String(entitled), attended > 0 ? String(attended) : "—", entitled > 0 ? pct : "—"];
   });
   const attendTable = buildTable(
     ["Name of Director", "Designation", "Meetings Entitled", "Meetings Attended", "% Attendance"],

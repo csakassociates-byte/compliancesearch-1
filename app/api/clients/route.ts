@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTeamMemberIds } from "@/lib/team";
-import crypto from "crypto";
+import { syncCompany } from "@/lib/syncCompany";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -101,13 +101,10 @@ export async function POST(req: NextRequest) {
   if (!body.companyName?.trim())
     return NextResponse.json({ error: "Company name required" }, { status: 400 });
 
-  const id = crypto.randomUUID();
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO csi_companies (id, "userId", "companyName", cin, "entityType", "regAddress", "incorporationDate", "updatedAt")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
-    id, userId, body.companyName.trim(),
-    body.cin?.trim() || null, body.entityType?.trim() || null,
-    body.regAddress?.trim() || null, body.incorporationDate?.trim() || null
-  );
+  const id = await syncCompany(userId, body.companyName.trim(), body.cin?.trim() || null, {
+    entityType:        body.entityType?.trim()        || null,
+    regAddress:        body.regAddress?.trim()        || null,
+    incorporationDate: body.incorporationDate?.trim() || null,
+  });
   return NextResponse.json({ success: true, id });
 }

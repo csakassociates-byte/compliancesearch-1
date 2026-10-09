@@ -34,18 +34,24 @@ function getMeetingRows(data: AnnualFilingData): string {
 }
 
 function getAttendanceRows(data: AnnualFilingData): string {
-  const total = data.boardMeetings?.length || 0;
-  return data.directors
-    .filter(d => d.isActive)
+  const directors = data.directors.filter(d => d.isActive || (d.changedDuringYear && d.dateOfCessation));
+  return directors
     .map(d => {
-      const attended = data.boardMeetings?.filter(m =>
+      const entitledMeetings = (data.boardMeetings || []).filter(m => {
+        if (!m.date) return false;
+        if (d.dateOfAppointment && m.date < d.dateOfAppointment) return false;
+        if (d.dateOfCessation && m.date >= d.dateOfCessation) return false;
+        return true;
+      });
+      const entitled = entitledMeetings.length;
+      const attended = entitledMeetings.filter(m =>
         m.directorsPresent?.some(p => p.toLowerCase().trim() === d.name.toLowerCase().trim())
-      ).length ?? 0;
-      const pct = total > 0 ? `${Math.round((attended / total) * 100)}%` : "—";
+      ).length;
+      const pct = entitled > 0 ? `${Math.round((attended / entitled) * 100)}%` : "—";
       return `<tr>
         <td>${d.name}</td>
         <td>${d.designation}</td>
-        <td class="center">${total}</td>
+        <td class="center">${entitled}</td>
         <td class="center">${attended || "—"}</td>
         <td class="center">${attended > 0 ? pct : "—"}</td>
       </tr>`;

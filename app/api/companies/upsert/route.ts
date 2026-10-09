@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { syncCompany } from "@/lib/syncCompany";
 
 export async function POST(req: NextRequest) {
   // Require login — any authenticated user can upsert their own companies
@@ -240,33 +241,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Also sync to csi_companies (user's client list + document linking) ──
-    const existingClient = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM csi_companies WHERE "userId" = $1 AND (
-         LOWER("companyName") = LOWER($2) OR (cin IS NOT NULL AND cin = $3)
-       ) LIMIT 1`,
-      userId, companyName, cin
-    );
-    if (existingClient.length) {
-      await prisma.$executeRawUnsafe(
-        `UPDATE csi_companies SET
-          cin = COALESCE($3, cin),
-          "entityType" = COALESCE($4, "entityType"),
-          "regAddress" = COALESCE($5, "regAddress"),
-          "incorporationDate" = COALESCE($6, "incorporationDate"),
-          "updatedAt" = NOW()
-         WHERE id = $1 AND "userId" = $2`,
-        existingClient[0].id, userId,
-        cin || null, entityType || null, regAddress || null, incorporationDate || null
-      );
-    } else {
-      const { default: crypto } = await import("crypto");
-      const csiId = crypto.randomUUID();
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO csi_companies (id, "userId", "companyName", cin, "entityType", "regAddress", "incorporationDate", "updatedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
-        csiId, userId, companyName, cin || null, entityType || null, regAddress || null, incorporationDate || null
-      );
-    }
+    await syncCompany(userId, companyName, cin || null, {
+      entityType:        entityType        || null,
+      regAddress:        regAddress        || null,
+      incorporationDate: incorporationDate || null,
+    });
 
     const result = await prisma.companyProfile.findUnique({
       where: { id: company.id },
