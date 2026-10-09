@@ -247,8 +247,9 @@ export async function GET(req: NextRequest) {
 
     const rows = await prisma.$queryRawUnsafe<Array<{
       id: string; companyName: string | null; financialYear: string | null; updatedAt: Date;
+      isFinalized: boolean; finalizedAt: Date | null;
     }>>(
-      `SELECT id, "companyName", "financialYear", "updatedAt"
+      `SELECT id, "companyName", "financialYear", "updatedAt", "isFinalized", "finalizedAt"
        FROM csi_documents WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
        ORDER BY "updatedAt" DESC LIMIT 50`,
       memberIds

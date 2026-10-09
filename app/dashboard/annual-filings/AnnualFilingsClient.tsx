@@ -8,6 +8,8 @@ interface FilingRow {
   companyName: string | null;
   financialYear: string | null;
   updatedAt: string;
+  isFinalized: boolean;
+  finalizedAt: string | null;
 }
 
 export default function AnnualFilingsClient() {
@@ -50,6 +52,8 @@ export default function AnnualFilingsClient() {
     grouped[key].push(f);
   }
 
+  const finalizedCount = filings.filter(f => f.isFinalized).length;
+
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="max-w-4xl mx-auto px-4 py-10">
@@ -64,13 +68,26 @@ export default function AnnualFilingsClient() {
                 {filings.length}
               </span>
             )}
+            {!loading && finalizedCount > 0 && (
+              <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                🔒 {finalizedCount} Finalized
+              </span>
+            )}
           </div>
-          <button
-            onClick={() => router.push("/tools/documents/annual-filing")}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors"
-          >
-            + New Annual Filing
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/tools/compliance-monitor"
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-1.5"
+            >
+              📋 Compliance Monitor
+            </Link>
+            <button
+              onClick={() => router.push("/tools/documents/annual-filing")}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors"
+            >
+              + New Annual Filing
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -110,57 +127,87 @@ export default function AnnualFilingsClient() {
           </div>
         ) : (
           <div className="space-y-4">
-            {Object.entries(grouped).map(([company, rows]) => (
-              <div key={company} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                {/* Company header */}
-                <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-                  <span className="text-base">🏢</span>
-                  <span className="font-bold text-slate-800 text-sm">{company}</span>
-                  <span className="ml-auto text-xs text-slate-400">{rows.length} draft{rows.length > 1 ? "s" : ""}</span>
-                </div>
-
-                {/* FY rows */}
-                {rows
-                  .sort((a, b) => (b.financialYear || "").localeCompare(a.financialYear || ""))
-                  .map((f, i) => (
-                  <div
-                    key={f.id}
-                    className={`flex items-center gap-4 px-5 py-3.5 ${i !== 0 ? "border-t border-slate-100" : ""}`}
-                  >
-                    <div className="flex-shrink-0 w-24">
-                      <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">
-                        FY {f.financialYear || "—"}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs text-slate-400">
-                        Last saved: {new Date(f.updatedAt).toLocaleDateString("en-IN", {
-                          day: "2-digit", month: "short", year: "numeric"
-                        })}{" "}
-                        at {new Date(f.updatedAt).toLocaleTimeString("en-IN", {
-                          hour: "2-digit", minute: "2-digit"
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Link
-                        href={`/tools/documents/annual-filing?load=${f.id}`}
-                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors"
-                      >
-                        Resume →
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(f.id, f.companyName)}
-                        disabled={deleting === f.id}
-                        className="px-2.5 py-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 rounded-lg transition-colors disabled:opacity-40"
-                      >
-                        {deleting === f.id ? "…" : "Delete"}
-                      </button>
-                    </div>
+            {Object.entries(grouped).map(([company, rows]) => {
+              const anyFinalized = rows.some(r => r.isFinalized);
+              return (
+                <div key={company} className={`bg-white rounded-2xl border overflow-hidden ${anyFinalized ? "border-emerald-200" : "border-slate-200"}`}>
+                  {/* Company header */}
+                  <div className={`px-5 py-3 border-b flex items-center gap-2 ${anyFinalized ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-slate-100"}`}>
+                    <span className="text-base">{anyFinalized ? "🔒" : "🏢"}</span>
+                    <span className="font-bold text-slate-800 text-sm">{company}</span>
+                    <span className="ml-auto text-xs text-slate-400">
+                      {rows.length} {rows.length === 1 && rows[0].isFinalized ? "filing" : `draft${rows.length > 1 ? "s" : ""}`}
+                    </span>
                   </div>
-                ))}
-              </div>
-            ))}
+
+                  {/* FY rows */}
+                  {rows
+                    .sort((a, b) => (b.financialYear || "").localeCompare(a.financialYear || ""))
+                    .map((f, i) => (
+                    <div
+                      key={f.id}
+                      className={`flex items-center gap-4 px-5 py-3.5 ${i !== 0 ? "border-t border-slate-100" : ""}`}
+                    >
+                      {/* FY badge */}
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">
+                          FY {f.financialYear || "—"}
+                        </span>
+                        {f.isFinalized && (
+                          <span className="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            🔒 Finalized
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Date info */}
+                      <div className="flex-1 min-w-0">
+                        {f.isFinalized && f.finalizedAt ? (
+                          <span className="text-xs text-emerald-600 font-medium">
+                            Generated on {new Date(f.finalizedAt).toLocaleDateString("en-IN", {
+                              day: "2-digit", month: "short", year: "numeric"
+                            })}{" "}
+                            at {new Date(f.finalizedAt).toLocaleTimeString("en-IN", {
+                              hour: "2-digit", minute: "2-digit"
+                            })}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            Last saved: {new Date(f.updatedAt).toLocaleDateString("en-IN", {
+                              day: "2-digit", month: "short", year: "numeric"
+                            })}{" "}
+                            at {new Date(f.updatedAt).toLocaleTimeString("en-IN", {
+                              hour: "2-digit", minute: "2-digit"
+                            })}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Link
+                          href={`/tools/documents/annual-filing?load=${f.id}`}
+                          className={`px-4 py-1.5 text-white text-xs font-bold rounded-lg transition-colors ${
+                            f.isFinalized
+                              ? "bg-amber-500 hover:bg-amber-600"
+                              : "bg-blue-600 hover:bg-blue-700"
+                          }`}
+                        >
+                          {f.isFinalized ? "View →" : "Resume →"}
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(f.id, f.companyName)}
+                          disabled={deleting === f.id}
+                          className="px-2.5 py-1.5 text-xs text-red-400 hover:text-red-600 border border-red-100 hover:border-red-300 rounded-lg transition-colors disabled:opacity-40"
+                        >
+                          {deleting === f.id ? "…" : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
