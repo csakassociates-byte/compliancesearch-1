@@ -31,6 +31,8 @@ interface ComplianceRow {
   dpt3Applicable: boolean;
   dpt3Srn: string;
   remarks: string;
+  itrStatus: string;
+  itrAckNo: string;
 }
 
 const FY_OPTIONS = ["2026-27", "2025-26", "2024-25", "2023-24", "2022-23", "2021-22"];
@@ -56,6 +58,7 @@ const FIELD_LABELS: Record<string, string> = {
   mgt7: "MGT-7/7A SRN",
   adt1: "ADT-1 appointment details",
   dpt3: "DPT-3",
+  itr: "ITR Filing",
   remarks: "Remarks",
 };
 
@@ -117,6 +120,7 @@ export default function ComplianceMonitorPage() {
   const [reminderRow, setReminderRow] = useState<ComplianceRow | null>(null);
   const [reminderText, setReminderText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [workflowBlock, setWorkflowBlock] = useState<string | null>(null);
   const [companyModal, setCompanyModal] = useState<ComplianceRow | null>(null);
   const [companyProfile, setCompanyProfile] = useState<{
     loading: boolean;
@@ -321,6 +325,10 @@ export default function ComplianceMonitorPage() {
         patch.dpt3Applicable = editValues.dpt3Applicable as boolean;
         patch.dpt3Srn        = editValues.dpt3Srn as string ?? "";
         break;
+      case "itr":
+        patch.itrStatus = editValues.itrStatus as string;
+        patch.itrAckNo  = editValues.itrAckNo as string ?? "";
+        break;
       case "remarks":
         patch.remarks = editValues.remarks as string;
         break;
@@ -515,6 +523,30 @@ export default function ComplianceMonitorPage() {
             )}
           </div>
         );
+      case "itr":
+        return (
+          <div className="space-y-3">
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { v: "filed",   label: "✓ Filed",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                { v: "pending", label: "Pending",    cls: "bg-red-50 text-red-700 border-red-200" },
+                { v: "na",      label: "N/A",        cls: "bg-slate-100 text-slate-600 border-slate-300" },
+              ].map(({ v, label, cls }) => (
+                <button key={v} onClick={() => setEditValues(ev => ({ ...ev, itrStatus: v }))}
+                  className={selBtn(editValues.itrStatus === v, cls)}>{label}</button>
+              ))}
+            </div>
+            {editValues.itrStatus === "filed" && (
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Acknowledgement Number (optional)</label>
+                <input value={editValues.itrAckNo as string || ""}
+                  onChange={e => setEditValues(v => ({ ...v, itrAckNo: e.target.value.toUpperCase() }))}
+                  placeholder="e.g. 123456789012345"
+                  className={inpMono} />
+              </div>
+            )}
+          </div>
+        );
       case "remarks":
         return (
           <input value={editValues.remarks as string || ""}
@@ -561,8 +593,15 @@ export default function ComplianceMonitorPage() {
 
   function cellBs(r: ComplianceRow) {
     if (r.workStatus === "declined") return <span className={naPill}>N/A</span>;
-    if (r.balanceSheetReady) return <span className={okPill}>✓ Ready</span>;
-    return <span className={errPill} onClick={() => openEdit(r.companyId, "bs", { balanceSheetReady: false })}>Pending</span>;
+    if (r.balanceSheetReady) return <span className={`${okPill} cursor-pointer hover:opacity-80`} onClick={() => openEdit(r.companyId, "bs", { balanceSheetReady: true })}>✓ Ready</span>;
+    const open = () => {
+      if (r.docStatus === "awaited") {
+        setWorkflowBlock("Please mark the document received status first before updating the Balance Sheet.");
+        return;
+      }
+      openEdit(r.companyId, "bs", { balanceSheetReady: false });
+    };
+    return <span className={errPill} onClick={open}>Pending</span>;
   }
 
   function cellUdin(val: string, field: "udinStat" | "udinTax", row: ComplianceRow) {
@@ -579,7 +618,17 @@ export default function ComplianceMonitorPage() {
     const dueDate  = field === "aoc4" ? dueDates.aoc4 : dueDates.mgt7;
     const today    = new Date(); today.setHours(0, 0, 0, 0);
     const daysLeft = Math.ceil((dueDate.getTime() - today.getTime()) / 86400000);
-    const openFn   = () => openEdit(row.companyId, field, { [field === "aoc4" ? "aoc4Srn" : "mgt7Srn"]: "" });
+    const openFn   = () => {
+      if (field === "aoc4" && !row.attachmentsGenerated) {
+        setWorkflowBlock("Please generate the annual filing attachments before entering the AOC-4 SRN.");
+        return;
+      }
+      if (field === "mgt7" && !row.aoc4Srn) {
+        setWorkflowBlock("Please file AOC-4 and enter its SRN before updating the MGT-7/7A status.");
+        return;
+      }
+      openEdit(row.companyId, field, { [field === "aoc4" ? "aoc4Srn" : "mgt7Srn"]: "" });
+    };
     if (daysLeft < 0) return (
       <div className="flex flex-col gap-0.5">
         <span className={`${pb} bg-red-100 text-red-700 border-red-300 cursor-pointer hover:bg-red-200`} onClick={openFn}>🚨 Overdue</span>
@@ -623,12 +672,37 @@ export default function ComplianceMonitorPage() {
   function cellAttach(r: ComplianceRow) {
     if (r.workStatus === "declined") return <span className={naPill}>N/A</span>;
     if (r.attachmentsGenerated) return <span className={okPill}>✓ Generated</span>;
+    const href = `/tools/documents/annual-filing${r.cin ? `?cin=${encodeURIComponent(r.cin)}&fy=${fy}` : ""}`;
+    if (!r.balanceSheetReady) {
+      return (
+        <span className={`${errPill} cursor-pointer`}
+          onClick={() => setWorkflowBlock("Please finalize the Balance Sheet before generating the annual filing attachments.")}>
+          Generate →
+        </span>
+      );
+    }
     return (
-      <Link href={`/tools/documents/annual-filing${r.cin ? `?cin=${encodeURIComponent(r.cin)}&fy=${fy}` : ""}`}
-        className={`${errPill} no-underline`}>
-        Generate →
-      </Link>
+      <Link href={href} className={`${errPill} no-underline`}>Generate →</Link>
     );
+  }
+
+  function cellItr(r: ComplianceRow) {
+    if (r.workStatus === "declined") return <span className={naPill}>N/A</span>;
+    const open = () => {
+      if (!r.balanceSheetReady) {
+        setWorkflowBlock("Please finalize the Balance Sheet before updating the ITR filing status.");
+        return;
+      }
+      openEdit(r.companyId, "itr", { itrStatus: r.itrStatus || "pending", itrAckNo: r.itrAckNo || "" });
+    };
+    if (r.itrStatus === "filed") return (
+      <div className="flex flex-col gap-0.5">
+        <span className={`${okPill} cursor-pointer hover:opacity-80`} onClick={open}>✓ Filed</span>
+        {r.itrAckNo && <div className="text-[10px] text-slate-400 font-mono truncate max-w-[110px]" title={r.itrAckNo}>{r.itrAckNo}</div>}
+      </div>
+    );
+    if (r.itrStatus === "na") return <span className={`${naPill} cursor-pointer hover:opacity-80`} onClick={open}>N/A</span>;
+    return <span className={errPill} onClick={open}>Pending</span>;
   }
 
   // ─── Filter tab ────────────────────────────────────────────────────────────
@@ -779,6 +853,7 @@ export default function ComplianceMonitorPage() {
                     <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">MGT-7/7A</th>
                     <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">ADT-1</th>
                     <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">DPT-3</th>
+                    <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">ITR Filing</th>
                     <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[130px]">Remarks</th>
                   </tr>
                 </thead>
@@ -827,6 +902,7 @@ export default function ComplianceMonitorPage() {
                         <td className="px-3 py-2">{cellSrn(row.mgt7Srn, "mgt7", row)}</td>
                         <td className="px-3 py-2">{cellAdt1(row)}</td>
                         <td className="px-3 py-2">{cellDpt3(row)}</td>
+                        <td className="px-3 py-2">{cellItr(row)}</td>
                         <td className="px-3 py-2 max-w-[130px]">
                           <div className="flex items-center gap-1 group/rem">
                             <span className="text-[11px] text-slate-500 truncate">{row.remarks || "—"}</span>
@@ -917,6 +993,24 @@ export default function ComplianceMonitorPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Workflow Block Alert ─────────────────────────────────────────── */}
+      {workflowBlock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setWorkflowBlock(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-200">
+            <div className="px-6 pt-6 pb-5 text-center">
+              <div className="w-12 h-12 rounded-full bg-amber-50 border-2 border-amber-200 flex items-center justify-center text-2xl mx-auto mb-3">⚠️</div>
+              <h3 className="font-bold text-slate-800 text-base mb-2">Step Required</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">{workflowBlock}</p>
+              <button onClick={() => setWorkflowBlock(null)}
+                className="mt-5 px-6 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+                OK, Got It
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

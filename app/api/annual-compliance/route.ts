@@ -68,6 +68,8 @@ export async function GET(req: NextRequest) {
     // Ensure new columns exist (for existing DBs)
     await prisma.$executeRawUnsafe(`ALTER TABLE csi_annual_compliance ADD COLUMN IF NOT EXISTS "docStatus" TEXT NOT NULL DEFAULT 'awaited'`);
     await prisma.$executeRawUnsafe(`ALTER TABLE csi_annual_compliance ADD COLUMN IF NOT EXISTS "docStatusRemarks" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE csi_annual_compliance ADD COLUMN IF NOT EXISTS "itrStatus" TEXT NOT NULL DEFAULT 'pending'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE csi_annual_compliance ADD COLUMN IF NOT EXISTS "itrAckNo" TEXT`);
 
     const records = await prisma.$queryRawUnsafe<Array<{
       id: string; companyId: string | null; cin: string | null;
@@ -78,13 +80,16 @@ export async function GET(req: NextRequest) {
       aoc4Srn: string | null; mgt7Srn: string | null;
       adt1Srn: string | null; adt1FromFy: string | null; adt1ToFy: string | null;
       dpt3Applicable: boolean; dpt3Srn: string | null;
+      itrStatus: string; itrAckNo: string | null;
       remarks: string | null;
     }>>(
       `SELECT id, "companyId", cin, "docStatus", "docStatusRemarks",
               "workStatus", "workStatusRemarks",
               "inc20aStatus", "balanceSheetReady", "udinStatutory", "udinTaxAudit",
               "aoc4Srn", "mgt7Srn", "adt1Srn", "adt1FromFy", "adt1ToFy",
-              "dpt3Applicable", "dpt3Srn", remarks
+              "dpt3Applicable", "dpt3Srn",
+              COALESCE("itrStatus", 'pending') as "itrStatus", "itrAckNo",
+              remarks
        FROM csi_annual_compliance
        WHERE "userId" = ANY($1::text[]) AND "financialYear" = $2`,
       memberIds, fy
@@ -184,6 +189,8 @@ export async function GET(req: NextRequest) {
         adt1CarriedForward,
         dpt3Applicable:       rec?.dpt3Applicable ?? false,
         dpt3Srn:              rec?.dpt3Srn ?? "",
+        itrStatus:            rec?.itrStatus ?? "pending",
+        itrAckNo:             rec?.itrAckNo ?? "",
         remarks:              rec?.remarks ?? "",
       };
     });
@@ -199,7 +206,8 @@ const ALLOWED_FIELDS = [
   "docStatus", "docStatusRemarks",
   "workStatus", "workStatusRemarks", "inc20aStatus", "balanceSheetReady",
   "udinStatutory", "udinTaxAudit", "aoc4Srn", "mgt7Srn",
-  "adt1Srn", "adt1FromFy", "adt1ToFy", "dpt3Applicable", "dpt3Srn", "remarks",
+  "adt1Srn", "adt1FromFy", "adt1ToFy", "dpt3Applicable", "dpt3Srn",
+  "itrStatus", "itrAckNo", "remarks",
 ] as const;
 
 export async function PUT(req: NextRequest) {
@@ -247,8 +255,9 @@ export async function PUT(req: NextRequest) {
          "docStatus", "docStatusRemarks",
          "workStatus", "workStatusRemarks", "inc20aStatus", "balanceSheetReady",
          "udinStatutory", "udinTaxAudit", "aoc4Srn", "mgt7Srn",
-         "adt1Srn", "adt1FromFy", "adt1ToFy", "dpt3Applicable", "dpt3Srn", remarks)
-       VALUES (gen_random_uuid()::TEXT,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+         "adt1Srn", "adt1FromFy", "adt1ToFy", "dpt3Applicable", "dpt3Srn",
+         "itrStatus", "itrAckNo", remarks)
+       VALUES (gen_random_uuid()::TEXT,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        RETURNING id`,
       userId,
       body.companyId ?? null,
@@ -270,6 +279,8 @@ export async function PUT(req: NextRequest) {
       body.adt1ToFy || null,
       body.dpt3Applicable ?? false,
       body.dpt3Srn || null,
+      body.itrStatus || "pending",
+      body.itrAckNo || null,
       body.remarks || null,
     );
 
