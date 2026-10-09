@@ -697,6 +697,17 @@ function AnnualFilingTool() {
     return () => clearTimeout(timer);
   }, [data, auditOpts]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-generate documents when a locked (finalized) filing is loaded ──
+  // Generated HTML is not stored in DB — regenerate on load so download buttons appear
+  useEffect(() => {
+    if (!isLocked || !data.companyName || Object.keys(generated).length > 0) return;
+    try {
+      const cashFlowIncluded = data.companyType === "section8" || data.companyType === "fpc";
+      const docs = generateAllAttachments(data, { ...auditOpts, cashFlowIncluded });
+      setGenerated(docs as unknown as Record<string, string>);
+    } catch { /* silent */ }
+  }, [isLocked, data.companyName]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Auto-calculate Total Shares = Paid-up Capital / Nominal Value ───────
   useEffect(() => {
     const clean   = (v: string) => parseFloat(v.replace(/,/g, "")) || 0;
