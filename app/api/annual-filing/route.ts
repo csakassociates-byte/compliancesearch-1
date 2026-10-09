@@ -1,38 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTeamMemberIds } from "@/lib/team";
-
-async function syncCompanyToClientList(userId: string, companyName: string, cin?: string): Promise<string | null> {
-  try {
-    const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM csi_companies
-       WHERE "userId" = $1 AND (
-         LOWER("companyName") = LOWER($2)
-         OR ($3::text IS NOT NULL AND cin = $3)
-       ) LIMIT 1`,
-      userId, companyName, cin || null
-    );
-    if (existing.length) {
-      if (cin) {
-        await prisma.$executeRawUnsafe(
-          `UPDATE csi_companies SET cin = $3, "updatedAt" = NOW() WHERE id = $1 AND "userId" = $2 AND cin IS NULL`,
-          existing[0].id, userId, cin
-        );
-      }
-      return existing[0].id;
-    } else {
-      const newId = randomUUID();
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO csi_companies (id, "userId", "companyName", cin, "updatedAt") VALUES ($1,$2,$3,$4,NOW())`,
-        newId, userId, companyName, cin || null
-      );
-      return newId;
-    }
-  } catch { return null; /* non-fatal */ }
-}
+import { syncCompany } from "@/lib/syncCompany";
 
 // Ensure csi_documents has all columns needed for annual filing
 async function ensureColumns() {
@@ -55,6 +26,9 @@ async function ensureColumns() {
   await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "financialYear" TEXT`);
   await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "formDataJson" TEXT NOT NULL DEFAULT '{}'`);
   await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "companyName" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "isFinalized" BOOLEAN NOT NULL DEFAULT false`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "finalizedBy" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "finalizedAt" TIMESTAMPTZ`);
 }
 
 // Save / update annual filing draft
@@ -72,9 +46,22 @@ export async function POST(req: NextRequest) {
       formDataJson: string;
     };
 
+    // Block saves without CIN — prevents garbage drafts from partial company name typing
+    // Manual update of an existing draft (body.id present) is always allowed
+    if (!body.id && !body.cin) {
+      return NextResponse.json({ skipped: true }, { status: 200 });
+    }
+    // Validate CIN format when provided
+    if (body.cin) {
+      const cinPattern = /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{2,4}[0-9]{6}$/;
+      if (!cinPattern.test(body.cin.trim().toUpperCase())) {
+        return NextResponse.json({ error: "Invalid CIN format" }, { status: 400 });
+      }
+    }
+
     await ensureColumns();
 
-    const companyId = await syncCompanyToClientList(userId, body.companyName, body.cin);
+    const companyId = await syncCompany(userId, body.companyName, body.cin);
 
     if (body.id) {
       await prisma.$executeRawUnsafe(
@@ -95,6 +82,43 @@ export async function POST(req: NextRequest) {
         companyId,
       );
       return NextResponse.json({ success: true, id: body.id });
+    }
+
+    // Before inserting, check if a draft already exists for this team + (cin OR companyName) + FY
+    // This prevents duplicates even when formDataJson doesn't yet have the CIN field
+    {
+      const memberIds = await getTeamMemberIds(userId);
+      const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM csi_documents
+         WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
+           AND "financialYear" = $2
+           AND (
+             ($3 <> '' AND "formDataJson"::jsonb #>> '{data,cin}' = $3)
+             OR UPPER(TRIM("companyName")) = UPPER(TRIM($4))
+           )
+         ORDER BY "updatedAt" DESC LIMIT 1`,
+        memberIds, body.financialYear, body.cin ?? "", body.companyName
+      );
+      if (existing.length) {
+        const existingId = existing[0].id;
+        await prisma.$executeRawUnsafe(
+          `UPDATE csi_documents SET
+            title = $2,
+            "companyName" = $3,
+            "financialYear" = $4,
+            "formDataJson" = $5,
+            "companyId" = COALESCE("companyId", $6),
+            "updatedAt" = NOW()
+           WHERE id = $1`,
+          existingId,
+          `Annual Filing — ${body.companyName} — FY ${body.financialYear}`,
+          body.companyName,
+          body.financialYear,
+          body.formDataJson,
+          companyId,
+        );
+        return NextResponse.json({ success: true, id: existingId });
+      }
     }
 
     const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
@@ -120,6 +144,40 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// Finalize or un-finalize a filing
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const userId    = (session.user as { id: string }).id;
+    const userEmail = (session.user as { email?: string }).email ?? "unknown";
+
+    const body = await req.json() as { id: string; action: "finalize" | "unfinalize" };
+    await ensureColumns();
+
+    if (body.action === "finalize") {
+      await prisma.$executeRawUnsafe(
+        `UPDATE csi_documents SET "isFinalized" = true, "finalizedBy" = $3, "finalizedAt" = NOW(), "updatedAt" = NOW()
+         WHERE id = $1 AND "userId" = $2`,
+        body.id, userId, userEmail
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        `UPDATE csi_documents SET "isFinalized" = false, "finalizedBy" = NULL, "finalizedAt" = NULL, "updatedAt" = NOW()
+         WHERE id = $1 AND "userId" = $2`,
+        body.id, userId
+      );
+    }
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[annual-filing PATCH]", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Server error" },
+      { status: 500 }
+    );
+  }
+}
+
 // Load existing annual filing drafts for the logged-in user
 export async function GET(req: NextRequest) {
   try {
@@ -137,8 +195,9 @@ export async function GET(req: NextRequest) {
     if (id) {
       const rows = await prisma.$queryRawUnsafe<Array<{
         id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
+        isFinalized: boolean; finalizedBy: string | null; finalizedAt: Date | null;
       }>>(
-        `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
+        `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt", "isFinalized", "finalizedBy", "finalizedAt"
          FROM csi_documents WHERE id = $1 AND "userId" = ANY($2::text[]) AND type = 'annual_filing'`,
         id, memberIds
       );
@@ -151,8 +210,9 @@ export async function GET(req: NextRequest) {
       const rows = fy
         ? await prisma.$queryRawUnsafe<Array<{
             id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
+            isFinalized: boolean; finalizedBy: string | null; finalizedAt: Date | null;
           }>>(
-            `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
+            `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt", "isFinalized", "finalizedBy", "finalizedAt"
              FROM csi_documents
              WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
                AND "financialYear" = $2
@@ -162,8 +222,9 @@ export async function GET(req: NextRequest) {
           )
         : await prisma.$queryRawUnsafe<Array<{
             id: string; companyName: string | null; financialYear: string | null; formDataJson: string; updatedAt: Date;
+            isFinalized: boolean; finalizedBy: string | null; finalizedAt: Date | null;
           }>>(
-            `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt"
+            `SELECT id, "companyName", "financialYear", "formDataJson", "updatedAt", "isFinalized", "finalizedBy", "finalizedAt"
              FROM csi_documents
              WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
                AND "formDataJson"::jsonb #>> '{data,cin}' = $2
