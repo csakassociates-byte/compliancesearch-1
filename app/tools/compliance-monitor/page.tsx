@@ -121,6 +121,7 @@ export default function ComplianceMonitorPage() {
   const [reminderText, setReminderText] = useState("");
   const [copied, setCopied] = useState(false);
   const [workflowBlock, setWorkflowBlock] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [companyModal, setCompanyModal] = useState<ComplianceRow | null>(null);
   const [companyProfile, setCompanyProfile] = useState<{
     loading: boolean;
@@ -240,10 +241,14 @@ export default function ComplianceMonitorPage() {
   };
 
   const filteredRows = rows.filter(r => {
-    if (filterMode === "active")    return r.workStatus === "active";
-    if (filterMode === "declined")  return r.workStatus === "declined";
-    if (filterMode === "confirming") return r.workStatus === "confirming";
-    if (filterMode === "alerts")    return hasPendingItems(r);
+    if (filterMode === "active")    { if (r.workStatus !== "active") return false; }
+    else if (filterMode === "declined")  { if (r.workStatus !== "declined") return false; }
+    else if (filterMode === "confirming") { if (r.workStatus !== "confirming") return false; }
+    else if (filterMode === "alerts")    { if (!hasPendingItems(r)) return false; }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      return r.companyName.toLowerCase().includes(q) || (r.cin || "").toLowerCase().includes(q);
+    }
     return true;
   });
 
@@ -812,15 +817,33 @@ export default function ComplianceMonitorPage() {
             );
           })()}
 
-          {/* Filter tabs */}
-          <div className="flex gap-2 flex-wrap mb-3">
+          {/* Filter tabs + Search */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             <FilterTab id="all"        label="All"         count={counts.all} />
             <FilterTab id="active"     label="Active"      count={counts.active} />
             <FilterTab id="declined"   label="Declined"    count={counts.declined} />
             <FilterTab id="confirming" label="Confirming"  count={counts.confirming} />
             <FilterTab id="alerts"     label="Has pending" count={counts.alerts} danger />
+            <div className="ml-auto flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+              <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search by name or CIN…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="text-sm text-slate-700 placeholder-slate-400 outline-none bg-transparent w-48"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")} className="text-slate-400 hover:text-slate-600 leading-none">×</button>
+              )}
+            </div>
           </div>
-          <div className="text-xs text-slate-400 mb-3">Click any <span className="bg-red-50 text-red-700 border border-red-200 rounded-full px-1.5 py-0.5 font-medium">Pending</span> badge to update it</div>
+          <div className="text-xs text-slate-400 mb-3">Click any <span className="bg-red-50 text-red-700 border border-red-200 rounded-full px-1.5 py-0.5 font-medium">Pending</span> badge to update it
+            {searchQuery && filteredRows.length > 0 && <span className="ml-2 text-blue-500 font-medium">{filteredRows.length} result{filteredRows.length !== 1 ? "s" : ""} for &ldquo;{searchQuery}&rdquo;</span>}
+            {searchQuery && filteredRows.length === 0 && <span className="ml-2 text-red-500 font-medium">No results for &ldquo;{searchQuery}&rdquo;</span>}
+          </div>
 
           {/* Empty state */}
           {rows.length === 0 && (
