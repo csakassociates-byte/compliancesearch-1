@@ -118,6 +118,16 @@ export default function ComplianceMonitorPage() {
   const [reminderText, setReminderText] = useState("");
   const [copied, setCopied] = useState(false);
   const [companyModal, setCompanyModal] = useState<ComplianceRow | null>(null);
+  const [companyProfile, setCompanyProfile] = useState<{
+    loading: boolean;
+    company?: { cin: string | null; entityType: string | null; regAddress: string | null; incorporationDate: string | null };
+    directors?: Array<{ name: string; din: string | null; designation: string | null; category: string | null; appointedAt: string | null; cessationAt: string | null; isActive: boolean; pan: string | null; mobile: string | null; email: string | null }>;
+    shareholderSummary?: Array<{ name: string; din: string | null; pan: string | null; shares: number; percent: string }>;
+    totalShares?: number;
+    auditor?: { firmName: string; frn: string; partnerName: string; membershipNo: string; auditorAddress: string | null; auditorCity: string | null; auditorEmail: string | null; auditorMobile: string | null; agmFrom: string | null; agmTo: string | null; fyRange: string | null; isActive: boolean } | null;
+    recentDocs?: Array<{ id: string; type: string; title: string; financialYear: string | null; updatedAt: string }>;
+  } | null>(null);
+  const [profileTab, setProfileTab] = useState("info");
   const editRef = useRef<HTMLDivElement>(null);
   // Close modal on Escape key
   useEffect(() => {
@@ -781,7 +791,15 @@ export default function ComplianceMonitorPage() {
                         </td>
                         <td className={`sticky left-8 z-10 px-3 py-2 border-r border-slate-100 ${isEditing ? "bg-blue-50/50" : "bg-white group-hover:bg-slate-50"}`}>
                           <button
-                            onClick={() => setCompanyModal(row)}
+                            onClick={() => {
+                              setCompanyModal(row);
+                              setProfileTab("info");
+                              setCompanyProfile({ loading: true });
+                              fetch(`/api/company-profile?companyId=${row.companyId}`)
+                                .then(r => r.json())
+                                .then(d => setCompanyProfile({ loading: false, ...d }))
+                                .catch(() => setCompanyProfile({ loading: false }));
+                            }}
                             className="text-left w-full group/name"
                             title="Click to view company details">
                             <div className="font-medium text-blue-700 hover:text-blue-900 text-xs truncate max-w-[155px] underline decoration-dotted underline-offset-2 cursor-pointer">{row.companyName}</div>
@@ -946,43 +964,48 @@ export default function ComplianceMonitorPage() {
           </div>
         </div>
       )}
-      {/* ── Company Master Data Modal ────────────────────────────────────── */}
+      {/* ── Company Master Data Modal (full profile) ─────────────────────── */}
       {companyModal && (() => {
         const c = companyModal;
+        const p = companyProfile;
         const entityLabel: Record<string, string> = {
           pvt_ltd: "Private Limited", pub_ltd: "Public Limited",
-          opc: "OPC", llp: "LLP", section8: "Section 8",
-          nidhi: "Nidhi", producer: "Producer", unlimited: "Unlimited",
+          opc: "One Person Company", llp: "LLP", section8: "Section 8",
+          nidhi: "Nidhi", producer: "Producer Company", unlimited: "Unlimited",
         };
-        const incDate = c.incorporationDate
-          ? new Date(c.incorporationDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-          : null;
-        const cinParts = c.cin ? {
-          llpin: c.cin.startsWith("AAA"),
-          state: c.cin.slice(4, 6),
-          year:  c.cin.slice(6, 10),
-          activity: c.cin.slice(0, 1),
-        } : null;
+        const fmtDate = (d: string | null | undefined) => d
+          ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+          : "—";
+        const et = p?.company?.entityType ?? c.entityType;
+        const cin = p?.company?.cin ?? c.cin;
+        const regAddr = p?.company?.regAddress ?? c.regAddress;
+        const incDate = fmtDate(p?.company?.incorporationDate ?? c.incorporationDate);
+
+        const TABS = [
+          { id: "info",     label: "Company Info" },
+          { id: "dirs",     label: `Directors (${p?.directors?.length ?? "…"})` },
+          { id: "holders",  label: `Shareholders (${p?.shareholderSummary?.length ?? "…"})` },
+          { id: "auditor",  label: "Auditor" },
+          { id: "status",   label: "Compliance" },
+        ];
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[3px]" onClick={() => setCompanyModal(null)} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col" style={{ maxHeight: "90vh" }}>
+
               {/* Hero banner */}
-              <div className="bg-gradient-to-br from-blue-700 to-blue-900 px-6 pt-6 pb-5 text-white">
+              <div className="bg-gradient-to-br from-blue-700 to-blue-900 px-6 pt-5 pb-4 text-white shrink-0 rounded-t-2xl">
                 <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl font-bold shrink-0">
+                  <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center text-xl font-bold shrink-0">
                     {c.companyName.charAt(0).toUpperCase()}
                   </div>
-                  <div className="min-w-0">
-                    <h2 className="text-lg font-bold leading-tight">{c.companyName}</h2>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-base font-bold leading-tight">{c.companyName}</h2>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      {c.entityType && (
-                        <span className="text-[10px] bg-white/20 rounded px-2 py-0.5 font-semibold uppercase tracking-wide">
-                          {entityLabel[c.entityType] || c.entityType}
-                        </span>
-                      )}
-                      {c.cin && <span className="text-[11px] text-blue-200 font-mono">{c.cin}</span>}
-                      {incDate && <span className="text-[11px] text-blue-200">Est. {incDate}</span>}
+                      {et && <span className="text-[10px] bg-white/20 rounded px-2 py-0.5 font-semibold uppercase tracking-wide">{entityLabel[et] || et}</span>}
+                      {cin && <span className="text-[11px] text-blue-200 font-mono">{cin}</span>}
+                      {incDate !== "—" && <span className="text-[11px] text-blue-200">Est. {incDate}</span>}
                     </div>
                   </div>
                   <button onClick={() => setCompanyModal(null)}
@@ -990,75 +1013,231 @@ export default function ComplianceMonitorPage() {
                     ×
                   </button>
                 </div>
+                {/* Tabs */}
+                <div className="flex gap-1 mt-4 overflow-x-auto pb-px">
+                  {TABS.map(tab => (
+                    <button key={tab.id} onClick={() => setProfileTab(tab.id)}
+                      className={`shrink-0 px-3 py-1.5 rounded-t-lg text-[11px] font-medium transition-colors ${
+                        profileTab === tab.id ? "bg-white text-blue-800" : "text-white/70 hover:text-white hover:bg-white/10"
+                      }`}>
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Details grid */}
-              <div className="px-6 py-5 space-y-4">
-                <div>
-                  <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-3">Company Information</div>
-                  <div className="space-y-3">
-                    {[
-                      { label: "CIN", value: c.cin, mono: true },
-                      { label: "Entity Type", value: entityLabel[c.entityType] || c.entityType || "—" },
-                      { label: "Date of Incorporation", value: incDate || "—" },
-                      { label: "Registered Address", value: c.regAddress || "—" },
-                    ].map(row => (
-                      <div key={row.label} className="flex gap-3">
-                        <div className="text-xs text-slate-400 w-36 shrink-0 pt-0.5">{row.label}</div>
-                        <div className={`text-xs text-slate-800 font-medium ${row.mono ? "font-mono" : ""}`}>
-                          {row.value || "—"}
+              {/* Body — scrollable */}
+              <div className="overflow-y-auto flex-1 p-6 bg-white rounded-b-2xl">
+                {p?.loading && (
+                  <div className="text-center py-8 text-slate-400 text-sm">Loading company profile…</div>
+                )}
+                {!p?.loading && (
+                  <>
+                    {/* ── Company Info tab ──────────────────────────────── */}
+                    {profileTab === "info" && (
+                      <div className="space-y-5">
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-3">Master Information</div>
+                          <div className="space-y-2.5">
+                            {[
+                              { label: "CIN", value: cin, mono: true },
+                              { label: "Entity Type", value: entityLabel[et || ""] || et || "—" },
+                              { label: "Date of Incorporation", value: incDate },
+                              { label: "Registered Address", value: regAddr || "—" },
+                            ].map(row => (
+                              <div key={row.label} className="flex gap-3">
+                                <div className="text-xs text-slate-400 w-44 shrink-0">{row.label}</div>
+                                <div className={`text-xs text-slate-800 font-medium ${row.mono ? "font-mono" : ""} leading-relaxed`}>{row.value || "—"}</div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
+                        {p?.recentDocs && p.recentDocs.length > 0 && (
+                          <div>
+                            <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-3">Recent Documents</div>
+                            <div className="space-y-1.5">
+                              {p.recentDocs.map(doc => (
+                                <div key={doc.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                                  <span className="text-xs text-slate-700 truncate max-w-[280px]">{doc.title}</span>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {doc.financialYear && <span className="text-[10px] text-slate-400">FY {doc.financialYear}</span>}
+                                    <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type.replace(/_/g, " ")}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    )}
 
-                {/* Compliance quick status for current FY */}
-                <div className="border-t border-slate-100 pt-4">
-                  <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-3">Compliance Status — FY {fy}</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: "Work Status",     val: c.workStatus === "active" ? "✓ Active" : c.workStatus === "declined" ? "✕ Declined" : "⏳ Confirming",
-                        color: c.workStatus === "active" ? "text-emerald-700 bg-emerald-50" : c.workStatus === "declined" ? "text-slate-500 bg-slate-50" : "text-amber-700 bg-amber-50" },
-                      { label: "Doc Status",      val: c.docStatus === "received" ? "✓ Received" : c.docStatus === "partial" ? "⚠ Partial" : c.docStatus === "na" ? "N/A" : "⏳ Awaited",
-                        color: c.docStatus === "received" ? "text-emerald-700 bg-emerald-50" : c.docStatus === "na" ? "text-slate-500 bg-slate-50" : c.docStatus === "partial" ? "text-amber-700 bg-amber-50" : "text-blue-700 bg-blue-50" },
-                      { label: "Balance Sheet",   val: c.balanceSheetReady ? "✓ Ready" : "Pending",
-                        color: c.balanceSheetReady ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50" },
-                      { label: "INC-20A",         val: c.inc20aStatus === "filed" ? "✓ Filed" : c.inc20aStatus === "na" ? "N/A" : "Pending",
-                        color: c.inc20aStatus === "filed" ? "text-emerald-700 bg-emerald-50" : c.inc20aStatus === "na" ? "text-slate-500 bg-slate-50" : "text-red-700 bg-red-50" },
-                      { label: "AOC-4",           val: c.aoc4Srn ? `#${c.aoc4Srn}` : "Pending",
-                        color: c.aoc4Srn ? "text-blue-700 bg-blue-50" : "text-red-700 bg-red-50" },
-                      { label: "MGT-7/7A",        val: c.mgt7Srn ? `#${c.mgt7Srn}` : "Pending",
-                        color: c.mgt7Srn ? "text-blue-700 bg-blue-50" : "text-red-700 bg-red-50" },
-                    ].map(item => (
-                      <div key={item.label} className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-3 py-2">
-                        <span className="text-[11px] text-slate-500">{item.label}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${item.color}`}>{item.val}</span>
+                    {/* ── Directors tab ─────────────────────────────────── */}
+                    {profileTab === "dirs" && (
+                      <div className="space-y-3">
+                        {!p?.directors?.length && (
+                          <div className="text-center py-8 text-slate-400 text-sm">No director records found for this company.</div>
+                        )}
+                        {p?.directors?.map((d, i) => (
+                          <div key={i} className={`rounded-xl border p-4 ${d.isActive ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-70"}`}>
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div>
+                                <div className="text-sm font-semibold text-slate-800">{d.name}</div>
+                                {d.designation && <div className="text-xs text-slate-500 mt-0.5">{d.designation}{d.category ? ` · ${d.category}` : ""}</div>}
+                              </div>
+                              <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${d.isActive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-400 border border-slate-200"}`}>
+                                {d.isActive ? "Active" : "Ceased"}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                              {[
+                                { label: "DIN", value: d.din },
+                                { label: "PAN", value: d.pan },
+                                { label: "Mobile", value: d.mobile },
+                                { label: "Email", value: d.email },
+                                { label: "Appointed", value: fmtDate(d.appointedAt) },
+                                { label: "Ceased", value: d.cessationAt ? fmtDate(d.cessationAt) : d.isActive ? "—" : "—" },
+                              ].filter(f => f.value && f.value !== "—").map(f => (
+                                <div key={f.label} className="flex gap-2">
+                                  <span className="text-[10px] text-slate-400 w-14 shrink-0">{f.label}</span>
+                                  <span className="text-[11px] text-slate-700 font-medium font-mono">{f.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    )}
 
-                {/* Footer actions */}
-                <div className="flex gap-2 pt-2 border-t border-slate-100">
-                  {c.cin && (
-                    <a href={`https://www.mca.gov.in/mcafoportal/viewCompanyMasterData.do`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors flex items-center gap-1">
-                      🌐 MCA Master Data
-                    </a>
-                  )}
-                  <button
-                    onClick={() => { setReminderRow(c); setReminderText(generateReminder(c)); setCopied(false); setCompanyModal(null); }}
-                    className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1">
-                    📩 Send Reminder
-                  </button>
-                  <button onClick={() => setCompanyModal(null)}
-                    className="ml-auto px-4 py-2 rounded-lg bg-white border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 transition-colors">
-                    Close
-                  </button>
-                </div>
+                    {/* ── Shareholders tab ──────────────────────────────── */}
+                    {profileTab === "holders" && (
+                      <div className="space-y-3">
+                        {p?.totalShares !== undefined && p.totalShares > 0 && (
+                          <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                            <span className="text-xs text-blue-700">Total paid-up shares:</span>
+                            <span className="text-sm font-bold text-blue-900">{p.totalShares.toLocaleString("en-IN")}</span>
+                          </div>
+                        )}
+                        {!p?.shareholderSummary?.length && (
+                          <div className="text-center py-8 text-slate-400 text-sm">No shareholder records found for this company.</div>
+                        )}
+                        {p?.shareholderSummary?.map((s, i) => (
+                          <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-slate-800">{s.name}</div>
+                                <div className="flex gap-3 mt-1">
+                                  {s.din && <span className="text-[10px] text-slate-400">DIN: <span className="font-mono text-slate-600">{s.din}</span></span>}
+                                  {s.pan && <span className="text-[10px] text-slate-400">PAN: <span className="font-mono text-slate-600">{s.pan}</span></span>}
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <div className="text-base font-bold text-slate-800">{s.shares.toLocaleString("en-IN")}</div>
+                                <div className="text-[10px] text-slate-400">shares · {s.percent}%</div>
+                              </div>
+                            </div>
+                            {/* Holding bar */}
+                            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(parseFloat(s.percent), 100)}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* ── Auditor tab ───────────────────────────────────── */}
+                    {profileTab === "auditor" && (
+                      <div>
+                        {!p?.auditor && (
+                          <div className="text-center py-8 text-slate-400 text-sm">No auditor record found for this company.</div>
+                        )}
+                        {p?.auditor && (
+                          <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="text-sm font-bold text-slate-800">{p.auditor.firmName}</div>
+                                {p.auditor.frn && <div className="text-xs text-slate-500 mt-0.5">FRN: {p.auditor.frn}</div>}
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${p.auditor.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-400 border-slate-200"}`}>
+                                {p.auditor.isActive ? "Active" : "Inactive"}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 mt-1">
+                              {[
+                                { label: "Partner Name",    value: p.auditor.partnerName },
+                                { label: "Membership No",   value: p.auditor.membershipNo },
+                                { label: "Address",         value: [p.auditor.auditorAddress, p.auditor.auditorCity].filter(Boolean).join(", ") },
+                                { label: "Mobile",          value: p.auditor.auditorMobile },
+                                { label: "Email",           value: p.auditor.auditorEmail },
+                                { label: "Appointment FY",  value: p.auditor.fyRange },
+                                { label: "AGM From",        value: p.auditor.agmFrom },
+                                { label: "AGM To",          value: p.auditor.agmTo },
+                              ].filter(f => f.value).map(f => (
+                                <div key={f.label}>
+                                  <div className="text-[10px] text-slate-400 mb-0.5">{f.label}</div>
+                                  <div className="text-xs text-slate-800 font-medium">{f.value}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Compliance Status tab ─────────────────────────── */}
+                    {profileTab === "status" && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Compliance Status — FY {fy}</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { label: "Work Status",     val: c.workStatus === "active" ? "✓ Active" : c.workStatus === "declined" ? "✕ Declined" : "⏳ Confirming", color: c.workStatus === "active" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : c.workStatus === "declined" ? "text-slate-500 bg-slate-50 border-slate-200" : "text-amber-700 bg-amber-50 border-amber-200" },
+                            { label: "Doc Status",      val: c.docStatus === "received" ? "✓ Received" : c.docStatus === "partial" ? "⚠ Partial" : c.docStatus === "na" ? "N/A" : "⏳ Awaited", color: c.docStatus === "received" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : c.docStatus === "na" ? "text-slate-500 bg-slate-50 border-slate-200" : c.docStatus === "partial" ? "text-amber-700 bg-amber-50 border-amber-200" : "text-blue-700 bg-blue-50 border-blue-200" },
+                            { label: "INC-20A",         val: c.inc20aStatus === "filed" ? "✓ Filed" : c.inc20aStatus === "na" ? "N/A" : "Pending", color: c.inc20aStatus === "filed" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : c.inc20aStatus === "na" ? "text-slate-500 bg-slate-50 border-slate-200" : "text-red-700 bg-red-50 border-red-200" },
+                            { label: "Balance Sheet",   val: c.balanceSheetReady ? "✓ Ready" : "Pending", color: c.balanceSheetReady ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-red-700 bg-red-50 border-red-200" },
+                            { label: "UDIN Statutory",  val: c.udinStatutory ? (c.udinStatutory === "na" ? "N/A" : "✓ Done") : "Pending", color: c.udinStatutory ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-red-700 bg-red-50 border-red-200" },
+                            { label: "UDIN Tax Audit",  val: c.udinTaxAudit ? (c.udinTaxAudit === "na" ? "N/A" : "✓ Done") : "—", color: c.udinTaxAudit ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-slate-400 bg-slate-50 border-slate-200" },
+                            { label: "Attachments",     val: c.attachmentsGenerated ? "✓ Generated" : "Pending", color: c.attachmentsGenerated ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-red-700 bg-red-50 border-red-200" },
+                            { label: "AOC-4",           val: c.aoc4Srn ? `✓ ${c.aoc4Srn}` : "Pending", color: c.aoc4Srn ? "text-blue-700 bg-blue-50 border-blue-200" : "text-red-700 bg-red-50 border-red-200" },
+                            { label: "MGT-7/7A",        val: c.mgt7Srn ? `✓ ${c.mgt7Srn}` : "Pending", color: c.mgt7Srn ? "text-blue-700 bg-blue-50 border-blue-200" : "text-red-700 bg-red-50 border-red-200" },
+                            { label: "ADT-1",           val: c.adt1Srn ? `✓ ${c.adt1Srn}` : "Pending", color: c.adt1Srn ? "text-blue-700 bg-blue-50 border-blue-200" : "text-red-700 bg-red-50 border-red-200" },
+                            { label: "DPT-3",           val: !c.dpt3Applicable ? "N/A" : c.dpt3Srn ? "✓ Filed" : "Pending", color: !c.dpt3Applicable ? "text-slate-400 bg-slate-50 border-slate-200" : c.dpt3Srn ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-red-700 bg-red-50 border-red-200" },
+                          ].map(item => (
+                            <div key={item.label} className={`flex items-center justify-between gap-2 border rounded-lg px-3 py-2 ${item.color.split(" ").slice(1).join(" ")}`}>
+                              <span className="text-[11px] font-medium text-slate-600">{item.label}</span>
+                              <span className={`text-[10px] font-bold ${item.color.split(" ")[0]}`}>{item.val}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {c.remarks && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                            <div className="text-[10px] text-slate-400 mb-1">Remarks</div>
+                            <div className="text-xs text-slate-700">{c.remarks}</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
+
+              {/* Footer */}
+              <div className="shrink-0 flex gap-2 px-6 py-3 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+                {cin && (
+                  <a href="https://www.mca.gov.in/mcafoportal/viewCompanyMasterData.do"
+                    target="_blank" rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">
+                    🌐 MCA Master Data
+                  </a>
+                )}
+                <button onClick={() => { setReminderRow(c); setReminderText(generateReminder(c)); setCopied(false); setCompanyModal(null); }}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+                  📩 Reminder
+                </button>
+                <button onClick={() => setCompanyModal(null)}
+                  className="ml-auto px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 transition-colors">
+                  Close
+                </button>
+              </div>
+
             </div>
           </div>
         );
