@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
         }>>(
           `SELECT cd.name, cd.din, cd.designation, cd.category,
                   cd."appointedAt", cd."ceasedAt" as "cessationAt", cd."isActive",
-                  cp.pan, cp.mobile, cp.email
+                  cp."panNo" as pan, cp.mobile, cp.email
            FROM "CompanyDirector" cd
            LEFT JOIN csi_persons cp
              ON cp."companyId" = $2 AND (cp.din = cd.din OR LOWER(cp.name) = LOWER(cd.name))
