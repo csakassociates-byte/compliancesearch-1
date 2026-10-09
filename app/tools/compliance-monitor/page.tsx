@@ -120,10 +120,12 @@ export default function ComplianceMonitorPage() {
   const [companyModal, setCompanyModal] = useState<ComplianceRow | null>(null);
   const [companyProfile, setCompanyProfile] = useState<{
     loading: boolean;
-    company?: { cin: string | null; entityType: string | null; regAddress: string | null; incorporationDate: string | null };
-    directors?: Array<{ name: string; din: string | null; designation: string | null; category: string | null; appointedAt: string | null; cessationAt: string | null; isActive: boolean; pan: string | null; mobile: string | null; email: string | null }>;
-    shareholderSummary?: Array<{ name: string; din: string | null; pan: string | null; shares: number; percent: string }>;
+    company?: { cin: string | null; entityType: string | null; regAddress: string | null; incorporationDate: string | null; email: string | null; paidUpCapital: string | null; authorisedCapital: string | null; registrationNumber: string | null; rocName: string | null };
+    mcaProfile?: { rocName: string | null; status: string | null; isListed: boolean; smallCompany: boolean; authorisedCapital: string | null; paidUpCapital: string | null; registrationNumber: string | null; dateOfLastAGM: string | null; dateOfBalanceSheet: string | null; categoryOfCompany: string | null; subcategory: string | null; classOfCompany: string | null } | null;
+    directors?: Array<{ name: string; din: string | null; designation: string | null; category: string | null; appointedAt: string | null; cessationAt: string | null; isActive: boolean; pan: string | null; mobile: string | null; email: string | null; source?: string }>;
+    shareholderSummary?: Array<{ name: string; din?: string | null; pan: string | null; shares: number; percent: string; folioNo?: string; type?: string; isPromoter?: boolean }>;
     totalShares?: number;
+    afFinancialYear?: string | null;
     auditor?: { firmName: string; frn: string; partnerName: string; membershipNo: string; auditorAddress: string | null; auditorCity: string | null; auditorEmail: string | null; auditorMobile: string | null; agmFrom: string | null; agmTo: string | null; fyRange: string | null; isActive: boolean } | null;
     recentDocs?: Array<{ id: string; type: string; title: string; financialYear: string | null; updatedAt: string }>;
   } | null>(null);
@@ -981,6 +983,12 @@ export default function ComplianceMonitorPage() {
         const regAddr = p?.company?.regAddress ?? c.regAddress;
         const incDate = fmtDate(p?.company?.incorporationDate ?? c.incorporationDate);
 
+        const mca = p?.mcaProfile;
+        const rocName = mca?.rocName ?? p?.company?.rocName ?? "—";
+        const regNum = mca?.registrationNumber ?? p?.company?.registrationNumber ?? (cin ? cin.slice(-6) : "—");
+        const authCap = mca?.authorisedCapital ?? p?.company?.authorisedCapital ?? "—";
+        const paidCap = mca?.paidUpCapital ?? p?.company?.paidUpCapital ?? "—";
+        const companyEmail = p?.company?.email ?? "—";
         const TABS = [
           { id: "info",     label: "Company Info" },
           { id: "dirs",     label: `Directors (${p?.directors?.length ?? "…"})` },
@@ -1035,30 +1043,70 @@ export default function ComplianceMonitorPage() {
                   <>
                     {/* ── Company Info tab ──────────────────────────────── */}
                     {profileTab === "info" && (
-                      <div className="space-y-5">
+                      <div className="space-y-5 text-xs">
+                        {/* COMPANY INFORMATION */}
                         <div>
-                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-3">Master Information</div>
-                          <div className="space-y-2.5">
+                          <div className="bg-slate-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-t">COMPANY INFORMATION</div>
+                          <div className="border border-slate-200 rounded-b divide-y divide-slate-100">
                             {[
-                              { label: "CIN", value: cin, mono: true },
-                              { label: "Entity Type", value: entityLabel[et || ""] || et || "—" },
-                              { label: "Date of Incorporation", value: incDate },
-                              { label: "Registered Address", value: regAddr || "—" },
+                              { label: "Company Name",         value: c.companyName },
+                              { label: "CIN",                  value: cin,    mono: true },
+                              { label: "Registration Number",  value: regNum, mono: true },
+                              { label: "ROC Name",             value: rocName },
+                              { label: "Entity Type",          value: entityLabel[et || ""] || et || "—" },
+                              { label: "Sub-category",         value: mca?.subcategory || "—" },
+                              { label: "Class of Company",     value: mca?.classOfCompany || "—" },
+                              { label: "Status",               value: mca?.status || "Active" },
+                              { label: "Date of Incorporation",value: incDate },
+                              { label: "Listed Company",       value: mca?.isListed ? "Yes" : "No" },
+                              { label: "Small Company",        value: mca?.smallCompany ? "Yes" : "No" },
+                              { label: "Date of Balance Sheet",value: mca?.dateOfBalanceSheet ? fmtDate(mca.dateOfBalanceSheet) : "—" },
+                              { label: "Date of Last AGM",     value: mca?.dateOfLastAGM ? fmtDate(mca.dateOfLastAGM) : "—" },
                             ].map(row => (
-                              <div key={row.label} className="flex gap-3">
-                                <div className="text-xs text-slate-400 w-44 shrink-0">{row.label}</div>
-                                <div className={`text-xs text-slate-800 font-medium ${row.mono ? "font-mono" : ""} leading-relaxed`}>{row.value || "—"}</div>
+                              <div key={row.label} className="flex">
+                                <div className="text-slate-500 bg-slate-50 w-44 shrink-0 px-3 py-1.5 font-medium">{row.label}</div>
+                                <div className={`text-slate-800 px-3 py-1.5 flex-1 ${(row as { mono?: boolean }).mono ? "font-mono" : ""}`}>{row.value || "—"}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        {/* CAPITAL STRUCTURE */}
+                        <div>
+                          <div className="bg-slate-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-t">CAPITAL STRUCTURE</div>
+                          <div className="border border-slate-200 rounded-b divide-y divide-slate-100">
+                            {[
+                              { label: "Authorised Capital",  value: authCap },
+                              { label: "Paid-up Capital",     value: paidCap },
+                            ].map(row => (
+                              <div key={row.label} className="flex">
+                                <div className="text-slate-500 bg-slate-50 w-44 shrink-0 px-3 py-1.5 font-medium">{row.label}</div>
+                                <div className="text-slate-800 px-3 py-1.5 flex-1">{row.value || "—"}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        {/* CONTACT DETAILS */}
+                        <div>
+                          <div className="bg-slate-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-t">CONTACT DETAILS</div>
+                          <div className="border border-slate-200 rounded-b divide-y divide-slate-100">
+                            {[
+                              { label: "Registered Address", value: regAddr || "—" },
+                              { label: "Email",              value: companyEmail },
+                            ].map(row => (
+                              <div key={row.label} className="flex">
+                                <div className="text-slate-500 bg-slate-50 w-44 shrink-0 px-3 py-1.5 font-medium">{row.label}</div>
+                                <div className="text-slate-800 px-3 py-1.5 flex-1 break-words">{row.value || "—"}</div>
                               </div>
                             ))}
                           </div>
                         </div>
                         {p?.recentDocs && p.recentDocs.length > 0 && (
                           <div>
-                            <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-3">Recent Documents</div>
-                            <div className="space-y-1.5">
+                            <div className="bg-slate-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-t">RECENT DOCUMENTS</div>
+                            <div className="border border-slate-200 rounded-b divide-y divide-slate-100">
                               {p.recentDocs.map(doc => (
-                                <div key={doc.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-                                  <span className="text-xs text-slate-700 truncate max-w-[280px]">{doc.title}</span>
+                                <div key={doc.id} className="flex items-center justify-between px-3 py-2">
+                                  <span className="text-slate-700 truncate max-w-[280px]">{doc.title}</span>
                                   <div className="flex items-center gap-2 shrink-0">
                                     {doc.financialYear && <span className="text-[10px] text-slate-400">FY {doc.financialYear}</span>}
                                     <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type.replace(/_/g, " ")}</span>
@@ -1073,74 +1121,113 @@ export default function ComplianceMonitorPage() {
 
                     {/* ── Directors tab ─────────────────────────────────── */}
                     {profileTab === "dirs" && (
-                      <div className="space-y-3">
-                        {!p?.directors?.length && (
-                          <div className="text-center py-8 text-slate-400 text-sm">No director records found for this company.</div>
-                        )}
-                        {p?.directors?.map((d, i) => (
-                          <div key={i} className={`rounded-xl border p-4 ${d.isActive ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-70"}`}>
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <div>
-                                <div className="text-sm font-semibold text-slate-800">{d.name}</div>
-                                {d.designation && <div className="text-xs text-slate-500 mt-0.5">{d.designation}{d.category ? ` · ${d.category}` : ""}</div>}
-                              </div>
-                              <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${d.isActive ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-400 border border-slate-200"}`}>
-                                {d.isActive ? "Active" : "Ceased"}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
-                              {[
-                                { label: "DIN", value: d.din },
-                                { label: "PAN", value: d.pan },
-                                { label: "Mobile", value: d.mobile },
-                                { label: "Email", value: d.email },
-                                { label: "Appointed", value: fmtDate(d.appointedAt) },
-                                { label: "Ceased", value: d.cessationAt ? fmtDate(d.cessationAt) : d.isActive ? "—" : "—" },
-                              ].filter(f => f.value && f.value !== "—").map(f => (
-                                <div key={f.label} className="flex gap-2">
-                                  <span className="text-[10px] text-slate-400 w-14 shrink-0">{f.label}</span>
-                                  <span className="text-[11px] text-slate-700 font-medium font-mono">{f.value}</span>
-                                </div>
-                              ))}
-                            </div>
+                      <div className="text-xs">
+                        <div className="bg-slate-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-t flex items-center justify-between">
+                          <span>DIRECTORS / SIGNATORIES</span>
+                          <span>{p?.directors?.length ?? 0} record(s)</span>
+                        </div>
+                        {!p?.directors?.length ? (
+                          <div className="border border-slate-200 rounded-b text-center py-8 text-slate-400">No director records found for this company.</div>
+                        ) : (
+                          <div className="border border-slate-200 rounded-b overflow-x-auto">
+                            <table className="w-full text-[11px] border-collapse">
+                              <thead>
+                                <tr className="bg-slate-100">
+                                  {["DIN", "Name", "Designation", "Category", "Appointed", "Ceased", "Status"].map(h => (
+                                    <th key={h} className="text-left px-2 py-2 font-semibold text-slate-600 border-b border-slate-200 whitespace-nowrap">{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {p.directors.map((d, i) => (
+                                  <tr key={i} className={d.isActive ? "" : "opacity-60 bg-slate-50"}>
+                                    <td className="px-2 py-2 font-mono text-slate-600 whitespace-nowrap">{d.din || "—"}</td>
+                                    <td className="px-2 py-2 text-slate-800 font-medium">{d.name}</td>
+                                    <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{d.designation || "—"}</td>
+                                    <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{d.category || "—"}</td>
+                                    <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{d.appointedAt ? fmtDate(d.appointedAt) : "—"}</td>
+                                    <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{d.cessationAt ? fmtDate(d.cessationAt) : "—"}</td>
+                                    <td className="px-2 py-2 whitespace-nowrap">
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${d.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                                        {d.isActive ? "Active" : "Ceased"}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
-                        ))}
+                        )}
+                        {p?.afFinancialYear && (
+                          <div className="mt-2 text-[10px] text-slate-400">Source: Annual filing attachment — FY {p.afFinancialYear}</div>
+                        )}
                       </div>
                     )}
 
                     {/* ── Shareholders tab ──────────────────────────────── */}
                     {profileTab === "holders" && (
-                      <div className="space-y-3">
+                      <div className="text-xs space-y-3">
                         {p?.totalShares !== undefined && p.totalShares > 0 && (
-                          <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-center gap-3">
-                            <span className="text-xs text-blue-700">Total paid-up shares:</span>
+                          <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 flex items-center gap-3">
+                            <span className="text-[11px] text-blue-700">Total Paid-up Shares:</span>
                             <span className="text-sm font-bold text-blue-900">{p.totalShares.toLocaleString("en-IN")}</span>
                           </div>
                         )}
-                        {!p?.shareholderSummary?.length && (
-                          <div className="text-center py-8 text-slate-400 text-sm">No shareholder records found for this company.</div>
-                        )}
-                        {p?.shareholderSummary?.map((s, i) => (
-                          <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="text-sm font-semibold text-slate-800">{s.name}</div>
-                                <div className="flex gap-3 mt-1">
-                                  {s.din && <span className="text-[10px] text-slate-400">DIN: <span className="font-mono text-slate-600">{s.din}</span></span>}
-                                  {s.pan && <span className="text-[10px] text-slate-400">PAN: <span className="font-mono text-slate-600">{s.pan}</span></span>}
-                                </div>
-                              </div>
-                              <div className="shrink-0 text-right">
-                                <div className="text-base font-bold text-slate-800">{s.shares.toLocaleString("en-IN")}</div>
-                                <div className="text-[10px] text-slate-400">shares · {s.percent}%</div>
-                              </div>
-                            </div>
-                            {/* Holding bar */}
-                            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(parseFloat(s.percent), 100)}%` }} />
-                            </div>
+                        <div>
+                          <div className="bg-slate-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-t flex items-center justify-between">
+                            <span>SHAREHOLDERS</span>
+                            <span>{p?.shareholderSummary?.length ?? 0} record(s)</span>
                           </div>
-                        ))}
+                          {!p?.shareholderSummary?.length ? (
+                            <div className="border border-slate-200 rounded-b text-center py-8 text-slate-400">No shareholder records found for this company.</div>
+                          ) : (
+                            <div className="border border-slate-200 rounded-b overflow-x-auto">
+                              <table className="w-full text-[11px] border-collapse">
+                                <thead>
+                                  <tr className="bg-slate-100">
+                                    {["Name", "Folio No", "Type", "Shares Held", "% Holding", "Promoter", "PAN"].map(h => (
+                                      <th key={h} className="text-left px-2 py-2 font-semibold text-slate-600 border-b border-slate-200 whitespace-nowrap">{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {p.shareholderSummary.map((s, i) => {
+                                    const typeLabels: Record<string, string> = {
+                                      resident_individual: "Resident Individual",
+                                      nri: "NRI", body_corporate: "Body Corporate",
+                                      huf: "HUF", trust: "Trust", government: "Govt.",
+                                    };
+                                    return (
+                                      <tr key={i}>
+                                        <td className="px-2 py-2 text-slate-800 font-medium">{s.name}</td>
+                                        <td className="px-2 py-2 font-mono text-slate-600 whitespace-nowrap">{s.folioNo || "—"}</td>
+                                        <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{s.type ? (typeLabels[s.type] || s.type) : "—"}</td>
+                                        <td className="px-2 py-2 text-slate-800 font-semibold text-right tabular-nums whitespace-nowrap">{s.shares.toLocaleString("en-IN")}</td>
+                                        <td className="px-2 py-2 text-slate-700 text-right whitespace-nowrap">
+                                          <div className="flex items-center gap-1 justify-end">
+                                            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(parseFloat(s.percent), 100)}%` }} />
+                                            </div>
+                                            <span>{s.percent}%</span>
+                                          </div>
+                                        </td>
+                                        <td className="px-2 py-2 whitespace-nowrap">
+                                          {s.isPromoter
+                                            ? <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-1.5 py-0.5">Yes</span>
+                                            : <span className="text-slate-400">—</span>}
+                                        </td>
+                                        <td className="px-2 py-2 font-mono text-slate-600 whitespace-nowrap">{s.pan || "—"}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                        {p?.afFinancialYear && (
+                          <div className="text-[10px] text-slate-400">Source: Annual filing attachment — FY {p.afFinancialYear}</div>
+                        )}
                       </div>
                     )}
 
