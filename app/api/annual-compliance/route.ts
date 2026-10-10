@@ -54,25 +54,39 @@ export async function GET(req: NextRequest) {
 
     // Derive FY end date: FY "2025-26" → 31 Mar 2026; "2024-25" → 31 Mar 2025
     const fyEndYear = parseInt(fy.split("-")[0]) + 1;
-    const fyEndDate = `${fyEndYear}-03-31`;
+    const fyEndDate = new Date(`${fyEndYear}-03-31`);
 
-    // All companies for this user/team incorporated on or before the FY end date
-    // Companies incorporated after the FY end date are not applicable for that year
-    const companies = await prisma.$queryRawUnsafe<Array<{
+    // All companies for this user/team (filter by FY in JS to handle any date format)
+    const allCompanies = await prisma.$queryRawUnsafe<Array<{
       id: string; companyName: string; cin: string | null;
       incorporationDate: string | null; entityType: string | null; regAddress: string | null;
     }>>(
       `SELECT id, "companyName", cin, "incorporationDate", "entityType", "regAddress"
        FROM csi_companies
        WHERE "userId" = ANY($1::text[])
-         AND (
-           "incorporationDate" IS NULL
-           OR TRIM("incorporationDate") = ''
-           OR (TRIM("incorporationDate") ~ '^[0-9]' AND "incorporationDate"::date <= $2::date)
-         )
        ORDER BY LOWER("companyName") ASC`,
-      memberIds, fyEndDate
+      memberIds
     );
+
+    // Parse incorporation date safely — handles YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
+    function parseIncDate(raw: string | null): Date | null {
+      if (!raw || !raw.trim()) return null;
+      const s = raw.trim();
+      // ISO format YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s.slice(0, 10));
+      // Indian format DD/MM/YYYY or DD-MM-YYYY
+      const m = s.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
+      if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}`);
+      return null;
+    }
+
+    // Only include companies incorporated on or before the FY end date
+    // Companies with no/unparseable date are always included
+    const companies = allCompanies.filter(c => {
+      const incDate = parseIncDate(c.incorporationDate);
+      if (!incDate || isNaN(incDate.getTime())) return true; // unknown → include
+      return incDate <= fyEndDate;
+    });
 
     // Compliance records for this FY
     // Ensure new columns exist (for existing DBs)
@@ -83,6 +97,7 @@ export async function GET(req: NextRequest) {
 
     // Auto-fix: update any existing compliance records where inc20aStatus is still 'pending'
     // but the company was incorporated before 2 Nov 2018 (INC-20A not applicable for them)
+    // Auto-fix INC-20A for pre-2018 companies — only cast ISO-format dates (YYYY-MM-DD)
     await prisma.$executeRawUnsafe(`
       UPDATE csi_annual_compliance ac
       SET "inc20aStatus" = 'na', "updatedAt" = NOW()
@@ -91,7 +106,7 @@ export async function GET(req: NextRequest) {
           SELECT 1 FROM csi_companies c
           WHERE (c.id = ac."companyId" OR (ac.cin IS NOT NULL AND c.cin = ac.cin))
             AND c."incorporationDate" IS NOT NULL
-            AND TRIM(c."incorporationDate") ~ '^[0-9]'
+            AND c."incorporationDate" ~ '^\\d{4}-\\d{2}-\\d{2}'
             AND c."incorporationDate"::date < '2018-11-02'
         )
     `);
@@ -190,9 +205,9 @@ export async function GET(req: NextRequest) {
         // Check carry-forward from any past FY
         if (inc20aFiledByCompanyId.has(c.id) || (c.cin && inc20aFiledByCin.has(c.cin))) {
           inc20aStatus = "filed";
-        } else if (c.incorporationDate) {
-          const incDate = new Date(c.incorporationDate);
-          if (!isNaN(incDate.getTime()) && incDate < INC20A_CUTOFF) {
+        } else {
+          const incDate = parseIncDate(c.incorporationDate);
+          if (incDate && !isNaN(incDate.getTime()) && incDate < INC20A_CUTOFF) {
             inc20aStatus = "na";
           }
         }
