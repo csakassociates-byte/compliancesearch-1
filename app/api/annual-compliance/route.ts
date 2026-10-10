@@ -71,6 +71,20 @@ export async function GET(req: NextRequest) {
     await prisma.$executeRawUnsafe(`ALTER TABLE csi_annual_compliance ADD COLUMN IF NOT EXISTS "itrStatus" TEXT NOT NULL DEFAULT 'pending'`);
     await prisma.$executeRawUnsafe(`ALTER TABLE csi_annual_compliance ADD COLUMN IF NOT EXISTS "itrAckNo" TEXT`);
 
+    // Auto-fix: update any existing compliance records where inc20aStatus is still 'pending'
+    // but the company was incorporated before 2 Nov 2018 (INC-20A not applicable for them)
+    await prisma.$executeRawUnsafe(`
+      UPDATE csi_annual_compliance ac
+      SET "inc20aStatus" = 'na', "updatedAt" = NOW()
+      WHERE ac."inc20aStatus" = 'pending'
+        AND EXISTS (
+          SELECT 1 FROM csi_companies c
+          WHERE (c.id = ac."companyId" OR (ac.cin IS NOT NULL AND c.cin = ac.cin))
+            AND c."incorporationDate" IS NOT NULL
+            AND c."incorporationDate"::date < '2018-11-02'
+        )
+    `);
+
     const records = await prisma.$queryRawUnsafe<Array<{
       id: string; companyId: string | null; cin: string | null;
       docStatus: string; docStatusRemarks: string | null;
@@ -226,8 +240,36 @@ export async function PUT(req: NextRequest) {
 
     await ensureTable();
 
+    // Resolve INC-20A applicability from company's incorporation date
+    const INC20A_CUTOFF = new Date("2018-11-02");
+    async function resolveInc20aStatus(requestedStatus: string | undefined): Promise<string> {
+      if (requestedStatus && requestedStatus !== "pending") return requestedStatus;
+      // Look up incorporationDate from csi_companies
+      const companyRows = body.companyId
+        ? await prisma.$queryRawUnsafe<Array<{ incorporationDate: string | null }>>(
+            `SELECT "incorporationDate" FROM csi_companies WHERE id = $1 LIMIT 1`,
+            body.companyId
+          )
+        : body.cin
+          ? await prisma.$queryRawUnsafe<Array<{ incorporationDate: string | null }>>(
+              `SELECT "incorporationDate" FROM csi_companies WHERE cin = $1 LIMIT 1`,
+              body.cin
+            )
+          : [];
+      const incDateStr = companyRows[0]?.incorporationDate;
+      if (incDateStr) {
+        const incDate = new Date(incDateStr);
+        if (!isNaN(incDate.getTime()) && incDate < INC20A_CUTOFF) return "na";
+      }
+      return requestedStatus ?? "pending";
+    }
+
     if (body.recordId) {
       // UPDATE existing record
+      // If inc20aStatus is being set to "pending", check if it should actually be "na"
+      if ("inc20aStatus" in body && body.inc20aStatus === "pending") {
+        body.inc20aStatus = await resolveInc20aStatus("pending");
+      }
       const sets: string[] = [];
       const vals: unknown[] = [body.recordId, userId];
       let i = 3;
@@ -248,7 +290,9 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: true, id: body.recordId });
     }
 
-    // INSERT new record
+    // INSERT new record — resolve INC-20A from incorporation date
+    const inc20aResolved = await resolveInc20aStatus(body.inc20aStatus as string | undefined);
+
     const rows = await prisma.$queryRawUnsafe<[{ id: string }]>(
       `INSERT INTO csi_annual_compliance
         (id, "userId", "companyId", cin, "companyName", "financialYear",
@@ -268,7 +312,7 @@ export async function PUT(req: NextRequest) {
       body.docStatusRemarks ?? null,
       body.workStatus ?? "confirming",
       body.workStatusRemarks ?? null,
-      body.inc20aStatus ?? "pending",
+      inc20aResolved,
       body.balanceSheetReady ?? false,
       body.udinStatutory || null,
       body.udinTaxAudit || null,
