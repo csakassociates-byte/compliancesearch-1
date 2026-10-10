@@ -67,7 +67,8 @@ export async function GET(req: NextRequest) {
        WHERE "userId" = ANY($1::text[])
          AND (
            "incorporationDate" IS NULL
-           OR "incorporationDate"::date <= $2::date
+           OR TRIM("incorporationDate") = ''
+           OR (TRIM("incorporationDate") ~ '^[0-9]' AND "incorporationDate"::date <= $2::date)
          )
        ORDER BY LOWER("companyName") ASC`,
       memberIds, fyEndDate
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
           SELECT 1 FROM csi_companies c
           WHERE (c.id = ac."companyId" OR (ac.cin IS NOT NULL AND c.cin = ac.cin))
             AND c."incorporationDate" IS NOT NULL
+            AND TRIM(c."incorporationDate") ~ '^[0-9]'
             AND c."incorporationDate"::date < '2018-11-02'
         )
     `);
