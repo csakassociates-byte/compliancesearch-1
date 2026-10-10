@@ -956,6 +956,19 @@ export default function ComplianceMonitorPage() {
                             title="Click to view company details">
                             <div className="font-medium text-blue-700 hover:text-blue-900 text-xs truncate max-w-[155px] underline decoration-dotted underline-offset-2 cursor-pointer">{row.companyName}</div>
                             {row.cin && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{row.cin}</div>}
+                            {row.incorporationDate && (
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                DOI: {(() => {
+                                  const s = row.incorporationDate.trim();
+                                  // Already DD/MM/YYYY
+                                  if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}/.test(s)) return s.replace(/-/g, "/");
+                                  // ISO YYYY-MM-DD → DD/MM/YYYY
+                                  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                                  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+                                  return s;
+                                })()}
+                              </div>
+                            )}
                           </button>
                         </td>
                         <td className="px-3 py-2">{cellDocStatus(row)}</td>
