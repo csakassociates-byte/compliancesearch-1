@@ -232,6 +232,16 @@ export default function ComplianceMonitorPage() {
     fullyCompliant: activeRows.filter(r => isFullyCompliant(r)).length,
   };
 
+  // Per-form progress for active companies
+  const formProgress = {
+    aoc4:        { done: activeRows.filter(r => !!r.aoc4Srn).length,        total: activeRows.length },
+    mgt7:        { done: activeRows.filter(r => !!r.mgt7Srn).length,        total: activeRows.length },
+    balanceSheet:{ done: activeRows.filter(r => !!r.balanceSheetReady).length, total: activeRows.length },
+    itr:         { done: activeRows.filter(r => !!r.itrStatus && r.itrStatus.toLowerCase() !== "pending" && r.itrStatus.toLowerCase() !== "not filed").length, total: activeRows.length },
+    udin:        { done: activeRows.filter(r => !!r.udinStatutory).length,   total: activeRows.length },
+    attachments: { done: activeRows.filter(r => !!r.attachmentsGenerated).length, total: activeRows.length },
+  };
+
   const counts = {
     all:        rows.length,
     active:     rows.filter(r => r.workStatus === "active").length,
@@ -840,6 +850,48 @@ export default function ComplianceMonitorPage() {
               )}
             </div>
           </div>
+          {/* Per-form progress summary — only shown when there are active companies */}
+          {activeRows.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {[
+                { label: "AOC-4",        ...formProgress.aoc4,        color: "blue"   },
+                { label: "MGT-7/7A",     ...formProgress.mgt7,        color: "violet" },
+                { label: "Balance Sheet",...formProgress.balanceSheet, color: "emerald"},
+                { label: "ITR",          ...formProgress.itr,         color: "amber"  },
+                { label: "UDIN (Stat)",  ...formProgress.udin,        color: "rose"   },
+                { label: "Attachments",  ...formProgress.attachments, color: "slate"  },
+              ].map(({ label, done, total, color }) => {
+                const pending = total - done;
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                const colorMap: Record<string, { chip: string; bar: string; text: string }> = {
+                  blue:    { chip: "bg-blue-50 border-blue-200",    bar: "bg-blue-500",    text: "text-blue-700"    },
+                  violet:  { chip: "bg-violet-50 border-violet-200",bar: "bg-violet-500",  text: "text-violet-700"  },
+                  emerald: { chip: "bg-emerald-50 border-emerald-200",bar: "bg-emerald-500",text: "text-emerald-700" },
+                  amber:   { chip: "bg-amber-50 border-amber-200",  bar: "bg-amber-500",   text: "text-amber-700"   },
+                  rose:    { chip: "bg-rose-50 border-rose-200",    bar: "bg-rose-500",    text: "text-rose-700"    },
+                  slate:   { chip: "bg-slate-50 border-slate-200",  bar: "bg-slate-500",   text: "text-slate-700"   },
+                };
+                const c = colorMap[color];
+                return (
+                  <div key={label} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${c.chip}`}>
+                    <span className={`font-semibold ${c.text}`}>{label}</span>
+                    <span className="text-slate-500">
+                      <span className={`font-bold ${c.text}`}>{done}/{total}</span>
+                      {" "}
+                      <span className="text-slate-400 font-normal">prepared</span>
+                    </span>
+                    {pending > 0 && (
+                      <span className="bg-white border border-red-200 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pending} pending</span>
+                    )}
+                    <div className="w-12 h-1.5 rounded-full bg-slate-200 overflow-hidden ml-1">
+                      <div className={`h-full rounded-full transition-all ${c.bar}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="text-xs text-slate-400 mb-3">Click any <span className="bg-red-50 text-red-700 border border-red-200 rounded-full px-1.5 py-0.5 font-medium">Pending</span> badge to update it
             {searchQuery && filteredRows.length > 0 && <span className="ml-2 text-blue-500 font-medium">{filteredRows.length} result{filteredRows.length !== 1 ? "s" : ""} for &ldquo;{searchQuery}&rdquo;</span>}
             {searchQuery && filteredRows.length === 0 && <span className="ml-2 text-red-500 font-medium">No results for &ldquo;{searchQuery}&rdquo;</span>}
