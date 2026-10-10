@@ -112,6 +112,7 @@ export default function ComplianceMonitorPage() {
   const [rows, setRows] = useState<ComplianceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterMode, setFilterMode] = useState("all");
+  const [formFilter, setFormFilter] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editField, setEditField] = useState("");
   const [editValues, setEditValues] = useState<Record<string, string | boolean>>({});
@@ -251,10 +252,17 @@ export default function ComplianceMonitorPage() {
   };
 
   const filteredRows = rows.filter(r => {
-    if (filterMode === "active")    { if (r.workStatus !== "active") return false; }
-    else if (filterMode === "declined")  { if (r.workStatus !== "declined") return false; }
+    if (filterMode === "active")     { if (r.workStatus !== "active") return false; }
+    else if (filterMode === "declined")   { if (r.workStatus !== "declined") return false; }
     else if (filterMode === "confirming") { if (r.workStatus !== "confirming") return false; }
     else if (filterMode === "alerts")    { if (!hasPendingItems(r)) return false; }
+    // Form-specific chip filter — show only companies where that form is pending
+    if (formFilter === "aoc4"        && !!r.aoc4Srn)            return false;
+    if (formFilter === "mgt7"        && !!r.mgt7Srn)            return false;
+    if (formFilter === "balanceSheet" && !!r.balanceSheetReady) return false;
+    if (formFilter === "itr"         && !!r.itrStatus && r.itrStatus.toLowerCase() !== "pending" && r.itrStatus.toLowerCase() !== "not filed") return false;
+    if (formFilter === "udin"        && !!r.udinStatutory)      return false;
+    if (formFilter === "attachments" && !!r.attachmentsGenerated) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       return r.companyName.toLowerCase().includes(q) || (r.cin || "").toLowerCase().includes(q);
@@ -724,7 +732,7 @@ export default function ComplianceMonitorPage() {
   function FilterTab({ id, label, count, danger }: { id: string; label: string; count: number; danger?: boolean }) {
     const active = filterMode === id;
     return (
-      <button onClick={() => setFilterMode(id)}
+      <button onClick={() => { setFilterMode(id); setFormFilter(null); }}
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
           active ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
         }`}>
@@ -854,26 +862,33 @@ export default function ComplianceMonitorPage() {
           {activeRows.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {[
-                { label: "AOC-4",        ...formProgress.aoc4,        color: "blue"   },
-                { label: "MGT-7/7A",     ...formProgress.mgt7,        color: "violet" },
-                { label: "Balance Sheet",...formProgress.balanceSheet, color: "emerald"},
-                { label: "ITR",          ...formProgress.itr,         color: "amber"  },
-                { label: "UDIN (Stat)",  ...formProgress.udin,        color: "rose"   },
-                { label: "Attachments",  ...formProgress.attachments, color: "slate"  },
-              ].map(({ label, done, total, color }) => {
+                { label: "AOC-4",        key: "aoc4",        ...formProgress.aoc4,        color: "blue"   },
+                { label: "MGT-7/7A",     key: "mgt7",        ...formProgress.mgt7,        color: "violet" },
+                { label: "Balance Sheet",key: "balanceSheet",...formProgress.balanceSheet, color: "emerald"},
+                { label: "ITR",          key: "itr",         ...formProgress.itr,         color: "amber"  },
+                { label: "UDIN (Stat)",  key: "udin",        ...formProgress.udin,        color: "rose"   },
+                { label: "Attachments",  key: "attachments", ...formProgress.attachments, color: "slate"  },
+              ].map(({ label, key, done, total, color }) => {
                 const pending = total - done;
                 const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-                const colorMap: Record<string, { chip: string; bar: string; text: string }> = {
-                  blue:    { chip: "bg-blue-50 border-blue-200",    bar: "bg-blue-500",    text: "text-blue-700"    },
-                  violet:  { chip: "bg-violet-50 border-violet-200",bar: "bg-violet-500",  text: "text-violet-700"  },
-                  emerald: { chip: "bg-emerald-50 border-emerald-200",bar: "bg-emerald-500",text: "text-emerald-700" },
-                  amber:   { chip: "bg-amber-50 border-amber-200",  bar: "bg-amber-500",   text: "text-amber-700"   },
-                  rose:    { chip: "bg-rose-50 border-rose-200",    bar: "bg-rose-500",    text: "text-rose-700"    },
-                  slate:   { chip: "bg-slate-50 border-slate-200",  bar: "bg-slate-500",   text: "text-slate-700"   },
+                const isActive = formFilter === key;
+                const colorMap: Record<string, { chip: string; chipActive: string; bar: string; text: string }> = {
+                  blue:    { chip: "bg-blue-50 border-blue-200",    chipActive: "bg-blue-100 border-blue-500 ring-2 ring-blue-300",    bar: "bg-blue-500",    text: "text-blue-700"    },
+                  violet:  { chip: "bg-violet-50 border-violet-200",chipActive: "bg-violet-100 border-violet-500 ring-2 ring-violet-300",bar: "bg-violet-500",  text: "text-violet-700"  },
+                  emerald: { chip: "bg-emerald-50 border-emerald-200",chipActive: "bg-emerald-100 border-emerald-500 ring-2 ring-emerald-300",bar: "bg-emerald-500",text: "text-emerald-700" },
+                  amber:   { chip: "bg-amber-50 border-amber-200",  chipActive: "bg-amber-100 border-amber-500 ring-2 ring-amber-300",  bar: "bg-amber-500",   text: "text-amber-700"   },
+                  rose:    { chip: "bg-rose-50 border-rose-200",    chipActive: "bg-rose-100 border-rose-500 ring-2 ring-rose-300",    bar: "bg-rose-500",    text: "text-rose-700"    },
+                  slate:   { chip: "bg-slate-50 border-slate-200",  chipActive: "bg-slate-100 border-slate-500 ring-2 ring-slate-300",  bar: "bg-slate-500",   text: "text-slate-700"   },
                 };
                 const c = colorMap[color];
                 return (
-                  <div key={label} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${c.chip}`}>
+                  <button
+                    key={label}
+                    onClick={() => setFormFilter(isActive ? null : key)}
+                    title={isActive ? "Click to clear filter" : `Show ${pending} companies with ${label} pending`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer select-none
+                      ${isActive ? c.chipActive : `${c.chip} hover:brightness-95`}`}
+                  >
                     <span className={`font-semibold ${c.text}`}>{label}</span>
                     <span className="text-slate-500">
                       <span className={`font-bold ${c.text}`}>{done}/{total}</span>
@@ -881,18 +896,30 @@ export default function ComplianceMonitorPage() {
                       <span className="text-slate-400 font-normal">prepared</span>
                     </span>
                     {pending > 0 && (
-                      <span className="bg-white border border-red-200 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pending} pending</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isActive ? "bg-red-600 text-white border-red-600" : "bg-white border-red-200 text-red-600"}`}>
+                        {pending} pending
+                      </span>
                     )}
                     <div className="w-12 h-1.5 rounded-full bg-slate-200 overflow-hidden ml-1">
                       <div className={`h-full rounded-full transition-all ${c.bar}`} style={{ width: `${pct}%` }} />
                     </div>
-                  </div>
+                    {isActive && <span className="text-[10px] text-slate-500 ml-0.5">✕</span>}
+                  </button>
                 );
               })}
             </div>
           )}
 
-          <div className="text-xs text-slate-400 mb-3">Click any <span className="bg-red-50 text-red-700 border border-red-200 rounded-full px-1.5 py-0.5 font-medium">Pending</span> badge to update it
+          <div className="text-xs text-slate-400 mb-3">
+            {formFilter ? (
+              <span>
+                Showing companies with <span className="font-semibold text-red-600">{formFilter === "aoc4" ? "AOC-4" : formFilter === "mgt7" ? "MGT-7/7A" : formFilter === "balanceSheet" ? "Balance Sheet" : formFilter === "itr" ? "ITR" : formFilter === "udin" ? "UDIN (Stat)" : "Attachments"}</span> pending
+                {" — "}
+                <button onClick={() => setFormFilter(null)} className="text-blue-500 hover:underline">Clear filter</button>
+              </span>
+            ) : (
+              <>Click any <span className="bg-red-50 text-red-700 border border-red-200 rounded-full px-1.5 py-0.5 font-medium">Pending</span> badge to update it · Click a chip above to filter by form</>
+            )}
             {searchQuery && filteredRows.length > 0 && <span className="ml-2 text-blue-500 font-medium">{filteredRows.length} result{filteredRows.length !== 1 ? "s" : ""} for &ldquo;{searchQuery}&rdquo;</span>}
             {searchQuery && filteredRows.length === 0 && <span className="ml-2 text-red-500 font-medium">No results for &ldquo;{searchQuery}&rdquo;</span>}
           </div>
