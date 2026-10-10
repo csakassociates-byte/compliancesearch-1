@@ -52,7 +52,12 @@ export async function GET(req: NextRequest) {
     await ensureTable();
     const memberIds = await getTeamMemberIds(userId);
 
-    // All companies for this user/team
+    // Derive FY end date: FY "2025-26" → 31 Mar 2026; "2024-25" → 31 Mar 2025
+    const fyEndYear = parseInt(fy.split("-")[0]) + 1;
+    const fyEndDate = `${fyEndYear}-03-31`;
+
+    // All companies for this user/team incorporated on or before the FY end date
+    // Companies incorporated after the FY end date are not applicable for that year
     const companies = await prisma.$queryRawUnsafe<Array<{
       id: string; companyName: string; cin: string | null;
       incorporationDate: string | null; entityType: string | null; regAddress: string | null;
@@ -60,8 +65,12 @@ export async function GET(req: NextRequest) {
       `SELECT id, "companyName", cin, "incorporationDate", "entityType", "regAddress"
        FROM csi_companies
        WHERE "userId" = ANY($1::text[])
+         AND (
+           "incorporationDate" IS NULL
+           OR "incorporationDate"::date <= $2::date
+         )
        ORDER BY LOWER("companyName") ASC`,
-      memberIds
+      memberIds, fyEndDate
     );
 
     // Compliance records for this FY
@@ -130,6 +139,23 @@ export async function GET(req: NextRequest) {
       if (p.cin)       prevAdt1ByCin.set(p.cin, p);
     }
 
+    // INC-20A carry-forward: it is a one-time filing — once filed, it stays filed forever
+    // Fetch any past FY record where inc20aStatus = 'filed' for each company
+    const inc20aFiledRecords = await prisma.$queryRawUnsafe<Array<{
+      companyId: string | null; cin: string | null;
+    }>>(
+      `SELECT DISTINCT "companyId", cin
+       FROM csi_annual_compliance
+       WHERE "userId" = ANY($1::text[]) AND "inc20aStatus" = 'filed'`,
+      memberIds
+    );
+    const inc20aFiledByCompanyId = new Set<string>();
+    const inc20aFiledByCin       = new Set<string>();
+    for (const r of inc20aFiledRecords) {
+      if (r.companyId) inc20aFiledByCompanyId.add(r.companyId);
+      if (r.cin)       inc20aFiledByCin.add(r.cin);
+    }
+
     // Auto-detect attachment generation from csi_documents
     const attachments = await prisma.$queryRawUnsafe<Array<{ cin: string }>>(
       `SELECT DISTINCT "formDataJson"::jsonb #>> '{data,cin}' AS cin
@@ -152,13 +178,21 @@ export async function GET(req: NextRequest) {
     const rows = companies.map(c => {
       const rec = recByCompanyId.get(c.id) ?? (c.cin ? recByCin.get(c.cin) : undefined);
 
-      // Auto-detect INC-20A: if company was incorporated before the INC-20A requirement
-      // and status is still default "pending", auto-set to "na"
+      // INC-20A status resolution (priority order):
+      // 1. Current FY record value (if explicitly set to anything other than pending)
+      // 2. Carry-forward: if filed in ANY past FY → still "filed" (one-time filing)
+      // 3. Auto-NA: if incorporated before 2 Nov 2018 → "na"
+      // 4. Default: "pending"
       let inc20aStatus = rec?.inc20aStatus ?? "pending";
-      if (inc20aStatus === "pending" && c.incorporationDate) {
-        const incDate = new Date(c.incorporationDate);
-        if (!isNaN(incDate.getTime()) && incDate < INC20A_CUTOFF) {
-          inc20aStatus = "na";
+      if (inc20aStatus === "pending") {
+        // Check carry-forward from any past FY
+        if (inc20aFiledByCompanyId.has(c.id) || (c.cin && inc20aFiledByCin.has(c.cin))) {
+          inc20aStatus = "filed";
+        } else if (c.incorporationDate) {
+          const incDate = new Date(c.incorporationDate);
+          if (!isNaN(incDate.getTime()) && incDate < INC20A_CUTOFF) {
+            inc20aStatus = "na";
+          }
         }
       }
 
