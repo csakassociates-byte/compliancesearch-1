@@ -783,7 +783,7 @@ ${withLH ? companyLH(f) : plainHeader(f)}
 <tr><td style="width:35%"><strong>Date of AGM:</strong></td><td>${fmtDate(f.meetingDate)} (${fmtDay(f.meetingDate)})</td></tr>
 <tr><td><strong>Time:</strong></td><td>${f.meetingTime || "[TIME]"}</td></tr>
 <tr><td><strong>Venue:</strong></td><td>${f.venue || "[VENUE]"}</td></tr>
-<tr><td><strong>AGM No.:</strong></td><td>${agm} AGM${f.meetingSerial ? ` / ${f.meetingSerial}` : ""}</td></tr>
+<tr><td><strong>AGM No.:</strong></td><td>${agm} AGM</td></tr>
 <tr><td><strong>Chairman:</strong></td><td>${f.chairmanName || "[CHAIRMAN]"} (DIN: ${f.chairmanDin || "[DIN]"})</td></tr>
 </table>
 </div>
@@ -1363,12 +1363,6 @@ export default function AuditorAppointmentPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f.incorporationDate, f.fy, f.appointmentType]);
 
-  // Auto-fill meetingSerial from agmOrdinal when empty and subsequent appointment
-  useEffect(() => {
-    if (f.appointmentType !== "subsequent" || !f.agmOrdinal || f.meetingSerial) return;
-    setF(p => ({ ...p, meetingSerial: `${f.agmOrdinal} AGM` }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f.agmOrdinal, f.appointmentType]);
 
   // Auto-fill venue with registered address when venue is empty
   useEffect(() => {
@@ -2375,7 +2369,7 @@ export default function AuditorAppointmentPage() {
                         hint={f.appointmentType === "subsequent" ? "e.g., 1st AGM" : "e.g., BM-03/2025-26"}>
                         <input className={ic()} value={f.meetingSerial}
                           onChange={e => setF(p => ({ ...p, meetingSerial: e.target.value }))}
-                          placeholder={f.appointmentType === "subsequent" ? "1st AGM" : "BM-03/2025"} />
+                          placeholder="e.g., BM-03/2025-26" />
                       </Field>
                     </div>
                     <Field label="Venue / Platform">
