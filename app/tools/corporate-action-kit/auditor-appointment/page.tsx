@@ -1209,6 +1209,16 @@ export default function AuditorAppointmentPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f, session, hydrated, isFinalized]);
 
+  // Auto-recalculate AGM serial number whenever incorporationDate or FY changes
+  useEffect(() => {
+    if (f.appointmentType !== "subsequent") return;
+    const auto = calcAgmOrdinal(f.incorporationDate, f.fy);
+    if (auto && auto !== f.agmOrdinal) {
+      setF(p => ({ ...p, agmOrdinal: auto }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.incorporationDate, f.fy, f.appointmentType]);
+
   async function handleSaveDocument() {
     if (!session) return;
     setDocSaveStatus("saving");
@@ -1844,15 +1854,25 @@ export default function AuditorAppointmentPage() {
                           </p>
                         )}
                       </Field>
-                      <Field label="AGM Serial Number" hint="Auto-calculated from incorporation date — type to override (e.g., 3rd, 15th, 50th)">
-                        <input
-                          className={ic()}
-                          value={f.agmOrdinal}
-                          onChange={e => setF(p => ({ ...p, agmOrdinal: e.target.value }))}
-                          placeholder="e.g., 3rd"
-                        />
+                      <Field label="AGM Serial Number" hint="Auto-calculated from incorporation date + FY — edit to override">
+                        <div className="relative">
+                          <input
+                            className={ic()}
+                            value={f.agmOrdinal}
+                            onChange={e => setF(p => ({ ...p, agmOrdinal: e.target.value }))}
+                            placeholder="e.g., 3rd"
+                          />
+                          {f.incorporationDate && f.fy && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-teal-600 font-semibold pointer-events-none">
+                              auto ✓
+                            </span>
+                          )}
+                        </div>
+                        {!f.incorporationDate && (
+                          <p className="text-xs text-slate-400 mt-1">Fill incorporation date (Step 1) to auto-calculate</p>
+                        )}
                         {f.incorporationDate && !f.fy && (
-                          <p className="text-xs text-slate-400 mt-1">Enter FY above to auto-calculate AGM number</p>
+                          <p className="text-xs text-slate-400 mt-1">Select FY above to auto-calculate</p>
                         )}
                       </Field>
                       {f.agmOrdinal && (
