@@ -713,9 +713,23 @@ export default function ComplianceMonitorPage() {
     if (r.adt1Srn) return (
       <div>
         {r.adt1CarriedForward
-          ? <span className={`${warnPill}`} title="Carried forward from previous year">↩ Carried Fwd</span>
+          ? (
+            <span
+              className={`${warnPill} cursor-pointer hover:opacity-80`}
+              title="Click to view / edit appointment details"
+              onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
+            >↩ Carried Fwd</span>
+          )
           : <span className={okPill}>✓ Filed</span>}
         {r.adt1FromFy && <div className="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap">{r.adt1FromFy} → {r.adt1ToFy}</div>}
+        {r.adt1CarriedForward && r.adt1Srn && (
+          <div
+            className="text-[9px] text-amber-600 mt-0.5 whitespace-nowrap cursor-pointer hover:underline"
+            onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
+          >
+            SRN: {r.adt1Srn}
+          </div>
+        )}
       </div>
     );
 
