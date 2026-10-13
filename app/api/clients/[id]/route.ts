@@ -11,12 +11,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const userId = (session.user as { id: string }).id;
   const { id } = await params;
 
+  // Use ownerId so team members can access their org's clients
+  const ctx = await getTeamContext(userId);
+  const ownerId = ctx.ownerId;
+
   const companies = await prisma.$queryRawUnsafe<Array<{
     id: string; cin: string | null; companyName: string;
     regAddress: string | null; entityType: string | null;
     incorporationDate: string | null; createdAt: Date;
   }>>(
-    `SELECT * FROM csi_companies WHERE id = $1 AND "userId" = $2`, id, userId
+    `SELECT * FROM csi_companies WHERE id = $1 AND "userId" = $2`, id, ownerId
   );
   if (!companies.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -30,7 +34,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
        AND ("companyId" = $1
             OR ("companyId" IS NULL AND LOWER("companyName") = LOWER($3)))
      ORDER BY "meetingDate" DESC NULLS LAST, "createdAt" DESC`,
-    id, userId, companies[0].companyName
+    id, ownerId, companies[0].companyName
   );
 
   return NextResponse.json({ company: companies[0], documents });
@@ -41,6 +45,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
   const { id } = await params;
+
+  const ctx = await getTeamContext(userId);
+  const ownerId = ctx.ownerId;
 
   const body = await req.json() as {
     companyName?: string; cin?: string; entityType?: string;
@@ -56,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       "incorporationDate" = COALESCE($7, "incorporationDate"),
       "updatedAt" = NOW()
      WHERE id = $1 AND "userId" = $2`,
-    id, userId,
+    id, ownerId,
     body.companyName?.trim() || null, body.cin?.trim() || null,
     body.entityType?.trim() || null, body.regAddress?.trim() || null,
     body.incorporationDate?.trim() || null
@@ -89,7 +96,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   // Get company info before deleting (for the log)
   const companies = await prisma.$queryRawUnsafe<Array<{ companyName: string; cin: string | null }>>(
-    `SELECT "companyName", cin FROM csi_companies WHERE id = $1 AND "userId" = $2`, id, userId
+    `SELECT "companyName", cin FROM csi_companies WHERE id = $1 AND "userId" = $2`, id, ctx.ownerId
   );
   if (!companies.length) return NextResponse.json({ error: "Company not found" }, { status: 404 });
   const { companyName, cin } = companies[0];
@@ -101,7 +108,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   // Delete company (documents get SetNull per schema)
   await prisma.$executeRawUnsafe(
-    `DELETE FROM csi_companies WHERE id = $1 AND "userId" = $2`, id, userId
+    `DELETE FROM csi_companies WHERE id = $1 AND "userId" = $2`, id, ctx.ownerId
   );
 
   // Log the deletion

@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamContext } from "@/lib/team";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
+
+  // Use ownerId so team members can find their org's clients
+  const ctx = await getTeamContext(userId);
+  const ownerId = ctx.ownerId;
 
   const { searchParams } = new URL(req.url);
   const name = searchParams.get("name");
@@ -17,7 +22,7 @@ export async function GET(req: NextRequest) {
   if (cin) {
     const bycin = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("cin") = LOWER($2) LIMIT 1`,
-      userId, cin.trim()
+      ownerId, cin.trim()
     );
     if (bycin.length) return NextResponse.json({ companyId: bycin[0].id, source: "cin" });
   }
@@ -26,7 +31,7 @@ export async function GET(req: NextRequest) {
   if (name) {
     const byname = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `SELECT id FROM csi_companies WHERE "userId" = $1 AND LOWER("companyName") = LOWER($2) LIMIT 1`,
-      userId, name.trim()
+      ownerId, name.trim()
     );
     if (byname.length) return NextResponse.json({ companyId: byname[0].id, source: "name" });
   }
