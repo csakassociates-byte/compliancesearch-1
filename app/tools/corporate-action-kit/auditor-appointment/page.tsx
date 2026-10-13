@@ -263,14 +263,26 @@ function ordinal(n: number): string {
   return `${n}th`;
 }
 
+function parseIncDate(raw: string): Date | null {
+  if (!raw) return null;
+  // YYYY-MM-DD (HTML date input)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) { const d = new Date(raw); return isNaN(d.getTime()) ? null : d; }
+  // DD/MM/YYYY (MCA / URL param format)
+  const dmyMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmyMatch) { const d = new Date(`${dmyMatch[3]}-${dmyMatch[2].padStart(2,"0")}-${dmyMatch[1].padStart(2,"0")}`); return isNaN(d.getTime()) ? null : d; }
+  // MM/DD/YYYY fallback
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function calcAgmOrdinal(incorporationDate: string, fy: string): string {
   if (!incorporationDate || !fy) return "";
   const parts = fy.split("-");
   if (parts.length < 2) return "";
   const fyEndYear = parseInt(parts[0]) + 1;
   if (isNaN(fyEndYear)) return "";
-  const inc = new Date(incorporationDate);
-  if (isNaN(inc.getTime())) return "";
+  const inc = parseIncDate(incorporationDate);
+  if (!inc) return "";
   const incMonth = inc.getMonth() + 1;
   const incYear = inc.getFullYear();
   // First FY ends: if inc is Jan-Mar → same year March; Apr-Dec → next year March
@@ -1048,6 +1060,7 @@ export default function AuditorAppointmentPage() {
   const [selectedSavedAuditorId, setSelectedSavedAuditorId] = useState<string>("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [membershipAutoFilled, setMembershipAutoFilled] = useState(false);
+  const [showChairmanSuggestions, setShowChairmanSuggestions] = useState(false);
 
   // ── Document save state ──
   const [docSaveStatus, setDocSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -1125,6 +1138,37 @@ export default function AuditorAppointmentPage() {
       })
       .catch(() => {});
   }, [f.cin, session]);
+
+  // Auto-fill mobile/email from annual filing attachment (fallback) + AGM/board dates
+  useEffect(() => {
+    if (!session || !f.cin || !f.fy) return;
+    let cancelled = false;
+    fetch(`/api/annual-filing?cin=${encodeURIComponent(f.cin)}&fy=${encodeURIComponent(f.fy)}`)
+      .then(r => r.json())
+      .then((res: { filing?: { formDataJson: string } | null }) => {
+        if (cancelled || !res.filing) return;
+        try {
+          const fd = JSON.parse(res.filing.formDataJson) as {
+            data?: {
+              companyMobile?: string; companyEmail?: string;
+              agmDateCurrentYear?: string; boardMeetingDate?: string;
+            }
+          };
+          const d = fd.data;
+          if (!d) return;
+          setF(p => ({
+            ...p,
+            companyEmail:    p.companyEmail    || d.companyEmail    || "",
+            companyMobile:   p.companyMobile   || d.companyMobile   || "",
+            // Fill AGM date and board date only if empty
+            meetingDate:     p.meetingDate     || d.agmDateCurrentYear  || "",
+            boardRecommDate: p.boardRecommDate || d.boardMeetingDate    || "",
+          }));
+        } catch { /* ignore */ }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [f.cin, f.fy, session]);
 
   // Pre-fill from URL params (?cin=, ?companyName=, ?appointmentType=, ?fy=, ?incorporationDate=)
   useEffect(() => {
@@ -1239,6 +1283,20 @@ export default function AuditorAppointmentPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f.incorporationDate, f.fy, f.appointmentType]);
+
+  // Auto-fill meetingSerial from agmOrdinal when empty and subsequent appointment
+  useEffect(() => {
+    if (f.appointmentType !== "subsequent" || !f.agmOrdinal || f.meetingSerial) return;
+    setF(p => ({ ...p, meetingSerial: `${f.agmOrdinal} AGM` }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.agmOrdinal, f.appointmentType]);
+
+  // Auto-fill venue with registered address when venue is empty
+  useEffect(() => {
+    if (!f.regAddress || f.venue) return;
+    setF(p => ({ ...p, venue: p.venue || f.regAddress }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.regAddress]);
 
   async function handleSaveDocument() {
     if (!session) return;
@@ -2206,9 +2264,25 @@ export default function AuditorAppointmentPage() {
                     </Field>
                     <div className="grid grid-cols-2 gap-4">
                       <Field label="Chairman Name">
-                        <input className={ic()} value={f.chairmanName}
-                          onChange={e => setF(p => ({ ...p, chairmanName: e.target.value }))}
-                          placeholder="Name of chairperson" />
+                        <div className="relative">
+                          <input className={ic()} value={f.chairmanName}
+                            onChange={e => { setF(p => ({ ...p, chairmanName: e.target.value })); setShowChairmanSuggestions(true); }}
+                            onFocus={() => setShowChairmanSuggestions(true)}
+                            onBlur={() => setTimeout(() => setShowChairmanSuggestions(false), 150)}
+                            placeholder="Name of chairperson" />
+                          {showChairmanSuggestions && f.directors.filter(d => d.name && (!f.chairmanName || d.name.toLowerCase().includes(f.chairmanName.toLowerCase()))).length > 0 && (
+                            <div className="absolute z-20 top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg mt-1 max-h-44 overflow-y-auto">
+                              {f.directors.filter(d => d.name && (!f.chairmanName || d.name.toLowerCase().includes(f.chairmanName.toLowerCase()))).map(d => (
+                                <button key={d.id} type="button"
+                                  onMouseDown={() => { setF(p => ({ ...p, chairmanName: d.name, chairmanDin: d.din })); setShowChairmanSuggestions(false); }}
+                                  className="w-full text-left px-3 py-2 hover:bg-teal-50 border-b border-slate-100 last:border-0">
+                                  <span className="text-sm font-semibold text-slate-800">{d.name}</span>
+                                  <span className="text-xs text-slate-400 ml-2">{d.designation}{d.din ? ` · DIN: ${d.din}` : ""}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </Field>
                       <Field label="Chairman DIN">
                         <input className={ic()} value={f.chairmanDin}
