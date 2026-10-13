@@ -275,6 +275,23 @@ function parseIncDate(raw: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+function addFYYears(fy: string, n: number): string {
+  const parts = fy.split("-");
+  if (parts.length < 2) return fy;
+  const startYear = parseInt(parts[0]) + n;
+  if (isNaN(startYear)) return fy;
+  return `${startYear}-${String(startYear + 1).slice(-2)}`;
+}
+
+function firstAgmFY(incDate: string): string {
+  const d = parseIncDate(incDate);
+  if (!d) return "[FY]";
+  const month = d.getMonth() + 1;
+  const year = d.getFullYear();
+  const fyEndYear = month <= 3 ? year : year + 1;
+  return `${fyEndYear - 1}-${String(fyEndYear).slice(-2)}`;
+}
+
 function calcAgmOrdinal(incorporationDate: string, fy: string): string {
   if (!incorporationDate || !fy) return "";
   const parts = fy.split("-");
@@ -545,7 +562,7 @@ ${isFirst ? `<p class="para">The Chairman informed the Board that the Company wa
 <div class="section">
 <h3>${isFirst ? "RESOLUTION: APPOINTMENT OF FIRST STATUTORY AUDITOR" : "RESOLUTION: FILLING OF CASUAL VACANCY — STATUTORY AUDITOR"}</h3>
 ${isFirst ? `
-<p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 139(6) read with Section 142 and other applicable provisions of the Companies Act, 2013, ${auditorLabel(f)}, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate confirming eligibility under Section 141 of the Act, be and ${f.auditorType === "firm" ? "are" : "is"} hereby appointed as the <strong>First Statutory Auditor</strong> of the Company, to hold office from the date of this meeting <strong>until the conclusion of the First Annual General Meeting</strong> of the Company, at a remuneration of ${f.remuneration ? `<strong>Rs. ${f.remuneration}</strong> per annum, exclusive of applicable GST and reimbursement of out-of-pocket expenses` : "[REMUNERATION — to be agreed]"}.</p>
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 139(6) read with Section 142 and other applicable provisions of the Companies Act, 2013, ${auditorLabel(f)}, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate confirming eligibility under Section 141 of the Act, be and ${f.auditorType === "firm" ? "are" : "is"} hereby appointed as the <strong>First Statutory Auditor</strong> of the Company, to hold office from the date of this meeting <strong>until the conclusion of the First Annual General Meeting</strong>${f.incorporationDate ? ` (FY ${firstAgmFY(f.incorporationDate)})` : ""} of the Company, at a remuneration of ${f.remuneration ? `<strong>Rs. ${f.remuneration}</strong> per annum, exclusive of applicable GST and reimbursement of out-of-pocket expenses` : "[REMUNERATION — to be agreed]"}.</p>
 <p class="para"><strong>RESOLVED FURTHER THAT</strong> any Director or the Company Secretary be and is hereby authorised to issue the formal Letter of Appointment to the Auditor, to file Form ADT-1 with the Registrar of Companies within fifteen days of this appointment, and to do all such acts as may be required to give effect to this resolution."</p>
 ` : `
 <p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 139(8) and other applicable provisions of the Companies Act, 2013, ${auditorLabel(f)}, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate confirming eligibility under Section 141, be and ${f.auditorType === "firm" ? "are" : "is"} hereby appointed as Statutory Auditor to fill the casual vacancy, to hold office until the conclusion of the <strong>next Annual General Meeting</strong> of the Company, at a remuneration of ${f.remuneration ? `<strong>Rs. ${f.remuneration}</strong> per annum, exclusive of applicable GST` : "[REMUNERATION — to be agreed]"}${f.vacancyReason === "resignation" ? ", subject to ratification by members at a General Meeting to be convened within three months of this recommendation [Section 139(8)]" : ""}.</p>
@@ -636,7 +653,7 @@ ${f.dividendDeclared
 <div class="section">
 <h3>RESOLUTION NO. 5: RECOMMENDATION FOR APPOINTMENT OF STATUTORY AUDITOR${f.auditorType === "firm" ? "S" : ""} AT ${agm.toUpperCase()} AGM</h3>
 <div class="box">
-<p class="para"><strong>"RESOLVED THAT</strong> pursuant to the provisions of Section 139(1) read with Section 142 and Rule 3 of the Companies (Audit and Auditors) Rules, 2014, and other applicable provisions of the Companies Act, 2013, the consent of the Board be and is hereby accorded to recommend <strong>${auditorLabel(f)}</strong>, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate of eligibility under Section 141 of the Act, for appointment as <strong>Statutory Auditor${f.auditorType === "firm" ? "s" : ""}</strong> of the Company for a term of <strong>five consecutive years</strong> from the conclusion of the <strong>${agm} Annual General Meeting</strong> until the conclusion of the <strong>${sixth} Annual General Meeting</strong>, at such remuneration as may be decided by the Board of Directors in consultation with the Auditor${f.auditorType === "firm" ? "s" : ""}, subject to the approval of the members at the ensuing Annual General Meeting.</p>
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to the provisions of Section 139(1) read with Section 142 and Rule 3 of the Companies (Audit and Auditors) Rules, 2014, and other applicable provisions of the Companies Act, 2013, the consent of the Board be and is hereby accorded to recommend <strong>${auditorLabel(f)}</strong>, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate of eligibility under Section 141 of the Act, for appointment as <strong>Statutory Auditor${f.auditorType === "firm" ? "s" : ""}</strong> of the Company for a term of <strong>five consecutive years</strong> from the conclusion of the <strong>${agm} Annual General Meeting</strong>${fy !== "[FY]" ? ` (FY ${fy})` : ""} until the conclusion of the <strong>${sixth} Annual General Meeting</strong>${fy !== "[FY]" ? ` (FY ${addFYYears(fy, 5)})` : ""}, at such remuneration as may be decided by the Board of Directors in consultation with the Auditor${f.auditorType === "firm" ? "s" : ""}, subject to the approval of the members at the ensuing Annual General Meeting.</p>
 <p class="para"><strong>RESOLVED FURTHER THAT</strong> any Director or the Company Secretary be and is hereby authorised to include the necessary item and Explanatory Statement in the Notice of the ${agm} Annual General Meeting and to do all acts, deeds and things as may be required to give effect to this resolution."</p>
 </div>
 </div>
@@ -780,7 +797,7 @@ ${presentDirs.length > 0 ? `<div class="section"><p class="bold">DIRECTORS PRESE
 <div class="section">
 <h3>ORDINARY RESOLUTION — APPOINTMENT OF STATUTORY AUDITOR</h3>
 <div class="box">
-<p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 139(1), Section 142 and other applicable provisions of the Companies Act, 2013 read with the Companies (Audit and Auditors) Rules, 2014, ${auditorLabel(f)}, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate under Rule 4(1) confirming eligibility under Section 141, be and ${f.auditorType === "firm" ? "are" : "is"} hereby appointed as the <strong>Statutory Auditor${f.auditorType === "firm" ? "s" : ""}</strong> of the Company, to hold office for a term of <strong>five consecutive years</strong> from the conclusion of this <strong>${agm} Annual General Meeting</strong> until the conclusion of the <strong>${sixth} Annual General Meeting</strong>, at such remuneration${f.remuneration ? ` of Rs. ${f.remuneration} per annum,` : ""} as shall be fixed by the Board in consultation with the Auditors.</p>
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 139(1), Section 142 and other applicable provisions of the Companies Act, 2013 read with the Companies (Audit and Auditors) Rules, 2014, ${auditorLabel(f)}, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate under Rule 4(1) confirming eligibility under Section 141, be and ${f.auditorType === "firm" ? "are" : "is"} hereby appointed as the <strong>Statutory Auditor${f.auditorType === "firm" ? "s" : ""}</strong> of the Company, to hold office for a term of <strong>five consecutive years</strong> from the conclusion of this <strong>${agm} Annual General Meeting</strong>${f.fy ? ` (FY ${f.fy})` : ""} until the conclusion of the <strong>${sixth} Annual General Meeting</strong>${f.fy ? ` (FY ${addFYYears(f.fy, 5)})` : ""}, at such remuneration${f.remuneration ? ` of Rs. ${f.remuneration} per annum,` : ""} as shall be fixed by the Board in consultation with the Auditors.</p>
 <p class="para"><strong>RESOLVED FURTHER THAT</strong> the Board of Directors be and is hereby authorised to file Form ADT-1 within fifteen days and to do all acts as may be required."</p>
 </div>
 <p class="italic para" style="font-size:11pt;">Note: No annual ratification at subsequent AGMs is required [Companies (Amendment) Act, 2017].</p>
