@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Notes to Financial Statements
  * Format: Section A (Corporate Information) + Section B (Significant Accounting Policies a–u)
  * Applicable: Companies Act 2013 | Indian GAAP | AS framework
@@ -7,7 +7,7 @@
 
 import type { AnnualFilingData } from "../../types";
 import { buildDividendText } from "../../types";
-import { buildPageSigFooter, fmtDate, fyEndYear, fyStartYear, sigCol, wrapPage } from "../../utils";
+import { buildPageSigFooter, fmtDate, fyEndYear, fyStartYear, sigCol, b64DataUri, wrapPage } from "../../utils";
 
 export function generateNotesOnAccounts(data: AnnualFilingData): string {
   const fy      = data.financialYear;
@@ -286,13 +286,11 @@ ${isSection8
       For <strong>${auditorFirmName}</strong><br>
       Chartered Accountants<br>
       Firm No.: ${auditorFRN}</p>
-      ${aud.sealBase64
-        ? `<img src="data:image/jpeg;base64,${aud.sealBase64}" style="height:50pt;max-width:110pt;display:block;margin-top:6pt;object-fit:contain;" alt="Firm Seal">`
-        : ""}
+      
       ${aud.signatureBase64
-        ? `<img src="data:image/jpeg;base64,${aud.signatureBase64}" style="height:36pt;max-width:110pt;display:block;margin-top:${aud.sealBase64 ? "4pt" : "20pt"};object-fit:contain;" alt="Signature">`
+        ? `<img src="${b64DataUri(aud.signatureBase64)}" style="height:36pt;max-width:110pt;display:block;margin-top:20pt;object-fit:contain;" alt="Signature">`
         : ""}
-      <div class="sig-line"${(aud.signatureBase64 || aud.sealBase64) ? ' style="margin-top:4pt"' : ""}>
+      <div class="sig-line"${aud.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
         <strong>${partnerName}</strong><br>
         ${partnerLabel}<br>
         M.No.: ${memberNo}<br>
@@ -302,21 +300,21 @@ ${isSection8
     <div class="sig-col">
       <p>For and on behalf of the Board<br>
       <strong>FOR:- ${data.companyName}</strong></p>
-      ${dir1.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir1.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
+      ${dir1.signatureBase64 ? `<img src="${b64DataUri(dir1.signatureBase64)}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
       <div class="sig-line"${dir1.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
         <strong>${dir1.name || "________________"}</strong><br>
         ${dir1.designation || "Director"}<br>
         DIN: ${dir1.din || "________________"}
       </div>
       ${dir2?.name ? `
-        ${dir2.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir2.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;margin-top:16pt;">` : ""}
+        ${dir2.signatureBase64 ? `<img src="${b64DataUri(dir2.signatureBase64)}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;margin-top:16pt;">` : ""}
         <div class="sig-line" style="margin-top:${dir2.signatureBase64 ? "4pt" : "20pt"};">
           <strong>${dir2.name}</strong><br>
           ${dir2.designation || "Director"}<br>
           DIN: ${dir2.din || "________________"}
         </div>` : ""}
       ${dir3?.name ? `
-        ${dir3.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir3.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;margin-top:16pt;">` : ""}
+        ${dir3.signatureBase64 ? `<img src="${b64DataUri(dir3.signatureBase64)}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;margin-top:16pt;">` : ""}
         <div class="sig-line" style="margin-top:${dir3.signatureBase64 ? "4pt" : "20pt"};">
           <strong>${dir3.name}</strong><br>
           ${dir3.designation || "Director"}<br>
@@ -337,7 +335,7 @@ ${isSection8
     ...(dir3?.name ? [{ name: dir3.name, designation: dir3.designation, din: dir3.din, signatureBase64: dir3.signatureBase64 }] : []),
   ];
   const pageFooter = buildPageSigFooter(
-    pageSigs,
+    [],
     { base64: aud.sealBase64 || undefined, firmName: aud.firmName ? `M/s. ${aud.firmName}` : undefined, frn: aud.frn || undefined }
   );
 

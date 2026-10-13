@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Board Report — Rule 8A (Abridged)
  * Applicable to: OPC (One Person Company) + Small Companies
  * Legal basis: Section 134 of Companies Act 2013 read with Rule 8A of
@@ -613,7 +613,7 @@ ${data.significantOrders && data.significantOrdersDetails
     ...(sig2?.name ? [{ name: sig2.name, designation: sig2.designation, din: sig2.din, signatureBase64: sig2.signatureBase64 }] : []),
     ...(sig3?.name ? [{ name: sig3.name, designation: sig3.designation, din: sig3.din, signatureBase64: sig3.signatureBase64 }] : []),
   ];
-  const pageFooter = buildPageSigFooter(pageSigs);
+  const pageFooter = buildPageSigFooter([]);
 
   return wrapPage(
     `Directors' Report — ${data.companyName} — FY ${fy}`,

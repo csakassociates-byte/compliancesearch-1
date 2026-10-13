@@ -183,33 +183,49 @@ export function commonPrintCSS(): string {
     .indent      { margin-left: 20pt; }
     .section-num { font-weight: bold; }
 
-    /* ── Page-repeating signature / seal footer ── */
+    /* ── Page-repeating director sig strip + floating seal stamp ── */
 
-    /* Screen: shown once at the bottom of the document flow */
+    /* Screen: strip at end of flow; stamp fixed so it is never in document flow (prevents Chrome PDF double-render) */
     @media screen {
-      .page-sig-footer { margin-top: 40pt; }
+      .page-sig-strip  { margin-top: 40pt; }
+      .page-seal-stamp { position: fixed; bottom: 20px; right: 20px; opacity: 0.6; }
+      .page-seal-stamp img { width: 90pt; height: auto; display: block; }
     }
 
-    /* Print: fixed at bottom of EVERY page — left/right/bottom offset 20mm to match body margins */
+    /* Print: director sig strip fixed at bottom; seal stamp floats ABOVE the strip (separate from footer) */
     @media print {
-      .page-sig-footer {
+      .page-sig-strip {
         position: fixed;
         bottom: 20mm;
         left: 20mm;
-        right: 20mm;
-        height: 20mm;
-        padding: 4pt 0 2pt;
+        right: 110pt;
+        height: 14mm;
+        padding: 2pt 0 2pt;
         margin: 0;
         z-index: 9999;
       }
-      /* Push content up so nothing flows under the footer (40mm footer bottom + 4mm gap) */
-      .has-page-footer { padding-bottom: 44mm; }
+      .page-seal-stamp {
+        position: fixed;
+        bottom: 38mm;
+        right: 20mm;
+        z-index: 10000;
+        pointer-events: none;
+      }
+      .page-seal-stamp img {
+        width: 90pt;
+        height: auto;
+        display: block;
+      }
+      /* Push content up so nothing flows under strip/stamp area */
+      .has-page-footer { padding-bottom: 50mm; }
+      /* Extra padding when seal stamp is present (stamp top at ~70mm from bottom) */
+      .has-page-stamp  { padding-bottom: 75mm; }
     }
 
-    .page-sig-footer {
+    .page-sig-strip {
       display: flex;
       align-items: flex-end;
-      justify-content: space-between;
+      justify-content: flex-start;
       gap: 6pt;
       background: white;
       border-top: 0.5pt solid #666;
@@ -221,19 +237,12 @@ export function commonPrintCSS(): string {
       align-items: center;
       flex: 1;
       min-width: 0;
-      padding-top: 4pt;
+      padding-top: 2pt;
     }
 
     .psf-sig-img {
       max-height: 26pt;
       max-width: 86pt;
-      object-fit: contain;
-      display: block;
-    }
-
-    .psf-seal-img {
-      max-height: 30pt;
-      max-width: 64pt;
       object-fit: contain;
       display: block;
     }
@@ -261,11 +270,16 @@ export function commonPrintCSS(): string {
   `;
 }
 
-/** Build the repeating per-page footer strip (director sigs and/or CA seal) */
+/** Auto-detect PNG vs JPEG from base64 prefix and return a data URI */
+export function b64DataUri(b64: string): string {
+  return b64.startsWith("/9j/") ? `data:image/jpeg;base64,${b64}` : `data:image/png;base64,${b64}`;
+}
+
+/** Build the repeating per-page footer: director sig strip (left) + floating seal stamp (right) */
 export function buildPageSigFooter(
   sigs: Array<{ name?: string; designation?: string; din?: string; signatureBase64?: string }>,
   seal?: { base64?: string; firmName?: string; frn?: string },
-  align: "space-between" | "flex-end" = "space-between"
+  _align?: string  // kept for call-site backward compatibility, no longer used
 ): string {
   if (!sigs.length && !seal) return "";
 
@@ -273,29 +287,28 @@ export function buildPageSigFooter(
     .filter(s => s.name || s.signatureBase64)
     .map(s => `<div class="psf-slot">
   ${s.signatureBase64
-    ? `<img class="psf-sig-img" src="data:image/jpeg;base64,${s.signatureBase64}" alt="Sig">`
+    ? `<img class="psf-sig-img" src="${b64DataUri(s.signatureBase64)}" alt="Sig">`
     : `<div style="height:26pt;"></div>`}
   <div class="psf-name">${s.name || "________________"}</div>
   ${s.designation ? `<div class="psf-sub">${s.designation}</div>` : ""}
   ${s.din         ? `<div class="psf-sub">DIN: ${s.din}</div>`    : ""}
 </div>`).join("");
 
-  const sealSlot = seal ? `<div class="psf-slot">
-  ${seal.base64
-    ? `<img class="psf-seal-img" src="data:image/jpeg;base64,${seal.base64}" alt="Seal">`
-    : `<div style="height:30pt;"></div>`}
-  ${seal.firmName ? `<div class="psf-name">${seal.firmName}</div>` : ""}
-  ${seal.frn      ? `<div class="psf-sub">FRN: ${seal.frn}</div>` : ""}
-</div>` : "";
+  const stripHtml = sigSlots
+    ? `<div class="page-sig-strip">${sigSlots}</div>`
+    : "";
 
-  const style = align !== "space-between" ? ` style="justify-content:${align}"` : "";
-  return `<div class="page-sig-footer"${style}>${sigSlots}${sealSlot}</div>`;
+  const stampHtml = seal?.base64
+    ? `<div class="page-seal-stamp"><img src="${b64DataUri(seal.base64)}" alt="Seal"></div>`
+    : "";
+
+  return stripHtml + stampHtml;
 }
 
 /** Generate a single signature column div (with optional embedded signature image) */
 export function sigCol(sig: { name?: string; din?: string; designation?: string; signatureBase64?: string }, opts?: { width?: string }): string {
   const imgHtml = sig.signatureBase64
-    ? `<img src="data:image/jpeg;base64,${sig.signatureBase64}" style="height:40pt;max-width:130pt;display:block;object-fit:contain;">`
+    ? `<img src="${b64DataUri(sig.signatureBase64)}" style="height:40pt;max-width:130pt;display:block;object-fit:contain;">`
     : "";
   const lineMargin = sig.signatureBase64 ? "margin-top:4pt" : "";
   const colStyle   = opts?.width ? ` style="width:${opts.width}"` : "";
@@ -312,7 +325,10 @@ export function sigCol(sig: { name?: string; din?: string; designation?: string;
 /** Wrap HTML content in a full printable page.
  *  Pass footerHtml (from buildPageSigFooter) to repeat signatures on every printed page. */
 export function wrapPage(title: string, bodyHtml: string, footerHtml?: string): string {
-  const bodyAttr = footerHtml ? ' class="has-page-footer"' : '';
+  const hasFooter = !!footerHtml;
+  const hasStamp  = hasFooter && footerHtml!.includes('page-seal-stamp');
+  const classes   = [hasFooter ? 'has-page-footer' : '', hasStamp ? 'has-page-stamp' : ''].filter(Boolean).join(' ');
+  const bodyAttr  = classes ? ` class="${classes}"` : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

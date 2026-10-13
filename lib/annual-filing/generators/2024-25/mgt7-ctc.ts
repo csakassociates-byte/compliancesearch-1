@@ -1,11 +1,11 @@
-/**
+﻿/**
  * MGT-7 / MGT-7A CTC — Extract of Board Resolution
  * Appointment of Designated Person to furnish information to ROC
  * under Rule 9, Section 89 & 90 of Companies Act 2013
  */
 
 import type { AnnualFilingData } from "../../types";
-import { buildPageSigFooter, fmtDate } from "../../utils";
+import { buildPageSigFooter, b64DataUri, fmtDate } from "../../utils";
 
 export function generateMGT7CTC(data: AnnualFilingData): string {
   const meetingDate  = fmtDate(data.dateOfReport) || "________________";
@@ -35,7 +35,7 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
   function buildSig(dir: { name: string; designation: string; din: string; signatureBase64?: string }) {
     return `
     <div class="sig-col">
-      ${dir.signatureBase64 ? `<img src="data:image/jpeg;base64,${dir.signatureBase64}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
+      ${dir.signatureBase64 ? `<img src="${b64DataUri(dir.signatureBase64)}" style="height:36pt;max-width:120pt;display:block;object-fit:contain;">` : ""}
       <div class="sig-line"${dir.signatureBase64 ? ' style="margin-top:4pt"' : ""}>
         <strong>${dir.name || "________________"}</strong><br>
         ${dir.designation || "Director"}<br>
@@ -124,13 +124,13 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
     .sig-col { flex: 1; }
     .sig-col .sig-line { border-top: 1px solid #000; padding-top: 4pt; margin-top: 30pt; }
 
-    @media screen { .page-sig-footer { margin-top: 40pt; } }
+    @media screen { .page-sig-strip { margin-top: 40pt; } }
     @media print {
-      .page-sig-footer { position: fixed; bottom: 0; left: 0; right: 0; height: 20mm; padding: 4pt 0 2pt; margin: 0; z-index: 9999; }
-      .has-page-footer { padding-bottom: 24mm; }
+      .page-sig-strip { position: fixed; bottom: 0; left: 0; right: 100pt; height: 14mm; padding: 2pt 0 2pt; margin: 0; z-index: 9999; }
+      .has-page-footer { padding-bottom: 50mm; }
     }
-    .page-sig-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 6pt; background: white; border-top: 0.5pt solid #666; }
-    .psf-slot { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; padding-top: 4pt; }
+    .page-sig-strip { display: flex; align-items: flex-end; justify-content: flex-start; gap: 6pt; background: white; border-top: 0.5pt solid #666; }
+    .psf-slot { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; padding-top: 2pt; }
     .psf-sig-img { max-height: 26pt; max-width: 86pt; object-fit: contain; display: block; }
     .psf-name { font-size: 7pt; font-weight: bold; text-align: center; margin-top: 2pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
     .psf-sub  { font-size: 6pt; color: #333; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
@@ -141,7 +141,7 @@ export function generateMGT7CTC(data: AnnualFilingData): string {
     ...(dir2?.name ? [{ name: dir2.name, designation: dir2.designation, din: dir2.din, signatureBase64: dir2.signatureBase64 }] : []),
     ...(dir3?.name ? [{ name: dir3.name, designation: dir3.designation, din: dir3.din, signatureBase64: dir3.signatureBase64 }] : []),
   ];
-  const pageFooter = buildPageSigFooter(pageSigs);
+  const pageFooter = buildPageSigFooter([]);
   const bodyAttr = pageFooter ? ' class="has-page-footer"' : '';
 
   return `<!DOCTYPE html>
@@ -180,3 +180,4 @@ ${pageFooter}
 </body>
 </html>`;
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Board Report — Rule 8 (Full)
  * Applicable to: Section 8 Companies, Farmer Producer Companies (FPC),
  *   and Private Limited NOT qualifying as small company
@@ -649,7 +649,7 @@ ${data.significantOrders && data.significantOrdersDetails
     ...(sig2?.name ? [{ name: sig2.name, designation: sig2.designation, din: sig2.din, signatureBase64: sig2.signatureBase64 }] : []),
     ...(sig3?.name ? [{ name: sig3.name, designation: sig3.designation, din: sig3.din, signatureBase64: sig3.signatureBase64 }] : []),
   ];
-  const pageFooter = buildPageSigFooter(pageSigs);
+  const pageFooter = buildPageSigFooter([]);
 
   return wrapPage(
     `Directors' Report — ${data.companyName} — FY ${fy}`,

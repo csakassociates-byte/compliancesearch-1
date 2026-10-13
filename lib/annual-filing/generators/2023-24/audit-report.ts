@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Independent Auditor's Report Generator — FY 2023-24
  * Format: firm's standard template (AR_FORMAT.pdf)
  * SA 700 (Unmodified), SA 705 (Modified), SA 706 (EOM)
@@ -14,7 +14,7 @@
 
 import type { AnnualFilingData } from "../../types";
 import { buildDividendText } from "../../types";
-import { buildPageSigFooter, fmtDate, fyEndYear, wrapPage } from "../../utils";
+import { buildPageSigFooter, fmtDate, fyEndYear, b64DataUri, wrapPage } from "../../utils";
 
 export type OpinionType = "unmodified" | "qualified" | "adverse" | "disclaimer";
 
@@ -188,13 +188,10 @@ ${auditTrailPara}
       <p><em>For M/s ${firmDisplayName}</em><br>
       <em>Chartered Accountants</em><br>
       ${frnLine}</p>
-      ${aud.sealBase64
-        ? `<img src="data:image/jpeg;base64,${aud.sealBase64}" style="height:60pt;max-width:120pt;display:block;margin-top:8pt;object-fit:contain;" alt="Firm Seal">`
-        : '<div style="height:60pt;"></div>'}
     </div>
     <div style="text-align:right;min-width:45%;">
       ${aud.signatureBase64
-        ? `<img src="data:image/jpeg;base64,${aud.signatureBase64}" style="height:40pt;max-width:120pt;display:inline-block;object-fit:contain;margin-bottom:2pt;" alt="Signature">`
+        ? `<img src="${b64DataUri(aud.signatureBase64)}" style="height:40pt;max-width:120pt;display:inline-block;object-fit:contain;margin-bottom:2pt;" alt="Signature">`
         : '<div style="height:40pt;"></div>'}
       <p><strong>${aud.partnerName || "[Partner Name]"}</strong><br>
       (${partnerLabel})<br>

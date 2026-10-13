@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AOC-1 — Statement containing salient features of financial statements
  *   of subsidiaries / associate companies / joint ventures
  * Pursuant to: First proviso to Section 129(3) of the Companies Act, 2013
@@ -192,7 +192,7 @@ ${renderPartB(subsidiaries, fyEnd)}
     ...(sig2?.name ? [{ name: sig2.name, designation: sig2.designation, din: sig2.din, signatureBase64: sig2.signatureBase64 }] : []),
     ...(sig3?.name ? [{ name: sig3.name, designation: sig3.designation, din: sig3.din, signatureBase64: sig3.signatureBase64 }] : []),
   ];
-  const pageFooter = buildPageSigFooter(pageSigs);
+  const pageFooter = buildPageSigFooter([]);
 
   return wrapPage(
     `Form AOC-1 — ${data.companyName} — FY ${fy}`,

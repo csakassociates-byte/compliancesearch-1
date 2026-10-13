@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shareholder / Member List as on 31st March
  * Attachment for MGT-7 / MGT-7A filing
  * Shows full member register as at year-end
@@ -178,7 +178,7 @@ export function generateShareholderList(data: AnnualFilingData): string {
     ...(d2?.name ? [{ name: d2.name, designation: d2.designation, din: d2.din, signatureBase64: d2.signatureBase64 }] : []),
     ...(d3?.name ? [{ name: d3.name, designation: d3.designation, din: d3.din, signatureBase64: d3.signatureBase64 }] : []),
   ];
-  const pageFooter = buildPageSigFooter(pageSigs);
+  const pageFooter = buildPageSigFooter([]);
 
   return wrapPage(
     `Shareholder List — ${data.companyName} — FY ${fy}`,
