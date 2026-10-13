@@ -1127,6 +1127,7 @@ export default function AuditorAppointmentPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [previewLabel, setPreviewLabel] = useState("");
   const [previewKey, setPreviewKey] = useState<string>("");
+  const [pdfLoading, setPdfLoading] = useState<Record<string, boolean>>({});
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const membershipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1572,6 +1573,48 @@ export default function AuditorAppointmentPage() {
     setPreviewKey(key);
     setPreviewLabel(label);
     setPreview(final);
+  }
+
+  async function handleDownloadPdf(docKey: string, docLabel: string, withLH: boolean) {
+    const doc = docs.find(d => d.key === docKey);
+    if (!doc) return;
+    const effectiveLH = withLH && !doc.auditorDoc;
+    const html = doc.gen(effectiveLH);
+    const final = session ? html : injectPreviewWatermark(html);
+    const loadKey = `${docKey}_${withLH ? "lh" : "nolh"}`;
+    setPdfLoading(prev => ({ ...prev, [loadKey]: true }));
+    try {
+      const filename = `${docLabel}_${f.companyName || "Company"}_FY${f.fy || ""}`
+        .replace(/[^a-zA-Z0-9_\-. ]/g, "_");
+      const res = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          html: final,
+          filename,
+          docType: docKey,
+          companyName: f.companyName || "",
+          docTitle: docLabel,
+          dirs: [],
+          auditor: undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error((err as { error?: string }).error || "PDF generation failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      alert(`PDF generation failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPdfLoading(prev => ({ ...prev, [loadKey]: false }));
+    }
   }
 
   function requestAction(docKey: string, action: "print" | "word", withLHOverride?: boolean) {
@@ -2537,13 +2580,17 @@ export default function AuditorAppointmentPage() {
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <h3 className="font-bold text-slate-800">{previewLabel}</h3>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <button onClick={() => requestAction(previewKey, "print", true)}
-                          className="px-3 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-teal-600 to-teal-700 shadow-sm hover:from-teal-500 hover:to-teal-600 transition-all">
-                          ⬇️ With Letterhead
+                        <button
+                          onClick={() => handleDownloadPdf(previewKey, previewLabel, true)}
+                          disabled={pdfLoading[`${previewKey}_lh`]}
+                          className="px-3 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-teal-600 to-teal-700 shadow-sm hover:from-teal-500 hover:to-teal-600 disabled:opacity-50 disabled:cursor-wait transition-all">
+                          {pdfLoading[`${previewKey}_lh`] ? "Generating…" : "⬇️ With Letterhead"}
                         </button>
-                        <button onClick={() => requestAction(previewKey, "print", false)}
-                          className="px-3 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-slate-500 to-slate-600 shadow-sm hover:from-slate-400 hover:to-slate-500 transition-all">
-                          ⬇️ Without Letterhead
+                        <button
+                          onClick={() => handleDownloadPdf(previewKey, previewLabel, false)}
+                          disabled={pdfLoading[`${previewKey}_nolh`]}
+                          className="px-3 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-slate-500 to-slate-600 shadow-sm hover:from-slate-400 hover:to-slate-500 disabled:opacity-50 disabled:cursor-wait transition-all">
+                          {pdfLoading[`${previewKey}_nolh`] ? "Generating…" : "⬇️ Without Letterhead"}
                         </button>
                         <button onClick={() => requestAction(previewKey, "word")}
                           className="px-3 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-blue-600 to-blue-700 shadow-sm hover:from-blue-500 hover:to-blue-600 transition-all">
@@ -2582,13 +2629,17 @@ export default function AuditorAppointmentPage() {
                                 className="px-3 py-1.5 rounded-lg border-2 border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors">
                                 👁️ Preview
                               </button>
-                              <button onClick={() => requestAction(doc.key, "print", true)}
-                                className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all">
-                                ⬇️ With LH
+                              <button
+                                onClick={() => handleDownloadPdf(doc.key, doc.label, true)}
+                                disabled={pdfLoading[`${doc.key}_lh`]}
+                                className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 disabled:opacity-50 disabled:cursor-wait transition-all">
+                                {pdfLoading[`${doc.key}_lh`] ? "…" : "⬇️ With LH"}
                               </button>
-                              <button onClick={() => requestAction(doc.key, "print", false)}
-                                className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gradient-to-br from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 transition-all">
-                                ⬇️ Without LH
+                              <button
+                                onClick={() => handleDownloadPdf(doc.key, doc.label, false)}
+                                disabled={pdfLoading[`${doc.key}_nolh`]}
+                                className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gradient-to-br from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 disabled:opacity-50 disabled:cursor-wait transition-all">
+                                {pdfLoading[`${doc.key}_nolh`] ? "…" : "⬇️ Without LH"}
                               </button>
                               <button onClick={() => requestAction(doc.key, "word")}
                                 className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 transition-all">
@@ -2603,34 +2654,26 @@ export default function AuditorAppointmentPage() {
                     <SectionCard title="">
                       <div className="flex gap-3">
                         <button
-                          onClick={() => {
-                            docs.forEach((doc, i) => {
-                              setTimeout(() => {
-                                const html = doc.gen(!doc.auditorDoc);
-                                const final = session ? html : injectPreviewWatermark(html);
-                                printDoc(final);
-                              }, i * 900);
-                            });
+                          onClick={async () => {
+                            for (const doc of docs) {
+                              await handleDownloadPdf(doc.key, doc.label, true);
+                            }
                           }}
                           className="flex-1 py-3 rounded-xl text-white font-bold text-sm bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all shadow-sm">
                           ⬇️ Download All (With LH)
                         </button>
                         <button
-                          onClick={() => {
-                            docs.forEach((doc, i) => {
-                              setTimeout(() => {
-                                const html = doc.gen(false);
-                                const final = session ? html : injectPreviewWatermark(html);
-                                printDoc(final);
-                              }, i * 900);
-                            });
+                          onClick={async () => {
+                            for (const doc of docs) {
+                              await handleDownloadPdf(doc.key, doc.label, false);
+                            }
                           }}
                           className="flex-1 py-3 rounded-xl text-white font-bold text-sm bg-gradient-to-br from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 transition-all shadow-sm">
                           ⬇️ Download All (Without LH)
                         </button>
                       </div>
                       <p className="text-xs text-slate-400 text-center mt-2">
-                        Opens each document in a separate print/save PDF dialog
+                        Downloads each document as a proper PDF file
                       </p>
                     </SectionCard>
 
