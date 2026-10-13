@@ -264,6 +264,10 @@ export default function ComplianceMonitorPage() {
     itrPending:        activeRows.filter(r => !r.itrStatus || r.itrStatus.toLowerCase() === "pending" || r.itrStatus.toLowerCase() === "not filed").length,
     udinDone:          activeRows.filter(r => !!r.udinStatutory && r.udinStatutory !== "na").length,
     udinPendingBS:     activeRows.filter(r => r.balanceSheetReady && !r.udinStatutory).length,
+    // ADT-1 / Auditor Appointment
+    adt1Valid:         activeRows.filter(r => !!r.adt1Srn && !r.adt1ReapptDue).length,
+    adt1ReapptDue:     activeRows.filter(r => !!r.adt1ReapptDue).length,
+    adt1Pending:       activeRows.filter(r => !r.adt1Srn && r.workStatus !== "declined").length,
   };
 
   const filterKeyLabel: Record<string, string> = {
@@ -273,6 +277,8 @@ export default function ComplianceMonitorPage() {
     attachPendingBS: "Attachments pending (BS ready)", aoc4Pending: "AOC-4 not filed (attachments ready)",
     mgt7Pending: "MGT-7 not filed (attachments ready)", udinPendingBS: "UDIN pending (BS ready)",
     itrPending: "ITR pending",
+    adt1ReapptDueFlt: "ADT-1 — Reappointment due this AGM",
+    adt1PendingFlt: "ADT-1 pending (no SRN)",
   };
 
   const counts = {
@@ -303,6 +309,8 @@ export default function ComplianceMonitorPage() {
     if (formFilter === "mgt7Pending"      && !(r.attachmentsGenerated && !r.mgt7Srn)) return false;
     if (formFilter === "udinPendingBS"    && !(r.balanceSheetReady && !r.udinStatutory)) return false;
     if (formFilter === "itrPending"       && !(!r.itrStatus || r.itrStatus.toLowerCase() === "pending" || r.itrStatus.toLowerCase() === "not filed")) return false;
+    if (formFilter === "adt1ReapptDueFlt" && !r.adt1ReapptDue) return false;
+    if (formFilter === "adt1PendingFlt"   && !!r.adt1Srn) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       return r.companyName.toLowerCase().includes(q) || (r.cin || "").toLowerCase().includes(q);
@@ -1148,6 +1156,40 @@ export default function ComplianceMonitorPage() {
                       {ps.bsReady > 0 && <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.round(ps.udinDone / ps.bsReady * 100)}%` }} />}
                     </div>
                     <span className="text-[10px] text-slate-400 flex-none">of {ps.bsReady} BS ready</span>
+                  </div>
+
+                  {/* Parallel track — ADT-1 Auditor Appointment */}
+                  <div className="mt-2 flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 flex-wrap">
+                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex-none">Parallel track</div>
+                    <div className="h-3 w-px bg-slate-200 flex-none" />
+                    <div className="text-[11px] font-semibold text-slate-600 flex-none">ADT-1 (Auditor Appointment)</div>
+                    <div className="h-3 w-px bg-slate-200 flex-none" />
+                    <span className="text-[11px] font-semibold text-emerald-600 flex-none">{ps.adt1Valid} ✓ valid</span>
+                    {ps.adt1ReapptDue > 0 && (
+                      <button
+                        onClick={() => setFormFilter(f => f === "adt1ReapptDueFlt" ? null : "adt1ReapptDueFlt")}
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap transition ${formFilter === "adt1ReapptDueFlt" ? "bg-orange-200 text-orange-900 border-orange-400" : "bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100"}`}
+                      >
+                        ⚠ {ps.adt1ReapptDue} reappt. due
+                      </button>
+                    )}
+                    {ps.adt1Pending > 0 && (
+                      <button
+                        onClick={() => setFormFilter(f => f === "adt1PendingFlt" ? null : "adt1PendingFlt")}
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap transition ${formFilter === "adt1PendingFlt" ? "bg-red-200 text-red-900 border-red-400" : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"}`}
+                      >
+                        {ps.adt1Pending} pending
+                      </button>
+                    )}
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden min-w-[60px]">
+                      {ps.active > 0 && (
+                        <>
+                          <div className="h-full rounded-full bg-emerald-400 float-left" style={{ width: `${Math.round(ps.adt1Valid / ps.active * 100)}%` }} />
+                          <div className="h-full rounded-full bg-orange-300 float-left" style={{ width: `${Math.round(ps.adt1ReapptDue / ps.active * 100)}%` }} />
+                        </>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 flex-none">of {ps.active} active</span>
                   </div>
                 </div>
               );
