@@ -146,10 +146,10 @@ const AUDIT_STEPS = [
 ═══════════════════════════════════════════════ */
 const DOC_CSS = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.65; color: #000; background: #fff; padding: 40px 50px; }
-  h1 { font-size: 15pt; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-  h2 { font-size: 13pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 4px; }
-  h3 { font-size: 12.5pt; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.65; color: #000; background: #fff; padding: 40px 50px; }
+  h1 { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  h2 { font-size: 12pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 4px; }
+  h3 { font-size: 11.5pt; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; }
   .center { text-align: center; }
   .right { text-align: right; }
   .section { margin: 18px 0; }
@@ -157,7 +157,7 @@ const DOC_CSS = `
   .bold { font-weight: bold; }
   .italic { font-style: italic; }
   table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-  td, th { border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 12pt; }
+  td, th { border: 1px solid #000; padding: 6px 10px; vertical-align: top; font-size: 11pt; }
   th { background: #f0f0f0; font-weight: bold; }
   .no-border td, .no-border th { border: none; padding: 4px 0; }
   .sig-block { margin-top: 40px; }
