@@ -1052,6 +1052,10 @@ export default function AuditorAppointmentPage() {
   // ── Document save state ──
   const [docSaveStatus, setDocSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [savedDocId, setSavedDocId] = useState<string | null>(null);
+  const [isFinalized, setIsFinalized] = useState(false);
+  const [finalizedBy, setFinalizedBy] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Shared company fill — used by both CompanySearch onSelect AND CompanyExcelUpload onFill
   function fillCompany(c: CompanyData) {
@@ -1122,25 +1126,88 @@ export default function AuditorAppointmentPage() {
       .catch(() => {});
   }, [f.cin, session]);
 
-  // Load saved document from ?load=<id>
+  // Load saved document from ?load=<id> OR auto-load latest draft for this CIN
   useEffect(() => {
+    if (!session) return;
     const loadId = new URLSearchParams(window.location.search).get("load");
-    if (!loadId || !session) return;
-    fetch(`/api/auditor-appointment?id=${loadId}`)
+    if (loadId) {
+      fetch(`/api/auditor-appointment?id=${loadId}`)
+        .then(r => r.json())
+        .then((data: { doc?: { id: string; formDataJson: string; isFinalized?: boolean; finalizedBy?: string | null } }) => {
+          if (data.doc?.formDataJson) {
+            try {
+              const saved = JSON.parse(data.doc.formDataJson) as F;
+              setF({ ...DEFAULT, ...saved });
+              setSavedDocId(data.doc.id);
+              setIsFinalized(data.doc.isFinalized ?? false);
+              setFinalizedBy(data.doc.finalizedBy ?? null);
+              setStep(5);
+              setHydrated(true);
+            } catch { /* ignore parse errors */ }
+          }
+        })
+        .catch(() => {});
+    } else {
+      setHydrated(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
+  // Auto-load existing draft when CIN is entered (no ?load= param, no draft loaded yet)
+  useEffect(() => {
+    if (!session || !f.cin || savedDocId) return;
+    const cinPattern = /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{2,4}[0-9]{6}$/;
+    if (!cinPattern.test(f.cin.trim().toUpperCase())) return;
+    fetch(`/api/auditor-appointment?cin=${encodeURIComponent(f.cin)}&fy=${encodeURIComponent(f.fy)}`)
       .then(r => r.json())
-      .then((data: { doc?: { id: string; formDataJson: string } }) => {
+      .then((data: { doc?: { id: string; formDataJson: string; isFinalized?: boolean; finalizedBy?: string | null } | null }) => {
         if (data.doc?.formDataJson) {
           try {
             const saved = JSON.parse(data.doc.formDataJson) as F;
-            setF({ ...DEFAULT, ...saved });
-            setSavedDocId(data.doc.id);
-            setStep(5);
-          } catch { /* ignore parse errors */ }
+            setF(p => ({ ...p, ...saved }));
+            setSavedDocId(data.doc!.id);
+            setIsFinalized(data.doc!.isFinalized ?? false);
+            setFinalizedBy(data.doc!.finalizedBy ?? null);
+          } catch { /* ignore */ }
         }
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [f.cin, session]);
+
+  // Auto-save draft to DB whenever form data changes (debounced 1.5s)
+  useEffect(() => {
+    if (!session || !hydrated || isFinalized) return;
+    if (!f.cin && f.companyName.trim().length < 5) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const auditorLabel_ = f.auditorType === "firm"
+          ? (f.firmName || "Auditor")
+          : (f.auditorName || "Auditor");
+        const title = `Auditor Appointment — ${f.companyName || "Company"} — ${auditorLabel_} — FY ${f.fy}`;
+        const res = await fetch("/api/auditor-appointment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: savedDocId || undefined,
+            companyName: f.companyName,
+            cin: f.cin || undefined,
+            financialYear: f.fy,
+            meetingDate: f.meetingDate || undefined,
+            title,
+            formDataJson: JSON.stringify(f),
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { id?: string; skipped?: boolean };
+          if (data.id && !savedDocId) setSavedDocId(data.id);
+        }
+      } catch { /* silent */ }
+    }, 1500);
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f, session, hydrated, isFinalized]);
 
   async function handleSaveDocument() {
     if (!session) return;
@@ -1167,6 +1234,42 @@ export default function AuditorAppointmentPage() {
       const data = await res.json() as { id?: string };
       if (data.id) setSavedDocId(data.id);
       setDocSaveStatus("saved");
+    } catch {
+      setDocSaveStatus("error");
+    }
+  }
+
+  async function handleFinalize() {
+    if (!session || !savedDocId) return;
+    setDocSaveStatus("saving");
+    try {
+      const res = await fetch("/api/auditor-appointment", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: savedDocId, action: "finalize" }),
+      });
+      if (!res.ok) throw new Error("finalize failed");
+      setIsFinalized(true);
+      setFinalizedBy((session.user as { email?: string })?.email ?? "You");
+      setDocSaveStatus("saved");
+    } catch {
+      setDocSaveStatus("error");
+    }
+  }
+
+  async function handleUnfinalize() {
+    if (!session || !savedDocId) return;
+    setDocSaveStatus("saving");
+    try {
+      const res = await fetch("/api/auditor-appointment", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: savedDocId, action: "unfinalize" }),
+      });
+      if (!res.ok) throw new Error("unfinalize failed");
+      setIsFinalized(false);
+      setFinalizedBy(null);
+      setDocSaveStatus("idle");
     } catch {
       setDocSaveStatus("error");
     }
@@ -1484,7 +1587,7 @@ export default function AuditorAppointmentPage() {
                 </button>
               )}
               {step === 5 && (
-                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setSavedAuditors([]); setSaveStatus("idle"); setDocSaveStatus("idle"); setSavedDocId(null); setMembershipAutoFilled(false); }}
+                <button onClick={() => { setStep(1); setF(DEFAULT); setPreview(null); setSavedAuditors([]); setSaveStatus("idle"); setDocSaveStatus("idle"); setSavedDocId(null); setIsFinalized(false); setFinalizedBy(null); setMembershipAutoFilled(false); }}
                   className="px-4 py-2 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 hover:border-slate-300 transition-colors">
                   🔄 New Appointment
                 </button>
@@ -2317,35 +2420,67 @@ export default function AuditorAppointmentPage() {
                       </p>
                     </SectionCard>
 
-                    {/* Save document to My Documents / Company Profile */}
+                    {/* Save / Finalize document record */}
                     {session && (
-                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Save Appointment Record</p>
-                        <p className="text-xs text-slate-400 mb-3">
-                          Save this appointment to your records — reprint anytime from My Clients or Documents.
-                        </p>
-                        <button
-                          onClick={handleSaveDocument}
-                          disabled={docSaveStatus === "saving"}
-                          className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
-                            docSaveStatus === "saved"
-                              ? "bg-teal-50 border-2 border-teal-400 text-teal-700"
-                              : docSaveStatus === "error"
-                              ? "bg-red-50 border-2 border-red-300 text-red-600 hover:bg-red-100"
-                              : docSaveStatus === "saving"
-                              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                              : "bg-gradient-to-br from-teal-600 to-teal-700 text-white hover:from-teal-500 hover:to-teal-600 shadow-sm"
-                          }`}>
-                          {docSaveStatus === "saving"   ? "Saving..."
-                           : docSaveStatus === "saved"  ? `✓ ${savedDocId ? "Record Updated" : "Appointment Saved"}`
-                           : docSaveStatus === "error"  ? "Save Failed — Try Again"
-                           : savedDocId                 ? "🔄 Update Saved Record"
-                           : "📁 Save to My Records"}
-                        </button>
-                        {docSaveStatus === "saved" && (
-                          <p className="text-xs text-teal-600 text-center mt-2">
-                            Visible in My Clients → {f.companyName || "Company"} → Documents
-                          </p>
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                        <div>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Appointment Record</p>
+                          {savedDocId && (
+                            <p className="text-xs text-slate-400 mb-1">
+                              {isFinalized
+                                ? `🔒 Locked by ${finalizedBy ?? "you"} — documents are final`
+                                : "Auto-saving draft as you fill the form"}
+                            </p>
+                          )}
+                        </div>
+
+                        {isFinalized ? (
+                          <div className="space-y-2">
+                            <div className="bg-teal-50 border-2 border-teal-400 rounded-xl px-4 py-3 text-center">
+                              <p className="text-sm font-bold text-teal-700">🔒 Appointment Finalized</p>
+                              <p className="text-xs text-teal-600 mt-1">Record is locked — documents are final</p>
+                            </div>
+                            <button
+                              onClick={handleUnfinalize}
+                              disabled={docSaveStatus === "saving"}
+                              className="w-full py-2.5 rounded-xl text-xs font-bold border-2 border-slate-300 text-slate-500 hover:bg-slate-50 transition-all">
+                              {docSaveStatus === "saving" ? "Unlocking..." : "🔓 Unlock to Edit"}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <button
+                              onClick={handleSaveDocument}
+                              disabled={docSaveStatus === "saving"}
+                              className={`w-full py-3 rounded-xl text-sm font-bold transition-all ${
+                                docSaveStatus === "saved"
+                                  ? "bg-teal-50 border-2 border-teal-400 text-teal-700"
+                                  : docSaveStatus === "error"
+                                  ? "bg-red-50 border-2 border-red-300 text-red-600 hover:bg-red-100"
+                                  : docSaveStatus === "saving"
+                                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                  : "bg-gradient-to-br from-teal-600 to-teal-700 text-white hover:from-teal-500 hover:to-teal-600 shadow-sm"
+                              }`}>
+                              {docSaveStatus === "saving"   ? "Saving..."
+                               : docSaveStatus === "saved"  ? `✓ ${savedDocId ? "Record Updated" : "Appointment Saved"}`
+                               : docSaveStatus === "error"  ? "Save Failed — Try Again"
+                               : savedDocId                 ? "🔄 Update Saved Record"
+                               : "📁 Save to My Records"}
+                            </button>
+                            {savedDocId && (
+                              <button
+                                onClick={handleFinalize}
+                                disabled={docSaveStatus === "saving"}
+                                className="w-full py-2.5 rounded-xl text-xs font-bold border-2 border-teal-500 text-teal-700 hover:bg-teal-50 transition-all">
+                                {docSaveStatus === "saving" ? "Finalizing..." : "🔒 Finalize & Lock Appointment"}
+                              </button>
+                            )}
+                            {docSaveStatus === "saved" && (
+                              <p className="text-xs text-teal-600 text-center">
+                                Visible in My Clients → {f.companyName || "Company"} → Documents
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
