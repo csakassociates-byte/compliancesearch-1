@@ -2487,6 +2487,14 @@ export default function AuditorAppointmentPage() {
                               className="w-full py-2.5 rounded-xl text-xs font-bold border-2 border-slate-300 text-slate-500 hover:bg-slate-50 transition-all">
                               {docSaveStatus === "saving" ? "Unlocking..." : "🔓 Unlock to Edit"}
                             </button>
+                            {f.cin && (
+                              <Link
+                                href={`/tools/documents/annual-filing?cin=${encodeURIComponent(f.cin)}&fy=${encodeURIComponent(f.fy)}`}
+                                className="w-full block text-center py-2.5 rounded-xl text-xs font-bold border-2 border-blue-500 text-blue-700 hover:bg-blue-50 transition-all"
+                              >
+                                → Proceed to Annual Filing Attachments
+                              </Link>
+                            )}
                           </div>
                         ) : (
                           <div className="space-y-2">

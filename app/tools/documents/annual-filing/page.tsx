@@ -572,6 +572,8 @@ function AnnualFilingTool() {
   }[] | null>(null);
   const [showAuditorImport, setShowAuditorImport] = useState(false);
   const [importingAuditor, setImportingAuditor] = useState(false);
+  const [autoAuditorAppt, setAutoAuditorAppt] = useState<{ id: string; title: string } | null>(null);
+  const [autoAuditorLoading, setAutoAuditorLoading] = useState(false);
 
   // ── Financial document auto-fill (Step 3) ────────────────────────────
   type FinExtracted = { label: string; fKey: string; prevKey: string; currentValue: number|null; prevValue: number|null; found: boolean; };
@@ -1316,6 +1318,31 @@ function AnnualFilingTool() {
       setSavingCA(false);
     }
   }
+
+  // ── Auto-detect finalized Auditor Appointment for same CIN+FY ────────
+  useEffect(() => {
+    if (!session?.user || !data.cin || !data.financialYear) { setAutoAuditorAppt(null); return; }
+    const cin = data.cin.trim().toUpperCase();
+    const fy  = data.financialYear;
+    const cinPattern = /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{2,4}[0-9]{6}$/;
+    if (!cinPattern.test(cin)) { setAutoAuditorAppt(null); return; }
+    let cancelled = false;
+    setAutoAuditorAppt(null);
+    fetch(`/api/auditor-appointment?cin=${encodeURIComponent(cin)}&fy=${encodeURIComponent(fy)}`)
+      .then(r => r.json() as Promise<{ doc?: { id: string; formDataJson: string; isFinalized: boolean } | null }>)
+      .then(json => {
+        if (cancelled) return;
+        if (json.doc?.isFinalized) {
+          const fd = JSON.parse(json.doc.formDataJson) as { firmName?: string; auditorName?: string };
+          const name = fd.firmName || fd.auditorName || "Auditor Appointment";
+          setAutoAuditorAppt({ id: json.doc.id, title: name });
+        } else {
+          setAutoAuditorAppt(null);
+        }
+      })
+      .catch(() => { if (!cancelled) setAutoAuditorAppt(null); });
+    return () => { cancelled = true; };
+  }, [data.cin, data.financialYear, session]);
 
   // ── Import auditor from saved Auditor Appointment document ───────────
   async function openAuditorImport() {
@@ -2115,6 +2142,31 @@ function AnnualFilingTool() {
 
     return (
       <>
+        {/* ── Smart auto-load from Auditor Appointment ── */}
+        {session?.user && autoAuditorAppt && (
+          <div className="bg-teal-50 border-2 border-teal-400 rounded-2xl p-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-teal-800">⚡ Finalized Auditor Appointment Found</p>
+              <p className="text-xs text-teal-700 mt-0.5">
+                <span className="font-semibold">{autoAuditorAppt.title}</span> — appointment is finalized for this company &amp; FY.
+                Auto-fill auditor details from this record?
+              </p>
+            </div>
+            <button
+              disabled={autoAuditorLoading}
+              onClick={async () => {
+                setAutoAuditorLoading(true);
+                await importAuditorFromDoc(autoAuditorAppt.id);
+                setAutoAuditorAppt(null);
+                setAutoAuditorLoading(false);
+              }}
+              className="flex-shrink-0 text-xs font-bold bg-teal-600 text-white px-4 py-2 rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
+            >
+              {autoAuditorLoading ? "Loading…" : "⚡ Auto-fill →"}
+            </button>
+          </div>
+        )}
+
         {/* ── Saved CA Selection ── */}
         {session?.user && (
           <SectionCard title="Select from Saved CAs" color="emerald">
@@ -2206,12 +2258,18 @@ function AnnualFilingTool() {
                   reader.onload = ev => { const b64 = (ev.target?.result as string).split(",")[1]; onDone(b64); };
                   reader.readAsDataURL(file);
                 }
+                function isPng(file: File) { return file.type === "image/png"; }
+                function pngOnly(file: File): boolean {
+                  if (isPng(file)) return true;
+                  alert("Only PNG format is accepted.\n\nTo convert JPEG/JPG to PNG with transparent background:\n1. Go to remove.bg (free) — removes white/plain background automatically\n2. Download the result as PNG\n\nOr for a simple format-only conversion (no background removal):\n- Windows: Open in Paint → File → Save As → PNG\n- Online: cloudconvert.com → select JPEG to PNG");
+                  return false;
+                }
                 function onPasteSig(e: React.ClipboardEvent) {
                   const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith("image/"));
                   if (!item) return;
                   e.preventDefault();
                   const file = item.getAsFile();
-                  if (!file) return;
+                  if (!file || !pngOnly(file)) return;
                   readFileAsB64(file, b64 => { patchAud({ signatureBase64: b64 }); void persistCAImage("signatureBase64", b64); });
                 }
                 function onPasteSeal(e: React.ClipboardEvent) {
@@ -2219,10 +2277,19 @@ function AnnualFilingTool() {
                   if (!item) return;
                   e.preventDefault();
                   const file = item.getAsFile();
-                  if (!file) return;
+                  if (!file || !pngOnly(file)) return;
                   readFileAsB64(file, b64 => { patchAud({ sealBase64: b64 }); void persistCAImage("sealBase64", b64); });
                 }
                 return (<>
+                {/* PNG conversion guide */}
+                <div className="col-span-2 mb-1 p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+                  <span className="font-semibold">PNG only accepted</span> — transparent background required so stamp/sign appears cleanly on documents.
+                  {" "}<span className="font-semibold">JPEG hai to convert karo:</span>
+                  {" "}White background remove karke PNG banane ke liye <a href="https://www.remove.bg" target="_blank" rel="noopener noreferrer" className="underline font-semibold text-blue-600">remove.bg</a> (free) use karo.
+                  {" "}Simple format conversion ke liye <a href="https://cloudconvert.com/jpg-to-png" target="_blank" rel="noopener noreferrer" className="underline font-semibold text-blue-600">cloudconvert.com</a>.
+                  {" "}Ya Windows Paint mein open karo → File → Save As → PNG.
+                </div>
+
                 <div>
                   <p className="text-xs text-slate-500 mb-2 font-semibold">Partner / Proprietor Signature</p>
                   {data.auditor.signatureBase64 ? (
@@ -2232,8 +2299,8 @@ function AnnualFilingTool() {
                         <span className="text-xs text-emerald-700 font-semibold">✓ Saved</span>
                         <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
                           Change
-                          <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
-                            const file = e.target.files?.[0]; if (!file) return;
+                          <input type="file" className="hidden" accept="image/png" onChange={e => {
+                            const file = e.target.files?.[0]; if (!file || !pngOnly(file)) return;
                             readFileAsB64(file, b64 => { patchAud({ signatureBase64: b64 }); void persistCAImage("signatureBase64", b64); });
                           }} />
                         </label>
@@ -2252,9 +2319,9 @@ function AnnualFilingTool() {
                     >
                       <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                       <span className="text-xs text-slate-500 font-semibold">Click to Upload / Ctrl+V to Paste</span>
-                      <span className="text-xs text-slate-400">PNG (transparent) or JPEG</span>
-                      <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
-                        const file = e.target.files?.[0]; if (!file) return;
+                      <span className="text-xs text-slate-400">PNG only (transparent background)</span>
+                      <input type="file" className="hidden" accept="image/png" onChange={e => {
+                        const file = e.target.files?.[0]; if (!file || !pngOnly(file)) return;
                         readFileAsB64(file, b64 => { patchAud({ signatureBase64: b64 }); void persistCAImage("signatureBase64", b64); });
                       }} />
                     </div>
@@ -2271,8 +2338,8 @@ function AnnualFilingTool() {
                         <span className="text-xs text-emerald-700 font-semibold">✓ Saved</span>
                         <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
                           Change
-                          <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
-                            const file = e.target.files?.[0]; if (!file) return;
+                          <input type="file" className="hidden" accept="image/png" onChange={e => {
+                            const file = e.target.files?.[0]; if (!file || !pngOnly(file)) return;
                             readFileAsB64(file, b64 => { patchAud({ sealBase64: b64 }); void persistCAImage("sealBase64", b64); });
                           }} />
                         </label>
@@ -2291,9 +2358,9 @@ function AnnualFilingTool() {
                     >
                       <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                       <span className="text-xs text-slate-500 font-semibold">Click to Upload / Ctrl+V to Paste</span>
-                      <span className="text-xs text-slate-400">PNG (transparent) or JPEG</span>
-                      <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => {
-                        const file = e.target.files?.[0]; if (!file) return;
+                      <span className="text-xs text-slate-400">PNG only (transparent background)</span>
+                      <input type="file" className="hidden" accept="image/png" onChange={e => {
+                        const file = e.target.files?.[0]; if (!file || !pngOnly(file)) return;
                         readFileAsB64(file, b64 => { patchAud({ sealBase64: b64 }); void persistCAImage("sealBase64", b64); });
                       }} />
                     </div>
@@ -4211,16 +4278,16 @@ function AnnualFilingTool() {
                             {sig.signatureBase64 ? (
                               <div className="p-2 border border-emerald-200 rounded-lg bg-emerald-50">
                                 <img
-                                  src={`data:image/jpeg;base64,${sig.signatureBase64}`}
+                                  src={sig.signatureBase64?.startsWith("iVBOR") ? `data:image/png;base64,${sig.signatureBase64}` : `data:image/jpeg;base64,${sig.signatureBase64}`}
                                   alt="Signature"
                                   className="h-12 object-contain mb-1"
-                                  style={{ maxWidth: "140px" }}
+                                  style={{ maxWidth: "140px", background: "repeating-conic-gradient(#e5e7eb 0% 25%, white 0% 50%) 0 0 / 8px 8px" }}
                                 />
                                 <div className="flex items-center gap-3">
                                   <span className="text-xs text-emerald-700 font-semibold">✓ Signature saved</span>
                                   <label className="text-xs text-blue-600 cursor-pointer hover:underline font-semibold">
                                     Change
-                                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => e.target.files?.[0] && uploadSignature(slot, e.target.files[0])} />
+                                    <input type="file" className="hidden" accept="image/png" onChange={e => { const f = e.target.files?.[0]; if (f) { if (f.type !== "image/png") { alert("Only PNG format accepted. Convert using remove.bg or Windows Paint → Save As → PNG."); return; } uploadSignature(slot, f); } }} />
                                   </label>
                                 </div>
                               </div>
@@ -4230,8 +4297,8 @@ function AnnualFilingTool() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                                 <span className="text-xs text-slate-500 font-semibold">Upload Signature</span>
-                                <span className="text-xs text-slate-400">JPEG / PNG — saved to director record</span>
-                                <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg" onChange={e => e.target.files?.[0] && uploadSignature(slot, e.target.files[0])} />
+                                <span className="text-xs text-slate-400">PNG only (transparent background)</span>
+                                <input type="file" className="hidden" accept="image/png" onChange={e => { const f = e.target.files?.[0]; if (f) { if (f.type !== "image/png") { alert("Only PNG format accepted. Convert using remove.bg or Windows Paint → Save As → PNG."); return; } uploadSignature(slot, f); } }} />
                               </label>
                             )}
                           </>
@@ -4758,7 +4825,7 @@ function AnnualFilingTool() {
                   <label className="flex items-center gap-1 cursor-pointer flex-shrink-0" title="Toggle signatures on this document">
                     <input
                       type="checkbox"
-                      checked={sigEnabled[a.key] !== false}
+                      checked={sigEnabled[a.key] === true}
                       onChange={e => {
                         const enabled = e.target.checked;
                         setSigEnabled(prev => ({ ...prev, [a.key]: enabled }));
@@ -4776,7 +4843,7 @@ function AnnualFilingTool() {
                     onClick={() => {
                       const cashFlowIncluded = data.companyType === "section8" || data.companyType === "fpc";
                       const opts = { ...auditOpts, cashFlowIncluded };
-                      const genData = sigEnabled[a.key] !== false ? data : stripDocSignatures(data);
+                      const genData = sigEnabled[a.key] === true ? data : stripDocSignatures(data);
                       const docs = generateAllAttachments(genData, opts) as unknown as Record<string, string>;
                       if (docs[a.key]) setGenerated(prev => ({ ...prev, [a.key]: docs[a.key] }));
                     }}
