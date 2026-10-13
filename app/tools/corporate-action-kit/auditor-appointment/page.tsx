@@ -1574,8 +1574,8 @@ export default function AuditorAppointmentPage() {
     setPreview(final);
   }
 
-  function requestAction(docKey: string, action: "print" | "word") {
-    const withLH = f.useLetterHead !== false;
+  function requestAction(docKey: string, action: "print" | "word", withLHOverride?: boolean) {
+    const withLH = withLHOverride !== undefined ? withLHOverride : f.useLetterHead !== false;
     const doc = docs.find(d => d.key === docKey);
     if (!doc) return;
     const effectiveLH = withLH && !doc.auditorDoc;
@@ -2537,9 +2537,13 @@ export default function AuditorAppointmentPage() {
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <h3 className="font-bold text-slate-800">{previewLabel}</h3>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <button onClick={() => requestAction(previewKey, "print")}
+                        <button onClick={() => requestAction(previewKey, "print", true)}
                           className="px-3 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-teal-600 to-teal-700 shadow-sm hover:from-teal-500 hover:to-teal-600 transition-all">
-                          🖨️ Print
+                          ⬇️ With Letterhead
+                        </button>
+                        <button onClick={() => requestAction(previewKey, "print", false)}
+                          className="px-3 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-slate-500 to-slate-600 shadow-sm hover:from-slate-400 hover:to-slate-500 transition-all">
+                          ⬇️ Without Letterhead
                         </button>
                         <button onClick={() => requestAction(previewKey, "word")}
                           className="px-3 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-br from-blue-600 to-blue-700 shadow-sm hover:from-blue-500 hover:to-blue-600 transition-all">
@@ -2570,18 +2574,21 @@ export default function AuditorAppointmentPage() {
                                 <p className="text-xs text-slate-400 mt-0.5">Auditor document — letterhead option uses auditor details</p>
                               )}
                             </div>
-                            <div className="flex gap-2 flex-shrink-0">
+                            <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
                               <button onClick={() => {
-                                const withLH = f.useLetterHead !== false;
-                                const effectiveLH = withLH && !doc.auditorDoc;
+                                const effectiveLH = !doc.auditorDoc;
                                 openPreview(doc.key, doc.label, doc.gen(effectiveLH));
                               }}
-                                className="px-3 py-1.5 rounded-lg border-2 border-teal-200 text-teal-700 text-xs font-bold hover:bg-teal-50 transition-colors">
-                                Preview
+                                className="px-3 py-1.5 rounded-lg border-2 border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-colors">
+                                👁️ Preview
                               </button>
-                              <button onClick={() => requestAction(doc.key, "print")}
+                              <button onClick={() => requestAction(doc.key, "print", true)}
                                 className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all">
-                                🖨️ Print
+                                ⬇️ With LH
+                              </button>
+                              <button onClick={() => requestAction(doc.key, "print", false)}
+                                className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gradient-to-br from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 transition-all">
+                                ⬇️ Without LH
                               </button>
                               <button onClick={() => requestAction(doc.key, "word")}
                                 className="px-3 py-1.5 rounded-lg text-white text-xs font-bold bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 transition-all">
@@ -2594,22 +2601,36 @@ export default function AuditorAppointmentPage() {
                     </SectionCard>
 
                     <SectionCard title="">
-                      <button
-                        onClick={() => {
-                          const withLH = f.useLetterHead !== false;
-                          docs.forEach((doc, i) => {
-                            setTimeout(() => {
-                              const html = doc.gen(withLH && !doc.auditorDoc);
-                              const final = session ? html : injectPreviewWatermark(html);
-                              printDoc(final);
-                            }, i * 900);
-                          });
-                        }}
-                        className="w-full py-3 rounded-xl text-white font-bold text-sm bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all shadow-sm">
-                        🖨️ Print All {docs.length} Documents
-                      </button>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            docs.forEach((doc, i) => {
+                              setTimeout(() => {
+                                const html = doc.gen(!doc.auditorDoc);
+                                const final = session ? html : injectPreviewWatermark(html);
+                                printDoc(final);
+                              }, i * 900);
+                            });
+                          }}
+                          className="flex-1 py-3 rounded-xl text-white font-bold text-sm bg-gradient-to-br from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 transition-all shadow-sm">
+                          ⬇️ Download All (With LH)
+                        </button>
+                        <button
+                          onClick={() => {
+                            docs.forEach((doc, i) => {
+                              setTimeout(() => {
+                                const html = doc.gen(false);
+                                const final = session ? html : injectPreviewWatermark(html);
+                                printDoc(final);
+                              }, i * 900);
+                            });
+                          }}
+                          className="flex-1 py-3 rounded-xl text-white font-bold text-sm bg-gradient-to-br from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 transition-all shadow-sm">
+                          ⬇️ Download All (Without LH)
+                        </button>
+                      </div>
                       <p className="text-xs text-slate-400 text-center mt-2">
-                        Opens each document in a separate print dialog
+                        Opens each document in a separate print/save PDF dialog
                       </p>
                     </SectionCard>
 
