@@ -29,6 +29,13 @@ export default async function HomePage() {
         <div className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-20 pointer-events-none" style={{ background: "radial-gradient(circle,#bfdbfe,transparent 70%)", transform: "translate(30%,-30%)" }} />
         <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full opacity-15 pointer-events-none" style={{ background: "radial-gradient(circle,#ddd6fe,transparent 70%)", transform: "translate(-30%,30%)" }} />
 
+        {/* Welcome greeting — only when logged in */}
+        {session?.user?.name && (
+          <p className="text-sm font-semibold mb-3" style={{ color: "#1d4ed8" }}>
+            Welcome back, {session.user.name.split(" ")[0]} 👋
+          </p>
+        )}
+
         {/* Badge */}
         <div className="inline-flex items-center gap-2 text-xs font-bold px-4 py-1.5 rounded-full mb-6 border uppercase tracking-widest"
           style={{ background: "#eff6ff", borderColor: "#bfdbfe", color: "#1d4ed8" }}>
