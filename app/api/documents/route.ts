@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTeamMemberIds } from "@/lib/team";
+import { getTeamMemberIds, getTeamContext } from "@/lib/team";
 import crypto from "crypto";
 
 // GET /api/documents — list team's documents
@@ -31,8 +31,12 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
 
+  // Save under ownerId so team member docs stay in org's namespace, no duplicates
+  const ctx = await getTeamContext(userId);
+  const ownerId = ctx.ownerId;
+
   const body = await req.json() as {
-    type: string; title: string; companyName?: string;
+    type: string; title: string; companyName?: string; companyId?: string;
     financialYear?: string; meetingDate?: string; formDataJson: string;
   };
 
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest) {
   await prisma.$executeRawUnsafe(
     `INSERT INTO csi_documents (id, "userId", type, title, "companyName", "financialYear", "meetingDate", "formDataJson", "updatedAt")
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    id, userId, body.type, body.title,
+    id, ownerId, body.type, body.title,
     body.companyName ?? null, body.financialYear ?? null,
     body.meetingDate ?? null, body.formDataJson, now
   );

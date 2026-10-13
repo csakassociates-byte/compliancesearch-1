@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTeamMemberIds } from "@/lib/team";
+import { getTeamMemberIds, getTeamContext } from "@/lib/team";
 import { syncCompany } from "@/lib/syncCompany";
 
 export async function POST(req: NextRequest) {
@@ -10,6 +10,8 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const userId = (session.user as { id: string }).id;
+    const ctx = await getTeamContext(userId);
+    const ownerId = ctx.ownerId;
 
     const body = await req.json() as {
       id?: string;
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
           title = $3, "companyName" = $4, "financialYear" = $5,
           "formDataJson" = $6, "companyId" = COALESCE("companyId", $7), "updatedAt" = NOW()
          WHERE id = $1 AND "userId" = ANY($2::text[])`,
-        body.id, [userId], body.title, body.assesseeName,
+        body.id, [ownerId], body.title, body.assesseeName,
         body.assessmentYear || null, body.formDataJson, companyId
       );
       return NextResponse.json({ id: body.id });
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
     await prisma.$executeRawUnsafe(
       `INSERT INTO csi_documents (id, "userId", type, title, "companyName", "financialYear", "formDataJson", "companyId", "createdAt", "updatedAt")
        VALUES ($1,$2,'itr_filing',$3,$4,$5,$6,$7,NOW(),NOW())`,
-      id, userId, body.title, body.assesseeName,
+      id, ownerId, body.title, body.assesseeName,
       body.assessmentYear || null, body.formDataJson, companyId
     );
     return NextResponse.json({ id });

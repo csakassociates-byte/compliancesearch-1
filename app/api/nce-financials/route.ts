@@ -3,13 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { syncCompany } from "@/lib/syncCompany";
-import { getTeamMemberIds } from "@/lib/team";
+import { getTeamMemberIds, getTeamContext } from "@/lib/team";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const userId = (session.user as { id: string }).id;
+    const ctx = await getTeamContext(userId);
+    const ownerId = ctx.ownerId;
 
     const body = await req.json() as {
       id?: string;
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
           title = $3, "companyName" = $4, "financialYear" = $5,
           "formDataJson" = $6, "companyId" = COALESCE("companyId", $7), "updatedAt" = NOW()
          WHERE id = $1 AND "userId" = ANY($2::text[])`,
-        body.id, [userId], body.title, body.entityName,
+        body.id, [ownerId], body.title, body.entityName,
         body.financialYear || null, body.formDataJson, companyId
       );
       return NextResponse.json({ id: body.id });
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
     await prisma.$executeRawUnsafe(
       `INSERT INTO csi_documents (id, "userId", type, title, "companyName", "financialYear", "formDataJson", "companyId", "createdAt", "updatedAt")
        VALUES ($1,$2,'nce_financials',$3,$4,$5,$6,$7,NOW(),NOW())`,
-      id, userId, body.title, body.entityName,
+      id, ownerId, body.title, body.entityName,
       body.financialYear || null, body.formDataJson, companyId
     );
     return NextResponse.json({ id });

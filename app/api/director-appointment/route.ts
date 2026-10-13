@@ -3,13 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { syncCompany } from "@/lib/syncCompany";
-import { getTeamMemberIds } from "@/lib/team";
+import { getTeamMemberIds, getTeamContext } from "@/lib/team";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const userId = (session.user as { id: string }).id;
+    const ctx = await getTeamContext(userId);
+    const ownerId = ctx.ownerId;
 
     const body = await req.json() as {
       id?: string;
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
           "companyId" = COALESCE("companyId", $7),
           "updatedAt" = NOW()
          WHERE id = $1 AND "userId" = $2`,
-        body.id, userId,
+        body.id, ownerId,
         body.title, body.companyName,
         body.meetingDate || null,
         body.formDataJson, companyId
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
         (id, "userId", "companyId", type, title, "companyName", "meetingDate", "formDataJson", "createdAt", "updatedAt")
        VALUES (gen_random_uuid()::TEXT, $1, $2, 'director_appointment', $3, $4, $5, $6, NOW(), NOW())
        RETURNING id`,
-      userId, companyId,
+      ownerId, companyId,
       body.title, body.companyName,
       body.meetingDate || null,
       body.formDataJson

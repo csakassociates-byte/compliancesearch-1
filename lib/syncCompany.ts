@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { getTeamMemberIds } from "@/lib/team";
+import { getTeamMemberIds, getTeamContext } from "@/lib/team";
 
 interface SyncCompanyOptions {
   entityType?:        string | null;
@@ -12,6 +12,7 @@ interface SyncCompanyOptions {
  * Finds or creates a company record, searching across the entire team.
  * Priority: CIN match > name match > insert new.
  * Prevents duplicates even when multiple team members work on the same company.
+ * Always inserts under ownerId so team members don't create duplicate entries.
  */
 export async function syncCompany(
   userId:      string,
@@ -20,7 +21,11 @@ export async function syncCompany(
   opts?:       SyncCompanyOptions,
 ): Promise<string | null> {
   try {
-    const memberIds = await getTeamMemberIds(userId);
+    const [memberIds, ctx] = await Promise.all([
+      getTeamMemberIds(userId),
+      getTeamContext(userId),
+    ]);
+    const ownerId = ctx.ownerId;
 
     // 1. Check by CIN across the whole team (strongest match)
     if (cin) {
@@ -69,7 +74,7 @@ export async function syncCompany(
       return existing.id;
     }
 
-    // 3. Not found anywhere in team — insert new
+    // 3. Not found anywhere in team — insert new under ownerId to prevent duplicates
     const newId = randomUUID();
     await prisma.$executeRawUnsafe(
       `INSERT INTO csi_companies
@@ -77,7 +82,7 @@ export async function syncCompany(
        VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
        ON CONFLICT DO NOTHING`,
       newId,
-      userId,
+      ownerId,
       companyName.trim(),
       cin?.trim() || null,
       opts?.entityType        ?? null,

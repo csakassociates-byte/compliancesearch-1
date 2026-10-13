@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getTeamMemberIds } from "@/lib/team";
+import { getTeamMemberIds, getTeamContext } from "@/lib/team";
 import { syncCompany } from "@/lib/syncCompany";
 
 // Ensure csi_documents has all columns needed for annual filing
@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const userId = (session.user as { id: string }).id;
+    const ctx = await getTeamContext(userId);
+    const ownerId = ctx.ownerId;
 
     const body = await req.json() as {
       id?: string;
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
           "updatedAt" = NOW()
          WHERE id = $1 AND "userId" = $2`,
         body.id,
-        userId,
+        ownerId,
         `Annual Filing — ${body.companyName} — FY ${body.financialYear}`,
         body.companyName,
         body.financialYear,
@@ -130,7 +132,7 @@ export async function POST(req: NextRequest) {
         (id, "userId", "companyId", type, title, "companyName", "financialYear", "formDataJson", "createdAt", "updatedAt")
        VALUES (gen_random_uuid()::TEXT, $1, $2, 'annual_filing', $3, $4, $5, $6, NOW(), NOW())
        RETURNING id`,
-      userId,
+      ownerId,
       companyId,
       `Annual Filing — ${body.companyName} — FY ${body.financialYear}`,
       body.companyName,

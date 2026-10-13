@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamContext } from "@/lib/team";
 import crypto from "crypto";
 
 /* ── Auto-migrate ─────────────────────────────────────────────── */
@@ -119,6 +120,8 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as { id: string }).id;
+  const ctx = await getTeamContext(userId);
+  const ownerId = ctx.ownerId;
 
   await ensureCols();
 
@@ -242,7 +245,7 @@ export async function POST(req: NextRequest) {
          "formDataJson" = $1,
          "updatedAt"    = NOW()
        WHERE id = $2 AND "userId" = $3`,
-      JSON.stringify(formData), meetingDocId, userId
+      JSON.stringify(formData), meetingDocId, ownerId
     );
   } else {
     // CREATE new meeting document
@@ -251,7 +254,7 @@ export async function POST(req: NextRequest) {
       `INSERT INTO csi_documents
          (id, "userId", "companyId", type, title, "companyName", "meetingDate", "formDataJson", "sourceType", "updatedAt")
        VALUES ($1,$2,$3,'board_minutes',$4,$5,$6,$7,'share_transfer',NOW())`,
-      meetingDocId, userId, body.companyId,
+      meetingDocId, ownerId, body.companyId,
       title, body.companyName,
       body.meetingDate, JSON.stringify(formData)
     );
