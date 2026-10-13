@@ -276,6 +276,8 @@ export async function GET(req: NextRequest) {
         adt1FromFy,
         adt1ToFy,
         adt1CarriedForward,
+        // Tenure ends at this FY's AGM → reappointment required
+        adt1ReapptDue: !!(adt1Srn && adt1ToFy && adt1ToFy === fy),
         dpt3Applicable:          rec?.dpt3Applicable ?? false,
         dpt3Srn:                 rec?.dpt3Srn ?? "",
         itrStatus:               rec?.itrStatus ?? "pending",

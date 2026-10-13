@@ -28,6 +28,7 @@ interface ComplianceRow {
   adt1FromFy: string;
   adt1ToFy: string;
   adt1CarriedForward?: boolean;
+  adt1ReapptDue?: boolean;
   auditorApptDraftId: string | null;
   auditorApptFinalized: boolean;
   dpt3Applicable: boolean;
@@ -709,38 +710,81 @@ export default function ComplianceMonitorPage() {
   function cellAdt1(r: ComplianceRow) {
     if (r.workStatus === "declined") return <span className={naPill}>N/A</span>;
 
-    // ADT-1 already filed
-    if (r.adt1Srn) return (
-      <div>
-        {r.adt1CarriedForward
-          ? (
-            <span
-              className={`${warnPill} cursor-pointer hover:opacity-80`}
-              title="Click to view / edit appointment details"
-              onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
-            >↩ Carried Fwd</span>
-          )
-          : <span className={okPill}>✓ Filed</span>}
-        {r.adt1FromFy && <div className="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap">{r.adt1FromFy} → {r.adt1ToFy}</div>}
-        {r.adt1CarriedForward && r.adt1Srn && (
-          <div
-            className="text-[9px] text-amber-600 mt-0.5 whitespace-nowrap cursor-pointer hover:underline"
-            onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
-          >
-            SRN: {r.adt1Srn}
-          </div>
-        )}
-      </div>
-    );
-
-    // Build URL for Auditor Appointment tool
+    // Build URL for Auditor Appointment tool (needed below)
     const apptParams = new URLSearchParams();
-    if (r.cin)             apptParams.set("cin", r.cin);
-    if (r.companyName)     apptParams.set("companyName", r.companyName);
+    if (r.cin)               apptParams.set("cin", r.cin);
+    if (r.companyName)       apptParams.set("companyName", r.companyName);
     if (r.incorporationDate) apptParams.set("incorporationDate", r.incorporationDate);
     apptParams.set("fy", fy);
     apptParams.set("appointmentType", "subsequent");
     const apptBaseUrl = `/tools/corporate-action-kit/auditor-appointment`;
+
+    // ADT-1 already filed — check if reappointment is due at this year's AGM
+    if (r.adt1Srn) {
+      // Tenure ends at this FY's AGM → reappointment / new CA appointment required
+      if (r.adt1ReapptDue) return (
+        <div>
+          <span
+            className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border bg-orange-50 text-orange-700 border-orange-300 whitespace-nowrap cursor-pointer hover:bg-orange-100"
+            title="Auditor tenure ends at this year's AGM — re-appointment needed. Click to view details."
+            onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
+          >⚠ Reappt. Due</span>
+          {r.adt1FromFy && (
+            <div
+              className="text-[9px] text-orange-500 mt-0.5 whitespace-nowrap cursor-pointer hover:underline"
+              onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
+              title="Current tenure — click to update after re-appointment"
+            >
+              {r.adt1FromFy} → {r.adt1ToFy} · SRN: {r.adt1Srn}
+            </div>
+          )}
+          {/* Show Auditor Appointment tool links for re-appointment */}
+          {r.auditorApptFinalized
+            ? <button
+                onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: "", adt1FromFy: r.adt1FromFy, adt1ToFy: "" })}
+                className="text-[9px] text-blue-600 hover:text-blue-800 underline text-left whitespace-nowrap mt-0.5 block">
+                Enter new SRN →
+              </button>
+            : r.auditorApptDraftId
+              ? <Link href={`${apptBaseUrl}?load=${r.auditorApptDraftId}`}
+                  className="text-[9px] text-blue-600 hover:text-blue-800 underline whitespace-nowrap mt-0.5 block">
+                  Continue Draft →
+                </Link>
+              : <Link href={`${apptBaseUrl}?${apptParams.toString()}`}
+                  className="text-[9px] text-orange-600 hover:text-orange-800 underline whitespace-nowrap mt-0.5 block">
+                  Start Re-Appt →
+                </Link>
+          }
+        </div>
+      );
+
+      // Tenure continues beyond this FY — carried forward / currently filed
+      return (
+        <div>
+          {r.adt1CarriedForward
+            ? (
+              <span
+                className={`${warnPill} cursor-pointer hover:opacity-80`}
+                title="Click to view / edit appointment details"
+                onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
+              >↩ Carried Fwd</span>
+            )
+            : <span className={`${okPill} cursor-pointer hover:opacity-80`}
+                onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}>
+                ✓ Filed
+              </span>}
+          {r.adt1FromFy && (
+            <div
+              className="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap cursor-pointer hover:underline"
+              onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: r.adt1Srn, adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
+            >
+              {r.adt1FromFy} → {r.adt1ToFy}
+              {r.adt1CarriedForward && <span className="ml-1">· SRN: {r.adt1Srn}</span>}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     // Appointment finalized in tool — show "Enter ADT-1 SRN" prompt
     if (r.auditorApptFinalized) return (
