@@ -453,9 +453,14 @@ ${!isFirst && f.vacancyReason === "resignation" ? `<li><strong>Important:</stron
 /* 2b — Board Notice for Recommendation Meeting (Subsequent Auditor only) */
 function genBoardNoticeRecommendation(f: F, withLH: boolean): string {
   const agm = f.agmOrdinal || "1st";
-  const noticeDate = subDays(f.boardRecommDate || f.meetingDate, 7);
+  const fy  = f.fy || "[FY]";
+  const boardDate = f.boardRecommDate || f.meetingDate;
+  const noticeDate = subDays(boardDate, 7);
+  const auditorName = f.auditorType === "firm"
+    ? `M/s. ${f.firmName || "[FIRM NAME]"}`
+    : `${f.auditorName || "[AUDITOR NAME]"}`;
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Board Notice — Auditor Recommendation</title><style>${DOC_CSS}</style></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Board Notice — Pre-AGM Board Meeting</title><style>${DOC_CSS}</style></head><body>
 ${withLH ? companyLH(f) : plainHeader(f)}
 <h3 class="center">NOTICE OF MEETING OF THE BOARD OF DIRECTORS</h3>
 <p class="center italic">Pursuant to Section 173 of the Companies Act, 2013 and Secretarial Standard-1 (SS-1)</p>
@@ -464,18 +469,23 @@ ${withLH ? companyLH(f) : plainHeader(f)}
 <p class="para">Date of Notice: ${noticeDate}</p>
 <p class="para">To,<br/>All the Directors,<br/><strong>${f.companyName || "[COMPANY NAME]"}</strong></p>
 <p class="para">Dear Director(s),</p>
-<p class="para">Notice is hereby given that a Meeting of the Board of Directors of <strong>${f.companyName || "[COMPANY NAME]"}</strong> is scheduled to be held on <strong>${fmtDate(f.boardRecommDate || f.meetingDate)} (${fmtDay(f.boardRecommDate || f.meetingDate)})</strong> at <strong>${f.meetingTime || "[TIME]"}</strong> at <strong>${f.venue || "[VENUE]"}</strong> to transact the following business:</p>
+<p class="para">Notice is hereby given that a Meeting of the Board of Directors of <strong>${f.companyName || "[COMPANY NAME]"}</strong> is scheduled to be held on <strong>${fmtDate(boardDate)} (${fmtDay(boardDate)})</strong> at <strong>${f.meetingTime || "[TIME]"}</strong> at <strong>${f.venue || "[VENUE]"}</strong> to transact the following business:</p>
 </div>
 
 <div class="section">
 <h3>AGENDA</h3>
 <table>
-<thead><tr><th style="width:8%">Item</th><th>Business</th><th style="width:22%">Type</th><th style="width:22%">Section</th></tr></thead>
+<thead><tr><th style="width:8%">Item</th><th>Business</th><th style="width:22%">Type</th><th style="width:22%">Section / Reference</th></tr></thead>
 <tbody>
 <tr><td>1.</td><td>To take note of directors present and confirm quorum.</td><td>Procedural</td><td>Sec 174 / SS-1</td></tr>
 <tr><td>2.</td><td>To confirm the minutes of the previous Board Meeting.</td><td>Procedural</td><td>SS-1 Para 7.3</td></tr>
-<tr><td>3.</td><td><strong>Recommendation for Appointment of Statutory Auditor at ${agm} AGM</strong> — To recommend ${f.auditorType === "firm" ? `M/s. ${f.firmName || "[FIRM NAME]"}` : `${f.auditorName || "[AUDITOR NAME]"}`} for appointment as Statutory Auditor${f.auditorType === "firm" ? "s" : ""} of the Company for a term of five consecutive years pursuant to Section 139(1), subject to approval of members at the ensuing ${agm} Annual General Meeting.</td><td>Board Resolution</td><td>Sec 139(1) + 142</td></tr>
-<tr><td>4.</td><td>Any other matter with the permission of the Chair.</td><td>Procedural</td><td>—</td></tr>
+<tr><td>3.</td><td><strong>Approval of Annual Financial Statements for FY ${fy}</strong> — To consider and approve the Balance Sheet, Statement of Profit &amp; Loss, Cash Flow Statement, and Notes to Accounts for the financial year ended 31st March, ${fy.split("-")[0] ? String(parseInt(fy.split("-")[0]) + 1) : "[YEAR]"}.</td><td>Board Resolution</td><td>Sec 129(2) r/w Sec 134</td></tr>
+<tr><td>4.</td><td><strong>Approval of Board's Report (Directors' Report) for FY ${fy}</strong> — To consider and approve the Board's Report together with all annexures thereto, including the Management Discussion &amp; Analysis, extract of Annual Return (MGT-9), and all mandatory disclosures under Section 134 of the Companies Act, 2013.</td><td>Board Resolution</td><td>Sec 134(3)</td></tr>
+<tr><td>5.</td><td><strong>Declaration / Recommendation of Dividend</strong> — To consider and recommend dividend, if any, for FY ${fy} for approval of members at the ensuing Annual General Meeting.${f.dividendDeclared ? ` <em>(Proposed dividend: ₹${f.dividendPerShare || "[AMOUNT]"} per equity share)</em>` : " <em>(No dividend is being recommended for this year)</em>"}</td><td>Board Resolution</td><td>Sec 123 r/w Rule 3</td></tr>
+<tr><td>6.</td><td><strong>Recommendation for Re-appointment / Appointment of Director(s)</strong> — To consider and recommend the re-appointment of Director(s) retiring by rotation, subject to approval of members at the ensuing Annual General Meeting, as per the provisions of Section 152(6) of the Companies Act, 2013.</td><td>Board Resolution</td><td>Sec 152(6)</td></tr>
+<tr><td>7.</td><td><strong>Recommendation for Appointment of Statutory Auditor${f.auditorType === "firm" ? "s" : ""} at ${agm} AGM</strong> — To recommend ${auditorName} for appointment as Statutory Auditor${f.auditorType === "firm" ? "s" : ""} of the Company for a term of five consecutive years commencing from the conclusion of the ${agm} Annual General Meeting, pursuant to Section 139(1) read with Rule 3 of the Companies (Audit and Auditors) Rules, 2014, subject to approval of the members at the ensuing ${agm} Annual General Meeting.</td><td>Board Resolution</td><td>Sec 139(1) + 142</td></tr>
+<tr><td>8.</td><td><strong>Convening of ${agm} Annual General Meeting</strong> — To fix the date, time, place/mode and agenda of the ${agm} Annual General Meeting of the Company${f.meetingDate ? ` (proposed date: ${fmtDate(f.meetingDate)})` : ""} and to approve the draft Notice of AGM along with Explanatory Statement under Section 102.</td><td>Board Resolution</td><td>Sec 96, 101 r/w SS-2</td></tr>
+<tr><td>9.</td><td>Any other matter with the permission of the Chair.</td><td>Procedural</td><td>—</td></tr>
 </tbody>
 </table>
 </div>
@@ -483,9 +493,10 @@ ${withLH ? companyLH(f) : plainHeader(f)}
 <div class="section">
 <p class="bold">NOTES:</p>
 <ol>
-<li>This notice is issued at least 7 days prior to the meeting in compliance with Section 173(3) and SS-1.</li>
-<li>The written consent and certificate of eligibility of the proposed auditor under Rule 4(1) are attached for the Board's consideration.</li>
-<li>The Board's recommendation is a prerequisite to placing the matter before members at the ${agm} Annual General Meeting.</li>
+<li>This notice is issued at least 7 days prior to the meeting in compliance with Section 173(3) and SS-1. In case of shorter notice, the consent of the majority of Directors shall be taken.</li>
+<li>The draft Annual Financial Statements, Board's Report, and the Consent &amp; Certificate of Eligibility of the proposed Statutory Auditor under Section 141 and Rule 4(1) are attached for the Board's consideration.</li>
+<li>Directors may send their comments / suggestions on the agenda items to the Company in advance of the meeting.</li>
+<li>The Board's recommendation of the Statutory Auditor is a prerequisite to placing the matter before the members at the ${agm} Annual General Meeting [Section 139(1)].</li>
 </ol>
 </div>
 
@@ -554,18 +565,24 @@ ${twoSigBlock(f)}
 function genBoardRecommAGM(f: F, withLH: boolean): string {
   const agm = f.agmOrdinal || "1st";
   const sixth = sixthAgm(agm);
+  const fy = f.fy || "[FY]";
+  const fyParts = (f.fy || "").split("-");
+  const fyEndYear = fyParts[1] ? "20" + fyParts[1] : "____";
   const presentDirs = f.directors.filter(d => d.isPresent);
   const recommDate = f.boardRecommDate || f.meetingDate;
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Board Resolution — Recommending Auditor to AGM</title><style>${DOC_CSS}</style></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Board Resolution CTC — Pre-AGM Board Meeting</title><style>${DOC_CSS}</style></head><body>
 ${withLH ? companyLH(f) : plainHeader(f)}
-<h3 class="center">CERTIFIED TRUE COPY OF RESOLUTION</h3>
+<h3 class="center">CERTIFIED TRUE COPY OF RESOLUTION(S)</h3>
 <p class="center">Passed at the Meeting of the Board of Directors</p>
+<p class="center italic">(Pre-AGM Board Meeting — ${agm} Annual General Meeting)</p>
 
 <div class="section">
 <table class="no-border">
 <tr><td style="width:35%"><strong>Date of Meeting:</strong></td><td>${fmtDate(recommDate)} (${fmtDay(recommDate)})</td></tr>
+<tr><td><strong>Time:</strong></td><td>${f.meetingTime || "[TIME]"}</td></tr>
 <tr><td><strong>Venue:</strong></td><td>${f.venue || "[VENUE]"}</td></tr>
+<tr><td><strong>Meeting Serial No.:</strong></td><td>${f.meetingSerial || "[SERIAL]"}</td></tr>
 <tr><td><strong>Chairman:</strong></td><td>${f.chairmanName || "[CHAIRMAN]"} (DIN: ${f.chairmanDin || "[DIN]"})</td></tr>
 </table>
 </div>
@@ -574,23 +591,67 @@ ${withLH ? companyLH(f) : plainHeader(f)}
 <p class="bold">DIRECTORS PRESENT:</p>
 ${presentDirs.length > 0
   ? `<table><thead><tr><th style="width:8%">S.No.</th><th>Name</th><th>DIN</th><th>Designation</th></tr></thead><tbody>${presentDirs.map((d, i) => `<tr><td>${i + 1}.</td><td>${d.name || "[NAME]"}</td><td>${d.din || "[DIN]"}</td><td>${d.designation}</td></tr>`).join("")}</tbody></table>`
-  : `<p class="italic">[Directors present]</p>`}
+  : `<p class="italic">[Directors present to be listed]</p>`}
 </div>
 
 <div class="section">
-<p class="para">The Chairman informed the Board that pursuant to Section 139(1) of the Companies Act, 2013, the existing Statutory Auditor's term is coming to a close and the Company is required to appoint a Statutory Auditor at the ${agm} Annual General Meeting. The Board reviewed the written consent and eligibility certificate received from ${auditorLabel(f)} and proceeded to recommend the appointment.</p>
+<p class="para">The Chairman informed the Board that the Company's financial year ${fy} has concluded and the necessary statutory compliances are required to be completed, including adoption of financial statements, approval of the Board's Report and convening of the ${agm} Annual General Meeting. The Chairman further informed the Board that the term of the existing Statutory Auditor is coming to a close and it is necessary to recommend a new Statutory Auditor for appointment at the ensuing ${agm} Annual General Meeting. The Board proceeded to transact the following business:</p>
 </div>
 
 <div class="section">
-<h3>RESOLUTION: RECOMMENDATION FOR APPOINTMENT OF STATUTORY AUDITOR AT AGM</h3>
+<h3>RESOLUTION NO. 1: APPROVAL OF ANNUAL FINANCIAL STATEMENTS FOR FY ${fy}</h3>
 <div class="box">
-<p class="para"><strong>"RESOLVED THAT</strong> pursuant to the provisions of Section 139(1) read with Section 142 and other applicable provisions of the Companies Act, 2013 and the Companies (Audit and Auditors) Rules, 2014, the consent of the Board be and is hereby accorded to recommend <strong>${auditorLabel(f)}</strong>, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate of eligibility under Section 141 of the Act, for appointment as <strong>Statutory Auditor${f.auditorType === "firm" ? "s" : ""}</strong> of the Company for a term of <strong>five consecutive years</strong> from the conclusion of the <strong>${agm} Annual General Meeting</strong> until the conclusion of the <strong>${sixth} Annual General Meeting</strong>, at such remuneration as may be fixed by the Board in consultation with the Auditors, subject to the approval of the members at the ensuing Annual General Meeting.</p>
-<p class="para"><strong>RESOLVED FURTHER THAT</strong> any Director or the Company Secretary be and is hereby authorised to include the necessary item in the Notice of the ${agm} Annual General Meeting and to do all acts, deeds and things as may be required to give effect to this resolution."</p>
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to the provisions of Section 129(2) read with Section 134 and other applicable provisions of the Companies Act, 2013, the Audited Financial Statements of the Company for the financial year ended 31st March, ${fyEndYear}, comprising the Balance Sheet, Statement of Profit &amp; Loss, Cash Flow Statement, and Notes to Accounts, along with the Statutory Auditor's Report thereon, as placed before the Board, be and are hereby approved and adopted.</p>
+<p class="para"><strong>RESOLVED FURTHER THAT</strong> any Director be and is hereby authorised to sign the Financial Statements and to do all such acts, deeds and things as may be required in this regard."</p>
 </div>
 </div>
 
 <div class="section">
-<p class="para">The resolution was proposed, seconded and passed with requisite majority. The Chairman declared the resolution duly carried.</p>
+<h3>RESOLUTION NO. 2: APPROVAL OF BOARD'S REPORT (DIRECTORS' REPORT) FOR FY ${fy}</h3>
+<div class="box">
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to the provisions of Section 134(3) and other applicable provisions of the Companies Act, 2013, the Board's Report of the Company for the financial year ended 31st March, ${fyEndYear}, together with all annexures thereto, as placed before the Board and initialled by the Chairman for the purpose of identification, be and is hereby approved.</p>
+<p class="para"><strong>RESOLVED FURTHER THAT</strong> the Chairman, any Director, or the Company Secretary be and is hereby authorised to sign and authenticate the Board's Report and to do all such acts, deeds and things as may be necessary to give effect to this resolution."</p>
+</div>
+</div>
+
+<div class="section">
+<h3>RESOLUTION NO. 3: ${f.dividendDeclared ? "RECOMMENDATION OF DIVIDEND" : "NON-DECLARATION OF DIVIDEND"} FOR FY ${fy}</h3>
+<div class="box">
+${f.dividendDeclared
+  ? `<p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 123 and other applicable provisions of the Companies Act, 2013, the Board of Directors do hereby recommend a dividend of <strong>Rs. ${f.dividendPerShare || "___"} per equity share</strong> of face value Rs. ${f.dividendFaceValue || "10"} each, for the financial year ended 31st March, ${fyEndYear}, subject to the approval of the members at the ensuing ${agm} Annual General Meeting.</p>
+<p class="para"><strong>RESOLVED FURTHER THAT</strong> the dividend, if declared at the Annual General Meeting, shall be paid to those members whose names appear in the Register of Members as on the record date to be fixed by the Board."</p>`
+  : `<p class="para"><strong>"RESOLVED THAT</strong> having regard to the financial position of the Company and the need to conserve resources for business operations and growth, the Board of Directors do not recommend any dividend for the financial year ended 31st March, ${fyEndYear} and that the same be noted and placed before the members at the ensuing ${agm} Annual General Meeting."</p>`
+}
+</div>
+</div>
+
+<div class="section">
+<h3>RESOLUTION NO. 4: RE-APPOINTMENT OF DIRECTOR(S) RETIRING BY ROTATION</h3>
+<div class="box">
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to Section 152(6) and other applicable provisions of the Companies Act, 2013, the Board of Directors hereby takes note that _________________________ (DIN: ___________), Director of the Company, retires by rotation at the ensuing ${agm} Annual General Meeting and being eligible offers himself/herself for re-appointment, and recommends his/her re-appointment to the members for their approval at the ensuing Annual General Meeting.</p>
+<p class="para"><strong>RESOLVED FURTHER THAT</strong> the necessary disclosure as required under Section 102 and Schedule V of the Companies Act, 2013 be included in the Notice of the Annual General Meeting."</p>
+</div>
+</div>
+
+<div class="section">
+<h3>RESOLUTION NO. 5: RECOMMENDATION FOR APPOINTMENT OF STATUTORY AUDITOR${f.auditorType === "firm" ? "S" : ""} AT ${agm.toUpperCase()} AGM</h3>
+<div class="box">
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to the provisions of Section 139(1) read with Section 142 and Rule 3 of the Companies (Audit and Auditors) Rules, 2014, and other applicable provisions of the Companies Act, 2013, the consent of the Board be and is hereby accorded to recommend <strong>${auditorLabel(f)}</strong>, who ${f.auditorType === "firm" ? "have" : "has"} given written consent and furnished a certificate of eligibility under Section 141 of the Act, for appointment as <strong>Statutory Auditor${f.auditorType === "firm" ? "s" : ""}</strong> of the Company for a term of <strong>five consecutive years</strong> from the conclusion of the <strong>${agm} Annual General Meeting</strong> until the conclusion of the <strong>${sixth} Annual General Meeting</strong>, at such remuneration as may be decided by the Board of Directors in consultation with the Auditor${f.auditorType === "firm" ? "s" : ""}, subject to the approval of the members at the ensuing Annual General Meeting.</p>
+<p class="para"><strong>RESOLVED FURTHER THAT</strong> any Director or the Company Secretary be and is hereby authorised to include the necessary item and Explanatory Statement in the Notice of the ${agm} Annual General Meeting and to do all acts, deeds and things as may be required to give effect to this resolution."</p>
+</div>
+</div>
+
+<div class="section">
+<h3>RESOLUTION NO. 6: CONVENING OF ${agm.toUpperCase()} ANNUAL GENERAL MEETING</h3>
+<div class="box">
+<p class="para"><strong>"RESOLVED THAT</strong> pursuant to the provisions of Sections 96, 101 and 102 read with the Companies (Management and Administration) Rules, 2014 and Secretarial Standard on General Meetings (SS-2), the ${agm} Annual General Meeting of the Company be convened on <strong>${f.meetingDate ? fmtDate(f.meetingDate) : "___________"} (${f.meetingDate ? fmtDay(f.meetingDate) : "___"})</strong> at <strong>${f.meetingTime || "[TIME]"}</strong> at <strong>${f.venue || "[VENUE]"}</strong> to transact the ordinary and special business as set out in the draft Notice of AGM placed before the Board.</p>
+<p class="para"><strong>RESOLVED FURTHER THAT</strong> the draft Notice of the ${agm} Annual General Meeting together with the Explanatory Statement annexed thereto, as initialled by the Chairman for identification, be and is hereby approved and the same be sent to all the members, auditors, directors, and other persons entitled to receive the same at least 21 clear days before the date of the meeting.</p>
+<p class="para"><strong>RESOLVED FURTHER THAT</strong> any Director, the Company Secretary or any authorised person be and is hereby authorised to sign and issue the Notice of the ${agm} Annual General Meeting and to do all acts, deeds and things as may be required to give effect to this resolution."</p>
+</div>
+</div>
+
+<div class="section">
+<p class="para">All the above resolutions were proposed, seconded and passed with requisite majority. The Chairman declared each resolution duly carried.</p>
 </div>
 
 ${twoSigBlock(f, fmtDate(recommDate))}
