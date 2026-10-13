@@ -183,6 +183,29 @@ export async function GET(req: NextRequest) {
     );
     const attachedCins = new Set(attachments.map(a => a.cin).filter(Boolean));
 
+    // Auditor appointment draft status from csi_documents (type = auditor_appointment, same FY)
+    const auditorApptDocs = await prisma.$queryRawUnsafe<Array<{
+      id: string; cin: string | null; isFinalized: boolean;
+    }>>(
+      `SELECT id,
+              COALESCE(
+                "formDataJson"::jsonb #>> '{cin}',
+                "formDataJson"::jsonb #>> '{data,cin}'
+              ) AS cin,
+              COALESCE("isFinalized", false) AS "isFinalized"
+       FROM csi_documents
+       WHERE "userId" = ANY($1::text[]) AND type = 'auditor_appointment'
+         AND "financialYear" = $2`,
+      memberIds, fy
+    );
+    // Map by CIN: prefer finalized record if multiple drafts exist
+    const auditorApptByCin = new Map<string, { id: string; isFinalized: boolean }>();
+    for (const d of auditorApptDocs) {
+      if (!d.cin) continue;
+      const existing = auditorApptByCin.get(d.cin);
+      if (!existing || d.isFinalized) auditorApptByCin.set(d.cin, { id: d.id, isFinalized: d.isFinalized });
+    }
+
     // Build lookup maps
     const recByCompanyId = new Map<string, (typeof records)[0]>();
     const recByCin = new Map<string, (typeof records)[0]>();
@@ -229,34 +252,37 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const auditorAppt = c.cin ? auditorApptByCin.get(c.cin) : undefined;
       return {
-        companyId:            c.id,
-        companyName:          c.companyName,
-        cin:                  c.cin ?? "",
-        incorporationDate:    c.incorporationDate ?? "",
-        entityType:           c.entityType ?? "",
-        regAddress:           c.regAddress ?? "",
-        recordId:             rec?.id ?? null,
-        docStatus:            rec?.docStatus ?? "awaited",
-        docStatusRemarks:     rec?.docStatusRemarks ?? "",
-        workStatus:           rec?.workStatus ?? "confirming",
-        workStatusRemarks:    rec?.workStatusRemarks ?? "",
+        companyId:               c.id,
+        companyName:             c.companyName,
+        cin:                     c.cin ?? "",
+        incorporationDate:       c.incorporationDate ?? "",
+        entityType:              c.entityType ?? "",
+        regAddress:              c.regAddress ?? "",
+        recordId:                rec?.id ?? null,
+        docStatus:               rec?.docStatus ?? "awaited",
+        docStatusRemarks:        rec?.docStatusRemarks ?? "",
+        workStatus:              rec?.workStatus ?? "confirming",
+        workStatusRemarks:       rec?.workStatusRemarks ?? "",
         inc20aStatus,
-        balanceSheetReady:    rec?.balanceSheetReady ?? false,
-        udinStatutory:        rec?.udinStatutory ?? "",
-        udinTaxAudit:         rec?.udinTaxAudit ?? "",
-        attachmentsGenerated: !!(c.cin && attachedCins.has(c.cin)),
-        aoc4Srn:              rec?.aoc4Srn ?? "",
-        mgt7Srn:              rec?.mgt7Srn ?? "",
+        balanceSheetReady:       rec?.balanceSheetReady ?? false,
+        udinStatutory:           rec?.udinStatutory ?? "",
+        udinTaxAudit:            rec?.udinTaxAudit ?? "",
+        attachmentsGenerated:    !!(c.cin && attachedCins.has(c.cin)),
+        aoc4Srn:                 rec?.aoc4Srn ?? "",
+        mgt7Srn:                 rec?.mgt7Srn ?? "",
         adt1Srn,
         adt1FromFy,
         adt1ToFy,
         adt1CarriedForward,
-        dpt3Applicable:       rec?.dpt3Applicable ?? false,
-        dpt3Srn:              rec?.dpt3Srn ?? "",
-        itrStatus:            rec?.itrStatus ?? "pending",
-        itrAckNo:             rec?.itrAckNo ?? "",
-        remarks:              rec?.remarks ?? "",
+        dpt3Applicable:          rec?.dpt3Applicable ?? false,
+        dpt3Srn:                 rec?.dpt3Srn ?? "",
+        itrStatus:               rec?.itrStatus ?? "pending",
+        itrAckNo:                rec?.itrAckNo ?? "",
+        remarks:                 rec?.remarks ?? "",
+        auditorApptDraftId:      auditorAppt?.id ?? null,
+        auditorApptFinalized:    auditorAppt?.isFinalized ?? false,
       };
     });
 

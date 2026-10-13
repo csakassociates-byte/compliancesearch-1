@@ -28,6 +28,8 @@ interface ComplianceRow {
   adt1FromFy: string;
   adt1ToFy: string;
   adt1CarriedForward?: boolean;
+  auditorApptDraftId: string | null;
+  auditorApptFinalized: boolean;
   dpt3Applicable: boolean;
   dpt3Srn: string;
   remarks: string;
@@ -243,6 +245,35 @@ export default function ComplianceMonitorPage() {
     attachments: { done: activeRows.filter(r => !!r.attachmentsGenerated).length, total: activeRows.length },
   };
 
+  // Pipeline stats — sequential dependency chain
+  const ps = {
+    active:            activeRows.length,
+    dataReceived:      activeRows.filter(r => r.docStatus === "received" || r.docStatus === "partial").length,
+    dataAwaited:       activeRows.filter(r => !r.docStatus || r.docStatus === "awaited").length,
+    bsReady:           activeRows.filter(r => r.balanceSheetReady).length,
+    bsPendingWithData: activeRows.filter(r => (r.docStatus === "received" || r.docStatus === "partial") && !r.balanceSheetReady).length,
+    attachGenerated:   activeRows.filter(r => r.attachmentsGenerated).length,
+    attachPendingBS:   activeRows.filter(r => r.balanceSheetReady && !r.attachmentsGenerated).length,
+    attachBlocked:     activeRows.filter(r => !r.balanceSheetReady && !r.attachmentsGenerated).length,
+    aoc4Filed:         activeRows.filter(r => !!r.aoc4Srn).length,
+    aoc4Pending:       activeRows.filter(r => r.attachmentsGenerated && !r.aoc4Srn).length,
+    mgt7Filed:         activeRows.filter(r => !!r.mgt7Srn).length,
+    mgt7Pending:       activeRows.filter(r => r.attachmentsGenerated && !r.mgt7Srn).length,
+    itrFiled:          activeRows.filter(r => !!r.itrStatus && r.itrStatus.toLowerCase() !== "pending" && r.itrStatus.toLowerCase() !== "not filed").length,
+    itrPending:        activeRows.filter(r => !r.itrStatus || r.itrStatus.toLowerCase() === "pending" || r.itrStatus.toLowerCase() === "not filed").length,
+    udinDone:          activeRows.filter(r => !!r.udinStatutory && r.udinStatutory !== "na").length,
+    udinPendingBS:     activeRows.filter(r => r.balanceSheetReady && !r.udinStatutory).length,
+  };
+
+  const filterKeyLabel: Record<string, string> = {
+    aoc4: "AOC-4 pending", mgt7: "MGT-7/7A pending", balanceSheet: "Balance Sheet pending",
+    itr: "ITR pending", udin: "UDIN pending", attachments: "Attachments pending",
+    dataAwaited: "Data not received", bsPendingWithData: "Balance Sheet not prepared (data received)",
+    attachPendingBS: "Attachments pending (BS ready)", aoc4Pending: "AOC-4 not filed (attachments ready)",
+    mgt7Pending: "MGT-7 not filed (attachments ready)", udinPendingBS: "UDIN pending (BS ready)",
+    itrPending: "ITR pending",
+  };
+
   const counts = {
     all:        rows.length,
     active:     rows.filter(r => r.workStatus === "active").length,
@@ -256,13 +287,21 @@ export default function ComplianceMonitorPage() {
     else if (filterMode === "declined")   { if (r.workStatus !== "declined") return false; }
     else if (filterMode === "confirming") { if (r.workStatus !== "confirming") return false; }
     else if (filterMode === "alerts")    { if (!hasPendingItems(r)) return false; }
-    // Form-specific chip filter — show only companies where that form is pending
-    if (formFilter === "aoc4"        && !!r.aoc4Srn)            return false;
-    if (formFilter === "mgt7"        && !!r.mgt7Srn)            return false;
-    if (formFilter === "balanceSheet" && !!r.balanceSheetReady) return false;
-    if (formFilter === "itr"         && !!r.itrStatus && r.itrStatus.toLowerCase() !== "pending" && r.itrStatus.toLowerCase() !== "not filed") return false;
-    if (formFilter === "udin"        && !!r.udinStatutory)      return false;
-    if (formFilter === "attachments" && !!r.attachmentsGenerated) return false;
+    // Form filter — old chip-style filters
+    if (formFilter === "aoc4"         && !!r.aoc4Srn)            return false;
+    if (formFilter === "mgt7"         && !!r.mgt7Srn)            return false;
+    if (formFilter === "balanceSheet" && !!r.balanceSheetReady)  return false;
+    if (formFilter === "itr"          && !!r.itrStatus && r.itrStatus.toLowerCase() !== "pending" && r.itrStatus.toLowerCase() !== "not filed") return false;
+    if (formFilter === "udin"         && !!r.udinStatutory)      return false;
+    if (formFilter === "attachments"  && !!r.attachmentsGenerated) return false;
+    // Pipeline-specific filters
+    if (formFilter === "dataAwaited"      && !(r.workStatus === "active" && (!r.docStatus || r.docStatus === "awaited"))) return false;
+    if (formFilter === "bsPendingWithData"&& !((r.docStatus === "received" || r.docStatus === "partial") && !r.balanceSheetReady)) return false;
+    if (formFilter === "attachPendingBS"  && !(r.balanceSheetReady && !r.attachmentsGenerated)) return false;
+    if (formFilter === "aoc4Pending"      && !(r.attachmentsGenerated && !r.aoc4Srn)) return false;
+    if (formFilter === "mgt7Pending"      && !(r.attachmentsGenerated && !r.mgt7Srn)) return false;
+    if (formFilter === "udinPendingBS"    && !(r.balanceSheetReady && !r.udinStatutory)) return false;
+    if (formFilter === "itrPending"       && !(!r.itrStatus || r.itrStatus.toLowerCase() === "pending" || r.itrStatus.toLowerCase() === "not filed")) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       return r.companyName.toLowerCase().includes(q) || (r.cin || "").toLowerCase().includes(q);
@@ -669,6 +708,8 @@ export default function ComplianceMonitorPage() {
 
   function cellAdt1(r: ComplianceRow) {
     if (r.workStatus === "declined") return <span className={naPill}>N/A</span>;
+
+    // ADT-1 already filed
     if (r.adt1Srn) return (
       <div>
         {r.adt1CarriedForward
@@ -677,7 +718,59 @@ export default function ComplianceMonitorPage() {
         {r.adt1FromFy && <div className="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap">{r.adt1FromFy} → {r.adt1ToFy}</div>}
       </div>
     );
-    return <span className={errPill} onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: "", adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}>Pending</span>;
+
+    // Build URL for Auditor Appointment tool
+    const apptParams = new URLSearchParams();
+    if (r.cin)             apptParams.set("cin", r.cin);
+    if (r.companyName)     apptParams.set("companyName", r.companyName);
+    if (r.incorporationDate) apptParams.set("incorporationDate", r.incorporationDate);
+    apptParams.set("fy", fy);
+    apptParams.set("appointmentType", "subsequent");
+    const apptBaseUrl = `/tools/corporate-action-kit/auditor-appointment`;
+
+    // Appointment finalized in tool — show "Enter ADT-1 SRN" prompt
+    if (r.auditorApptFinalized) return (
+      <div className="flex flex-col gap-1">
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap">
+          ✅ Appt Done
+        </span>
+        <button
+          onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: "", adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}
+          className="text-[9px] text-blue-600 hover:text-blue-800 underline text-left whitespace-nowrap">
+          Enter ADT-1 SRN →
+        </button>
+      </div>
+    );
+
+    // Draft exists but not finalized
+    if (r.auditorApptDraftId) return (
+      <div className="flex flex-col gap-1">
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap">
+          📝 Draft
+        </span>
+        <Link
+          href={`${apptBaseUrl}?load=${r.auditorApptDraftId}`}
+          className="text-[9px] text-blue-600 hover:text-blue-800 underline whitespace-nowrap">
+          Continue →
+        </Link>
+      </div>
+    );
+
+    // Nothing started — show Start button
+    return (
+      <div className="flex flex-col gap-1">
+        <span className={errPill} onClick={() => openEdit(r.companyId, "adt1", { adt1Srn: "", adt1FromFy: r.adt1FromFy, adt1ToFy: r.adt1ToFy })}>
+          Pending
+        </span>
+        {r.cin && (
+          <Link
+            href={`${apptBaseUrl}?${apptParams.toString()}`}
+            className="text-[9px] text-teal-600 hover:text-teal-800 underline whitespace-nowrap">
+            🔗 Start Appt →
+          </Link>
+        )}
+      </div>
+    );
   }
 
   function cellDpt3(r: ComplianceRow) {
@@ -858,67 +951,159 @@ export default function ComplianceMonitorPage() {
               )}
             </div>
           </div>
-          {/* Per-form progress summary — only shown when there are active companies */}
-          {activeRows.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {[
-                { label: "AOC-4",        key: "aoc4",        ...formProgress.aoc4,        color: "blue"   },
-                { label: "MGT-7/7A",     key: "mgt7",        ...formProgress.mgt7,        color: "violet" },
-                { label: "Balance Sheet",key: "balanceSheet",...formProgress.balanceSheet, color: "emerald"},
-                { label: "ITR",          key: "itr",         ...formProgress.itr,         color: "amber"  },
-                { label: "UDIN (Stat)",  key: "udin",        ...formProgress.udin,        color: "rose"   },
-                { label: "Attachments",  key: "attachments", ...formProgress.attachments, color: "slate"  },
-              ].map(({ label, key, done, total, color }) => {
-                const pending = total - done;
-                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-                const isActive = formFilter === key;
-                const colorMap: Record<string, { chip: string; chipActive: string; bar: string; text: string }> = {
-                  blue:    { chip: "bg-blue-50 border-blue-200",    chipActive: "bg-blue-100 border-blue-500 ring-2 ring-blue-300",    bar: "bg-blue-500",    text: "text-blue-700"    },
-                  violet:  { chip: "bg-violet-50 border-violet-200",chipActive: "bg-violet-100 border-violet-500 ring-2 ring-violet-300",bar: "bg-violet-500",  text: "text-violet-700"  },
-                  emerald: { chip: "bg-emerald-50 border-emerald-200",chipActive: "bg-emerald-100 border-emerald-500 ring-2 ring-emerald-300",bar: "bg-emerald-500",text: "text-emerald-700" },
-                  amber:   { chip: "bg-amber-50 border-amber-200",  chipActive: "bg-amber-100 border-amber-500 ring-2 ring-amber-300",  bar: "bg-amber-500",   text: "text-amber-700"   },
-                  rose:    { chip: "bg-rose-50 border-rose-200",    chipActive: "bg-rose-100 border-rose-500 ring-2 ring-rose-300",    bar: "bg-rose-500",    text: "text-rose-700"    },
-                  slate:   { chip: "bg-slate-50 border-slate-200",  chipActive: "bg-slate-100 border-slate-500 ring-2 ring-slate-300",  bar: "bg-slate-500",   text: "text-slate-700"   },
-                };
-                const c = colorMap[color];
-                return (
+          {/* Compliance Pipeline — only shown when there are active companies */}
+          {activeRows.length > 0 && (() => {
+              const fBtn = (key: string, count: number, label: string, style: string) =>
+                count > 0 ? (
                   <button
-                    key={label}
-                    onClick={() => setFormFilter(isActive ? null : key)}
-                    title={isActive ? "Click to clear filter" : `Show ${pending} companies with ${label} pending`}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer select-none
-                      ${isActive ? c.chipActive : `${c.chip} hover:brightness-95`}`}
+                    key={key}
+                    onClick={() => setFormFilter(formFilter === key ? null : key)}
+                    className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all
+                      ${formFilter === key ? "bg-red-600 text-white border-red-600" : style}`}
+                    title={`Show ${count} companies — ${filterKeyLabel[key] || label}`}
                   >
-                    <span className={`font-semibold ${c.text}`}>{label}</span>
-                    <span className="text-slate-500">
-                      <span className={`font-bold ${c.text}`}>{done}/{total}</span>
-                      {" "}
-                      <span className="text-slate-400 font-normal">prepared</span>
-                    </span>
-                    {pending > 0 && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${isActive ? "bg-red-600 text-white border-red-600" : "bg-white border-red-200 text-red-600"}`}>
-                        {pending} pending
-                      </span>
-                    )}
-                    <div className="w-12 h-1.5 rounded-full bg-slate-200 overflow-hidden ml-1">
-                      <div className={`h-full rounded-full transition-all ${c.bar}`} style={{ width: `${pct}%` }} />
-                    </div>
-                    {isActive && <span className="text-[10px] text-slate-500 ml-0.5">✕</span>}
+                    {count} {label}{formFilter === key ? " ✕" : ""}
                   </button>
-                );
-              })}
-            </div>
-          )}
+                ) : null;
+
+              const doneNum = (n: number) => (
+                <span className="text-base font-semibold text-emerald-600">{n}</span>
+              );
+              const bar = (done: number, total: number, color: string) => total > 0 ? (
+                <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-1.5">
+                  <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.round(done / total * 100)}%` }} />
+                </div>
+              ) : null;
+
+              return (
+                <div className="mb-4 overflow-x-auto pb-1">
+                  <div className="flex items-stretch gap-0 min-w-[860px]">
+
+                    {/* Stage 1 — Active */}
+                    <div className="flex-none w-[110px] bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <div className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider mb-1">Active</div>
+                      <div className="text-2xl font-semibold text-blue-700">{ps.active}</div>
+                      <div className="text-[10px] text-blue-400 mt-0.5">of {rows.length} total</div>
+                      {bar(ps.active, rows.length, "bg-blue-400")}
+                    </div>
+
+                    <div className="flex items-center px-1 text-slate-300 text-lg flex-none">→</div>
+
+                    {/* Stage 2 — Data Collection */}
+                    <div className="flex-1 min-w-[150px] bg-white border border-slate-200 rounded-xl p-3">
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Data received</div>
+                      <div className="flex gap-2">
+                        <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
+                          {doneNum(ps.dataReceived)}
+                          <div className="text-[10px] text-emerald-600 mt-0.5">Received</div>
+                        </div>
+                        <div className="flex-1 bg-amber-50 border border-amber-100 rounded-lg p-2 text-center">
+                          <span className="text-base font-semibold text-amber-600">{ps.dataAwaited}</span>
+                          <div className="text-[10px] text-amber-500 mt-0.5">
+                            {fBtn("dataAwaited", ps.dataAwaited, "awaited", "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100") || "Awaited"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1.5">of {ps.active} active</div>
+                      {bar(ps.dataReceived, ps.active, "bg-emerald-400")}
+                    </div>
+
+                    <div className="flex items-center px-1 text-slate-300 text-lg flex-none">→</div>
+
+                    {/* Stage 3 — Balance Sheet */}
+                    <div className="flex-1 min-w-[160px] bg-white border border-slate-200 rounded-xl p-3">
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Balance Sheet</div>
+                      <div className="flex gap-2">
+                        <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
+                          {doneNum(ps.bsReady)}
+                          <div className="text-[10px] text-emerald-600 mt-0.5">Prepared</div>
+                        </div>
+                        <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+                          <span className="text-base font-semibold text-orange-500">{ps.bsPendingWithData}</span>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {fBtn("bsPendingWithData", ps.bsPendingWithData, "to prepare", "bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100") || "To prepare"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1.5">of {ps.dataReceived} data received</div>
+                      {bar(ps.bsReady, ps.dataReceived, "bg-emerald-400")}
+                    </div>
+
+                    <div className="flex items-center px-1 text-slate-300 text-lg flex-none">→</div>
+
+                    {/* Stage 4 — Attachments */}
+                    <div className="flex-1 min-w-[160px] bg-white border border-slate-200 rounded-xl p-3">
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Attachments</div>
+                      <div className="flex gap-2">
+                        <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
+                          {doneNum(ps.attachGenerated)}
+                          <div className="text-[10px] text-emerald-600 mt-0.5">Generated</div>
+                        </div>
+                        <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+                          <span className="text-base font-semibold text-orange-500">{ps.attachPendingBS}</span>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {fBtn("attachPendingBS", ps.attachPendingBS, "pending", "bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100") || "Pending"}
+                          </div>
+                        </div>
+                      </div>
+                      {ps.attachBlocked > 0 && (
+                        <div className="text-[10px] text-slate-400 mt-1.5 bg-slate-50 rounded-lg px-2 py-1 border border-slate-100">
+                          {ps.attachBlocked} blocked — BS not ready
+                        </div>
+                      )}
+                      <div className="text-[10px] text-slate-400 mt-1.5">of {ps.bsReady} BS ready</div>
+                      {bar(ps.attachGenerated, ps.bsReady, "bg-emerald-400")}
+                    </div>
+
+                    <div className="flex items-center px-1 text-slate-300 text-lg flex-none">→</div>
+
+                    {/* Stage 5 — Filings */}
+                    <div className="flex-1 min-w-[190px] bg-white border border-slate-200 rounded-xl p-3">
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Filings (of {ps.attachGenerated} with attachments)</div>
+                      <div className="space-y-1.5">
+                        {[
+                          { label: "AOC-4", filed: ps.aoc4Filed, pendingKey: "aoc4Pending", pendingCount: ps.aoc4Pending },
+                          { label: "MGT-7", filed: ps.mgt7Filed, pendingKey: "mgt7Pending", pendingCount: ps.mgt7Pending },
+                          { label: "ITR",   filed: ps.itrFiled,  pendingKey: "itrPending",  pendingCount: ps.itrPending  },
+                        ].map(({ label, filed, pendingKey, pendingCount }) => (
+                          <div key={label} className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold text-slate-500 w-11 flex-none">{label}</span>
+                            <span className="text-[11px] font-semibold text-emerald-600">{filed} ✓</span>
+                            {fBtn(pendingKey, pendingCount, "pending", "bg-red-50 text-red-700 border-red-200 hover:bg-red-100")}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Parallel track — UDIN */}
+                  <div className="mt-2 flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+                    <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex-none">Parallel track</div>
+                    <div className="h-3 w-px bg-slate-200 flex-none" />
+                    <div className="text-[11px] font-semibold text-slate-600 flex-none">UDIN (Statutory)</div>
+                    <div className="text-[10px] text-slate-400 flex-none">once BS is ready</div>
+                    <div className="h-3 w-px bg-slate-200 flex-none" />
+                    <span className="text-[11px] font-semibold text-emerald-600">{ps.udinDone} done</span>
+                    {fBtn("udinPendingBS", ps.udinPendingBS, "pending", "bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100")}
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                      {ps.bsReady > 0 && <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.round(ps.udinDone / ps.bsReady * 100)}%` }} />}
+                    </div>
+                    <span className="text-[10px] text-slate-400 flex-none">of {ps.bsReady} BS ready</span>
+                  </div>
+                </div>
+              );
+            })()}
 
           <div className="text-xs text-slate-400 mb-3">
             {formFilter ? (
               <span>
-                Showing companies with <span className="font-semibold text-red-600">{formFilter === "aoc4" ? "AOC-4" : formFilter === "mgt7" ? "MGT-7/7A" : formFilter === "balanceSheet" ? "Balance Sheet" : formFilter === "itr" ? "ITR" : formFilter === "udin" ? "UDIN (Stat)" : "Attachments"}</span> pending
+                Filtering: <span className="font-semibold text-slate-700">{filterKeyLabel[formFilter] || formFilter}</span>
                 {" — "}
                 <button onClick={() => setFormFilter(null)} className="text-blue-500 hover:underline">Clear filter</button>
               </span>
             ) : (
-              <>Click any <span className="bg-red-50 text-red-700 border border-red-200 rounded-full px-1.5 py-0.5 font-medium">Pending</span> badge to update it · Click a chip above to filter by form</>
+              <>Click any <span className="bg-red-50 text-red-700 border border-red-200 rounded-full px-1.5 py-0.5 font-medium">Pending</span> badge to update it</>
             )}
             {searchQuery && filteredRows.length > 0 && <span className="ml-2 text-blue-500 font-medium">{filteredRows.length} result{filteredRows.length !== 1 ? "s" : ""} for &ldquo;{searchQuery}&rdquo;</span>}
             {searchQuery && filteredRows.length === 0 && <span className="ml-2 text-red-500 font-medium">No results for &ldquo;{searchQuery}&rdquo;</span>}

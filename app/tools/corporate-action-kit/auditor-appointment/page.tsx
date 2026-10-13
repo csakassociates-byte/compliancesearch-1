@@ -1126,6 +1126,27 @@ export default function AuditorAppointmentPage() {
       .catch(() => {});
   }, [f.cin, session]);
 
+  // Pre-fill from URL params (?cin=, ?companyName=, ?appointmentType=, ?fy=, ?incorporationDate=)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlCin             = params.get("cin") || "";
+    const urlCompanyName     = params.get("companyName") || "";
+    const urlAppointmentType = params.get("appointmentType") as AppointmentType | null;
+    const urlFy              = params.get("fy") || "";
+    const urlIncDate         = params.get("incorporationDate") || "";
+    if (urlCin || urlCompanyName || urlAppointmentType || urlFy) {
+      setF(p => ({
+        ...p,
+        ...(urlCin             ? { cin: urlCin }                                        : {}),
+        ...(urlCompanyName     ? { companyName: urlCompanyName }                        : {}),
+        ...(urlAppointmentType ? { appointmentType: urlAppointmentType }                : {}),
+        ...(urlFy              ? { fy: urlFy }                                          : {}),
+        ...(urlIncDate         ? { incorporationDate: urlIncDate }                      : {}),
+      }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Load saved document from ?load=<id> OR auto-load latest draft for this CIN
   useEffect(() => {
     if (!session) return;
