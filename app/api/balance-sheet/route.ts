@@ -22,7 +22,10 @@ export async function POST(req: NextRequest) {
       formDataJson: string;
     };
 
-    const companyId = await syncCompany(userId, body.companyName, body.cin);
+    const [companyId, memberIds] = await Promise.all([
+      syncCompany(userId, body.companyName, body.cin),
+      getTeamMemberIds(userId),
+    ]);
 
     if (body.id) {
       await prisma.$executeRawUnsafe(
@@ -32,12 +35,13 @@ export async function POST(req: NextRequest) {
           "financialYear" = $5,
           "formDataJson" = $6,
           "companyId" = COALESCE("companyId", $7),
+          "userId" = $8,
           "updatedAt" = NOW()
-         WHERE id = $1 AND "userId" = $2`,
-        body.id, ownerId,
+         WHERE id = $1 AND "userId" = ANY($2::text[])`,
+        body.id, memberIds,
         body.title, body.companyName,
         body.financialYear || null,
-        body.formDataJson, companyId
+        body.formDataJson, companyId, ownerId
       );
       return NextResponse.json({ success: true, id: body.id });
     }

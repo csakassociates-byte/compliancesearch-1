@@ -65,13 +65,16 @@ export async function POST(req: NextRequest) {
 
     await ensureColumns();
 
-    const companyId = await syncCompany(userId, body.companyName, body.cin);
+    const [companyId, memberIds] = await Promise.all([
+      syncCompany(userId, body.companyName, body.cin),
+      getTeamMemberIds(userId),
+    ]);
 
     if (body.id) {
       // Don't allow updates to finalized records
       const check = await prisma.$queryRawUnsafe<Array<{ isFinalized: boolean }>>(
-        `SELECT "isFinalized" FROM csi_documents WHERE id = $1 AND "userId" = $2`,
-        body.id, userId
+        `SELECT "isFinalized" FROM csi_documents WHERE id = $1 AND "userId" = ANY($2::text[])`,
+        body.id, memberIds
       );
       if (check[0]?.isFinalized) {
         return NextResponse.json({ error: "Record is finalized and cannot be modified" }, { status: 403 });
@@ -85,12 +88,13 @@ export async function POST(req: NextRequest) {
           "meetingDate" = $6,
           "formDataJson" = $7,
           "companyId" = COALESCE("companyId", $8),
+          "userId" = $9,
           "updatedAt" = NOW()
-         WHERE id = $1 AND "userId" = $2`,
-        body.id, ownerId,
+         WHERE id = $1 AND "userId" = ANY($2::text[])`,
+        body.id, memberIds,
         body.title, body.companyName,
         body.financialYear || null, body.meetingDate || null,
-        body.formDataJson, companyId
+        body.formDataJson, companyId, ownerId
       );
       return NextResponse.json({ success: true, id: body.id });
     }

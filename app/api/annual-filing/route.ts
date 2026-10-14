@@ -67,7 +67,10 @@ export async function POST(req: NextRequest) {
 
     await ensureColumns();
 
-    const companyId = await syncCompany(userId, body.companyName, body.cin);
+    const [companyId, memberIds] = await Promise.all([
+      syncCompany(userId, body.companyName, body.cin),
+      getTeamMemberIds(userId),
+    ]);
 
     if (body.id) {
       await prisma.$executeRawUnsafe(
@@ -77,15 +80,17 @@ export async function POST(req: NextRequest) {
           "financialYear" = $5,
           "formDataJson" = $6,
           "companyId" = COALESCE("companyId", $7),
+          "userId" = $8,
           "updatedAt" = NOW()
-         WHERE id = $1 AND "userId" = $2`,
+         WHERE id = $1 AND "userId" = ANY($2::text[])`,
         body.id,
-        ownerId,
+        memberIds,
         `Annual Filing — ${body.companyName} — FY ${body.financialYear}`,
         body.companyName,
         body.financialYear,
         body.formDataJson,
         companyId,
+        ownerId,
       );
       return NextResponse.json({ success: true, id: body.id });
     }
@@ -161,17 +166,18 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json() as { id: string; action: "finalize" | "unfinalize" };
     await ensureColumns();
 
+    const memberIds = await getTeamMemberIds(userId);
     if (body.action === "finalize") {
       await prisma.$executeRawUnsafe(
         `UPDATE csi_documents SET "isFinalized" = true, "finalizedBy" = $3, "finalizedAt" = NOW(), "updatedAt" = NOW()
-         WHERE id = $1 AND "userId" = $2`,
-        body.id, userId, userEmail
+         WHERE id = $1 AND "userId" = ANY($2::text[])`,
+        body.id, memberIds, userEmail
       );
     } else {
       await prisma.$executeRawUnsafe(
         `UPDATE csi_documents SET "isFinalized" = false, "finalizedBy" = NULL, "finalizedAt" = NULL, "updatedAt" = NOW()
-         WHERE id = $1 AND "userId" = $2`,
-        body.id, userId
+         WHERE id = $1 AND "userId" = ANY($2::text[])`,
+        body.id, memberIds
       );
     }
     return NextResponse.json({ success: true });

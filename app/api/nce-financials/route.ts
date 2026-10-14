@@ -21,16 +21,20 @@ export async function POST(req: NextRequest) {
       formDataJson: string;
     };
 
-    const companyId = await syncCompany(userId, body.entityName);
+    const [companyId, memberIds] = await Promise.all([
+      syncCompany(userId, body.entityName),
+      getTeamMemberIds(userId),
+    ]);
 
     if (body.id) {
       await prisma.$executeRawUnsafe(
         `UPDATE csi_documents SET
           title = $3, "companyName" = $4, "financialYear" = $5,
-          "formDataJson" = $6, "companyId" = COALESCE("companyId", $7), "updatedAt" = NOW()
+          "formDataJson" = $6, "companyId" = COALESCE("companyId", $7),
+          "userId" = $8, "updatedAt" = NOW()
          WHERE id = $1 AND "userId" = ANY($2::text[])`,
-        body.id, [ownerId], body.title, body.entityName,
-        body.financialYear || null, body.formDataJson, companyId
+        body.id, memberIds, body.title, body.entityName,
+        body.financialYear || null, body.formDataJson, companyId, ownerId
       );
       return NextResponse.json({ id: body.id });
     }
