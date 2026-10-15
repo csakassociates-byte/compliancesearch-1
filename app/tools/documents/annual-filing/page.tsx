@@ -1488,10 +1488,10 @@ function AnnualFilingTool() {
       const isAudit = key === "audit-report";
       const isNotes = key === "notes-on-accounts";
 
-      const sigOn = sigEnabled[key] !== false; // default true unless explicitly unchecked
+      const sigOn = sigEnabled[key] === true; // signatures only when checkbox explicitly checked
 
       // When signatures are disabled, strip embedded base64 images from the HTML body
-      // (the body HTML was generated when sigOn was true; we can't re-generate on-the-fly)
+      // (the body HTML may have been generated with signatures; strip them for the PDF)
       const html = sigOn
         ? rawHtml
         : rawHtml.replace(/ src="data:image\/[^"]*"/g, ' src=""');
