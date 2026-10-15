@@ -334,14 +334,10 @@ ${isSection8
     ...(dir2?.name ? [{ name: dir2.name, designation: dir2.designation, din: dir2.din, signatureBase64: dir2.signatureBase64 }] : []),
     ...(dir3?.name ? [{ name: dir3.name, designation: dir3.designation, din: dir3.din, signatureBase64: dir3.signatureBase64 }] : []),
   ];
-  const pageFooter = buildPageSigFooter(
-    [],
-    { base64: aud.sealBase64 || undefined, firmName: aud.firmName ? `M/s. ${aud.firmName}` : undefined, frn: aud.frn || undefined }
-  );
-
+  // Seal rendered by Puppeteer footer — do NOT pass to wrapPage (would duplicate)
   return wrapPage(
     `Notes to Financial Statements — ${data.companyName} — FY ${fy}`,
     bodyHtml,
-    pageFooter || undefined
+    undefined
   );
 }

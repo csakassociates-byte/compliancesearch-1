@@ -1488,6 +1488,8 @@ function AnnualFilingTool() {
       const isAudit = key === "audit-report";
       const isNotes = key === "notes-on-accounts";
 
+      const sigOn = sigEnabled[key] !== false; // default true unless explicitly unchecked
+
       // Build director slots for footer (audit report has no director footer)
       const dirs = isAudit ? [] : [
         data.signatoryDirectors.director1,
@@ -1498,14 +1500,12 @@ function AnnualFilingTool() {
           name: d.name,
           designation: d.designation ?? undefined,
           din: d.din ?? undefined,
-          signatureBase64: d.signatureBase64 ?? undefined,
+          signatureBase64: sigOn ? (d.signatureBase64 ?? undefined) : undefined,
         }));
-
-      // CA seal for audit report and notes on accounts
       const auditor = (isAudit || isNotes) ? {
         firmName: data.auditor.firmName || undefined,
         frn: data.auditor.frn || undefined,
-        sealBase64: data.auditor.sealBase64 || undefined,
+        sealBase64: sigOn ? (data.auditor.sealBase64 || undefined) : undefined,
       } : undefined;
 
       const res = await fetch("/api/generate-pdf", {

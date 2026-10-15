@@ -204,16 +204,11 @@ ${auditTrailPara}
 </div>
 `;
 
-  // CA firm seal on every page; last-page formal sig is inside bodyHtml
-  const pageFooter = buildPageSigFooter(
-    [],
-    { base64: aud.sealBase64 || undefined, firmName: aud.firmName ? `M/s. ${aud.firmName}` : undefined, frn: aud.frn || undefined },
-    "flex-end"
-  );
-
+  // Seal is rendered by Puppeteer running footer (via /api/generate-pdf auditor param).
+  // Do NOT also pass it to wrapPage — that would duplicate it in the HTML static footer.
   return wrapPage(
     `Independent Auditor's Report — ${data.companyName} — FY ${fy}`,
     bodyHtml,
-    pageFooter || undefined
+    undefined
   );
 }
