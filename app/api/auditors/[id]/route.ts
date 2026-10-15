@@ -55,10 +55,11 @@ export async function PATCH(
 
   const body = await req.json() as { signatureBase64?: string; sealBase64?: string };
 
+  // NULLIF converts empty string → NULL so clicking Remove actually clears the DB value
   await prisma.$executeRawUnsafe(
     `UPDATE csi_auditors SET
-      "signatureBase64" = COALESCE($3, "signatureBase64"),
-      "sealBase64"      = COALESCE($4, "sealBase64"),
+      "signatureBase64" = CASE WHEN $3 IS NULL THEN "signatureBase64" ELSE NULLIF($3, '') END,
+      "sealBase64"      = CASE WHEN $4 IS NULL THEN "sealBase64"      ELSE NULLIF($4, '') END,
       "updatedAt"       = NOW()
      WHERE id = $1 AND "userId" = $2`,
     id, userId,

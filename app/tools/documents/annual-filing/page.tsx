@@ -1478,8 +1478,8 @@ function AnnualFilingTool() {
   }
 
   async function handleDownloadPdf(key: string, label: string) {
-    const html = generated[key];
-    if (!html) return;
+    const rawHtml = generated[key];
+    if (!rawHtml) return;
     setPdfLoading(prev => ({ ...prev, [key]: true }));
     try {
       const filename = `${key}_${data.companyName || "Company"}_FY${data.financialYear || ""}`
@@ -1489,6 +1489,12 @@ function AnnualFilingTool() {
       const isNotes = key === "notes-on-accounts";
 
       const sigOn = sigEnabled[key] !== false; // default true unless explicitly unchecked
+
+      // When signatures are disabled, strip embedded base64 images from the HTML body
+      // (the body HTML was generated when sigOn was true; we can't re-generate on-the-fly)
+      const html = sigOn
+        ? rawHtml
+        : rawHtml.replace(/ src="data:image\/[^"]*"/g, ' src=""');
 
       // Build director slots for footer (audit report has no director footer)
       const dirs = isAudit ? [] : [
