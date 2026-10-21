@@ -1471,8 +1471,8 @@ export default function ComplianceMonitorPage() {
         };
         const fmtDate = (d: string | null | undefined) => {
           if (!d) return "—";
-          // MCA returns DD/MM/YYYY — JS can't parse that, reorder to YYYY-MM-DD
-          const ddmm = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          // MCA dates come as DD/MM/YYYY or DD-MM-YYYY — JS can't parse these
+          const ddmm = d.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
           const dt = ddmm
             ? new Date(+ddmm[3], +ddmm[2] - 1, +ddmm[1])
             : new Date(d);
