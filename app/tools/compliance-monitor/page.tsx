@@ -1471,12 +1471,19 @@ export default function ComplianceMonitorPage() {
         };
         const fmtDate = (d: string | null | undefined) => {
           if (!d || d === "Invalid Date") return "—";
-          // MCA dates come as DD/MM/YYYY or DD-MM-YYYY — JS can't parse these
+          // Excel serial number stored as string e.g. "44651" → convert to date
+          const num = Number(d);
+          if (!isNaN(num) && num > 1000 && num < 60000) {
+            const dt = new Date((num - 25569) * 86400000);
+            if (!isNaN(dt.getTime()))
+              return dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+          }
+          // DD/MM/YYYY or DD-MM-YYYY from MCA text format
           const ddmm = d.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
           const dt = ddmm
             ? new Date(+ddmm[3], +ddmm[2] - 1, +ddmm[1])
             : new Date(d);
-          if (isNaN(dt.getTime())) return "—"; // unparseable → blank
+          if (isNaN(dt.getTime())) return "—";
           return dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
         };
         const et = p?.company?.entityType ?? c.entityType;

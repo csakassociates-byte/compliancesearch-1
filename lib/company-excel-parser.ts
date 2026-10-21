@@ -21,17 +21,34 @@ export async function parseCompanyExcel(
   const warnings: string[] = [];
 
   // Row 0 = title, Row 1 = headers, Row 2+ = data
+  const DATE_HEADERS = new Set([
+    "Date of Appointment", "Date of Appointment of Director",
+    "Cessation Date", "Date of Incorporation",
+  ]);
+  function cellToStr(h: string, v: unknown): string {
+    if (v === null || v === undefined || v === "") return "";
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return "";
+      return `${String(v.getDate()).padStart(2,"0")}/${String(v.getMonth()+1).padStart(2,"0")}/${v.getFullYear()}`;
+    }
+    if (DATE_HEADERS.has(h) && typeof v === "number" && v > 1 && v < 60000) {
+      const d = new Date((v - 25569) * 86400000);
+      if (!isNaN(d.getTime()))
+        return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    }
+    return String(v).trim();
+  }
   function sheetToMapped(sheetName: string): Record<string, string>[] {
     const sheet = wb.Sheets[sheetName];
     if (!sheet) return [];
-    const raw = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" }) as string[][];
+    const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" }) as unknown[][];
     if (raw.length < 2) return [];
-    const headers = raw[1].map(h => String(h).trim());
+    const headers = (raw[1] as unknown[]).map(h => String(h).trim());
     return raw
       .slice(2)
       .map(row => {
         const obj: Record<string, string> = {};
-        headers.forEach((h, i) => { obj[h] = String(row[i] ?? "").trim(); });
+        headers.forEach((h, i) => { obj[h] = cellToStr(h, (row as unknown[])[i]); });
         return obj;
       })
       .filter(row => Object.values(row).some(v => v !== ""));
@@ -40,13 +57,28 @@ export async function parseCompanyExcel(
   // ── MasterData sheet (key-value pairs) ──────────────────────────────────
   const masterSheet = wb.Sheets["MasterData"];
   const masterRaw   = masterSheet
-    ? (XLSX.utils.sheet_to_json<string[]>(masterSheet, { header: 1, defval: "" }) as string[][])
+    ? (XLSX.utils.sheet_to_json<unknown[]>(masterSheet, { header: 1, defval: "" }) as unknown[][])
     : [];
   const m: Record<string, string> = {};
+  // Date fields that may come as Excel serial numbers instead of strings
+  const DATE_KEYS = new Set(["Date of Incorporation", "Date of Last AGM", "Date of Balance Sheet"]);
+  function excelSerialToStr(n: number): string {
+    const d = new Date((n - 25569) * 86400000);
+    if (isNaN(d.getTime())) return String(n);
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+  }
   for (const row of masterRaw) {
-    const key = String(row[0] || "").trim();
-    const val = String(row[1] || "").trim();
-    if (key && val) m[key] = val;
+    const key = String((row as unknown[])[0] || "").trim();
+    const raw = (row as unknown[])[1];
+    if (!key || raw === "" || raw === null || raw === undefined) continue;
+    if (DATE_KEYS.has(key) && typeof raw === "number" && raw > 1 && raw < 60000) {
+      m[key] = excelSerialToStr(raw);
+    } else if (raw instanceof Date) {
+      if (!isNaN(raw.getTime()))
+        m[key] = `${String(raw.getDate()).padStart(2,"0")}/${String(raw.getMonth()+1).padStart(2,"0")}/${raw.getFullYear()}`;
+    } else {
+      m[key] = String(raw).trim();
+    }
   }
 
   const companyName        = m["Company Name"]                                              || "";
@@ -95,8 +127,8 @@ export async function parseCompanyExcel(
                    || row["DIN / PAN"]
                    || "";
     const isSig     = (row["Signatory"] || "").toLowerCase() === "yes";
-    const cessation = row["Cessation Date"]    || "";
-    const appointed = row["Date of Appointment"] || "";
+    const cessation = row["Cessation Date"]     || "";
+    const appointed = row["Date of Appointment"] || row["Date of Appointment of Director"] || "";
     const category  = row["Category"]          || "";
 
     if (!name) continue;
