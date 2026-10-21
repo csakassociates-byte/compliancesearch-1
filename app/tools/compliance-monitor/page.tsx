@@ -1470,13 +1470,13 @@ export default function ComplianceMonitorPage() {
           nidhi: "Nidhi", producer: "Producer Company", unlimited: "Unlimited",
         };
         const fmtDate = (d: string | null | undefined) => {
-          if (!d) return "—";
+          if (!d || d === "Invalid Date") return "—";
           // MCA dates come as DD/MM/YYYY or DD-MM-YYYY — JS can't parse these
           const ddmm = d.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
           const dt = ddmm
             ? new Date(+ddmm[3], +ddmm[2] - 1, +ddmm[1])
             : new Date(d);
-          if (isNaN(dt.getTime())) return d; // fallback: show raw string
+          if (isNaN(dt.getTime())) return "—"; // unparseable → blank
           return dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
         };
         const et = p?.company?.entityType ?? c.entityType;
