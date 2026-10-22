@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Get existing csi_persons KYC for this company ─────────────────
-  const kycRows = await prisma.$queryRawUnsafe<Array<{
+  type KycRow = {
     id: string; name: string; din: string | null;
     fatherName: string | null; dateOfBirth: string | null;
     mobile: string | null; email: string | null;
@@ -70,17 +70,42 @@ export async function GET(req: NextRequest) {
     dematDpId: string | null; dematClientId: string | null;
     signatureBase64: string | null;
     isDirector: boolean; isShareholder: boolean;
-  }>>(
+  };
+
+  // Company-specific KYC rows (highest priority)
+  const kycRows = await prisma.$queryRawUnsafe<KycRow[]>(
     `SELECT * FROM csi_persons WHERE "userId" = ANY($1::text[]) AND "companyId" = $2 ORDER BY "createdAt" ASC`,
     memberIds, companyId
   );
 
   // Build KYC lookup by DIN (preferred) or normalized name
-  const kycByDin  = new Map<string, typeof kycRows[0]>();
-  const kycByName = new Map<string, typeof kycRows[0]>();
+  const kycByDin  = new Map<string, KycRow>();
+  const kycByName = new Map<string, KycRow>();
   for (const k of kycRows) {
     if (k.din)  kycByDin.set(k.din.trim(), k);
     kycByName.set(k.name.trim().toUpperCase(), k);
+  }
+
+  // ── Cross-company KYC fallback: if a director has no KYC in this company,
+  //    look up the same DIN in any other company to pre-fill personal details ──
+  const missingDins = profileDirectors
+    .filter(d => d.din && !kycByDin.has(d.din.trim()))
+    .map(d => d.din!.trim());
+
+  if (missingDins.length > 0) {
+    const crossRows = await prisma.$queryRawUnsafe<KycRow[]>(
+      `SELECT DISTINCT ON (din) * FROM csi_persons
+       WHERE "userId" = ANY($1::text[]) AND din = ANY($2::text[])
+         AND "companyId" != $3
+       ORDER BY din, "updatedAt" DESC`,
+      memberIds, missingDins, companyId
+    );
+    for (const k of crossRows) {
+      if (k.din && !kycByDin.has(k.din.trim())) {
+        // Mark as cross-company source so id is null (no record in this company yet)
+        kycByDin.set(k.din.trim(), { ...k, id: `xc:${k.id}` });
+      }
+    }
   }
 
   // ── Merge: CompanyDirector + csi_persons KYC ─────────────────────
@@ -102,8 +127,8 @@ export async function GET(req: NextRequest) {
         isActive: dir.isActive,
         isDirector: true,
         isShareholder: kyc?.isShareholder ?? false,
-        // KYC from csi_persons (null if not filled yet)
-        id: kyc?.id ?? null,          // csi_persons.id — null means KYC not saved yet
+        // KYC from csi_persons (null if not filled yet or cross-company pre-fill)
+        id: (kyc?.id && !kyc.id.startsWith('xc:')) ? kyc.id : null,
         companyId,
         companyName,
         fatherName: kyc?.fatherName ?? null,
