@@ -519,8 +519,8 @@ function AnnualFilingTool() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [data, setData] = useState<AnnualFilingData>({ ...INITIAL_FILING_DATA });
   // Always-fresh ref so onBlur closures never read stale director data
-  const dataRef = React.useRef(data);
-  React.useEffect(() => { dataRef.current = data; }, [data]);
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
   const [auditOpts, setAuditOpts] = useState<AuditReportOptions>({
     opinionType: "unmodified",
     cashFlowIncluded: false,
