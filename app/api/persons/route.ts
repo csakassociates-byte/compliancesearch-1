@@ -86,6 +86,127 @@ export async function GET(req: NextRequest) {
     kycByName.set(k.name.trim().toUpperCase(), k);
   }
 
+  // ── Auto-sync: pull KYC from latest annual filing document if csi_persons is stale ──
+  // Runs server-side on every GET so Dashboard always shows up-to-date data.
+  try {
+    const docRows = await prisma.$queryRawUnsafe<Array<{ formDataJson: string }>>(
+      `SELECT "formDataJson" FROM csi_documents
+       WHERE "companyId" = $1 AND type = 'annual_filing'
+       ORDER BY "updatedAt" DESC LIMIT 1`,
+      companyId
+    );
+    if (docRows.length && docRows[0].formDataJson) {
+      const docData = JSON.parse(docRows[0].formDataJson) as {
+        data?: {
+          directors?: Array<{
+            name?: string; din?: string; pan?: string; fatherName?: string;
+            dateOfBirth?: string; email?: string; address?: string;
+            occupation?: string; nationality?: string; designation?: string;
+            category?: string; dateOfAppointment?: string;
+          }>;
+          shareholders?: Array<{
+            name?: string; pan?: string; address?: string;
+          }>;
+        };
+      };
+      const docDirs = docData?.data?.directors || [];
+      const docShs = docData?.data?.shareholders || [];
+      // Upsert each director from the document
+      for (const d of docDirs) {
+        if (!d.name?.trim()) continue;
+        const existing2 = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM csi_persons WHERE "userId" = ANY($1::text[]) AND "companyId" = $2
+           AND (LOWER(name) = LOWER($3) OR (din IS NOT NULL AND din = $4)) LIMIT 1`,
+          memberIds, companyId, d.name.trim(), d.din?.trim() || '__NONE__'
+        );
+        const pan   = d.pan?.trim()        || null;
+        const dob   = d.dateOfBirth?.trim() || null;
+        const fname = d.fatherName?.trim()  || null;
+        const email = d.email?.trim()       || null;
+        const addr  = d.address?.trim()     || null;
+        const occ   = d.occupation?.trim()  || null;
+        const nat   = d.nationality?.trim() || null;
+        const desig = d.designation?.trim() || null;
+        const cat   = d.category?.trim()    || null;
+        const doj   = d.dateOfAppointment?.trim() || null;
+        const din   = d.din?.trim()         || null;
+        if (existing2.length) {
+          await prisma.$executeRawUnsafe(
+            `UPDATE csi_persons SET
+              "panNo"          = COALESCE(NULLIF($3,''),  "panNo"),
+              "fatherName"     = COALESCE(NULLIF($4,''),  "fatherName"),
+              "dateOfBirth"    = COALESCE(NULLIF($5,''),  "dateOfBirth"),
+              email            = COALESCE(NULLIF($6,''),  email),
+              "presentAddress" = COALESCE(NULLIF($7,''),  "presentAddress"),
+              occupation       = COALESCE(NULLIF($8,''),  occupation),
+              nationality      = COALESCE(NULLIF($9,''),  nationality),
+              designation      = COALESCE(NULLIF($10,''), designation),
+              "directorCategory" = COALESCE(NULLIF($11,''), "directorCategory"),
+              "dateOfJoining"  = COALESCE(NULLIF($12,''), "dateOfJoining"),
+              din              = COALESCE(NULLIF($13,''), din),
+              "isDirector"     = TRUE,
+              "updatedAt"      = NOW()
+             WHERE id = $1 AND "userId" = ANY($2::text[])`,
+            existing2[0].id, memberIds,
+            pan, fname, dob, email, addr, occ, nat, desig, cat, doj, din
+          );
+        } else {
+          const crypto = (await import("crypto")).default;
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO csi_persons (id,"userId","companyId",name,din,"panNo","fatherName","dateOfBirth",email,"presentAddress",occupation,nationality,designation,"directorCategory","dateOfJoining","isDirector","isShareholder")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,TRUE,FALSE)
+             ON CONFLICT DO NOTHING`,
+            crypto.randomUUID(), userId, companyId,
+            d.name.trim(), din, pan, fname, dob, email, addr, occ, nat, desig, cat, doj
+          );
+        }
+      }
+      // Upsert each shareholder from the document
+      for (const s of docShs) {
+        if (!s.name?.trim()) continue;
+        const existing3 = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM csi_persons WHERE "userId" = ANY($1::text[]) AND "companyId" = $2
+           AND LOWER(name) = LOWER($3) LIMIT 1`,
+          memberIds, companyId, s.name.trim()
+        );
+        const span = s.pan?.trim()     || null;
+        const saddr = s.address?.trim() || null;
+        if (existing3.length) {
+          await prisma.$executeRawUnsafe(
+            `UPDATE csi_persons SET
+              "panNo"          = COALESCE(NULLIF($3,''), "panNo"),
+              "presentAddress" = COALESCE(NULLIF($4,''), "presentAddress"),
+              "isShareholder"  = TRUE,
+              "updatedAt"      = NOW()
+             WHERE id = $1 AND "userId" = ANY($2::text[])`,
+            existing3[0].id, memberIds, span, saddr
+          );
+        } else {
+          const crypto = (await import("crypto")).default;
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO csi_persons (id,"userId","companyId",name,"panNo","presentAddress","isDirector","isShareholder")
+             VALUES ($1,$2,$3,$4,$5,$6,FALSE,TRUE)
+             ON CONFLICT DO NOTHING`,
+            crypto.randomUUID(), userId, companyId,
+            s.name.trim(), span, saddr
+          );
+        }
+      }
+      // Re-fetch kycRows after sync so this request returns fresh data
+      const fresh = await prisma.$queryRawUnsafe<KycRow[]>(
+        `SELECT * FROM csi_persons WHERE "userId" = ANY($1::text[]) AND "companyId" = $2 ORDER BY "createdAt" ASC`,
+        memberIds, companyId
+      );
+      kycRows.length = 0;
+      kycRows.push(...fresh);
+      kycByDin.clear(); kycByName.clear();
+      for (const k of kycRows) {
+        if (k.din) kycByDin.set(k.din.trim(), k);
+        kycByName.set(k.name.trim().toUpperCase(), k);
+      }
+    }
+  } catch { /* non-fatal: sync failure doesn't break the response */ }
+
   // ── Cross-company KYC fallback: if a director has no KYC in this company,
   //    look up the same DIN in any other company to pre-fill personal details ──
   const missingDins = profileDirectors
