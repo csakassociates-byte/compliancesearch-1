@@ -2464,20 +2464,19 @@ function DirectorsTab({ companyId, company, onSwitchTab }: { companyId: string; 
   }
 
   async function handleEditKyc(p: PersonKYC) {
+    // Open modal immediately with whatever data we have (pre-filled from API/cross-company)
+    setEditPerson(p);
+    // If no DB record yet, create one in background so Save works
     if (!p.id) {
-      // Create KYC record first, then open modal with refreshed data
       setCreatingKyc(p._directorId || p.name);
       const newId = await ensureKycRecord(p);
       setCreatingKyc(null);
       if (newId) {
-        // Re-fetch to get fresh merged data
         const r = await fetch(`/api/persons?companyId=${companyId}&type=director`);
         const d = r.ok ? await r.json() : { persons: [] };
         const fresh = (d.persons as PersonKYC[]).find(x => x.id === newId || x._directorId === p._directorId);
         if (fresh) { setPersons(d.persons); setEditPerson(fresh); }
       }
-    } else {
-      setEditPerson(p);
     }
   }
 
@@ -2550,7 +2549,11 @@ function DirectorsTab({ companyId, company, onSwitchTab }: { companyId: string; 
               }`}>
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
-                    <div className="font-bold text-slate-800 truncate">{p.name}</div>
+                    <button
+                      onClick={() => setViewPerson(p)}
+                      className="font-bold text-slate-800 hover:text-blue-600 hover:underline truncate text-left cursor-pointer">
+                      {p.name}
+                    </button>
                     {p.din && (
                       <button
                         onClick={e => { e.stopPropagation(); setDinLookup({ din: p.din!, name: p.name }); }}
