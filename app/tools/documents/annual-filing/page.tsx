@@ -907,6 +907,23 @@ function AnnualFilingTool() {
             signatureBase64:  p.signatureBase64  || dirs[idx].signatureBase64,
             _personId:        p.id,
           };
+        } else {
+          // Director not in current list — add them from person records
+          dirs.push({
+            din:               (p as { din?: string }).din || "",
+            name:              p.name,
+            dateOfAppointment: toDateInput(p.appointedAt || ""),
+            fatherName:        p.fatherName       || "",
+            dateOfBirth:       p.dateOfBirth ? toDateInput(p.dateOfBirth) : "",
+            email:             p.email            || "",
+            nationality:       p.nationality      || "Indian",
+            occupation:        p.occupation       || "",
+            address:           p.presentAddress   || "",
+            pan:               p.panNo            || "",
+            sharesHeld:        p.sharesHeld       ?? 0,
+            signatureBase64:   p.signatureBase64  || "",
+            _personId:         p.id,
+          } as DirectorRecord);
         }
       }
       // Update directors AND restore signatureBase64 in signatoryDirectors
