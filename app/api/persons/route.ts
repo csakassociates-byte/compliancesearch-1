@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTeamMemberIds } from "@/lib/team";
 import crypto from "crypto";
 
 export async function GET(req: NextRequest) {
@@ -19,10 +20,13 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get("type"); // "director" | "shareholder" | null
   if (!companyId) return NextResponse.json({ error: "companyId required" }, { status: 400 });
 
+  const memberIds = await getTeamMemberIds(userId);
+
   // ── Get company's CIN from csi_companies ──────────────────────────
+  // No userId filter: companyId is already a unique UUID; team members must also be able to load
   const csiRows = await prisma.$queryRawUnsafe<Array<{ cin: string | null; companyName: string }>>(
-    `SELECT cin, "companyName" FROM csi_companies WHERE id = $1 AND "userId" = $2 LIMIT 1`,
-    companyId, userId
+    `SELECT cin, "companyName" FROM csi_companies WHERE id = $1 LIMIT 1`,
+    companyId
   );
   if (!csiRows.length) return NextResponse.json({ persons: [] });
 
@@ -67,8 +71,8 @@ export async function GET(req: NextRequest) {
     signatureBase64: string | null;
     isDirector: boolean; isShareholder: boolean;
   }>>(
-    `SELECT * FROM csi_persons WHERE "userId" = $1 AND "companyId" = $2 ORDER BY "createdAt" ASC`,
-    userId, companyId
+    `SELECT * FROM csi_persons WHERE "userId" = ANY($1::text[]) AND "companyId" = $2 ORDER BY "createdAt" ASC`,
+    memberIds, companyId
   );
 
   // Build KYC lookup by DIN (preferred) or normalized name

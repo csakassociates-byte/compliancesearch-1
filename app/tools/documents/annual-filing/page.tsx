@@ -5274,7 +5274,17 @@ function AnnualFilingTool() {
             <span className="text-xs text-slate-400">Step {step} of {STEPS.length}</span>
             {step < STEPS.length ? (
               <button
-                onClick={() => { void silentSave(); setStep(s => s + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                onClick={() => {
+                  void silentSave();
+                  // On step 5 (Directors), save all director KYC rows so they persist for future loads
+                  if (step === 5 && companyId) {
+                    for (const d of data.directors) {
+                      if (d.name.trim()) void saveDirectorKYC(d);
+                    }
+                  }
+                  setStep(s => s + 1);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
                 className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors text-sm"
               >
                 Next
