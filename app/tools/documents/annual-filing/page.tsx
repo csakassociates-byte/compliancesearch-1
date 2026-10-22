@@ -920,13 +920,20 @@ function AnnualFilingTool() {
       if (!persons.length) return;
       const dirs = [...currentDirs];
       for (const p of persons) {
-        const idx = dirs.findIndex(d =>
+        // Match by DIN first, then by name, then use first blank row
+        let idx = dirs.findIndex(d =>
           (p.din && d.din && p.din === d.din) ||
           d.name.trim().toLowerCase() === p.name.trim().toLowerCase()
         );
+        // If no match, fill a blank row (no name + no DIN) instead of appending
+        if (idx === -1) {
+          idx = dirs.findIndex(d => !d.name.trim() && !d.din.trim());
+        }
         if (idx !== -1) {
           dirs[idx] = {
             ...dirs[idx],
+            name:             p.name             || dirs[idx].name,
+            din:              (p as { din?: string }).din || dirs[idx].din,
             dateOfAppointment: dirs[idx].dateOfAppointment || toDateInput(p.appointedAt || ""),
             fatherName:       p.fatherName       || dirs[idx].fatherName,
             dateOfBirth:      p.dateOfBirth ? toDateInput(p.dateOfBirth) : dirs[idx].dateOfBirth,
@@ -940,7 +947,7 @@ function AnnualFilingTool() {
             _personId:        p.id,
           };
         } else {
-          // Director not in current list — add them from person records
+          // No match and no blank row — append as new director
           dirs.push({
             din:               (p as { din?: string }).din || "",
             name:              p.name,
