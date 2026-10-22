@@ -550,6 +550,15 @@ function AnnualFilingTool() {
   const [showCAManager, setShowCAManager] = useState(false);
   const [companyId, setCompanyId]   = useState<string | null>(null);
   const [loadingPersons, setLoadingPersons] = useState(false);
+  // All persons fetched for this company — used for name autocomplete in Step 5
+  const [allPersons, setAllPersons] = useState<Array<{
+    name: string; din?: string | null; pan?: string | null; fatherName?: string | null;
+    dateOfBirth?: string | null; email?: string | null; presentAddress?: string | null;
+    occupation?: string | null; nationality?: string | null;
+    designation?: string | null; category?: string | null; appointedAt?: string | null;
+    signatureBase64?: string | null; id?: string | null;
+  }>>([]);
+  const [dirSuggestIdx, setDirSuggestIdx] = useState<number | null>(null); // which director row is showing suggestions
   const [foundDraft, setFoundDraft] = useState<{
     id: string; companyName: string | null; financialYear: string | null;
     updatedAt: string; formDataJson: string;
@@ -892,6 +901,15 @@ function AnnualFilingTool() {
         signatureBase64?: string | null;
       }> };
       const persons = json.persons || [];
+      // Store for autocomplete suggestions
+      if (persons.length) setAllPersons(persons.map(p => ({
+        name: p.name, din: (p as {din?:string}).din, pan: p.panNo, fatherName: p.fatherName,
+        dateOfBirth: p.dateOfBirth, email: p.email, presentAddress: p.presentAddress,
+        occupation: p.occupation, nationality: p.nationality,
+        designation: (p as {designation?:string}).designation,
+        category: (p as {category?:string}).category,
+        appointedAt: p.appointedAt, signatureBase64: p.signatureBase64, id: p.id,
+      })));
       // Backfill: push any already-filled director KYC data from draft to csi_persons
       // (runs even when persons is empty — first time a company is opened)
       for (const d of currentDirs) {
@@ -4125,10 +4143,48 @@ function AnnualFilingTool() {
 
               {/* Row 1: Basic fields */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                <div>
+                <div className="relative">
                   <label className="text-xs text-slate-400 block mb-0.5">Full Name *</label>
-                  <input type="text" value={d.name} onChange={e => updateDir(i, { name: e.target.value })} placeholder="Full Name" className={inp}
-                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
+                  <input type="text" value={d.name}
+                    onChange={e => { updateDir(i, { name: e.target.value }); setDirSuggestIdx(i); }}
+                    onFocus={() => setDirSuggestIdx(i)}
+                    onBlur={() => { setTimeout(() => setDirSuggestIdx(null), 150); companyId && saveDirectorKYC(dataRef.current.directors[i]); }}
+                    placeholder="Full Name" className={inp} autoComplete="off" />
+                  {dirSuggestIdx === i && d.name.trim().length >= 1 && (() => {
+                    const q = d.name.trim().toLowerCase();
+                    const hits = allPersons.filter(p => p.name.toLowerCase().includes(q) && p.name.toLowerCase() !== d.name.toLowerCase());
+                    if (!hits.length) return null;
+                    return (
+                      <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-white border border-emerald-300 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                        {hits.map((p, pi) => (
+                          <button key={pi} type="button"
+                            onMouseDown={() => {
+                              updateDir(i, {
+                                name:              p.name,
+                                din:               p.din               || d.din,
+                                pan:               p.pan               || d.pan,
+                                fatherName:        p.fatherName        || d.fatherName,
+                                dateOfBirth:       p.dateOfBirth ? toDateInput(p.dateOfBirth) : d.dateOfBirth,
+                                email:             p.email             || d.email,
+                                address:           p.presentAddress    || d.address,
+                                occupation:        p.occupation        || d.occupation,
+                                nationality:       p.nationality       || d.nationality,
+                                designation:       p.designation       || d.designation,
+                                dateOfAppointment: p.appointedAt ? toDateInput(p.appointedAt) : d.dateOfAppointment,
+                                signatureBase64:   p.signatureBase64   || d.signatureBase64,
+                                _personId:         p.id,
+                              });
+                              setDirSuggestIdx(null);
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-50 border-b border-slate-100 last:border-0">
+                            <span className="font-semibold text-slate-800">{p.name}</span>
+                            {p.din && <span className="ml-2 text-slate-400">DIN: {p.din}</span>}
+                            {p.pan && <span className="ml-2 text-emerald-600">{p.pan}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">DIN</label>
