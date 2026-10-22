@@ -611,10 +611,14 @@ function AnnualFilingTool() {
             setFinalizedBy(json.filing.finalizedBy ?? null);
             setFinalizedAt(json.filing.finalizedAt ?? null);
           }
-          // Restore director signatures from csi_persons
+          // Restore director signatures from csi_persons + backfill both tables
           if (parsed.data._companyId) {
             setCompanyId(parsed.data._companyId);
             void loadPersonsForCompany(parsed.data._companyId, parsed.data.directors || []);
+            // Backfill shareholders to csi_persons on load
+            for (const s of (parsed.data.shareholders || [])) {
+              if (s.name.trim()) void saveShareholderKYC(s, parsed.data._companyId);
+            }
           }
           // CA signature restored via the savedCAs useEffect below
         }
@@ -989,6 +993,23 @@ function AnnualFilingTool() {
         dateOfJoining:    d.dateOfAppointment || undefined,
         signatureBase64:  d.signatureBase64  || undefined,
         isDirector:       true,
+      }),
+    });
+  }
+
+  // ── Save shareholder KYC back to csi_persons ──────────────────────────
+  async function saveShareholderKYC(s: ShareholderRecord, cId?: string) {
+    const targetCid = cId || companyId;
+    if (!targetCid || !session?.user || !s.name.trim()) return;
+    await fetch("/api/persons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyId:       targetCid,
+        name:            s.name,
+        panNo:           s.pan          || undefined,
+        presentAddress:  s.address      || undefined,
+        isShareholder:   true,
       }),
     });
   }
@@ -4509,7 +4530,7 @@ function AnnualFilingTool() {
                 </button>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <input type="text" value={s.name} onChange={e => updateSh(i, { name: e.target.value })} placeholder="Shareholder Name" className="col-span-2 border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                <input type="text" value={s.name} onChange={e => updateSh(i, { name: e.target.value })} onBlur={() => companyId && saveShareholderKYC(dataRef.current.shareholders?.[i] ?? s)} placeholder="Shareholder Name" className="col-span-2 border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 <select value={s.type} onChange={e => updateSh(i, { type: e.target.value as ShareholderRecord["type"] })} className="border border-slate-300 rounded px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
                   <option value="resident_individual">Resident Individual</option>
                   <option value="nri">NRI</option>
@@ -4518,7 +4539,7 @@ function AnnualFilingTool() {
                   <option value="trust">Trust</option>
                   <option value="government">Government</option>
                 </select>
-                <input type="text" value={s.pan || ""} onChange={e => updateSh(i, { pan: e.target.value.toUpperCase() })} placeholder="PAN" className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                <input type="text" value={s.pan || ""} onChange={e => updateSh(i, { pan: e.target.value.toUpperCase() })} onBlur={() => companyId && saveShareholderKYC(dataRef.current.shareholders?.[i] ?? s)} placeholder="PAN" className="border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Shares Held</label>
                   <input type="number" value={s.sharesHeld || ""} onChange={e => updateSh(i, { sharesHeld: parseInt(e.target.value) || 0 })} placeholder="0" className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
@@ -4531,7 +4552,7 @@ function AnnualFilingTool() {
                   <input type="text" value={s.folioNo} onChange={e => updateSh(i, { folioNo: e.target.value })} placeholder="Folio No." className={`w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 ${duplicateFolios.has(s.folioNo.trim()) ? "border-red-400 bg-red-50" : "border-slate-300"}`} />
                   {duplicateFolios.has(s.folioNo.trim()) && <p className="text-xs text-red-500 mt-0.5">⚠ Duplicate folio number</p>}
                 </div>
-                <input type="text" value={s.address || ""} onChange={e => updateSh(i, { address: e.target.value })} placeholder="Residential / Registered Address" className="col-span-2 border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                <input type="text" value={s.address || ""} onChange={e => updateSh(i, { address: e.target.value })} onBlur={() => companyId && saveShareholderKYC(dataRef.current.shareholders?.[i] ?? s)} placeholder="Residential / Registered Address" className="col-span-2 border border-slate-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
               </div>
             </div>
           ))}
@@ -5289,10 +5310,16 @@ function AnnualFilingTool() {
               <button
                 onClick={() => {
                   void silentSave();
-                  // On step 5 (Directors), save all director KYC rows so they persist for future loads
+                  // On step 5 (Directors), save all director KYC rows
                   if (step === 5 && companyId) {
-                    for (const d of data.directors) {
+                    for (const d of dataRef.current.directors) {
                       if (d.name.trim()) void saveDirectorKYC(d);
+                    }
+                  }
+                  // On step 6 (Shareholders), save all shareholder rows
+                  if (step === 6 && companyId) {
+                    for (const s of dataRef.current.shareholders || []) {
+                      if (s.name.trim()) void saveShareholderKYC(s);
                     }
                   }
                   setStep(s => s + 1);
