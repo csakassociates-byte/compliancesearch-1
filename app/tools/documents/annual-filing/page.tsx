@@ -870,8 +870,9 @@ function AnnualFilingTool() {
         setFinalizedAt(filing.finalizedAt ?? null);
         setStep(8);
       }
-      if (parsed.data._companyId) {
-        void loadPersonsForCompany(parsed.data._companyId, parsed.data.directors || []);
+      const autoLoadCid = parsed.data._companyId || companyId;
+      if (autoLoadCid) {
+        void loadPersonsForCompany(autoLoadCid, parsed.data.directors || []);
       }
       if (parsed.data.auditor._savedCAId) {
         const ca = savedCAs.find(c => c.id === parsed.data.auditor._savedCAId);
@@ -983,6 +984,8 @@ function AnnualFilingTool() {
         }
         return { ...prev, directors: dedupedDirs, signatoryDirectors: sigs };
       });
+      setSavedMsg({ ok: true, text: `${persons.length} director record${persons.length !== 1 ? 's' : ''} loaded from person records` });
+      setTimeout(() => setSavedMsg(null), 5000);
     } finally {
       setLoadingPersons(false);
     }
