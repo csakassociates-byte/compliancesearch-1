@@ -139,6 +139,7 @@ export default function ComplianceMonitorPage() {
     recentDocs?: Array<{ id: string; type: string; title: string; financialYear: string | null; updatedAt: string }>;
   } | null>(null);
   const [profileTab, setProfileTab] = useState("info");
+  const [udinPopup, setUdinPopup] = useState<{ companyId: string; field: "udinStat" | "udinTax"; val: string; step: 0 | 1 | 2 } | null>(null);
   const editRef = useRef<HTMLDivElement>(null);
   // Close modal on Escape key
   useEffect(() => {
@@ -678,7 +679,15 @@ export default function ComplianceMonitorPage() {
   function cellUdin(val: string, field: "udinStat" | "udinTax", row: ComplianceRow) {
     if (row.workStatus === "declined") return <span className={naPill}>N/A</span>;
     if (val === "na") return <span className={naPill}>N/A</span>;
-    if (val) return <span className={infoPill} title={val}>{val.slice(0, 14)}{val.length > 14 ? "…" : ""}</span>;
+    if (val) return (
+      <span
+        className={`${infoPill} cursor-pointer hover:opacity-80`}
+        title="Click to view / change UDIN"
+        onClick={() => setUdinPopup({ companyId: row.companyId, field, val, step: 0 })}
+      >
+        {val.slice(0, 14)}{val.length > 14 ? "…" : ""}
+      </span>
+    );
     return <span className={errPill} onClick={() => openEdit(row.companyId, field, { [field === "udinStat" ? "udinStatutory" : "udinTaxAudit"]: "" })}>Pending</span>;
   }
 
@@ -1393,6 +1402,68 @@ export default function ComplianceMonitorPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── UDIN View / Change Popup ─────────────────────────────────────── */}
+      {udinPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setUdinPopup(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-slate-800 text-base">
+                {udinPopup.field === "udinStat" ? "UDIN — Statutory Audit" : "UDIN — Tax Audit"}
+              </h3>
+              <button onClick={() => setUdinPopup(null)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+            </div>
+
+            {/* Full UDIN display */}
+            <div className="bg-slate-50 rounded-lg px-4 py-3 flex items-center gap-2 border border-slate-200">
+              <span className="font-mono text-sm text-slate-800 flex-1 select-all break-all">{udinPopup.val}</span>
+              <button
+                onClick={() => { navigator.clipboard.writeText(udinPopup.val); }}
+                className="text-xs text-blue-600 hover:underline font-semibold shrink-0"
+                title="Copy UDIN"
+              >Copy</button>
+            </div>
+
+            {/* Change section */}
+            {udinPopup.step === 0 && (
+              <button
+                onClick={() => setUdinPopup(p => p ? { ...p, step: 1 } : null)}
+                className="w-full py-2 rounded-lg border border-orange-300 text-orange-700 bg-orange-50 text-sm font-semibold hover:bg-orange-100 transition-colors"
+              >Change UDIN</button>
+            )}
+            {udinPopup.step === 1 && (
+              <div className="space-y-2">
+                <p className="text-sm text-slate-600 font-medium">Are you sure you want to change this UDIN?</p>
+                <p className="text-xs text-slate-400">Changing a UDIN that was already filed may cause mismatch with ICAI records.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setUdinPopup(null)} className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50">Cancel</button>
+                  <button
+                    onClick={() => setUdinPopup(p => p ? { ...p, step: 2 } : null)}
+                    className="flex-1 py-2 rounded-lg bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600"
+                  >Yes, Change</button>
+                </div>
+              </div>
+            )}
+            {udinPopup.step === 2 && (
+              <div className="space-y-2">
+                <p className="text-sm text-red-600 font-semibold">Confirm again — this will overwrite the existing UDIN.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setUdinPopup(null)} className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50">Cancel</button>
+                  <button
+                    onClick={() => {
+                      const { companyId, field } = udinPopup;
+                      setUdinPopup(null);
+                      openEdit(companyId, field, { [field === "udinStat" ? "udinStatutory" : "udinTaxAudit"]: udinPopup.val });
+                    }}
+                    className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold hover:bg-red-600"
+                  >Yes, Overwrite</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
