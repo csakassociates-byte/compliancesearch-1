@@ -870,7 +870,9 @@ function AnnualFilingTool() {
         setFinalizedAt(filing.finalizedAt ?? null);
         setStep(8);
       }
-      const autoLoadCid = parsed.data._companyId || companyId;
+      // Use current companyId state (dropdown selection) first — it's always the correct UUID.
+      // Fall back to _companyId in doc only when loading via ?load= URL with no dropdown selection.
+      const autoLoadCid = companyId || parsed.data._companyId;
       if (autoLoadCid) {
         void loadPersonsForCompany(autoLoadCid, parsed.data.directors || []);
       }
