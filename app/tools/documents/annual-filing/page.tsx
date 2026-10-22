@@ -947,6 +947,12 @@ function AnnualFilingTool() {
         }
         return { ...prev, directors: dedupedDirs, signatoryDirectors: sigs };
       });
+      // Backfill: push any already-filled director KYC data to csi_persons
+      for (const d of currentDirs) {
+        if (d.name.trim() && (d.pan || d.dateOfBirth || d.fatherName || d.email)) {
+          void saveDirectorKYC(d, cId);
+        }
+      }
     } finally {
       setLoadingPersons(false);
     }
@@ -959,14 +965,15 @@ function AnnualFilingTool() {
   }
 
   // ── Save director KYC back to csi_persons ─────────────────────────────
-  async function saveDirectorKYC(d: DirectorRecord) {
-    if (!companyId || !session?.user || !d.name.trim()) return;
+  async function saveDirectorKYC(d: DirectorRecord, cId?: string) {
+    const targetCid = cId || companyId;
+    if (!targetCid || !session?.user || !d.name.trim()) return;
     await fetch("/api/persons", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id:              d._personId || undefined,
-        companyId,
+        companyId: targetCid,
         name:            d.name,
         din:             d.din         || undefined,
         fatherName:      d.fatherName  || undefined,
