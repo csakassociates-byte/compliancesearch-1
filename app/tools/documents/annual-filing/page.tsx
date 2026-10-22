@@ -518,6 +518,9 @@ function AnnualFilingTool() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [data, setData] = useState<AnnualFilingData>({ ...INITIAL_FILING_DATA });
+  // Always-fresh ref so onBlur closures never read stale director data
+  const dataRef = React.useRef(data);
+  React.useEffect(() => { dataRef.current = data; }, [data]);
   const [auditOpts, setAuditOpts] = useState<AuditReportOptions>({
     opinionType: "unmodified",
     cashFlowIncluded: false,
@@ -4095,16 +4098,18 @@ function AnnualFilingTool() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Full Name *</label>
-                  <input type="text" value={d.name} onChange={e => updateDir(i, { name: e.target.value })} placeholder="Full Name" className={inp} />
+                  <input type="text" value={d.name} onChange={e => updateDir(i, { name: e.target.value })} placeholder="Full Name" className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">DIN</label>
-                  <input type="text" value={d.din} onChange={e => updateDir(i, { din: e.target.value })} placeholder="DIN" className={inp} />
+                  <input type="text" value={d.din} onChange={e => updateDir(i, { din: e.target.value })} placeholder="DIN" className={inp}
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Designation</label>
                   <select value={d.designation} onChange={e => updateDir(i, { designation: e.target.value })} className={inp + " bg-white"}
-                    onBlur={() => companyId && saveDirectorKYC(d)}>
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])}>
                     <option>Managing Director</option>
                     <option>Whole Time Director</option>
                     <option>Director</option>
@@ -4116,7 +4121,7 @@ function AnnualFilingTool() {
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Category</label>
                   <select value={d.category} onChange={e => updateDir(i, { category: e.target.value })} className={inp + " bg-white"}
-                    onBlur={() => companyId && saveDirectorKYC(d)}>
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])}>
                     <option>Executive</option>
                     <option>Non-Executive</option>
                     <option>Independent</option>
@@ -4130,22 +4135,22 @@ function AnnualFilingTool() {
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Father&apos;s Name</label>
                   <input type="text" value={d.fatherName || ""} onChange={e => updateDir(i, { fatherName: e.target.value })} placeholder="Father's Full Name" className={inp}
-                    onBlur={() => companyId && saveDirectorKYC({ ...d, fatherName: d.fatherName })} />
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Date of Birth</label>
                   <input type="date" value={d.dateOfBirth || ""} onChange={e => updateDir(i, { dateOfBirth: e.target.value })} className={inp}
-                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Nationality</label>
                   <input type="text" value={d.nationality || ""} onChange={e => updateDir(i, { nationality: e.target.value })} placeholder="e.g. Indian" className={inp}
-                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Occupation</label>
                   <input type="text" value={d.occupation || ""} onChange={e => updateDir(i, { occupation: e.target.value })} placeholder="e.g. Business" className={inp}
-                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
               </div>
 
@@ -4154,22 +4159,22 @@ function AnnualFilingTool() {
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Email-Id</label>
                   <input type="email" value={d.email || ""} onChange={e => updateDir(i, { email: e.target.value })} placeholder="email@example.com" className={inp}
-                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">PAN</label>
                   <input type="text" value={d.pan || ""} onChange={e => updateDir(i, { pan: e.target.value.toUpperCase() })} placeholder="ABCDE1234F" className={inp}
-                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">No. of Equity Shares Held</label>
                   <input type="number" min="0" value={d.sharesHeld ?? ""} onChange={e => updateDir(i, { sharesHeld: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="0" className={inp}
-                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 block mb-0.5">Date of Appointment</label>
                   <input type="date" value={d.dateOfAppointment} onChange={e => updateDir(i, { dateOfAppointment: e.target.value })} className={inp}
-                    onBlur={() => companyId && saveDirectorKYC(d)} />
+                    onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
                 </div>
                 {d.changedDuringYear && (
                   <div>
@@ -4203,7 +4208,7 @@ function AnnualFilingTool() {
               <div>
                 <label className="text-xs text-slate-400 block mb-0.5">Residential Address</label>
                 <input type="text" value={d.address || ""} onChange={e => updateDir(i, { address: e.target.value })} placeholder="Full residential address" className={inp}
-                  onBlur={() => companyId && saveDirectorKYC(d)} />
+                  onBlur={() => companyId && saveDirectorKYC(dataRef.current.directors[i])} />
               </div>
             </div>
           ))}
