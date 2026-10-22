@@ -888,6 +888,13 @@ function AnnualFilingTool() {
         signatureBase64?: string | null;
       }> };
       const persons = json.persons || [];
+      // Backfill: push any already-filled director KYC data from draft to csi_persons
+      // (runs even when persons is empty — first time a company is opened)
+      for (const d of currentDirs) {
+        if (d.name.trim() && (d.pan || d.dateOfBirth || d.fatherName || d.email)) {
+          void saveDirectorKYC(d, cId);
+        }
+      }
       if (!persons.length) return;
       const dirs = [...currentDirs];
       for (const p of persons) {
@@ -947,12 +954,6 @@ function AnnualFilingTool() {
         }
         return { ...prev, directors: dedupedDirs, signatoryDirectors: sigs };
       });
-      // Backfill: push any already-filled director KYC data to csi_persons
-      for (const d of currentDirs) {
-        if (d.name.trim() && (d.pan || d.dateOfBirth || d.fatherName || d.email)) {
-          void saveDirectorKYC(d, cId);
-        }
-      }
     } finally {
       setLoadingPersons(false);
     }
