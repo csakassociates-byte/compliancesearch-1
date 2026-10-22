@@ -165,7 +165,8 @@ function deduplicateDirs(dirs: DirectorRecord[]): DirectorRecord[] {
   const seen = new Set<string>();
   return dirs.filter(d => {
     const key = d.din?.trim() || d.name.trim().toLowerCase();
-    if (!key || seen.has(key)) return false;
+    if (!key) return true; // blank/new row — always keep, never deduplicate
+    if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });

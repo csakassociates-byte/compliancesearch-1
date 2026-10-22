@@ -128,7 +128,32 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    if (type === "director") return NextResponse.json({ persons: merged });
+    // If no CompanyProfile directors exist, fall back to csi_persons rows marked isDirector
+    const directorPersons = kycRows.filter(k => k.isDirector);
+    const fallback = directorPersons
+      .filter(k => !merged.some(m => (k.din && m.din === k.din) || m.name.trim().toUpperCase() === k.name.trim().toUpperCase()))
+      .map(k => ({
+        _directorId: null, _source: "csi_persons",
+        id: k.id, companyId, companyName,
+        name: k.name, din: k.din, designation: k.designation,
+        category: k.directorCategory, appointedAt: k.dateOfJoining,
+        isActive: true, isDirector: true, isShareholder: k.isShareholder,
+        fatherName: k.fatherName, dateOfBirth: k.dateOfBirth,
+        mobile: k.mobile, email: k.email,
+        presentAddress: k.presentAddress, permanentAddress: k.permanentAddress,
+        aadhaarNo: k.aadhaarNo, panNo: k.panNo,
+        accountNo: k.accountNo, ifscCode: k.ifscCode, bankName: k.bankName,
+        nationality: k.nationality ?? 'Indian', occupation: k.occupation,
+        occupationCategory: k.occupationCategory, dateOfJoining: k.dateOfJoining,
+        directorCategory: k.directorCategory, nomineeName: k.nomineeName,
+        nomineeRelation: k.nomineeRelation, nomineeAddress: k.nomineeAddress,
+        dematDpId: k.dematDpId, dematClientId: k.dematClientId,
+        signatureBase64: k.signatureBase64,
+        kycComplete: !!(k.panNo && k.mobile),
+      }));
+
+    const allMerged = [...merged, ...fallback];
+    if (type === "director") return NextResponse.json({ persons: allMerged });
   }
 
   // ── type=all: return every csi_persons row for this company ─────
