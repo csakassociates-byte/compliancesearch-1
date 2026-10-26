@@ -288,7 +288,7 @@ ${data.dividendDeclared
 
 <!-- ══════════════ 4. STATE OF AFFAIRS ══════════════ -->
 <h2>4. State of Affairs / Business Operations</h2>
-<p>${data.stateOfAffairs || `During the Financial Year ${fy}, the Company continued its principal business activities. The overall performance of the Company was satisfactory during the year under review.`}</p>
+<p>${(data.stateOfAffairs || `During the Financial Year ${fy}, the Company continued its principal business activities. The overall performance of the Company was satisfactory during the year under review.`).replace(/\b(Financial Year)\s+20\d\d-\d{2}\b/gi, '$1 ' + fy)}</p>
 
 <!-- ══════════════ 5. ANNUAL RETURN [Rule 8A(a), Sec. 92(3)] ══════════════ -->
 <h2>5. Annual Return</h2>
