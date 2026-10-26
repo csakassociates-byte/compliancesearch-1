@@ -267,6 +267,8 @@ export default function Navbar() {
                   <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">📊 Dashboard</Link>
                   <Link href="/dashboard/clients" className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">🏢 My Clients</Link>
                   <Link href="/dashboard/team" className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">👥 My Team</Link>
+                  <Link href="/dashboard/credits" className="flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg font-medium">🪙 Credits & Billing</Link>
+                  <div className="border-t border-slate-100 my-1" />
                   <button onClick={() => signOut({ callbackUrl: "/" })} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg">🚪 Sign Out</button>
                 </div>
               </div>
