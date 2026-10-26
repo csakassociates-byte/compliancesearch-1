@@ -13,16 +13,42 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const accounts = await prisma.csi_credit_accounts.findMany({
-    include: {
-      csi_users: { select: { id: true, name: true, email: true, createdAt: true } },
-      csi_credit_txns: { orderBy: { createdAt: "desc" }, take: 20 },
-      csi_utr_requests: { orderBy: { createdAt: "desc" }, take: 20 },
+  // Fetch ALL users, not just those with credit accounts
+  const users = await prisma.csi_users.findMany({
+    where: { plan: { not: "admin" } },
+    select: {
+      id: true, name: true, email: true, createdAt: true,
+      csi_credit_accounts: {
+        include: {
+          csi_credit_txns: { orderBy: { createdAt: "desc" }, take: 20 },
+          csi_utr_requests: { orderBy: { createdAt: "desc" }, take: 20 },
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(accounts);
+  // Normalize: wrap users without a credit account into a consistent shape
+  const result = users.map((u) => {
+    const acc = u.csi_credit_accounts;
+    if (acc) return { ...acc, csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt } };
+    return {
+      id: null,
+      userId: u.id,
+      balance: 0,
+      lifetimeCredits: 0,
+      freeCreditsGiven: 0,
+      isFreeUnlimited: false,
+      freeLimit: null,
+      createdAt: u.createdAt,
+      updatedAt: u.createdAt,
+      csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt },
+      csi_credit_txns: [],
+      csi_utr_requests: [],
+    };
+  });
+
+  return NextResponse.json(result);
 }
 
 // POST: manually add credits to a user
