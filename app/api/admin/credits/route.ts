@@ -16,8 +16,8 @@ export async function GET() {
   const accounts = await prisma.csi_credit_accounts.findMany({
     include: {
       csi_users: { select: { id: true, name: true, email: true, createdAt: true } },
-      csi_credit_txns: { orderBy: { createdAt: "desc" }, take: 1 },
-      csi_utr_requests: { where: { status: "pending" }, select: { id: true } },
+      csi_credit_txns: { orderBy: { createdAt: "desc" }, take: 20 },
+      csi_utr_requests: { orderBy: { createdAt: "desc" }, take: 20 },
     },
     orderBy: { createdAt: "desc" },
   });

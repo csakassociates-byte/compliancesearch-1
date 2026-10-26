@@ -213,6 +213,9 @@ export default function AdminDashboardClient({ rules: initialRules }: { rules: R
             <a href="/admin/credits" className="text-sm font-semibold text-emerald-600 hover:text-emerald-800 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 transition">
               🪙 Credits
             </a>
+            <a href="/admin/organisations" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 transition">
+              🏢 Organisations
+            </a>
             <a href="/" className="text-gray-400 hover:text-pink-500 text-sm transition font-medium">
               ← Back to App
             </a>
