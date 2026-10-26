@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Coins, ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle, XCircle, Copy } from "lucide-react";
 
-const UPI_ID = "csakassociates@upi"; // ← update this
+const UPI_ID = "8800170088@ybl";
 const PACKAGES = [
   { amount: 199, credits: 10, label: "Starter" },
   { amount: 499, credits: 30, label: "Basic" },
@@ -121,17 +121,46 @@ export default function CreditsPage() {
             ))}
           </div>
 
-          {/* UPI Details */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <div className="text-sm text-gray-600">Pay <strong>₹{selectedPkg.amount}</strong> to:</div>
-            <div className="flex items-center gap-2">
-              <code className="bg-white border border-gray-200 rounded px-3 py-1.5 text-sm font-mono flex-1">{UPI_ID}</code>
-              <button onClick={copyUpi} className="text-xs text-emerald-700 hover:underline flex items-center gap-1">
-                <Copy className="w-3.5 h-3.5" />
-                {copied ? "Copied!" : "Copy"}
-              </button>
+          {/* UPI Details + QR */}
+          <div className="bg-gray-50 rounded-xl p-4 flex flex-col md:flex-row gap-5 items-center">
+            {/* QR Code */}
+            <div className="flex flex-col items-center gap-2 shrink-0">
+              <div className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`upi://pay?pa=${UPI_ID}&pn=ComplianceSearch&am=${selectedPkg.amount}&cu=INR&tn=Credits+${selectedPkg.credits}`)}`}
+                  alt="UPI QR Code"
+                  width={160}
+                  height={160}
+                  className="rounded-lg"
+                />
+              </div>
+              <span className="text-xs text-gray-500">Scan with any UPI app</span>
             </div>
-            <div className="text-xs text-gray-500">Use any UPI app (GPay, PhonePe, Paytm). Note your UTR/reference number after payment.</div>
+
+            {/* UPI ID + instructions */}
+            <div className="flex-1 space-y-3 w-full">
+              <div>
+                <div className="text-sm text-gray-600 mb-1">Pay <strong className="text-gray-800">₹{selectedPkg.amount}</strong> to this UPI ID:</div>
+                <div className="flex items-center gap-2">
+                  <code className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono flex-1 text-gray-800 font-semibold">{UPI_ID}</code>
+                  <button onClick={copyUpi} className="flex items-center gap-1.5 px-3 py-2 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium shrink-0">
+                    <Copy className="w-3.5 h-3.5" />
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                <p className="text-xs text-emerald-800 font-medium">How to pay:</p>
+                <ol className="text-xs text-emerald-700 mt-1 space-y-0.5 list-decimal list-inside">
+                  <li>Open GPay / PhonePe / Paytm</li>
+                  <li>Scan the QR code or enter UPI ID manually</li>
+                  <li>Pay exactly <strong>₹{selectedPkg.amount}</strong></li>
+                  <li>Note the <strong>UTR / Reference Number</strong> from payment success screen</li>
+                  <li>Enter it below and submit</li>
+                </ol>
+              </div>
+            </div>
           </div>
 
           {/* UTR Submit */}
