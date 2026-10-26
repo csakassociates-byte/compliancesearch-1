@@ -28,10 +28,23 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
+  // Fetch total debit counts per account (all-time, not just last 20)
+  const debitCounts = await prisma.csi_credit_txns.groupBy({
+    by: ["accountId"],
+    where: { type: "debit" },
+    _count: { id: true },
+  });
+  const debitCountMap: Record<string, number> = {};
+  debitCounts.forEach(d => { debitCountMap[d.accountId] = d._count.id; });
+
   // Normalize: wrap users without a credit account into a consistent shape
   const result = users.map((u) => {
     const acc = u.csi_credit_accounts;
-    if (acc) return { ...acc, csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt } };
+    if (acc) return {
+      ...acc,
+      totalDocsGenerated: debitCountMap[acc.id] ?? 0,
+      csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt },
+    };
     return {
       id: null,
       userId: u.id,
@@ -42,6 +55,7 @@ export async function GET() {
       freeLimit: null,
       createdAt: u.createdAt,
       updatedAt: u.createdAt,
+      totalDocsGenerated: 0,
       csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt },
       csi_credit_txns: [],
       csi_utr_requests: [],

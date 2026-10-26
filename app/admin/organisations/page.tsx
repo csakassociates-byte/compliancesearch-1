@@ -12,6 +12,7 @@ type UtrReq = { id: string; utrNumber: string; amount: number; credits: number; 
 type Org = {
   id: string; userId: string; balance: number; lifetimeCredits: number;
   isFreeUnlimited: boolean; freeLimit: number | null; createdAt: string;
+  totalDocsGenerated: number;
   csi_users: { id: string; name: string | null; email: string; createdAt: string };
   csi_credit_txns: Txn[];
   csi_utr_requests: UtrReq[];
@@ -173,7 +174,7 @@ export default function AdminOrganisationsPage() {
       <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total Orgs", value: orgs.length, color: "text-gray-800" },
-          { label: "Docs Generated", value: orgs.reduce((s, o) => s + o.csi_credit_txns.filter(t => t.type === "debit").length, 0), color: "text-blue-700" },
+          { label: "Docs Generated", value: orgs.reduce((s, o) => s + o.totalDocsGenerated, 0), color: "text-blue-700" },
           { label: "Pending Payments", value: pendingUtrs.length, color: "text-yellow-700" },
           { label: "Total Credits Given", value: orgs.reduce((s, o) => s + o.lifetimeCredits, 0), color: "text-emerald-700" },
         ].map(s => (
@@ -195,7 +196,7 @@ export default function AdminOrganisationsPage() {
           const isExpanded = expanded === org.id;
           const pendingCount = org.csi_utr_requests.filter(u => u.status === "pending").length;
           const lastTxn = org.csi_credit_txns[0];
-          const totalDocs = org.csi_credit_txns.filter(t => t.type === "debit").length;
+          const totalDocs = org.totalDocsGenerated;
           const thisMonth = getThisMonthCount(org.csi_credit_txns);
           const badge = getActivityBadge(org.csi_credit_txns);
           const toolBreakdown = getToolBreakdown(org.csi_credit_txns);
