@@ -1,16 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Coins, ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle, XCircle, Copy } from "lucide-react";
+import { Coins, ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle, XCircle, Copy, FileText, Users, Building2, Award, ArrowLeftRight, BarChart3, Gift } from "lucide-react";
 
 const UPI_ID = "8800170088@ybl";
+
+const TOOL_META: Record<string, { label: string; color: string; bg: string }> = {
+  annual_filing:        { label: "Annual Filing",        color: "text-blue-700",   bg: "bg-blue-50" },
+  auditor_appointment:  { label: "Auditor Appointment",  color: "text-purple-700", bg: "bg-purple-50" },
+  bank_resolution:      { label: "Bank Resolution",      color: "text-orange-700", bg: "bg-orange-50" },
+  share_certificate:    { label: "Share Certificate",    color: "text-teal-700",   bg: "bg-teal-50" },
+  share_transfer:       { label: "Share Transfer",       color: "text-indigo-700", bg: "bg-indigo-50" },
+  compliance_monitor:   { label: "Compliance Monitor",   color: "text-rose-700",   bg: "bg-rose-50" },
+};
 const PACKAGES = [
   { amount: 199, credits: 10, label: "Starter" },
   { amount: 499, credits: 30, label: "Basic" },
   { amount: 1199, credits: 100, label: "Pro" },
 ];
 
-type Txn = { id: string; type: string; amount: number; description: string; toolSlug?: string; createdAt: string };
+type Txn = { id: string; type: string; amount: number; description: string; toolSlug?: string; createdAt: string; };
 type UtrReq = { id: string; utrNumber: string; amount: number; credits: number; status: string; createdAt: string };
 
 export default function CreditsPage() {
@@ -220,21 +229,44 @@ export default function CreditsPage() {
       {/* Transaction History */}
       {data?.transactions?.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="font-semibold text-gray-800 mb-3">Transaction History</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">Transaction History</h2>
           <div className="space-y-2">
-            {data.transactions.map((t: Txn) => (
-              <div key={t.id} className="flex items-center justify-between text-sm border-b border-gray-100 pb-2 last:border-0">
-                <div className="flex items-center gap-2">
-                  {t.type === "debit"
-                    ? <ArrowDownCircle className="w-4 h-4 text-red-400 shrink-0" />
-                    : <ArrowUpCircle className="w-4 h-4 text-green-500 shrink-0" />}
-                  <span className="text-gray-600 text-xs">{t.description}</span>
+            {data.transactions.map((t: Txn) => {
+              const tool = t.toolSlug ? TOOL_META[t.toolSlug] : null;
+              const isDebit = t.type === "debit";
+              const isFree = t.type === "free";
+              return (
+                <div key={t.id} className="flex items-start justify-between gap-3 py-2.5 border-b border-gray-100 last:border-0">
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                      isDebit ? "bg-red-50" : isFree ? "bg-yellow-50" : "bg-green-50"
+                    }`}>
+                      {isDebit
+                        ? <ArrowDownCircle className="w-4 h-4 text-red-500" />
+                        : isFree
+                        ? <Gift className="w-4 h-4 text-yellow-500" />
+                        : <ArrowUpCircle className="w-4 h-4 text-green-500" />}
+                    </div>
+                    <div>
+                      {tool && (
+                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-1 ${tool.bg} ${tool.color}`}>
+                          {tool.label}
+                        </span>
+                      )}
+                      <div className="text-sm text-gray-700 leading-snug">{t.description}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {new Date(t.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        {" · "}
+                        {new Date(t.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`text-base font-bold shrink-0 ${isDebit ? "text-red-600" : isFree ? "text-yellow-600" : "text-green-600"}`}>
+                    {isDebit ? "−" : "+"}{t.amount} cr
+                  </div>
                 </div>
-                <div className={`font-semibold ${t.type === "debit" ? "text-red-600" : "text-green-600"}`}>
-                  {t.type === "debit" ? "-" : "+"}{t.amount}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
