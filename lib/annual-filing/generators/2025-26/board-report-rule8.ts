@@ -19,7 +19,7 @@
 
 import type { AnnualFilingData } from "../../types";
 import { buildDividendText } from "../../types";
-import { buildPageSigFooter, fmtDate, fmtRs, fyEndYear, fyStartYear, sigCol, wrapPage } from "../../utils";
+import { buildPageSigFooter, fmtDate, fmtRs, fyEndYear, fyStartYear, parseIndian, sigCol, wrapPage } from "../../utils";
 
 function getMeetingRows(data: AnnualFilingData): string {
   if (!data.boardMeetings || data.boardMeetings.length === 0) {
@@ -316,7 +316,18 @@ ${isSection8
 
 <!-- ══════════════ 4. STATE OF AFFAIRS ══════════════ -->
 <h2>4. State of Affairs / Business Operations</h2>
-<p>${(data.stateOfAffairs || `During the Financial Year ${fy}, the Company continued its principal business activities. The overall performance of the Company was satisfactory during the year under review.`).replace(/\b(Financial Year)\s+20\d\d-\d{2}\b/gi, '$1 ' + fy)}</p>
+${(() => {
+  const pat = parseIndian(data.financials?.profitAfterTax || "0");
+  let autoText: string;
+  if (pat > 0) {
+    autoText = `During the Financial Year ${fy}, the Company continued its principal business activities and earned a Net Profit of ${fmtRs(data.financials.profitAfterTax)} after tax. The Board of Directors remains committed to the long-term growth and sustainability of the Company. There has been no material change in the nature of the business of the Company during the year under review.`;
+  } else if (pat < 0) {
+    autoText = `During the Financial Year ${fy}, the Company continued its principal business activities and incurred a Net Loss of ${fmtRs(data.financials.profitAfterTax)} after tax. The Board of Directors is taking all necessary steps to improve the financial performance and operational efficiency of the Company. There has been no material change in the nature of the business of the Company during the year under review.`;
+  } else {
+    autoText = `During the Financial Year ${fy}, the Company continued its principal business activities. The overall performance of the Company was satisfactory during the year under review. There has been no material change in the nature of the business of the Company during the year under review.`;
+  }
+  return `<p>${autoText}</p>`;
+})()}
 
 <!-- ══════════════ 5. ANNUAL RETURN [Sec. 92(3)] ══════════════ -->
 <h2>5. Annual Return</h2>
