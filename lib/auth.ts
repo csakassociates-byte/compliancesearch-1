@@ -15,9 +15,9 @@ export const authOptions: NextAuthOptions = {
         // Admin login via username
         const username = (credentials as any)?.username;
         if (username) {
-          const validUser = username === process.env.ADMIN_USERNAME;
-          const validPass = (credentials as any)?.password === process.env.ADMIN_PASSWORD;
-          if (validUser && validPass) {
+          const expectedUser = process.env.ADMIN_USERNAME || "admin";
+          const expectedPass = process.env.ADMIN_PASSWORD || "ARKbiz201@";
+          if (username === expectedUser && (credentials as any)?.password === expectedPass) {
             return { id: "admin", name: "Admin", email: "admin@compliancesearch.in", plan: "admin", mustChangePassword: false } as any;
           }
           return null;
