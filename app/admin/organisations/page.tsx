@@ -17,6 +17,41 @@ type Org = {
   csi_utr_requests: UtrReq[];
 };
 
+const TOOL_LABELS: Record<string, string> = {
+  annual_filing: "Annual Filing",
+  auditor_appointment: "Auditor Appointment",
+  bank_resolution: "Bank Resolution",
+  share_certificate: "Share Certificate",
+  share_transfer: "Share Transfer",
+  compliance_monitor: "Compliance Monitor",
+};
+
+function getActivityBadge(txns: Txn[]) {
+  const debits = txns.filter(t => t.type === "debit");
+  if (debits.length === 0) return { label: "No Activity", color: "bg-gray-100 text-gray-500" };
+  const latest = new Date(debits[0].createdAt);
+  const daysSince = Math.floor((Date.now() - latest.getTime()) / 86400000);
+  if (daysSince <= 7) return { label: "Active", color: "bg-green-100 text-green-700" };
+  if (daysSince <= 30) return { label: "Moderate", color: "bg-yellow-100 text-yellow-700" };
+  return { label: "Inactive", color: "bg-red-100 text-red-600" };
+}
+
+function getThisMonthCount(txns: Txn[]) {
+  const now = new Date();
+  return txns.filter(t => {
+    const d = new Date(t.createdAt);
+    return t.type === "debit" && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+}
+
+function getToolBreakdown(txns: Txn[]) {
+  const counts: Record<string, number> = {};
+  txns.filter(t => t.type === "debit" && t.toolSlug).forEach(t => {
+    counts[t.toolSlug!] = (counts[t.toolSlug!] || 0) + 1;
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+}
+
 export default function AdminOrganisationsPage() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +173,7 @@ export default function AdminOrganisationsPage() {
       <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total Orgs", value: orgs.length, color: "text-gray-800" },
-          { label: "Unlimited Access", value: orgs.filter(o => o.isFreeUnlimited).length, color: "text-purple-700" },
+          { label: "Docs Generated", value: orgs.reduce((s, o) => s + o.csi_credit_txns.filter(t => t.type === "debit").length, 0), color: "text-blue-700" },
           { label: "Pending Payments", value: pendingUtrs.length, color: "text-yellow-700" },
           { label: "Total Credits Given", value: orgs.reduce((s, o) => s + o.lifetimeCredits, 0), color: "text-emerald-700" },
         ].map(s => (
@@ -160,6 +195,10 @@ export default function AdminOrganisationsPage() {
           const isExpanded = expanded === org.id;
           const pendingCount = org.csi_utr_requests.filter(u => u.status === "pending").length;
           const lastTxn = org.csi_credit_txns[0];
+          const totalDocs = org.csi_credit_txns.filter(t => t.type === "debit").length;
+          const thisMonth = getThisMonthCount(org.csi_credit_txns);
+          const badge = getActivityBadge(org.csi_credit_txns);
+          const toolBreakdown = getToolBreakdown(org.csi_credit_txns);
 
           return (
             <div key={org.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -189,9 +228,11 @@ export default function AdminOrganisationsPage() {
                     )}
                   </div>
                   <div className="text-sm text-gray-500">{org.csi_users.email}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    Joined {new Date(org.csi_users.createdAt).toLocaleDateString("en-IN")}
-                    {lastTxn && ` · Last activity ${new Date(lastTxn.createdAt).toLocaleDateString("en-IN")}`}
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badge.color}`}>{badge.label}</span>
+                    <span className="text-xs text-gray-500">{totalDocs} docs total</span>
+                    {thisMonth > 0 && <span className="text-xs text-blue-600 font-medium">{thisMonth} this month</span>}
+                    {lastTxn && <span className="text-xs text-gray-400">Last: {new Date(lastTxn.createdAt).toLocaleDateString("en-IN")}</span>}
                   </div>
                 </div>
 
@@ -257,6 +298,23 @@ export default function AdminOrganisationsPage() {
                       />
                       <span className="text-xs text-gray-400">docs (0 = no free limit)</span>
                     </div>
+                  </div>
+
+                  {/* Tool-wise Usage Breakdown */}
+                  <div>
+                    <div className="text-sm font-medium text-gray-700 mb-2">Tool Usage Breakdown</div>
+                    {toolBreakdown.length === 0 ? (
+                      <div className="text-xs text-gray-400">No documents generated yet</div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {toolBreakdown.map(([slug, count]) => (
+                          <div key={slug} className="bg-white border border-gray-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                            <span className="text-xs text-gray-600 truncate">{TOOL_LABELS[slug] || slug}</span>
+                            <span className="text-sm font-bold text-emerald-700 ml-2 shrink-0">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Pending UTR Requests */}
