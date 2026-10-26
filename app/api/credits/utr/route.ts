@@ -21,7 +21,7 @@ async function sendUtrNotification(userName: string, userEmail: string, utrNumbe
   const adminUrl = "https://compliancesearch.in/admin/organisations";
 
   await resend.emails.send({
-    from: "ComplianceSearch <noreply@compliancesearch.in>",
+    from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
     to: ADMIN_EMAILS,
     subject: `💰 New Payment Request — ₹${amount} from ${userName || userEmail}`,
     html: `
