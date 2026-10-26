@@ -12,6 +12,17 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
+        // Admin login via username
+        const username = (credentials as any)?.username;
+        if (username) {
+          const validUser = username === process.env.ADMIN_USERNAME;
+          const validPass = (credentials as any)?.password === process.env.ADMIN_PASSWORD;
+          if (validUser && validPass) {
+            return { id: "admin", name: "Admin", email: "admin@compliancesearch.in", plan: "admin", mustChangePassword: false } as any;
+          }
+          return null;
+        }
+
         if (!credentials?.email || !credentials?.password) return null;
         const email = credentials.email.toLowerCase().trim();
 
