@@ -1,5 +1,3 @@
-// ComplianceSearch.in — Prisma Schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,10 +6,129 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── Existing Models ──────────────────────────────────────────────────────────
+model BlogComment {
+  id                String        @id
+  postId            String
+  parentId          String?
+  authorName        String
+  content           String
+  createdAt         DateTime      @default(now())
+  BlogComment       BlogComment?  @relation("BlogCommentToBlogComment", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_BlogComment BlogComment[] @relation("BlogCommentToBlogComment")
+  BlogPost          BlogPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model BlogLike {
+  id        String   @id
+  postId    String
+  createdAt DateTime @default(now())
+  visitorId String
+  BlogPost  BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, visitorId])
+}
+
+model BlogPost {
+  id            String        @id
+  title         String
+  slug          String        @unique
+  content       String
+  excerpt       String
+  category      String        @default("general")
+  tags          String        @default("")
+  authorName    String
+  authorEmail   String
+  authorPhone   String
+  status        String        @default("pending")
+  rejectionNote String?
+  views         Int           @default(0)
+  publishedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime
+  adminNotes    String?
+  BlogComment   BlogComment[]
+  BlogLike      BlogLike[]
+}
+
+model CalendarEvent {
+  id           String    @id
+  title        String
+  description  String?
+  category     String
+  authority    String
+  recurrence   String    @default("monthly")
+  dueDay       Int?
+  dueMonth     Int?
+  specificDate DateTime?
+  penalty      String?
+  link         String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime
+}
+
+model CompanyCharge {
+  id             String         @id
+  companyId      String
+  chargeId       String?
+  holderName     String
+  dateOfCreation String?
+  amount         String?
+  address        String?
+  isSatisfied    Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime
+  CompanyProfile CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model CompanyDirector {
+  id             String         @id
+  companyId      String
+  din            String?
+  name           String
+  designation    String?
+  category       String?
+  appointedAt    String?
+  ceasedAt       String?
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime
+  CompanyProfile CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model CompanyProfile {
+  id                 String            @id
+  cin                String            @unique
+  companyName        String
+  regAddress         String?
+  entityType         String?
+  email              String?
+  rocName            String?
+  status             String?
+  isListed           Boolean           @default(false)
+  sourceFile         String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime
+  gstNumber          String?
+  mobile             String?
+  authorisedCapital  String?
+  incorporationDate  String?
+  paidUpCapital      String?
+  categoryOfCompany  String?
+  classOfCompany     String?
+  dateOfBalanceSheet String?
+  dateOfLastAGM      String?
+  jurisdiction       String?
+  registrationNumber String?
+  smallCompany       Boolean           @default(false)
+  subcategory        String?
+  uploadedBy         String?
+  CompanyCharge      CompanyCharge[]
+  CompanyDirector    CompanyDirector[]
+}
 
 model ComplianceRule {
-  id               String   @id @default(cuid())
+  id               String   @id
   ruleKey          String   @unique
   name             String
   shortName        String
@@ -27,74 +144,13 @@ model ComplianceRule {
   isActive         Boolean  @default(true)
   tags             String
   conditionJson    String
-  documentsJson    String   @default("[]")
   createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-}
-
-model CalendarEvent {
-  id           String    @id @default(cuid())
-  title        String
-  description  String?
-  category     String
-  authority    String
-  recurrence   String    @default("monthly")
-  dueDay       Int?
-  dueMonth     Int?
-  specificDate DateTime?
-  penalty      String?
-  link         String?
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-}
-
-model BlogPost {
-  id            String        @id @default(cuid())
-  title         String
-  slug          String        @unique
-  content       String
-  excerpt       String
-  category      String        @default("general")
-  tags          String        @default("")
-  authorName    String
-  authorEmail   String
-  authorPhone   String
-  status        String        @default("pending")
-  rejectionNote String?
-  adminNotes    String?
-  views         Int           @default(0)
-  publishedAt   DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  comments      BlogComment[]
-  likes         BlogLike[]
-}
-
-model BlogComment {
-  id         String        @id @default(cuid())
-  postId     String
-  post       BlogPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parentId   String?
-  parent     BlogComment?  @relation("Replies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  replies    BlogComment[] @relation("Replies")
-  authorName String
-  content    String
-  createdAt  DateTime      @default(now())
-}
-
-model BlogLike {
-  id        String   @id @default(cuid())
-  postId    String
-  post      BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  visitorId String
-  createdAt DateTime @default(now())
-
-  @@unique([postId, visitorId])
+  updatedAt        DateTime
+  documentsJson    String   @default("[]")
 }
 
 model IFSCBranch {
-  id       String  @id @default(cuid())
+  id       String  @id
   ifsc     String  @unique
   bank     String
   bankCode String
@@ -104,164 +160,417 @@ model IFSCBranch {
   district String?
   state    String?
 
-  @@index([bank])
   @@index([bankCode])
+  @@index([bank])
   @@index([city])
   @@index([state])
 }
 
-model CompanyProfile {
-  id                  String            @id @default(cuid())
-  cin                 String            @unique
-  companyName         String
-  regAddress          String?
-  entityType          String?
-  email               String?
-  rocName             String?
-  status              String?
-  isListed            Boolean           @default(false)
-  sourceFile          String?
-  mobile              String?
-  gstNumber           String?
-  incorporationDate   String?
-  paidUpCapital       String?
-  authorisedCapital   String?
-  registrationNumber  String?
-  dateOfLastAGM       String?
-  dateOfBalanceSheet  String?
-  categoryOfCompany   String?
-  subcategory         String?
-  classOfCompany      String?
-  jurisdiction        String?
-  smallCompany        Boolean           @default(false)
-  uploadedBy          String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  directors           CompanyDirector[]
-  charges             CompanyCharge[]
-}
-
-model CompanyDirector {
-  id          String         @id @default(cuid())
-  companyId   String
-  company     CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  din         String?
-  name        String
-  designation String?
-  category    String?
-  appointedAt String?
-  ceasedAt    String?
-  isActive    Boolean        @default(true)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-}
-
-model CompanyCharge {
-  id             String         @id @default(cuid())
-  companyId      String
-  company        CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  chargeId       String?
-  holderName     String
-  dateOfCreation String?
-  amount         String?
-  address        String?
-  isSatisfied    Boolean        @default(false)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-}
-
 model Notice {
-  id          String   @id @default(cuid())
-  title       String
-  summary     String
-  content     String
-  authority   String   @default("MCA")
-  noticeType  String   @default("notification")
-  refNumber   String?
-  actName     String?
-  issuedDate  DateTime @default(now())
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id
+  title      String
+  summary    String
+  content    String
+  authority  String   @default("MCA")
+  noticeType String   @default("notification")
+  refNumber  String?
+  actName    String?
+  issuedDate DateTime @default(now())
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime
 }
 
-// ─── Auth Models (csi_ prefix) ───────────────────────────────────────────────
+model csi_activity_log {
+  id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  teamId     String
+  userId     String
+  userName   String
+  action     String
+  entityType String?
+  entityId   String?
+  entityName String?
+  createdAt  DateTime? @default(now()) @db.Timestamptz(6)
 
-model User {
-  id            String     @id @default(cuid())
-  name          String?
-  email         String     @unique
-  emailVerified DateTime?
-  passwordHash  String?
-  plan          String     @default("free")
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  sessions      Session[]
-  otps          OTP[]
-  companies     Company[]
-  documents     Document[]
-
-  @@map("csi_users")
+  @@index([teamId], map: "idx_csi_activity_log_teamid")
 }
 
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("csi_sessions")
-}
-
-model OTP {
-  id        String   @id @default(cuid())
-  email     String
-  code      String
-  purpose   String
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([email, purpose])
-  @@map("csi_otps")
-}
-
-model Company {
-  id                String     @id @default(cuid())
+model csi_annual_compliance {
+  id                String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   userId            String
-  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId         String?
+  cin               String?
+  companyName       String?
+  financialYear     String
+  workStatus        String   @default("confirming")
+  workStatusRemarks String?
+  inc20aStatus      String   @default("pending")
+  balanceSheetReady Boolean  @default(false)
+  udinStatutory     String?
+  udinTaxAudit      String?
+  aoc4Srn           String?
+  mgt7Srn           String?
+  adt1Srn           String?
+  adt1FromFy        String?
+  adt1ToFy          String?
+  dpt3Applicable    Boolean  @default(false)
+  dpt3Srn           String?
+  remarks           String?
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @db.Timestamptz(6)
+  docStatus         String   @default("awaited")
+  docStatusRemarks  String?
+  itrStatus         String   @default("pending")
+  itrAckNo          String?
+
+  @@index([financialYear], map: "idx_csi_ac_fy")
+  @@index([userId], map: "idx_csi_ac_userid")
+}
+
+model csi_auditors {
+  id                 String   @id
+  userId             String
+  firmName           String
+  frn                String
+  partnerName        String
+  membershipNo       String
+  place              String?
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @db.Timestamptz(6)
+  signatureBase64    String?
+  sealBase64         String?
+  cin                String?
+  auditorType        String?  @default("firm")
+  auditorAddress     String?
+  auditorCity        String?
+  auditorEmail       String?
+  auditorMobile      String?
+  appointmentType    String?
+  agmFrom            String?
+  agmTo              String?
+  fyRange            String?
+  remuneration       String?
+  isActive           Boolean? @default(true)
+  partnerDesignation String?
+
+  @@index([cin], map: "idx_csi_auditors_cin")
+  @@index([userId], map: "idx_csi_auditors_userid")
+}
+
+model csi_companies {
+  id                String          @id
+  userId            String
   cin               String?
   companyName       String
   regAddress        String?
   entityType        String?
   incorporationDate String?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  documents         Document[]
+  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime        @default(now()) @db.Timestamptz(6)
+  email             String?
+  mobile            String?
+  csi_users         csi_users       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  csi_documents     csi_documents[]
 
-  @@index([userId])
-  @@map("csi_companies")
+  @@index([userId], map: "csi_companies_user")
 }
 
-model Document {
-  id            String    @id @default(cuid())
+model csi_credit_accounts {
+  id               String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId           String             @unique
+  balance          Int                @default(0)
+  lifetimeCredits  Int                @default(0)
+  freeCreditsGiven Int                @default(0)
+  isFreeUnlimited  Boolean            @default(false)
+  freeLimit        Int?
+  createdAt        DateTime           @default(now()) @db.Timestamp(6)
+  updatedAt        DateTime           @default(now()) @db.Timestamp(6)
+  csi_users        csi_users          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  csi_credit_txns  csi_credit_txns[]
+  csi_utr_requests csi_utr_requests[]
+}
+
+model csi_credit_txns {
+  id                  String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  accountId           String
+  type                String
+  amount              Int
+  toolSlug            String?
+  description         String
+  docId               String?
+  utrId               String?
+  createdAt           DateTime            @default(now()) @db.Timestamp(6)
+  csi_credit_accounts csi_credit_accounts @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([accountId], map: "idx_credit_txns_account")
+}
+
+model csi_documents {
+  id            String         @id
   userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyId     String?
-  company       Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
   type          String
   title         String
   companyName   String?
   financialYear String?
   meetingDate   String?
   formDataJson  String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime       @default(now()) @db.Timestamptz(6)
+  sourceType    String?
+  sourceId      String?
+  isFinalized   Boolean        @default(false)
+  finalizedBy   String?
+  finalizedAt   DateTime?      @db.Timestamptz(6)
+  csi_companies csi_companies? @relation(fields: [companyId], references: [id], onUpdate: NoAction)
+  csi_users     csi_users      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([userId])
-  @@index([companyId])
-  @@map("csi_documents")
+  @@index([companyId], map: "csi_documents_company")
+  @@index([userId], map: "csi_documents_user")
+  @@index([userId], map: "idx_csi_docs_userid")
+}
+
+model csi_enquiries {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  email        String
+  mobile       String
+  company_name String?
+  query_type   String    @default("general")
+  message      String
+  status       String    @default("new")
+  source       String?   @default("website")
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model csi_otps {
+  id        String     @id
+  email     String
+  code      String
+  purpose   String
+  expiresAt DateTime   @db.Timestamptz(6)
+  used      Boolean    @default(false)
+  createdAt DateTime   @default(now()) @db.Timestamptz(6)
+  userId    String?
+  csi_users csi_users? @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([email, purpose], map: "csi_otps_email_purpose")
+}
+
+model csi_persons {
+  id                 String             @id
+  userId             String
+  companyId          String
+  name               String
+  fatherName         String?
+  dateOfBirth        String?
+  mobile             String?
+  email              String?
+  presentAddress     String?
+  permanentAddress   String?
+  aadhaarNo          String?
+  panNo              String?
+  accountNo          String?
+  ifscCode           String?
+  bankName           String?
+  nationality        String?            @default("Indian")
+  occupation         String?
+  occupationCategory String?
+  din                String?
+  dateOfJoining      String?
+  designation        String?
+  directorCategory   String?
+  nomineeName        String?
+  nomineeRelation    String?
+  nomineeAddress     String?
+  dematDpId          String?
+  dematClientId      String?
+  isDirector         Boolean?           @default(false)
+  isShareholder      Boolean?           @default(false)
+  createdAt          DateTime?          @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime?          @default(now()) @db.Timestamptz(6)
+  signatureBase64    String?
+  csi_shareholders   csi_shareholders[]
+}
+
+model csi_sessions {
+  id           String    @id
+  sessionToken String    @unique
+  userId       String
+  expires      DateTime  @db.Timestamptz(6)
+  csi_users    csi_users @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model csi_share_splits {
+  id             String    @id
+  userId         String
+  companyId      String
+  originalShId   String
+  originalCertNo String?
+  originalFolio  String?
+  originalDNFrom Int?
+  originalDNTo   Int?
+  originalShares Int?
+  splitDate      String?
+  splitParts     Json?
+  remarks        String?
+  createdAt      DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model csi_share_transfers {
+  id                      String    @id
+  userId                  String
+  companyId               String
+  transferorPersonId      String?
+  transferorName          String    @default("")
+  transferorFolio         String?
+  transferorCertNo        String?
+  transferorShareholderId String?
+  transfereePersonId      String?
+  transfereeName          String    @default("")
+  transfereeFolio         String?
+  transfereeCertNo        String?
+  transfereeShareholderId String?
+  numberOfShares          Int?
+  shareType               String?   @default("Equity")
+  distinctiveFrom         Int?
+  distinctiveTo           Int?
+  transferDate            String?
+  considerationPerShare   String?
+  totalConsideration      String?
+  stampDuty               String?
+  issuePlace              String?
+  nominalValue            String?
+  paidUpValue             String?
+  signingDirectorsJson    String?
+  status                  String?   @default("approved")
+  remarks                 String?
+  createdAt               DateTime? @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime? @default(now()) @db.Timestamptz(6)
+  meetingDocId            String?
+  resolutionNo            String?
+  resolutionText          String?
+  witness1Name            String?
+  witness1Address         String?
+  witness2Name            String?
+  witness2Address         String?
+  transfereeFather        String?
+  transfereeAddress       String?
+  transfereePan           String?
+  transfereeRelation      String?
+  transferorRelation      String?
+  transferorFatherName    String?
+  transferorAddress       String?
+  transfereeOccupation    String?
+}
+
+model csi_shareholders {
+  id                   String       @id
+  personId             String?
+  userId               String
+  companyId            String
+  folioNumber          String?
+  certificateNumber    String?
+  distinctiveFrom      Int?
+  distinctiveTo        Int?
+  numberOfShares       Int?
+  shareType            String?      @default("Equity")
+  dateOfAcquisition    String?
+  dateOfTransfer       String?
+  transferFrom         String?
+  nomineeName          String?
+  nomineeRelation      String?
+  nomineeAddress       String?
+  createdAt            DateTime?    @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime?    @default(now()) @db.Timestamptz(6)
+  nominalValue         String?
+  paidUpValue          String?
+  issuePlace           String?
+  signingDirectorsJson String?
+  transferStatus       String?
+  transferredShares    Int?
+  sourceTransferId     String?
+  certStatus           String?      @default("active")
+  cancelledReason      String?
+  cancelledAt          DateTime?    @db.Timestamptz(6)
+  splitFromId          String?
+  splitEventId         String?
+  csi_persons          csi_persons? @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model csi_team_invites {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  teamId        String
+  invitedBy     String
+  invitedEmail  String
+  invitedUserId String?
+  token         String    @unique
+  status        String?   @default("pending")
+  expiresAt     DateTime  @db.Timestamptz(6)
+  createdAt     DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([teamId], map: "idx_csi_team_invites_teamid")
+  @@index([token], map: "idx_csi_team_invites_token")
+}
+
+model csi_team_members {
+  id      String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  teamId  String
+  userId  String
+  role    String?   @default("member")
+  addedBy String
+  addedAt DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([teamId, userId])
+  @@index([userId], map: "idx_csi_team_members_userid")
+}
+
+model csi_teams {
+  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name      String?
+  ownerId   String
+  createdAt DateTime? @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model csi_tool_pricing {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  toolSlug   String   @unique
+  toolName   String
+  creditCost Int      @default(1)
+  isActive   Boolean  @default(true)
+  updatedAt  DateTime @default(now()) @db.Timestamp(6)
+}
+
+model csi_users {
+  id                  String               @id
+  name                String?
+  email               String               @unique
+  emailVerified       DateTime?            @db.Timestamptz(6)
+  passwordHash        String?
+  plan                String               @default("free")
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @default(now()) @db.Timestamptz(6)
+  mustChangePassword  Boolean?             @default(false)
+  csi_companies       csi_companies[]
+  csi_credit_accounts csi_credit_accounts?
+  csi_documents       csi_documents[]
+  csi_otps            csi_otps[]
+  csi_sessions        csi_sessions[]
+}
+
+model csi_utr_requests {
+  id                  String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  accountId           String
+  utrNumber           String
+  amount              Int
+  credits             Int
+  status              String              @default("pending")
+  adminNote           String?
+  createdAt           DateTime            @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime            @default(now()) @db.Timestamp(6)
+  csi_credit_accounts csi_credit_accounts @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([accountId], map: "idx_utr_requests_account")
 }

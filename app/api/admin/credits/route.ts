@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { addCredits } from "@/lib/credits";
+
+function isAdmin(session: any) {
+  return !!session;
+}
+
+// GET: list all orgs with credit info
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const accounts = await prisma.csi_credit_accounts.findMany({
+    include: {
+      csi_users: { select: { id: true, name: true, email: true, createdAt: true } },
+      csi_credit_txns: { orderBy: { createdAt: "desc" }, take: 1 },
+      csi_utr_requests: { where: { status: "pending" }, select: { id: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json(accounts);
+}
+
+// POST: manually add credits to a user
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { userId, amount, description } = await req.json();
+  if (!userId || !amount || amount < 1) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+
+  const newBalance = await addCredits(userId, Number(amount), description || "Admin credit");
+  return NextResponse.json({ success: true, newBalance });
+}
+
+// PATCH: toggle free unlimited or set freeLimit
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { userId, isFreeUnlimited, freeLimit } = await req.json();
+  if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+
+  const account = await prisma.csi_credit_accounts.findUnique({ where: { userId } });
+  if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+
+  const updated = await prisma.csi_credit_accounts.update({
+    where: { userId },
+    data: {
+      ...(isFreeUnlimited !== undefined ? { isFreeUnlimited } : {}),
+      ...(freeLimit !== undefined ? { freeLimit: freeLimit === null ? null : Number(freeLimit) } : {}),
+      updatedAt: new Date(),
+    },
+  });
+
+  return NextResponse.json({ success: true, account: updated });
+}

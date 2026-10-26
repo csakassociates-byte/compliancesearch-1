@@ -1485,6 +1485,27 @@ function AnnualFilingTool() {
   async function handleGenerate() {
     setGenerating(true);
     try {
+      // Credit check + deduction
+      const creditRes = await fetch("/api/credits/use", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolSlug: "annual_filing",
+          description: `Annual Filing — ${data.companyName || "Company"} (${data.financialYear || ""})`,
+        }),
+      });
+      if (!creditRes.ok) {
+        const err = await creditRes.json();
+        setGenerating(false);
+        if (err.insufficientCredits) {
+          window.location.href = "/dashboard/credits";
+        } else {
+          setSavedMsg({ ok: false, text: err.error || "Failed to process credits" });
+          setTimeout(() => setSavedMsg(null), 5000);
+        }
+        return;
+      }
+
       // Step 1: ensure draft is saved so we have a saveId to finalize
       let currentSaveId = (saveId && saveIdFY === data.financialYear) ? saveId : null;
       if (!currentSaveId && data.companyName && session?.user) {
