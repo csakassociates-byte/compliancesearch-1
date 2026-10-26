@@ -28,21 +28,53 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
-  // Fetch total debit counts per account (all-time, not just last 20)
-  const debitCounts = await prisma.csi_credit_txns.groupBy({
-    by: ["accountId"],
-    where: { type: "debit" },
-    _count: { id: true },
+  // Fetch per-user doc stats from csi_documents (accurate, all-time)
+  const userIds = users.map(u => u.id);
+
+  const [docCounts, annualFilingCounts, clientCounts] = await Promise.all([
+    // Total documents generated per user
+    prisma.csi_documents.groupBy({
+      by: ["userId"],
+      where: { userId: { in: userIds } },
+      _count: { id: true },
+    }),
+    // Annual filing specifically
+    prisma.csi_documents.groupBy({
+      by: ["userId"],
+      where: { userId: { in: userIds }, type: "annual_filing" },
+      _count: { id: true },
+    }),
+    // Unique clients per user
+    prisma.csi_documents.groupBy({
+      by: ["userId", "companyId"],
+      where: { userId: { in: userIds }, companyId: { not: null } },
+    }),
+  ]);
+
+  const docCountMap: Record<string, number> = {};
+  docCounts.forEach(d => { docCountMap[d.userId] = d._count.id; });
+
+  const annualFilingMap: Record<string, number> = {};
+  annualFilingCounts.forEach(d => { annualFilingMap[d.userId] = d._count.id; });
+
+  // Count unique companyIds per user
+  const clientCountMap: Record<string, Set<string>> = {};
+  clientCounts.forEach(d => {
+    if (!clientCountMap[d.userId]) clientCountMap[d.userId] = new Set();
+    if (d.companyId) clientCountMap[d.userId].add(d.companyId);
   });
-  const debitCountMap: Record<string, number> = {};
-  debitCounts.forEach(d => { debitCountMap[d.accountId] = d._count.id; });
 
   // Normalize: wrap users without a credit account into a consistent shape
   const result = users.map((u) => {
     const acc = u.csi_credit_accounts;
+    const stats = {
+      totalDocsGenerated: docCountMap[u.id] ?? 0,
+      annualFilingCount: annualFilingMap[u.id] ?? 0,
+      clientCount: clientCountMap[u.id]?.size ?? 0,
+    };
     if (acc) return {
       ...acc,
-      totalDocsGenerated: debitCountMap[acc.id] ?? 0,
+      ...stats,
       csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt },
     };
     return {
@@ -55,7 +87,7 @@ export async function GET() {
       freeLimit: null,
       createdAt: u.createdAt,
       updatedAt: u.createdAt,
-      totalDocsGenerated: 0,
+      ...stats,
       csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt },
       csi_credit_txns: [],
       csi_utr_requests: [],

@@ -12,7 +12,7 @@ type UtrReq = { id: string; utrNumber: string; amount: number; credits: number; 
 type Org = {
   id: string; userId: string; balance: number; lifetimeCredits: number;
   isFreeUnlimited: boolean; freeLimit: number | null; createdAt: string;
-  totalDocsGenerated: number;
+  totalDocsGenerated: number; annualFilingCount: number; clientCount: number;
   csi_users: { id: string; name: string | null; email: string; createdAt: string };
   csi_credit_txns: Txn[];
   csi_utr_requests: UtrReq[];
@@ -232,7 +232,9 @@ export default function AdminOrganisationsPage() {
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badge.color}`}>{badge.label}</span>
                     <span className="text-xs text-gray-500">{totalDocs} docs total</span>
-                    {thisMonth > 0 && <span className="text-xs text-blue-600 font-medium">{thisMonth} this month</span>}
+                    <span className="text-xs text-indigo-600 font-medium">👥 {org.clientCount} clients</span>
+                    <span className="text-xs text-emerald-600 font-medium">📄 {org.annualFilingCount} annual filings</span>
+                    {thisMonth > 0 && <span className="text-xs text-blue-600 font-medium">↑ {thisMonth} this month</span>}
                     {lastTxn && <span className="text-xs text-gray-400">Last: {new Date(lastTxn.createdAt).toLocaleDateString("en-IN")}</span>}
                   </div>
                 </div>
