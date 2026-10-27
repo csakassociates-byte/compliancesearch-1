@@ -38,6 +38,16 @@ interface ComplianceRow {
   itrAckNo: string;
 }
 
+interface LlpRow {
+  companyId: string; companyName: string; cin: string;
+  incorporationDate: string; regAddress: string; recordId: string | null;
+  docStatus: string; docStatusRemarks: string;
+  workStatus: string; workStatusRemarks: string;
+  form8Srn: string; form11Srn: string;
+  itrStatus: string; itrAckNo: string;
+  udinStatutory: string; remarks: string;
+}
+
 const FY_OPTIONS = ["2026-27", "2025-26", "2024-25", "2023-24", "2022-23", "2021-22"];
 
 // Default = previous FY (the one we're filing for)
@@ -111,9 +121,18 @@ const infoPill = `${pb} bg-blue-50 text-blue-700 border-blue-100`;
 
 export default function ComplianceMonitorPage() {
   const { status } = useSession({ required: true });
+  const [mainTab, setMainTab] = useState<"companies" | "llp">("companies");
   const [fy, setFy] = useState(getDefaultFY);
   const [rows, setRows] = useState<ComplianceRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ── LLP state ──────────────────────────────────────────────────────────────
+  const [llpRows, setLlpRows] = useState<LlpRow[]>([]);
+  const [llpLoading, setLlpLoading] = useState(false);
+  const [llpEditingId, setLlpEditingId] = useState<string | null>(null);
+  const [llpEditValues, setLlpEditValues] = useState<Record<string, string>>({});
+  const [llpSaving, setLlpSaving] = useState(false);
+  const [llpDueDates, setLlpDueDates] = useState<{ form8: string; form11: string } | null>(null);
   const [filterMode, setFilterMode] = useState("all");
   const [formFilter, setFormFilter] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -160,6 +179,31 @@ export default function ComplianceMonitorPage() {
     if (status !== "authenticated") return;
     load(fy);
   }, [fy, status, load]);
+
+  const loadLlp = useCallback((selectedFy: string) => {
+    setLlpLoading(true);
+    fetch(`/api/llp-compliance?fy=${selectedFy}`)
+      .then(r => r.json())
+      .then(d => { setLlpRows(d.rows || []); setLlpDueDates(d.dueDates || null); setLlpLoading(false); })
+      .catch(() => setLlpLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    loadLlp(fy);
+  }, [fy, status, loadLlp]);
+
+  async function saveLlpField(row: LlpRow, field: string, value: string) {
+    setLlpSaving(true);
+    await fetch("/api/llp-compliance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyId: row.companyId, cin: row.cin, financialYear: fy, [field]: value }),
+    });
+    setLlpSaving(false);
+    setLlpEditingId(null);
+    loadLlp(fy);
+  }
 
   function generateReminder(r: ComplianceRow): string {
     const pendingItems: string[] = [];
@@ -933,7 +977,7 @@ export default function ComplianceMonitorPage() {
         <div className="max-w-[1400px] mx-auto px-4 py-8">
 
           {/* Header */}
-          <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+          <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
             <div>
               <div className="text-xs text-slate-400 uppercase tracking-widest mb-1">Annual compliance monitor</div>
               <h1 className="text-2xl font-bold text-slate-800">Compliance Dashboard</h1>
@@ -955,6 +999,215 @@ export default function ComplianceMonitorPage() {
               </Link>
             </div>
           </div>
+
+          {/* Main Tab: Companies / LLP */}
+          <div className="flex gap-1 mb-6 bg-slate-200 p-1 rounded-xl w-fit">
+            <button onClick={() => setMainTab("companies")}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "companies" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              🏢 Companies ({rows.length})
+            </button>
+            <button onClick={() => setMainTab("llp")}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "llp" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              🤝 LLP ({llpRows.length})
+            </button>
+          </div>
+
+          {/* ══ LLP TAB ══════════════════════════════════════════════════════ */}
+          {mainTab === "llp" && (
+            <div>
+              {llpDueDates && (
+                <div className="flex gap-3 mb-4 flex-wrap">
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-2 text-sm">
+                    <span className="font-semibold text-orange-800">Form 8</span>
+                    <span className="text-orange-600 ml-2">Due: {llpDueDates.form8}</span>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm">
+                    <span className="font-semibold text-blue-800">Form 11</span>
+                    <span className="text-blue-600 ml-2">Due: {llpDueDates.form11}</span>
+                  </div>
+                </div>
+              )}
+
+              {llpLoading && <div className="text-center text-slate-400 py-12">Loading LLP data…</div>}
+              {!llpLoading && llpRows.length === 0 && (
+                <div className="text-center text-slate-400 py-16">
+                  <div className="text-4xl mb-3">🤝</div>
+                  <div className="font-medium text-slate-600 mb-1">No LLP clients found</div>
+                  <p className="text-sm text-slate-400">Import LLP master data (XLSX) from <a href="/dashboard/clients" className="text-blue-500 underline">My Clients</a> to get started.</p>
+                </div>
+              )}
+
+              {!llpLoading && llpRows.length > 0 && (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <table className="min-w-[1100px] w-full text-sm border-collapse">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="sticky left-0 z-20 bg-slate-50 px-2 py-2.5 text-center text-[10px] font-semibold text-slate-400 uppercase w-8">#</th>
+                        <th className="sticky left-8 z-20 bg-slate-50 px-3 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase min-w-[170px] border-r border-slate-200">LLP Name</th>
+                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[110px]">Doc Status</th>
+                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[110px]">Work Status</th>
+                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">Form 8 SRN</th>
+                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">Form 11 SRN</th>
+                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">ITR Status</th>
+                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">UDIN</th>
+                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[130px]">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {llpRows.map((row, idx) => {
+                        const isEditing = llpEditingId === row.companyId;
+                        const form8Done = !!row.form8Srn;
+                        const form11Done = !!row.form11Srn;
+                        const allDone = form8Done && form11Done && row.workStatus === "completed";
+
+                        const statusColors: Record<string, string> = {
+                          awaited: "bg-gray-100 text-gray-600",
+                          received: "bg-blue-100 text-blue-700",
+                          "in-progress": "bg-yellow-100 text-yellow-700",
+                          completed: "bg-green-100 text-green-700",
+                          pending: "bg-orange-100 text-orange-700",
+                          declined: "bg-red-100 text-red-600",
+                          na: "bg-slate-100 text-slate-500",
+                        };
+
+                        return (
+                          <tr key={row.companyId}
+                            onClick={() => { if (!llpEditingId) { setLlpEditingId(row.companyId); setLlpEditValues({ docStatus: row.docStatus, workStatus: row.workStatus, form8Srn: row.form8Srn, form11Srn: row.form11Srn, itrStatus: row.itrStatus, udinStatutory: row.udinStatutory, remarks: row.remarks }); } }}
+                            className={`border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer ${allDone ? "bg-green-50/30" : ""} ${isEditing ? "bg-blue-50/50" : ""}`}>
+                            <td className="sticky left-0 z-10 bg-white px-2 py-2.5 text-center text-xs text-slate-400">{idx + 1}</td>
+                            <td className="sticky left-8 z-10 bg-white px-3 py-2.5 border-r border-slate-200">
+                              <div className="font-medium text-slate-800 text-xs leading-tight">{row.companyName}</div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">{row.cin}</div>
+                            </td>
+
+                            {/* Doc Status */}
+                            <td className="px-3 py-2.5">
+                              {isEditing && llpEditValues.docStatus !== undefined ? (
+                                <select value={llpEditValues.docStatus} onChange={e => setLlpEditValues(v => ({ ...v, docStatus: e.target.value }))}
+                                  className="text-xs border border-slate-300 rounded px-1.5 py-1 w-full">
+                                  {["awaited","received","in-progress","completed"].map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              ) : (
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[row.docStatus] || "bg-gray-100 text-gray-600"}`}>
+                                  {row.docStatus}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Work Status */}
+                            <td className="px-3 py-2.5">
+                              {isEditing && llpEditValues.workStatus !== undefined ? (
+                                <select value={llpEditValues.workStatus} onChange={e => setLlpEditValues(v => ({ ...v, workStatus: e.target.value }))}
+                                  className="text-xs border border-slate-300 rounded px-1.5 py-1 w-full">
+                                  {["pending","in-progress","completed","declined","na"].map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              ) : (
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[row.workStatus] || "bg-gray-100 text-gray-600"}`}>
+                                  {row.workStatus}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Form 8 SRN */}
+                            <td className="px-3 py-2.5">
+                              {isEditing ? (
+                                <input value={llpEditValues.form8Srn ?? row.form8Srn} onChange={e => setLlpEditValues(v => ({ ...v, form8Srn: e.target.value }))}
+                                  placeholder="SRN…" className="text-xs border border-slate-300 rounded px-2 py-1 w-28 font-mono" />
+                              ) : row.form8Srn ? (
+                                <span className="text-xs font-mono bg-green-50 text-green-700 px-2 py-0.5 rounded">{row.form8Srn}</span>
+                              ) : (
+                                <span className="text-xs text-slate-300">—</span>
+                              )}
+                            </td>
+
+                            {/* Form 11 SRN */}
+                            <td className="px-3 py-2.5">
+                              {isEditing ? (
+                                <input value={llpEditValues.form11Srn ?? row.form11Srn} onChange={e => setLlpEditValues(v => ({ ...v, form11Srn: e.target.value }))}
+                                  placeholder="SRN…" className="text-xs border border-slate-300 rounded px-2 py-1 w-28 font-mono" />
+                              ) : row.form11Srn ? (
+                                <span className="text-xs font-mono bg-green-50 text-green-700 px-2 py-0.5 rounded">{row.form11Srn}</span>
+                              ) : (
+                                <span className="text-xs text-slate-300">—</span>
+                              )}
+                            </td>
+
+                            {/* ITR Status */}
+                            <td className="px-3 py-2.5">
+                              {isEditing ? (
+                                <select value={llpEditValues.itrStatus ?? row.itrStatus} onChange={e => setLlpEditValues(v => ({ ...v, itrStatus: e.target.value }))}
+                                  className="text-xs border border-slate-300 rounded px-1.5 py-1">
+                                  {["pending","filed","na"].map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              ) : (
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[row.itrStatus] || "bg-gray-100 text-gray-600"}`}>
+                                  {row.itrStatus}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* UDIN */}
+                            <td className="px-3 py-2.5">
+                              {isEditing ? (
+                                <input value={llpEditValues.udinStatutory ?? row.udinStatutory} onChange={e => setLlpEditValues(v => ({ ...v, udinStatutory: e.target.value }))}
+                                  placeholder="UDIN…" className="text-xs border border-slate-300 rounded px-2 py-1 w-32 font-mono" />
+                              ) : row.udinStatutory ? (
+                                <span className="text-xs font-mono text-slate-600">{row.udinStatutory}</span>
+                              ) : (
+                                <span className="text-xs text-slate-300">—</span>
+                              )}
+                            </td>
+
+                            {/* Remarks */}
+                            <td className="px-3 py-2.5">
+                              {isEditing ? (
+                                <input value={llpEditValues.remarks ?? row.remarks} onChange={e => setLlpEditValues(v => ({ ...v, remarks: e.target.value }))}
+                                  placeholder="Remarks…" className="text-xs border border-slate-300 rounded px-2 py-1 w-full" />
+                              ) : (
+                                <span className="text-xs text-slate-500">{row.remarks || "—"}</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Edit row actions */}
+                  {llpEditingId && (
+                    <div className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 flex items-center gap-3">
+                      <span className="text-sm text-slate-600 flex-1">
+                        Editing: <strong>{llpRows.find(r => r.companyId === llpEditingId)?.companyName}</strong>
+                      </span>
+                      <button onClick={() => { setLlpEditingId(null); setLlpEditValues({}); }}
+                        className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</button>
+                      <button disabled={llpSaving} onClick={async () => {
+                        const row = llpRows.find(r => r.companyId === llpEditingId);
+                        if (!row) return;
+                        await fetch("/api/llp-compliance", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ companyId: row.companyId, cin: row.cin, financialYear: fy, ...llpEditValues }),
+                        });
+                        setLlpEditingId(null); setLlpEditValues({});
+                        loadLlp(fy);
+                      }} className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium">
+                        {llpSaving ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Edit row trigger — click on row */}
+              {!llpLoading && llpRows.length > 0 && !llpEditingId && (
+                <p className="text-xs text-slate-400 mt-2 text-center">Click any row to edit compliance details</p>
+              )}
+            </div>
+          )}
+
+          {/* ══ COMPANIES TAB ════════════════════════════════════════════════ */}
+          {mainTab === "companies" && <div className="companies-tab">
 
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
@@ -1331,6 +1584,8 @@ export default function ComplianceMonitorPage() {
             </div>
           )}
 
+
+          </div>}
 
         </div>
       </main>
