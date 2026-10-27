@@ -1842,6 +1842,8 @@ export default function AuditorAppointmentPage() {
                           <option value="pvt_ltd">Private Limited Company</option>
                           <option value="pub_ltd">Public Limited Company</option>
                           <option value="opc">One Person Company (OPC)</option>
+                          <option value="llp">Limited Liability Partnership (LLP)</option>
+                          <option value="section8">Section 8 Company</option>
                         </select>
                       </Field>
                     </div>
