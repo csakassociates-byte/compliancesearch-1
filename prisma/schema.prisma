@@ -78,7 +78,7 @@ model CompanyCharge {
   isSatisfied    Boolean        @default(false)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime
-  CompanyProfile CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company        CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model CompanyDirector {
@@ -93,7 +93,7 @@ model CompanyDirector {
   isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime
-  CompanyProfile CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company        CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model CompanyProfile {
@@ -123,8 +123,8 @@ model CompanyProfile {
   smallCompany       Boolean           @default(false)
   subcategory        String?
   uploadedBy         String?
-  CompanyCharge      CompanyCharge[]
-  CompanyDirector    CompanyDirector[]
+  charges            CompanyCharge[]
+  directors          CompanyDirector[]
 }
 
 model ComplianceRule {
