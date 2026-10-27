@@ -81,30 +81,33 @@ export async function parseCompanyExcel(
     }
   }
 
-  const companyName        = m["Company Name"]                                              || "";
-  const cin                = m["CIN"]                                                       || "";
+  // ── Detect LLP vs Company (LLP Excel uses "LLPIN" and "LLP Name") ──────────
+  const isLLP = !!(m["LLPIN"] || m["LLP Name"]);
+
+  const companyName        = m["Company Name"] || m["LLP Name"]                             || "";
+  const cin                = m["CIN"]          || m["LLPIN"]                                || "";
   const regAddress         = m["Registered Address"]                                        || "";
-  const classOfCo          = m["Class of Company"]                                          || "";
+  const classOfCo          = m["Class of Company"]                                          || (isLLP ? "LLP" : "");
   const subcategory        = m["Subcategory of the Company"] || m["Company Sub-Category"]   || "";
   const categoryOfCompany  = m["Category of the Company"]   || m["Company Category"]        || "";
-  const entityType         = entityTypeFromExcel(classOfCo, subcategory);
+  const entityType         = isLLP ? "llp" : entityTypeFromExcel(classOfCo, subcategory);
   const registrationNumber = m["Registration Number"]                                       || undefined;
   const incorporationDate  = m["Date of Incorporation"]                                     || undefined;
   const dateOfLastAGM      = m["Date of Last AGM"]                                          || undefined;
   const dateOfBalanceSheet = m["Date of Balance Sheet"]                                     || undefined;
-  const paidUpCapital      = m["Paid up Capital (Rs)"]                                      || undefined;
+  const paidUpCapital      = m["Paid up Capital (Rs)"] || m["Total Obligation of Contribution"] || undefined;
   const authorisedCapital  = m["Authorised Capital (Rs)"]                                   || undefined;
-  const email              = m["Email Id"]                                                  || undefined;
+  const email              = (m["Email Id"] || "").replace("[at]", "@").replace("[dot]", ".") || undefined;
   const rocName            = m["ROC Name"] || m["ROC Name (display)"]                       || undefined;
-  const status             = m["Company Status (for efiling)"] || m["Company Status"]       || undefined;
+  const status             = m["Company Status (for efiling)"] || m["Company Status"] || m["LLP Status"] || undefined;
   const isListed           = (m["Listed in Stock Exchange(s) (Y/N)"] || "").toLowerCase() === "yes";
   const mobile             = m["Phone Number"] || m["Mobile Number"]                        || undefined;
   const gstNumber          = m["GST No"] || m["GST Number"]                                 || undefined;
   const jurisdiction       = m["Jurisdiction"]                                              || undefined;
-  const smallCompany       = subcategory.toLowerCase().includes("small company");
+  const smallCompany       = subcategory.toLowerCase().includes("small company") || (m["Small LLP"] || "").toLowerCase() === "yes";
 
-  if (!companyName) warnings.push("Company Name not found in MasterData sheet.");
-  if (!cin)         warnings.push("CIN not found in MasterData sheet.");
+  if (!companyName) warnings.push(`${isLLP ? "LLP" : "Company"} Name not found in MasterData sheet.`);
+  if (!cin)         warnings.push(`${isLLP ? "LLPIN" : "CIN"} not found in MasterData sheet.`);
 
   // ── Director Details ──────────────────────────────────────────────────────
   const dirRows  = sheetToMapped("Director Details");
@@ -127,8 +130,12 @@ export async function parseCompanyExcel(
                    || row["DIN / PAN"]
                    || "";
     const isSig     = (row["Signatory"] || "").toLowerCase() === "yes";
-    const cessation = row["Cessation Date"]     || "";
-    const appointed = row["Date of Appointment"] || row["Date of Appointment of Director"] || "";
+    const cessation = row["Cessation Date"] || row["Cessation date"] || "";
+    // LLP sheet: column 5 = Date of Appointment, column 6 = Cessation Date
+    const appointed = row["Date of Appointment"]
+                   || row["Date of Appointment of Director"]
+                   || row["Date of appointment"]
+                   || "";
     const category  = row["Category"]          || "";
 
     if (!name) continue;
@@ -146,7 +153,7 @@ export async function parseCompanyExcel(
     });
   }
 
-  if (directors.length === 0) warnings.push("No directors found in Director Details sheet.");
+  if (directors.length === 0) warnings.push(`No ${isLLP ? "partners" : "directors"} found in Director Details sheet.`);
 
   // ── IndexOfCharges ────────────────────────────────────────────────────────
   const chargeRows = sheetToMapped("IndexOfCharges");
