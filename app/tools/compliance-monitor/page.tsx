@@ -1306,14 +1306,14 @@ export default function ComplianceMonitorPage() {
               const doneBtn = (filterKey: string, n: number) => (
                 <button
                   onClick={() => setFormFilter(f => f === filterKey ? null : filterKey)}
-                  className={`text-base font-semibold transition-all rounded px-0.5 ${
+                  className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
                     formFilter === filterKey
-                      ? "text-white bg-emerald-600 px-1.5 rounded-md"
-                      : "text-emerald-600 hover:text-emerald-800 hover:underline"
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
                   }`}
                   title={`Click to filter: show only these ${n} companies`}
                 >
-                  {n}{formFilter === filterKey ? " ✕" : ""}
+                  {n} ✓{formFilter === filterKey ? " ✕" : ""}
                 </button>
               );
               const bar = (done: number, total: number, color: string) => total > 0 ? (
@@ -1417,7 +1417,7 @@ export default function ComplianceMonitorPage() {
                             <span className="text-[10px] font-semibold text-slate-500 w-11 flex-none">{label}</span>
                             <button
                               onClick={() => setFormFilter(f => f === doneKey ? null : doneKey)}
-                              className={`text-[11px] font-semibold transition-all rounded px-0.5 ${formFilter === doneKey ? "text-white bg-emerald-600 px-1.5 rounded-md" : "text-emerald-600 hover:underline"}`}
+                              className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border transition-all ${formFilter === doneKey ? "bg-emerald-600 text-white border-emerald-600" : "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"}`}
                               title="Click to see filed companies"
                             >{filed} ✓{formFilter === doneKey ? " ✕" : ""}</button>
                             {fBtn(pendingKey, pendingCount, "pending", "bg-red-50 text-red-700 border-red-200 hover:bg-red-100")}
@@ -1437,7 +1437,7 @@ export default function ComplianceMonitorPage() {
                     <div className="h-3 w-px bg-slate-200 flex-none" />
                     <button
                       onClick={() => setFormFilter(f => f === "udinDoneFilter" ? null : "udinDoneFilter")}
-                      className={`text-[11px] font-semibold transition-all rounded px-0.5 ${formFilter === "udinDoneFilter" ? "text-white bg-emerald-600 px-1.5 rounded-md" : "text-emerald-600 hover:underline"}`}
+                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all ${formFilter === "udinDoneFilter" ? "bg-emerald-600 text-white border-emerald-600" : "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"}`}
                       title="Click to see companies with UDIN done"
                     >{ps.udinDone} done{formFilter === "udinDoneFilter" ? " ✕" : ""}</button>
                     {fBtn("udinPendingBS", ps.udinPendingBS, "pending", "bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100")}
@@ -1455,7 +1455,7 @@ export default function ComplianceMonitorPage() {
                     <div className="h-3 w-px bg-slate-200 flex-none" />
                     <button
                       onClick={() => setFormFilter(f => f === "adt1ValidDone" ? null : "adt1ValidDone")}
-                      className={`text-[11px] font-semibold transition-all rounded flex-none ${formFilter === "adt1ValidDone" ? "text-white bg-emerald-600 px-1.5 rounded-md" : "text-emerald-600 hover:underline"}`}
+                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all flex-none ${formFilter === "adt1ValidDone" ? "bg-emerald-600 text-white border-emerald-600" : "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"}`}
                       title="Click to see companies with valid ADT-1"
                     >{ps.adt1Valid} ✓ valid{formFilter === "adt1ValidDone" ? " ✕" : ""}</button>
                     {ps.adt1ReapptDue > 0 && (
