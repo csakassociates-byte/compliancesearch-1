@@ -356,6 +356,15 @@ export default function ComplianceMonitorPage() {
     if (formFilter === "itrPending"       && !(!r.itrStatus || r.itrStatus.toLowerCase() === "pending" || r.itrStatus.toLowerCase() === "not filed")) return false;
     if (formFilter === "adt1ReapptDueFlt" && !r.adt1ReapptDue) return false;
     if (formFilter === "adt1PendingFlt"   && !!r.adt1Srn) return false;
+    // "Done" filters — show only completed companies
+    if (formFilter === "dataReceivedDone"  && !(r.docStatus === "received" || r.docStatus === "partial")) return false;
+    if (formFilter === "bsReadyDone"       && !r.balanceSheetReady) return false;
+    if (formFilter === "attachDone"        && !r.attachmentsGenerated) return false;
+    if (formFilter === "aoc4FiledDone"     && !r.aoc4Srn) return false;
+    if (formFilter === "mgt7FiledDone"     && !r.mgt7Srn) return false;
+    if (formFilter === "itrFiledDone"      && (!r.itrStatus || r.itrStatus.toLowerCase() === "pending" || r.itrStatus.toLowerCase() === "not filed")) return false;
+    if (formFilter === "udinDoneFilter"    && (!r.udinStatutory || r.udinStatutory === "na")) return false;
+    if (formFilter === "adt1ValidDone"     && (!r.adt1Srn || r.adt1ReapptDue)) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       return r.companyName.toLowerCase().includes(q) || (r.cin || "").toLowerCase().includes(q);
@@ -1294,8 +1303,18 @@ export default function ComplianceMonitorPage() {
                   </button>
                 ) : null;
 
-              const doneNum = (n: number) => (
-                <span className="text-base font-semibold text-emerald-600">{n}</span>
+              const doneBtn = (filterKey: string, n: number) => (
+                <button
+                  onClick={() => setFormFilter(f => f === filterKey ? null : filterKey)}
+                  className={`text-base font-semibold transition-all rounded px-0.5 ${
+                    formFilter === filterKey
+                      ? "text-white bg-emerald-600 px-1.5 rounded-md"
+                      : "text-emerald-600 hover:text-emerald-800 hover:underline"
+                  }`}
+                  title={`Click to filter: show only these ${n} companies`}
+                >
+                  {n}{formFilter === filterKey ? " ✕" : ""}
+                </button>
               );
               const bar = (done: number, total: number, color: string) => total > 0 ? (
                 <div className="h-1 rounded-full bg-slate-100 overflow-hidden mt-1.5">
@@ -1322,7 +1341,7 @@ export default function ComplianceMonitorPage() {
                       <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Data received</div>
                       <div className="flex gap-2">
                         <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
-                          {doneNum(ps.dataReceived)}
+                          {doneBtn("dataReceivedDone", ps.dataReceived)}
                           <div className="text-[10px] text-emerald-600 mt-0.5">Received</div>
                         </div>
                         <div className="flex-1 bg-amber-50 border border-amber-100 rounded-lg p-2 text-center">
@@ -1343,7 +1362,7 @@ export default function ComplianceMonitorPage() {
                       <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Balance Sheet</div>
                       <div className="flex gap-2">
                         <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
-                          {doneNum(ps.bsReady)}
+                          {doneBtn("bsReadyDone", ps.bsReady)}
                           <div className="text-[10px] text-emerald-600 mt-0.5">Prepared</div>
                         </div>
                         <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
@@ -1364,7 +1383,7 @@ export default function ComplianceMonitorPage() {
                       <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Attachments</div>
                       <div className="flex gap-2">
                         <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-center">
-                          {doneNum(ps.attachGenerated)}
+                          {doneBtn("attachDone", ps.attachGenerated)}
                           <div className="text-[10px] text-emerald-600 mt-0.5">Generated</div>
                         </div>
                         <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
@@ -1390,13 +1409,17 @@ export default function ComplianceMonitorPage() {
                       <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Filings (of {ps.attachGenerated} with attachments)</div>
                       <div className="space-y-1.5">
                         {[
-                          { label: "AOC-4", filed: ps.aoc4Filed, pendingKey: "aoc4Pending", pendingCount: ps.aoc4Pending },
-                          { label: "MGT-7", filed: ps.mgt7Filed, pendingKey: "mgt7Pending", pendingCount: ps.mgt7Pending },
-                          { label: "ITR",   filed: ps.itrFiled,  pendingKey: "itrPending",  pendingCount: ps.itrPending  },
-                        ].map(({ label, filed, pendingKey, pendingCount }) => (
+                          { label: "AOC-4", filed: ps.aoc4Filed, doneKey: "aoc4FiledDone", pendingKey: "aoc4Pending", pendingCount: ps.aoc4Pending },
+                          { label: "MGT-7", filed: ps.mgt7Filed, doneKey: "mgt7FiledDone", pendingKey: "mgt7Pending", pendingCount: ps.mgt7Pending },
+                          { label: "ITR",   filed: ps.itrFiled,  doneKey: "itrFiledDone",  pendingKey: "itrPending",  pendingCount: ps.itrPending  },
+                        ].map(({ label, filed, doneKey, pendingKey, pendingCount }) => (
                           <div key={label} className="flex items-center gap-2">
                             <span className="text-[10px] font-semibold text-slate-500 w-11 flex-none">{label}</span>
-                            <span className="text-[11px] font-semibold text-emerald-600">{filed} ✓</span>
+                            <button
+                              onClick={() => setFormFilter(f => f === doneKey ? null : doneKey)}
+                              className={`text-[11px] font-semibold transition-all rounded px-0.5 ${formFilter === doneKey ? "text-white bg-emerald-600 px-1.5 rounded-md" : "text-emerald-600 hover:underline"}`}
+                              title="Click to see filed companies"
+                            >{filed} ✓{formFilter === doneKey ? " ✕" : ""}</button>
                             {fBtn(pendingKey, pendingCount, "pending", "bg-red-50 text-red-700 border-red-200 hover:bg-red-100")}
                           </div>
                         ))}
@@ -1412,7 +1435,11 @@ export default function ComplianceMonitorPage() {
                     <div className="text-[11px] font-semibold text-slate-600 flex-none">UDIN (Statutory)</div>
                     <div className="text-[10px] text-slate-400 flex-none">once BS is ready</div>
                     <div className="h-3 w-px bg-slate-200 flex-none" />
-                    <span className="text-[11px] font-semibold text-emerald-600">{ps.udinDone} done</span>
+                    <button
+                      onClick={() => setFormFilter(f => f === "udinDoneFilter" ? null : "udinDoneFilter")}
+                      className={`text-[11px] font-semibold transition-all rounded px-0.5 ${formFilter === "udinDoneFilter" ? "text-white bg-emerald-600 px-1.5 rounded-md" : "text-emerald-600 hover:underline"}`}
+                      title="Click to see companies with UDIN done"
+                    >{ps.udinDone} done{formFilter === "udinDoneFilter" ? " ✕" : ""}</button>
                     {fBtn("udinPendingBS", ps.udinPendingBS, "pending", "bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100")}
                     <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden">
                       {ps.bsReady > 0 && <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.round(ps.udinDone / ps.bsReady * 100)}%` }} />}
@@ -1426,7 +1453,11 @@ export default function ComplianceMonitorPage() {
                     <div className="h-3 w-px bg-slate-200 flex-none" />
                     <div className="text-[11px] font-semibold text-slate-600 flex-none">ADT-1 (Auditor Appointment)</div>
                     <div className="h-3 w-px bg-slate-200 flex-none" />
-                    <span className="text-[11px] font-semibold text-emerald-600 flex-none">{ps.adt1Valid} ✓ valid</span>
+                    <button
+                      onClick={() => setFormFilter(f => f === "adt1ValidDone" ? null : "adt1ValidDone")}
+                      className={`text-[11px] font-semibold transition-all rounded flex-none ${formFilter === "adt1ValidDone" ? "text-white bg-emerald-600 px-1.5 rounded-md" : "text-emerald-600 hover:underline"}`}
+                      title="Click to see companies with valid ADT-1"
+                    >{ps.adt1Valid} ✓ valid{formFilter === "adt1ValidDone" ? " ✕" : ""}</button>
                     {ps.adt1ReapptDue > 0 && (
                       <button
                         onClick={() => setFormFilter(f => f === "adt1ReapptDueFlt" ? null : "adt1ReapptDueFlt")}
