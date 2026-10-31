@@ -574,6 +574,11 @@ function AnnualFilingTool() {
   const [unlockCheck2, setUnlockCheck2] = useState(false);
   const [unlockText, setUnlockText] = useState("");
   const [unlocking, setUnlocking]   = useState(false);
+  // AOC-4 AI filler
+  const [aocFinPdf, setAocFinPdf]         = useState<File | null>(null);
+  const [aocMcaZip, setAocMcaZip]         = useState<File | null>(null);
+  const [aocFilling, setAocFilling]       = useState(false);
+  const [aocFillMsg, setAocFillMsg]       = useState<{ ok: boolean; text: string } | null>(null);
   const [prevYearDraft, setPrevYearDraft] = useState<{
     id: string; companyName: string | null; financialYear: string | null;
     updatedAt: string; formDataJson: string;
@@ -592,6 +597,7 @@ function AnnualFilingTool() {
   type FinExtracted = { label: string; fKey: string; prevKey: string; currentValue: number|null; prevValue: number|null; found: boolean; aiAssisted?: boolean; };
   const [finDocResult, setFinDocResult] = useState<{ fields: FinExtracted[]; fileName: string; applied: boolean; } | null>(null);
   const [finDocParsing, setFinDocParsing] = useState(false);
+  const [aiScanMode, setAiScanMode] = useState(false);
   const [finDocError, setFinDocError]     = useState<string|null>(null);
   const finDocRef = useRef<HTMLInputElement>(null);
   const [aiValidating, setAiValidating] = useState(false);
@@ -599,6 +605,7 @@ function AnnualFilingTool() {
   const [aiPreflight, setAiPreflight] = useState(false);
   const [aiPreflightResult, setAiPreflightResult] = useState<{ ready: boolean; score: number; critical: string[]; warnings: string[]; suggestions: string[] } | null>(null);
   const aiEnabled = !!(session?.user as { ai_enabled?: boolean })?.ai_enabled;
+  const [showAiUpgrade, setShowAiUpgrade] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   // Ref holding latest auto-save logic — avoids stale closures inside the debounce timer
   const autoSaveFnRef = useRef<(() => Promise<void>) | undefined>(undefined);
@@ -1284,7 +1291,10 @@ function AnnualFilingTool() {
       }
       const formData = new FormData();
       formData.append("file", file);
-      const res  = await fetch("/api/annual-filing/parse-financials", { method: "POST", body: formData });
+      const url = aiScanMode && aiEnabled
+        ? "/api/annual-filing/parse-financials?scanned=1"
+        : "/api/annual-filing/parse-financials";
+      const res  = await fetch(url, { method: "POST", body: formData });
       const json = await res.json() as { fields?: FinExtracted[]; error?: string; rawTextSample?: string; extractedCIN?: string | null };
       if (!res.ok || json.error) { setFinDocError(json.error ?? "Parse failed."); return; }
       // Log raw PDF text for debugging pattern coverage
@@ -2857,6 +2867,22 @@ function AnnualFilingTool() {
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold text-white mb-0.5">📂 Upload Financial Statements</div>
               <div className="text-xs text-blue-200">Upload Balance Sheet &amp; P&amp;L — PDF or Excel (.pdf / .xlsx / .xls) — figures auto-fill into the fields below.</div>
+              {/* AI Scan Mode toggle — only for ai_enabled users */}
+              {aiEnabled && (
+                <label className="mt-2 flex items-center gap-2 cursor-pointer select-none w-fit">
+                  <div
+                    onClick={() => setAiScanMode(v => !v)}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${aiScanMode ? "bg-violet-500" : "bg-slate-500"}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${aiScanMode ? "translate-x-4" : ""}`} />
+                  </div>
+                  <span className="text-[11px] text-blue-200 leading-tight">
+                    {aiScanMode
+                      ? <><span className="text-violet-300 font-bold">🤖 AI Scan ON</span> — scanned / import errors? AI will read the document</>
+                      : "Scanned doc or import errors? Enable AI Scan"}
+                  </span>
+                </label>
+              )}
             </div>
             <input
               type="file"
@@ -2871,7 +2897,9 @@ function AnnualFilingTool() {
               className="flex-shrink-0 px-4 py-2 text-xs font-bold rounded-lg transition-colors disabled:opacity-60"
               style={{ background: finDocResult ? "#059669" : "#3b82f6", color: "#fff" }}
             >
-              {finDocParsing ? "⏳ Reading…" : finDocResult ? "✓ Re-upload" : "📂 Choose File"}
+              {finDocParsing
+                ? (aiScanMode ? "🤖 AI Reading…" : "⏳ Reading…")
+                : finDocResult ? "✓ Re-upload" : "📂 Choose File"}
             </button>
           </div>
 
@@ -2940,11 +2968,11 @@ function AnnualFilingTool() {
           )}
         </div>
 
-        {/* AI Validate button — shown when AI is enabled and financials have data */}
-        {aiEnabled && data.financials.revenueFromOperations && (
+        {/* AI Validate button — shown to all users when revenue is filled */}
+        {data.financials.revenueFromOperations && (
           <div className="mb-4">
             <button
-              onClick={() => void aiValidateFinancials()}
+              onClick={() => aiEnabled ? void aiValidateFinancials() : setShowAiUpgrade(true)}
               disabled={aiValidating}
               className="flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-60"
             >
@@ -5042,11 +5070,11 @@ function AnnualFilingTool() {
             );
           })()}
 
-          {/* AI Pre-flight Check */}
-          {aiEnabled && (
+          {/* AI Pre-flight Check — shown to all users */}
+          {(
             <div className="mb-4">
               <button
-                onClick={() => void runAiPreflight()}
+                onClick={() => aiEnabled ? void runAiPreflight() : setShowAiUpgrade(true)}
                 disabled={aiPreflight || generating}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-60 mb-3"
               >
@@ -5216,6 +5244,125 @@ function AnnualFilingTool() {
             >
               📋 Generate MCA V3 Filling Guide
             </button>
+
+            {/* ── AI Fill AOC-4 ─────────────────────────────────────────── */}
+            {isLocked && saveId && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 overflow-hidden">
+                <div className="px-4 py-3 bg-violet-600 flex items-center gap-2">
+                  <span className="text-lg">🤖</span>
+                  <div>
+                    <p className="text-white font-bold text-sm">Fill AOC-4 Excel with Compliance AI</p>
+                    <p className="text-violet-200 text-[11px]">AI reads your financial PDF + fills all 3 MCA Excel templates automatically</p>
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  {/* Upload 1: Financial PDF */}
+                  <div>
+                    <label className="block text-xs font-semibold text-violet-800 mb-1">
+                      📄 Upload Financial Statements (PDF)
+                    </label>
+                    <div
+                      className={`relative border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocFinPdf ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
+                      onClick={() => document.getElementById("aoc-fin-pdf")?.click()}
+                    >
+                      <input
+                        id="aoc-fin-pdf"
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={e => { setAocFinPdf(e.target.files?.[0] ?? null); setAocFillMsg(null); }}
+                      />
+                      {aocFinPdf ? (
+                        <span className="text-xs text-violet-700 font-semibold">✅ {aocFinPdf.name}</span>
+                      ) : (
+                        <span className="text-xs text-slate-500">Click to upload Balance Sheet PDF</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Upload 2: MCA ZIP */}
+                  <div>
+                    <label className="block text-xs font-semibold text-violet-800 mb-1">
+                      🗜️ Upload MCA Portal ZIP (AOC-4 + EAUDITOR + EDIRECTOR)
+                    </label>
+                    <div
+                      className={`relative border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocMcaZip ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
+                      onClick={() => document.getElementById("aoc-mca-zip")?.click()}
+                    >
+                      <input
+                        id="aoc-mca-zip"
+                        type="file"
+                        accept=".zip"
+                        className="hidden"
+                        onChange={e => { setAocMcaZip(e.target.files?.[0] ?? null); setAocFillMsg(null); }}
+                      />
+                      {aocMcaZip ? (
+                        <span className="text-xs text-violet-700 font-semibold">✅ {aocMcaZip.name}</span>
+                      ) : (
+                        <span className="text-xs text-slate-500">Click to upload MCA portal ZIP file</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status message */}
+                  {aocFillMsg && (
+                    <div className={`p-2.5 rounded-lg text-xs font-semibold ${aocFillMsg.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
+                      {aocFillMsg.text}
+                    </div>
+                  )}
+
+                  {/* Action info */}
+                  <div className="flex items-start gap-2 text-[11px] text-violet-700 bg-violet-100 rounded-lg p-2.5">
+                    <span className="flex-shrink-0">ℹ️</span>
+                    <span>AI will extract all financial figures from your PDF and auto-fill all 3 Excel files. Board meetings, directors, and auditor data are auto-pulled from your saved filing. Download the filled ZIP and open each file in Excel → Save → Upload to MCA.</span>
+                  </div>
+
+                  {/* Fill button */}
+                  <button
+                    onClick={async () => {
+                      if (!aocFinPdf || !aocMcaZip) {
+                        setAocFillMsg({ ok: false, text: "Please upload both files first." });
+                        return;
+                      }
+                      setAocFilling(true);
+                      setAocFillMsg(null);
+                      try {
+                        const fd = new FormData();
+                        fd.append("financialPdf", aocFinPdf);
+                        fd.append("mcaZip", aocMcaZip);
+                        fd.append("saveId", saveId);
+                        const res = await fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: fd });
+                        if (!res.ok) {
+                          const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
+                          throw new Error(err.error ?? "Server error");
+                        }
+                        const fieldsFound = res.headers.get("X-AI-Fields-Found");
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `${data.cin || "AOC4"}_FILLED.zip`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        setAocFillMsg({ ok: true, text: `✅ Download started! AI extracted ${fieldsFound ?? "?"} financial fields. Open each Excel → Save → Upload to MCA.` });
+                      } catch (e) {
+                        setAocFillMsg({ ok: false, text: `❌ ${e instanceof Error ? e.message : String(e)}` });
+                      } finally {
+                        setAocFilling(false);
+                      }
+                    }}
+                    disabled={aocFilling || !aocFinPdf || !aocMcaZip}
+                    className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    {aocFilling ? (
+                      <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> AI is reading & filling… (30-60 sec)</>
+                    ) : (
+                      <><span>🤖</span> Generate Filled AOC-4 ZIP</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {session?.user && (
               <div className="mt-5 pt-4 border-t border-blue-100 flex items-center justify-between gap-3">
@@ -5633,6 +5780,51 @@ function AnnualFilingTool() {
               className="flex-1 w-full border-0 bg-white"
               title={previewModal.label}
             />
+          </div>
+        </div>
+      )}
+
+      {/* AI Upgrade Modal */}
+      {showAiUpgrade && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAiUpgrade(false)}>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="bg-gradient-to-br from-violet-600 to-purple-700 px-6 pt-6 pb-8 text-white text-center">
+              <div className="text-4xl mb-2">🤖</div>
+              <h2 className="text-lg font-bold">AI-Powered Filing Assistant</h2>
+              <p className="text-sm text-violet-200 mt-1">Catch errors before ROC rejects your filing</p>
+            </div>
+            {/* Features */}
+            <div className="px-6 py-5 space-y-3">
+              <div className="flex items-start gap-3 text-sm">
+                <span className="text-violet-600 font-bold text-base leading-none mt-0.5">✓</span>
+                <div><span className="font-semibold">AI Validate Financials</span> — Spots mismatches, missing fields & arithmetic errors in P&L / Balance Sheet</div>
+              </div>
+              <div className="flex items-start gap-3 text-sm">
+                <span className="text-violet-600 font-bold text-base leading-none mt-0.5">✓</span>
+                <div><span className="font-semibold">AI Pre-flight Check</span> — Full review of all 8 steps before you generate documents</div>
+              </div>
+              <div className="flex items-start gap-3 text-sm">
+                <span className="text-violet-600 font-bold text-base leading-none mt-0.5">✓</span>
+                <div><span className="font-semibold">CA-grade insights</span> — Powered by Claude AI, trained on MCA compliance requirements</div>
+              </div>
+            </div>
+            {/* CTA */}
+            <div className="px-6 pb-6">
+              <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center mb-4">
+                <p className="text-xs text-violet-700 font-medium">🚀 Coming Soon — AI features for ComplianceSearch Pro</p>
+                <p className="text-xs text-gray-500 mt-1">Interested? Contact us to get early access.</p>
+              </div>
+              <a
+                href="mailto:support@compliancesearch.in?subject=AI Feature Early Access Request"
+                className="block w-full text-center px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold transition-colors"
+              >
+                Request Early Access →
+              </a>
+              <button onClick={() => setShowAiUpgrade(false)} className="mt-3 block w-full text-center text-xs text-gray-400 hover:text-gray-600">
+                Maybe later
+              </button>
+            </div>
           </div>
         </div>
       )}
