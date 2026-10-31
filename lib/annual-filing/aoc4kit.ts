@@ -40,8 +40,14 @@ function setCellInXml(xml: string, ref: string, value: string | number | null): 
     cellXml = `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escaped}</t></is></c>`;
   }
 
-  // If cell already exists — replace it (but never overwrite formula cells)
-  const cellRegex = new RegExp(`<c r="${ref}"[^>]*>(?:<f>[^<]*<\\/f>)?[\\s\\S]*?<\\/c>`);
+  // First check: self-closing empty cell like <c r="E42" s="5"/>  — replace directly
+  const selfClose = new RegExp(`<c r="${ref}"[^>]*/>`);
+  if (selfClose.test(xml)) {
+    return xml.replace(selfClose, cellXml);
+  }
+
+  // Second check: normal cell with content — replace (but never overwrite formula cells)
+  const cellRegex = new RegExp(`<c r="${ref}"[^>]*>[\\s\\S]*?<\\/c>`);
   const existing = xml.match(cellRegex);
   if (existing) {
     if (existing[0].includes("<f>")) return xml; // formula cell — skip
@@ -87,83 +93,153 @@ function setCellInXml(xml: string, ref: string, value: string | number | null): 
 interface FieldMap { [fieldName: string]: string }  // fieldName → cell ref (e.g. "E42")
 interface SectionInfo { start: number; end: number; cols: Record<string, string> }
 
+/** Build shared-strings lookup from sharedStrings.xml */
+async function loadSharedStrings(zip: JSZip): Promise<string[]> {
+  const ssFile = zip.file("xl/sharedStrings.xml");
+  if (!ssFile) return [];
+  const xml = await ssFile.async("string");
+  const result: string[] = [];
+  // Each <si> element is one shared string
+  const siRegex = /<si>([\s\S]*?)<\/si>/g;
+  let m: RegExpExecArray | null;
+  while ((m = siRegex.exec(xml)) !== null) {
+    // Collect all <t> text inside the <si>, handling rich text (<r><t>...</t></r>)
+    const parts: string[] = [];
+    const tRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+    let tm: RegExpExecArray | null;
+    while ((tm = tRegex.exec(m[1])) !== null) {
+      parts.push(tm[1]);
+    }
+    const val = parts.join("").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#xD;/g, "").replace(/&#10;/g, "\n");
+    result.push(val);
+  }
+  return result;
+}
+
 /** Read the FORM sheet from an already-opened JSZip to extract field→cell mapping. */
 export async function loadFieldMap(zip: JSZip, sheetPath: string): Promise<{ fields: FieldMap; sections: Record<string, SectionInfo> }> {
-  const sheetXml = await zip.file(sheetPath)!.async("string");
+  const [sheetXml, sharedStrings] = await Promise.all([
+    zip.file(sheetPath)!.async("string"),
+    loadSharedStrings(zip),
+  ]);
 
-  // Parse all rows into a simple row→col→value lookup
+  // col → row → value (string)
   const cellValues: Record<string, Record<number, string>> = {};
+  // col → row → formula string (for reference cells like =$BE$42)
+  const cellFormulas: Record<string, Record<number, string>> = {};
+
+  const unescape = (s: string) =>
+    s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#xD;/g, "").replace(/&#10;/g, "\n");
 
   const rowRegex = /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g;
   let rm: RegExpExecArray | null;
   while ((rm = rowRegex.exec(sheetXml)) !== null) {
     const rowNum = parseInt(rm[1]);
     const rowContent = rm[2];
-    const cellRegex = /<c r="([A-Z]+)\d+"[^>]*>([\s\S]*?)<\/c>/g;
+    const cellRegex = /<c r="([A-Z]+\d+)"([^>]*)>([\s\S]*?)<\/c>/g;
     let cm: RegExpExecArray | null;
     while ((cm = cellRegex.exec(rowContent)) !== null) {
-      const col = cm[0].match(/r="([A-Z]+)\d+"/)![1];
-      const cellContent = cm[2];
-      let val = "";
-      const v = cellContent.match(/<v>([\s\S]*?)<\/v>/);
-      const t = cellContent.match(/<t[^>]*>([\s\S]*?)<\/t>/);
-      const is_ = cellContent.match(/<is>([\s\S]*?)<\/is>/);
-      if (is_) {
-        const it = is_[0].match(/<t[^>]*>([\s\S]*?)<\/t>/);
-        val = it ? it[1] : "";
-      } else if (t) {
-        val = t[1];
-      } else if (v) {
-        val = v[1];
+      const cellRef = cm[1];
+      const colMatch = cellRef.match(/^([A-Z]+)/);
+      if (!colMatch) continue;
+      const col = colMatch[1];
+      const attrs = cm[2];
+      const cellContent = cm[3];
+
+      // Read formula
+      const fMatch = cellContent.match(/<f[^>]*>([\s\S]*?)<\/f>/);
+      if (fMatch) {
+        if (!cellFormulas[col]) cellFormulas[col] = {};
+        cellFormulas[col][rowNum] = unescape(fMatch[1]);
       }
+
+      // Read value
+      let val = "";
+      const isSharedStr = /t="s"/.test(attrs);
+      const isInlineStr = /t="inlineStr"/.test(attrs);
+      const isStr = /t="str"/.test(attrs);
+
+      if (isInlineStr) {
+        const isMatch = cellContent.match(/<is>([\s\S]*?)<\/is>/);
+        if (isMatch) {
+          const tMatch = isMatch[1].match(/<t[^>]*>([\s\S]*?)<\/t>/);
+          val = tMatch ? unescape(tMatch[1]) : "";
+        }
+      } else if (isSharedStr) {
+        const vMatch = cellContent.match(/<v>([\s\S]*?)<\/v>/);
+        if (vMatch) {
+          const idx = parseInt(vMatch[1]);
+          val = sharedStrings[idx] ?? "";
+        }
+      } else if (isStr) {
+        const vMatch = cellContent.match(/<v>([\s\S]*?)<\/v>/);
+        val = vMatch ? unescape(vMatch[1]) : (fMatch ? unescape(fMatch[1]) : "");
+      } else {
+        // number or date
+        const vMatch = cellContent.match(/<v>([\s\S]*?)<\/v>/);
+        val = vMatch ? vMatch[1] : "";
+      }
+
       if (!cellValues[col]) cellValues[col] = {};
-      cellValues[col][rowNum] = val.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
+      cellValues[col][rowNum] = val;
     }
   }
 
   const getCell = (col: string, row: number): string => cellValues[col]?.[row] ?? "";
+  const getFormula = (col: string, row: number): string => cellFormulas[col]?.[row] ?? cellValues[col]?.[row] ?? "";
 
-  // Layout columns for AOC / DIR / AUD
-  // BB=target fieldname, BC=type, BE=valueRef, BJ=linkedRef (dropdown)
-  // Detect layout by checking first few rows
-  const testBB = getCell("BB", 3) || getCell("BA", 3);
-  const layout = testBB === getCell("BB", 3)
-    ? { target: "BB", type: "BC", valueRef: "BE", linkedRef: "BJ" }
-    : { target: "BA", type: "BB", valueRef: "BD", linkedRef: "BI" };
+  // Auto-detect layout: try BB first, then BA (for EAUDITOR which uses BA)
+  let layout = { target: "BB", type: "BC", valueRef: "BE", linkedRef: "BJ" };
+  // Check first 10 rows for a field name in BB or BA
+  let foundInBB = false, foundInBA = false;
+  for (let r = 2; r <= 15; r++) {
+    const bb = getCell("BB", r); const ba = getCell("BA", r);
+    if (bb && bb.includes(".")) { foundInBB = true; break; }
+    if (ba && ba.includes(".")) { foundInBA = true; break; }
+  }
+  if (!foundInBB && foundInBA) {
+    layout = { target: "BA", type: "BB", valueRef: "BD", linkedRef: "BI" };
+  }
 
   const fields: FieldMap = {};
-  const maxRow = Math.max(...Object.values(cellValues).flatMap(r => Object.keys(r).map(Number)));
+  const rowNums = Object.values(cellValues).flatMap(r => Object.keys(r).map(Number));
+  const maxRow = rowNums.length > 0 ? Math.max(...rowNums) : 500;
 
-  for (let r = 2; r <= Math.min(maxRow, 2000); r++) {
+  for (let r = 2; r <= Math.min(maxRow, 3000); r++) {
     let tg = getCell(layout.target, r);
     if (!tg) continue;
-    tg = tg.replace("requestBody.formData.", "");
+    tg = tg.replace("requestBody.formData.", "").trim();
+    if (!tg || !tg.includes(".")) continue; // skip non-field rows
+
     const kind = getCell(layout.type, r).toLowerCase();
-    const vr = getCell(kind === "dropdown" ? layout.linkedRef : layout.valueRef, r);
-    // vr is like "=$BE$42" — extract cell ref
-    const refMatch = vr.match(/\$?([A-Z]+)\$?(\d+)/);
+    // Get the formula from valueRef or linkedRef column — it's like =$BE$42
+    const refCol = kind === "dropdown" ? layout.linkedRef : layout.valueRef;
+    const formula = getFormula(refCol, r);
+    // Extract cell address from formula like =$BE$42 or =BE42
+    const refMatch = formula.match(/\$?([A-Z]+)\$?(\d+)/);
     if (refMatch && !fields[tg]) {
       fields[tg] = refMatch[1] + refMatch[2];
     }
   }
 
-  // Sections (multi-row tables) — columns AI, AL, AN
+  // Sections (multi-row tables) — columns AI=name, AL=startRow, AN=endRow
   const sections: Record<string, SectionInfo> = {};
-  for (let r = 2; r <= 20; r++) {
+  for (let r = 2; r <= 30; r++) {
     const name = getCell("AI", r);
     if (!name) continue;
-    const sr = getCell("AL", r).replace(/\D/g, "");
-    const er = getCell("AN", r).replace(/\D/g, "");
+    const sr = getCell("AL", r).replace(/\D/g, "") || getFormula("AL", r).replace(/\D/g, "");
+    const er = getCell("AN", r).replace(/\D/g, "") || getFormula("AN", r).replace(/\D/g, "");
     if (sr && er) {
       sections[name] = { start: parseInt(sr), end: parseInt(er), cols: {} };
     }
   }
-  // Section column defs — columns AR, AS, AV
-  for (let r = 2; r <= 80; r++) {
+  // Section column defs — columns AR=section name, AS=field name, AV=column letter
+  for (let r = 2; r <= 100; r++) {
     const name = getCell("AR", r);
     const fn = getCell("AS", r);
-    if (name && fn && sections[name]) {
-      sections[name].cols[fn] = getCell("AV", r);
+    const colLetter = getCell("AV", r);
+    if (name && fn && colLetter && sections[name]) {
+      sections[name].cols[fn] = colLetter;
     }
   }
 
