@@ -56,12 +56,27 @@ export const authOptions: NextAuthOptions = {
   ],
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id                = user.id;
         token.plan              = (user as { plan?: string }).plan ?? "free";
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword ?? false;
         token.ai_enabled        = (user as { ai_enabled?: boolean }).ai_enabled ?? false;
+        token.ai_model          = (user as { ai_model?: string }).ai_model ?? "haiku";
+      }
+      // Refresh ai_enabled from DB on every token refresh so admin changes take effect without re-login
+      if (!user || trigger === "update") {
+        try {
+          const fresh = await prisma.csi_users.findUnique({
+            where: { id: token.id as string },
+            select: { ai_enabled: true, ai_model: true, plan: true },
+          });
+          if (fresh) {
+            token.ai_enabled = fresh.ai_enabled ?? false;
+            token.ai_model   = fresh.ai_model ?? "haiku";
+            token.plan       = fresh.plan ?? token.plan;
+          }
+        } catch { /* keep stale token on DB error */ }
       }
       return token;
     },
@@ -72,6 +87,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as { mustChangePassword?: boolean }).mustChangePassword
           = token.mustChangePassword as boolean ?? false;
         (session.user as { ai_enabled?: boolean }).ai_enabled   = token.ai_enabled as boolean ?? false;
+        (session.user as { ai_model?: string }).ai_model        = token.ai_model as string ?? "haiku";
       }
       return session;
     },

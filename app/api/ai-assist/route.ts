@@ -58,6 +58,18 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function extractJson(text: string): unknown | null {
+  // Try stripping markdown code blocks first
+  const stripped = text.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "");
+  const match = stripped.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+}
+
 async function handleExtractFinancials(model: string, data: Record<string, unknown>) {
   const { rawText } = data as { rawText: string };
 
@@ -67,33 +79,20 @@ async function handleExtractFinancials(model: string, data: Record<string, unkno
     messages: [
       {
         role: "user",
-        content: `You are a CA/financial data extractor. Extract structured financial data from the following balance sheet text. Return ONLY a JSON object with these keys (use null if not found):
-{
-  "paidUpCapital": number,
-  "reservesAndSurplus": number,
-  "totalShareholdersEquity": number,
-  "longTermBorrowings": number,
-  "shortTermBorrowings": number,
-  "totalBorrowings": number,
-  "fixedAssets": number,
-  "currentAssets": number,
-  "totalAssets": number,
-  "revenue": number,
-  "netProfit": number,
-  "turnover": number
-}
+        content: `You are a CA/financial data extractor. Extract structured financial data from the following balance sheet text. Return ONLY raw JSON (no markdown, no code blocks) with these keys (use null if not found):
+{"paidUpCapital":null,"reservesAndSurplus":null,"totalShareholdersEquity":null,"longTermBorrowings":null,"shortTermBorrowings":null,"totalBorrowings":null,"fixedAssets":null,"currentAssets":null,"totalAssets":null,"revenue":null,"netProfit":null,"turnover":null}
 
 Text:\n${rawText.slice(0, 4000)}`,
       },
     ],
   });
 
-  const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const textBlock0 = msg.content.find(c => c.type === "text") as { text: string } | undefined;
+  const text = textBlock0?.text ?? "";
+  const extracted = extractJson(text);
+  if (!extracted) {
     return NextResponse.json({ error: "Could not parse AI response" }, { status: 422 });
   }
-  const extracted = JSON.parse(jsonMatch[0]);
   return NextResponse.json({ success: true, data: extracted });
 }
 
@@ -106,24 +105,20 @@ async function handleValidateFinancials(model: string, data: Record<string, unkn
     messages: [
       {
         role: "user",
-        content: `You are a Chartered Accountant reviewing financial data for an Annual Filing. Check for errors, inconsistencies, or unusual values. Return a JSON object:
-{
-  "valid": boolean,
-  "warnings": string[],
-  "errors": string[]
-}
+        content: `You are a Chartered Accountant reviewing financial data for an Annual Filing. Check for errors, inconsistencies, or unusual values. Return ONLY raw JSON (no markdown, no code blocks):
+{"valid":true,"warnings":[],"errors":[]}
 
 Financial data: ${JSON.stringify(financials, null, 2)}`,
       },
     ],
   });
 
-  const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const textBlock = msg.content.find(c => c.type === "text") as { text: string } | undefined;
+  const text = textBlock?.text ?? "";
+  const result = extractJson(text);
+  if (!result) {
     return NextResponse.json({ error: "Could not parse AI response" }, { status: 422 });
   }
-  const result = JSON.parse(jsonMatch[0]);
   return NextResponse.json({ success: true, data: result });
 }
 
@@ -136,25 +131,19 @@ async function handlePreflightCheck(model: string, data: Record<string, unknown>
     messages: [
       {
         role: "user",
-        content: `You are a senior CA reviewing an Annual Filing (AOC-4 / MGT-7) before submission. Review the following form data and identify any issues, missing mandatory fields, or compliance problems. Return a JSON object:
-{
-  "ready": boolean,
-  "score": number (0-100),
-  "critical": string[],
-  "warnings": string[],
-  "suggestions": string[]
-}
+        content: `You are a senior CA reviewing an Annual Filing (AOC-4 / MGT-7) before submission. Review the following form data and identify any issues, missing mandatory fields, or compliance problems. Return ONLY raw JSON (no markdown, no code blocks):
+{"ready":true,"score":100,"critical":[],"warnings":[],"suggestions":[]}
 
 Form data: ${JSON.stringify(formData, null, 2)}`,
       },
     ],
   });
 
-  const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const textBlock2 = msg.content.find(c => c.type === "text") as { text: string } | undefined;
+  const text2 = textBlock2?.text ?? "";
+  const result = extractJson(text2);
+  if (!result) {
     return NextResponse.json({ error: "Could not parse AI response" }, { status: 422 });
   }
-  const result = JSON.parse(jsonMatch[0]);
   return NextResponse.json({ success: true, data: result });
 }

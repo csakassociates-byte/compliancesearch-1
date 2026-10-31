@@ -438,7 +438,7 @@ async function extractPdfText(buffer: Buffer): Promise<{ text: string; pages: nu
 // ROUTE HANDLER
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
@@ -492,15 +492,62 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── AI fallback: if many fields not found AND user has AI enabled ──
-    const foundCount = fields.filter(f => f.found).length;
-    const useAI = req.nextUrl.searchParams.get("ai") === "1";
+    const session = await getServerSession(authOptions);
+    const aiEnabled = (session?.user as { ai_enabled?: boolean })?.ai_enabled;
+    const scannedMode = req.nextUrl.searchParams.get("scanned") === "1";
 
-    if ((foundCount < fields.length / 2 || useAI) && rawTextSample) {
-      const session = await getServerSession(authOptions);
-      const aiEnabled = (session?.user as { ai_enabled?: boolean })?.ai_enabled;
+    // ── AI Scanned Mode: Claude reads the PDF/Excel directly (handles scanned docs) ──
+    if (scannedMode && aiEnabled && process.env.ANTHROPIC_API_KEY && ext === "pdf") {
+      try {
+        const anthropic = new Anthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY,
+          ...(process.env.ANTHROPIC_WORKSPACE_ID
+            ? { defaultHeaders: { "anthropic-workspace-id": process.env.ANTHROPIC_WORKSPACE_ID } }
+            : {}),
+        });
+        const base64Pdf = buffer.toString("base64");
+        const msg = await anthropic.messages.create({
+          model: "claude-sonnet-5-5", // sonnet for better vision accuracy
+          max_tokens: 1024,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "document",
+                source: { type: "base64", media_type: "application/pdf", data: base64Pdf },
+              } as unknown as { type: "text"; text: string },
+              {
+                type: "text",
+                text: `This is an Indian company's financial statement (Balance Sheet and/or P&L). Extract the financial figures and return ONLY raw JSON (no markdown, no explanation):
+{"revenueFromOperations":null,"otherIncome":null,"totalRevenue":null,"totalExpenses":null,"profitBeforeTax":null,"currentTax":null,"deferredTax":null,"profitAfterTax":null,"authorisedShareCapital":null,"paidUpCapital":null,"reservesAndSurplus":null,"totalAssets":null,"totalLiabilities":null,"prevRevenueFromOperations":null,"prevOtherIncome":null,"prevTotalRevenue":null,"prevTotalExpenses":null,"prevProfitBeforeTax":null,"prevCurrentTax":null,"prevDeferredTax":null,"prevProfitAfterTax":null,"prevAuthorisedShareCapital":null,"prevPaidUpCapital":null,"prevReservesAndSurplus":null,"prevTotalAssets":null,"prevTotalLiabilities":null}
 
-      if (aiEnabled && process.env.ANTHROPIC_API_KEY) {
+Rules: All amounts in absolute Rupees (₹). Current year = higher year. If a figure is not found, use null. Do not guess.`,
+              },
+            ],
+          }],
+        });
+        const aiText = (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";
+        const aiJsonMatch = aiText.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").match(/\{[\s\S]*\}/);
+        if (aiJsonMatch) {
+          const aiData = JSON.parse(aiJsonMatch[0]) as Record<string, number | null>;
+          // Override ALL fields with AI results (scanned mode = AI is primary)
+          fields = fields.map(f => {
+            const aiVal  = aiData[f.fKey]  ?? null;
+            const aiPrev = aiData[f.prevKey] ?? null;
+            if (aiVal !== null) return { ...f, found: true, currentValue: aiVal, prevValue: aiPrev, aiAssisted: true };
+            if (f.found) return f; // keep regex if AI missed it
+            return f;
+          });
+        }
+      } catch (scanErr) {
+        console.error("[parse-financials] AI scan error:", scanErr);
+        // non-fatal: fall through to regex results
+      }
+
+    } else {
+      // ── AI text fallback: if regex missed many fields ──
+      const foundCount = fields.filter(f => f.found).length;
+      if (foundCount < fields.length / 2 && rawTextSample && aiEnabled && process.env.ANTHROPIC_API_KEY) {
         try {
           const anthropic = new Anthropic({
             apiKey: process.env.ANTHROPIC_API_KEY,
@@ -513,55 +560,25 @@ export async function POST(req: NextRequest) {
             max_tokens: 1024,
             messages: [{
               role: "user",
-              content: `Extract financial data from this Indian company balance sheet/P&L text. Return ONLY a JSON object with these keys (number values in rupees, null if not found):
-{
-  "revenueFromOperations": number|null,
-  "otherIncome": number|null,
-  "totalRevenue": number|null,
-  "totalExpenses": number|null,
-  "profitBeforeTax": number|null,
-  "profitAfterTax": number|null,
-  "paidUpCapital": number|null,
-  "reservesAndSurplus": number|null,
-  "totalAssets": number|null,
-  "totalLiabilities": number|null,
-  "prevRevenueFromOperations": number|null,
-  "prevOtherIncome": number|null,
-  "prevTotalRevenue": number|null,
-  "prevTotalExpenses": number|null,
-  "prevProfitBeforeTax": number|null,
-  "prevProfitAfterTax": number|null,
-  "prevPaidUpCapital": number|null,
-  "prevReservesAndSurplus": number|null,
-  "prevTotalAssets": number|null,
-  "prevTotalLiabilities": number|null
-}
+              content: `Extract financial data from this Indian company balance sheet/P&L text. Return ONLY raw JSON (no markdown):
+{"revenueFromOperations":null,"otherIncome":null,"totalRevenue":null,"totalExpenses":null,"profitBeforeTax":null,"profitAfterTax":null,"paidUpCapital":null,"reservesAndSurplus":null,"totalAssets":null,"totalLiabilities":null,"prevRevenueFromOperations":null,"prevOtherIncome":null,"prevTotalRevenue":null,"prevTotalExpenses":null,"prevProfitBeforeTax":null,"prevProfitAfterTax":null,"prevPaidUpCapital":null,"prevReservesAndSurplus":null,"prevTotalAssets":null,"prevTotalLiabilities":null}
 
 Text:\n${rawTextSample.slice(0, 4000)}`,
             }],
           });
-
-          const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const aiData = JSON.parse(jsonMatch[0]) as Record<string, number | null>;
-            // Merge AI results into fields that regex missed
-            const keyMap: Record<string, { fKey: string; prevKey: string }> = {};
-            for (const fd of fields) keyMap[fd.fKey] = { fKey: fd.fKey, prevKey: fd.prevKey };
-
+          const aiText = (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";
+          const aiJsonMatch = aiText.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").match(/\{[\s\S]*\}/);
+          if (aiJsonMatch) {
+            const aiData = JSON.parse(aiJsonMatch[0]) as Record<string, number | null>;
             fields = fields.map(f => {
-              if (f.found) return f; // keep regex result
-              const aiVal = aiData[f.fKey];
-              const aiPrev = aiData[f.prevKey];
-              if (aiVal !== null && aiVal !== undefined) {
-                return { ...f, found: true, currentValue: aiVal, prevValue: aiPrev ?? null, aiAssisted: true };
-              }
+              if (f.found) return f;
+              const aiVal = aiData[f.fKey] ?? null;
+              if (aiVal !== null) return { ...f, found: true, currentValue: aiVal, prevValue: aiData[f.prevKey] ?? null, aiAssisted: true };
               return f;
             });
           }
         } catch (aiErr) {
           console.error("[parse-financials] AI fallback error:", aiErr);
-          // non-fatal: return regex results
         }
       }
     }
