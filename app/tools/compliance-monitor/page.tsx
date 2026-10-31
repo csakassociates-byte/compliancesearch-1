@@ -584,20 +584,36 @@ export default function ComplianceMonitorPage() {
       case "aoc4":
         return (
           <div className="space-y-2">
-            <input value={editValues.aoc4Srn as string || ""}
-              onChange={e => setEditValues(v => ({ ...v, aoc4Srn: e.target.value.toUpperCase() }))}
-              placeholder="SRN — e.g. A12345678"
-              className={inpMono} />
+            <div className="flex gap-2">
+              <input value={editValues.aoc4Srn as string || ""}
+                onChange={e => setEditValues(v => ({ ...v, aoc4Srn: e.target.value.toUpperCase() }))}
+                placeholder="SRN — e.g. A12345678"
+                className={`${inpMono} flex-1`} />
+              {(editValues.aoc4Srn as string) && (
+                <button onClick={() => setEditValues(v => ({ ...v, aoc4Srn: "" }))}
+                  className="px-3 py-2 text-xs rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 whitespace-nowrap">
+                  Clear SRN
+                </button>
+              )}
+            </div>
             <p className="text-xs text-slate-400">SRN issued by MCA portal after AOC-4 submission. Filing marked done only when SRN is entered.</p>
           </div>
         );
       case "mgt7":
         return (
           <div className="space-y-2">
-            <input value={editValues.mgt7Srn as string || ""}
-              onChange={e => setEditValues(v => ({ ...v, mgt7Srn: e.target.value.toUpperCase() }))}
-              placeholder="SRN — e.g. A87654321"
-              className={inpMono} />
+            <div className="flex gap-2">
+              <input value={editValues.mgt7Srn as string || ""}
+                onChange={e => setEditValues(v => ({ ...v, mgt7Srn: e.target.value.toUpperCase() }))}
+                placeholder="SRN — e.g. A87654321"
+                className={`${inpMono} flex-1`} />
+              {(editValues.mgt7Srn as string) && (
+                <button onClick={() => setEditValues(v => ({ ...v, mgt7Srn: "" }))}
+                  className="px-3 py-2 text-xs rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 whitespace-nowrap">
+                  Clear SRN
+                </button>
+              )}
+            </div>
             <p className="text-xs text-slate-400">For Section 8 / OPC / Small companies, enter MGT-7A SRN here.</p>
           </div>
         );
@@ -746,7 +762,15 @@ export default function ComplianceMonitorPage() {
 
   function cellSrn(val: string, field: "aoc4" | "mgt7", row: ComplianceRow) {
     if (row.workStatus === "declined") return <span className={naPill}>N/A</span>;
-    if (val) return <span className={infoPill} title={`SRN: ${val}`}>#{val}</span>;
+    if (val) return (
+      <span
+        className={`${infoPill} cursor-pointer hover:opacity-80`}
+        title={`SRN: ${val} — Click to edit or clear`}
+        onClick={() => openEdit(row.companyId, field, { [field === "aoc4" ? "aoc4Srn" : "mgt7Srn"]: val })}
+      >
+        #{val} ✏
+      </span>
+    );
     const dueDates = getDueDates(fy);
     const dueDate  = field === "aoc4" ? dueDates.aoc4 : dueDates.mgt7;
     const today    = new Date(); today.setHours(0, 0, 0, 0);

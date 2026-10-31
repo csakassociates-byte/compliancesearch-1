@@ -67,7 +67,7 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
       if (session?.user) {
         try {
           if (!data.cin || !data.companyName) throw new Error("CIN/name missing");
-          await fetch("/api/companies/upsert", {
+          const saveRes = await fetch("/api/companies/upsert", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -101,9 +101,14 @@ export default function CompanyExcelUpload({ onFill, accent = "blue", note }: Pr
               })),
             }),
           });
+          if (!saveRes.ok) {
+            const errData = await saveRes.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP ${saveRes.status}`);
+          }
           setSaveMsg("saved");
-        } catch {
-          // silent fail — form still filled
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Save failed";
+          setWarnings(w => [...w, `⚠ DB save error: ${msg}`]);
         }
       } else {
         setSaveMsg("prompt");
