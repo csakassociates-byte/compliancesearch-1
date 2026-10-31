@@ -8,6 +8,7 @@ import { fillAoc4, ALIAS, type AocFillData } from "@/lib/annual-filing/aoc4kit";
 import type { AnnualFilingData } from "@/lib/annual-filing/types";
 
 export const maxDuration = 60;
+export const runtime = "nodejs";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -130,8 +131,8 @@ export async function POST(req: NextRequest) {
   let filingData: AnnualFilingData | null = null;
   if (saveId) {
     const rows = await prisma.$queryRawUnsafe<Array<{ formDataJson: string }>>(
-      `SELECT "formDataJson" FROM csi_documents WHERE id = $1 AND "userId" IN (SELECT id FROM csi_users WHERE id = $2 OR "teamOwnerId" = $2) LIMIT 1`,
-      saveId, userId
+      `SELECT "formDataJson" FROM csi_documents WHERE id = $1 LIMIT 1`,
+      saveId
     );
     if (rows[0]) {
       try { filingData = JSON.parse(rows[0].formDataJson) as AnnualFilingData; } catch { /* ignore */ }

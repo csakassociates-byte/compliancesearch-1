@@ -5333,8 +5333,10 @@ function AnnualFilingTool() {
                         fd.append("saveId", saveId);
                         const res = await fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: fd });
                         if (!res.ok) {
-                          const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
-                          throw new Error(err.error ?? "Server error");
+                          const text = await res.text().catch(() => "");
+                          let errMsg = `HTTP ${res.status}`;
+                          try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { errMsg = text.slice(0, 120) || errMsg; }
+                          throw new Error(errMsg);
                         }
                         const fieldsFound = res.headers.get("X-AI-Fields-Found");
                         const blob = await res.blob();
