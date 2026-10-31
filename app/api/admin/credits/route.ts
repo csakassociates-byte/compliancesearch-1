@@ -17,7 +17,7 @@ export async function GET() {
   const users = await prisma.csi_users.findMany({
     where: { plan: { not: "admin" } },
     select: {
-      id: true, name: true, email: true, createdAt: true,
+      id: true, name: true, email: true, createdAt: true, ai_enabled: true, ai_model: true,
       csi_credit_accounts: {
         include: {
           csi_credit_txns: { orderBy: { createdAt: "desc" }, take: 20 },
@@ -75,7 +75,7 @@ export async function GET() {
     if (acc) return {
       ...acc,
       ...stats,
-      csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt },
+      csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt, ai_enabled: u.ai_enabled, ai_model: u.ai_model },
     };
     return {
       id: null,
@@ -88,7 +88,7 @@ export async function GET() {
       createdAt: u.createdAt,
       updatedAt: u.createdAt,
       ...stats,
-      csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt },
+      csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt, ai_enabled: u.ai_enabled, ai_model: u.ai_model },
       csi_credit_txns: [],
       csi_utr_requests: [],
     };

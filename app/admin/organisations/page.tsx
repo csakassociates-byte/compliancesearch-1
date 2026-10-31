@@ -13,7 +13,7 @@ type Org = {
   id: string; userId: string; balance: number; lifetimeCredits: number;
   isFreeUnlimited: boolean; freeLimit: number | null; createdAt: string;
   totalDocsGenerated: number; annualFilingCount: number; clientCount: number;
-  csi_users: { id: string; name: string | null; email: string; createdAt: string };
+  csi_users: { id: string; name: string | null; email: string; createdAt: string; ai_enabled?: boolean | null; ai_model?: string | null };
   csi_credit_txns: Txn[];
   csi_utr_requests: UtrReq[];
 };
@@ -97,6 +97,24 @@ export default function AdminOrganisationsPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: org.userId, isFreeUnlimited: !org.isFreeUnlimited }),
+    });
+    fetchOrgs();
+  }
+
+  async function toggleAI(org: Org) {
+    await fetch("/api/admin/ai", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: org.userId, ai_enabled: !org.csi_users.ai_enabled }),
+    });
+    fetchOrgs();
+  }
+
+  async function setAiModel(org: Org, model: string) {
+    await fetch("/api/admin/ai", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: org.userId, ai_model: model }),
     });
     fetchOrgs();
   }
@@ -289,6 +307,31 @@ export default function AdminOrganisationsPage() {
                       <Infinity className="w-3.5 h-3.5" />
                       {org.isFreeUnlimited ? "Unlimited ON — Click to Disable" : "Enable Unlimited"}
                     </button>
+
+                    <button
+                      onClick={() => toggleAI(org)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border font-medium transition-all ${
+                        org.csi_users.ai_enabled
+                          ? "bg-violet-100 text-violet-700 border-violet-300"
+                          : "bg-white text-gray-600 border-gray-300 hover:bg-violet-50 hover:border-violet-300"
+                      }`}
+                    >
+                      🤖 {org.csi_users.ai_enabled ? "AI ON — Click to Disable" : "Enable AI"}
+                    </button>
+
+                    {org.csi_users.ai_enabled && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">AI Model:</span>
+                        <select
+                          value={org.csi_users.ai_model ?? "haiku"}
+                          onChange={e => setAiModel(org, e.target.value)}
+                          className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400"
+                        >
+                          <option value="haiku">Haiku (Fast, Cheap)</option>
+                          <option value="sonnet">Sonnet (Smart, Thorough)</option>
+                        </select>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500">Free doc limit:</span>
