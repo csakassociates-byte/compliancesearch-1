@@ -68,7 +68,7 @@ model CalendarEvent {
 }
 
 model CompanyCharge {
-  id             String         @id
+  id             String         @id @default(cuid())
   companyId      String
   chargeId       String?
   holderName     String
@@ -82,7 +82,7 @@ model CompanyCharge {
 }
 
 model CompanyDirector {
-  id             String         @id
+  id             String         @id @default(cuid())
   companyId      String
   din            String?
   name           String
@@ -97,7 +97,7 @@ model CompanyDirector {
 }
 
 model CompanyProfile {
-  id                 String            @id
+  id                 String            @id @default(cuid())
   cin                String            @unique
   companyName        String
   regAddress         String?
