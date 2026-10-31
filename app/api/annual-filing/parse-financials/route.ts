@@ -502,7 +502,12 @@ export async function POST(req: NextRequest) {
 
       if (aiEnabled && process.env.ANTHROPIC_API_KEY) {
         try {
-          const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+          const anthropic = new Anthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY,
+            ...(process.env.ANTHROPIC_WORKSPACE_ID
+              ? { defaultHeaders: { "anthropic-workspace-id": process.env.ANTHROPIC_WORKSPACE_ID } }
+              : {}),
+          });
           const msg = await anthropic.messages.create({
             model: "claude-haiku-5-5",
             max_tokens: 1024,
