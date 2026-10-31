@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { parseCompanyExcel } from "@/lib/company-excel-parser";
 
 interface ComplianceRow {
   companyId: string;
@@ -131,6 +132,9 @@ export default function ComplianceMonitorPage() {
   const [llpLoading, setLlpLoading] = useState(false);
   const [llpModal, setLlpModal] = useState<{ companyId: string; field: string; values: Record<string, string> } | null>(null);
   const [llpSaving, setLlpSaving] = useState(false);
+  const [llpImporting, setLlpImporting] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [llpImportMsg, setLlpImportMsg] = useState("");
+  const llpImportRef = useRef<HTMLInputElement>(null);
   const [llpDueDates, setLlpDueDates] = useState<{ form8: string; form11: string } | null>(null);
   const [filterMode, setFilterMode] = useState("all");
   const [formFilter, setFormFilter] = useState<string | null>(null);
@@ -194,6 +198,46 @@ export default function ComplianceMonitorPage() {
 
   function openLlpEdit(row: LlpRow, field: string, values: Record<string, string>) {
     setLlpModal({ companyId: row.companyId, field, values });
+  }
+
+  async function handleLlpImport(file: File) {
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      setLlpImporting("error"); setLlpImportMsg("Only .xlsx or .xls files supported."); return;
+    }
+    setLlpImporting("loading"); setLlpImportMsg("");
+    try {
+      const { data } = await parseCompanyExcel(file);
+      if (!data.cin || !data.companyName) throw new Error("CIN or company name not found in this Excel");
+      const res = await fetch("/api/companies/upsert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cin: data.cin, companyName: data.companyName,
+          entityType: data.entityType || "LLP",
+          regAddress: data.regAddress || null,
+          incorporationDate: data.incorporationDate || null,
+          paidUpCapital: data.paidUpCapital || null,
+          authorisedCapital: data.authorisedCapital || null,
+          registrationNumber: data.registrationNumber || null,
+          email: data.email || null, rocName: data.rocName || null,
+          status: data.status || null, isListed: false,
+          directors: (data.directors || []).map(d => ({
+            din: d.din || null, name: d.name, designation: d.designation || null,
+            category: d.category || null, appointedAt: d.appointedAt || null,
+            isActive: d.isActive ?? true,
+          })),
+          charges: [],
+        }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
+      setLlpImporting("done");
+      setLlpImportMsg(`✓ ${data.companyName} imported successfully`);
+      loadLlp(fy);
+      setTimeout(() => { setLlpImporting("idle"); setLlpImportMsg(""); }, 4000);
+    } catch (e) {
+      setLlpImporting("error");
+      setLlpImportMsg(e instanceof Error ? e.message : "Import failed");
+    }
   }
 
   async function saveLlpField(row: LlpRow, field: string, value: string) {
@@ -1037,15 +1081,37 @@ export default function ComplianceMonitorPage() {
           </div>
 
           {/* Main Tab: Companies / LLP */}
-          <div className="flex gap-1 mb-6 bg-slate-200 p-1 rounded-xl w-fit">
-            <button onClick={() => setMainTab("companies")}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "companies" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-              🏢 Companies ({rows.length})
-            </button>
-            <button onClick={() => setMainTab("llp")}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "llp" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-              🤝 LLP ({llpRows.length})
-            </button>
+          <div className="flex items-center gap-4 mb-6 flex-wrap">
+            <div className="flex gap-1 bg-slate-200 p-1 rounded-xl">
+              <button onClick={() => setMainTab("companies")}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "companies" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                🏢 Companies ({rows.length})
+              </button>
+              <button onClick={() => setMainTab("llp")}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "llp" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                🤝 LLP ({llpRows.length})
+              </button>
+            </div>
+
+            {/* LLP master data import — visible only on LLP tab */}
+            {mainTab === "llp" && (
+              <div className="flex items-center gap-2">
+                <input ref={llpImportRef} type="file" accept=".xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleLlpImport(f); e.target.value = ""; }} />
+                <button
+                  onClick={() => { setLlpImporting("idle"); setLlpImportMsg(""); llpImportRef.current?.click(); }}
+                  disabled={llpImporting === "loading"}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border-2 border-dashed border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:border-purple-400 transition-all disabled:opacity-60">
+                  {llpImporting === "loading" ? "⏳ Importing…" : "📊 Import LLP Excel"}
+                </button>
+                {llpImporting === "done" && (
+                  <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">{llpImportMsg}</span>
+                )}
+                {llpImporting === "error" && (
+                  <span className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">⚠ {llpImportMsg}</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ══ LLP TAB ══════════════════════════════════════════════════════ */}
