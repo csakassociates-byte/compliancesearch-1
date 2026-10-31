@@ -129,8 +129,7 @@ export default function ComplianceMonitorPage() {
   // ── LLP state ──────────────────────────────────────────────────────────────
   const [llpRows, setLlpRows] = useState<LlpRow[]>([]);
   const [llpLoading, setLlpLoading] = useState(false);
-  const [llpEditingId, setLlpEditingId] = useState<string | null>(null);
-  const [llpEditValues, setLlpEditValues] = useState<Record<string, string>>({});
+  const [llpModal, setLlpModal] = useState<{ companyId: string; field: string; values: Record<string, string> } | null>(null);
   const [llpSaving, setLlpSaving] = useState(false);
   const [llpDueDates, setLlpDueDates] = useState<{ form8: string; form11: string } | null>(null);
   const [filterMode, setFilterMode] = useState("all");
@@ -193,6 +192,10 @@ export default function ComplianceMonitorPage() {
     loadLlp(fy);
   }, [fy, status, loadLlp]);
 
+  function openLlpEdit(row: LlpRow, field: string, values: Record<string, string>) {
+    setLlpModal({ companyId: row.companyId, field, values });
+  }
+
   async function saveLlpField(row: LlpRow, field: string, value: string) {
     setLlpSaving(true);
     await fetch("/api/llp-compliance", {
@@ -201,7 +204,7 @@ export default function ComplianceMonitorPage() {
       body: JSON.stringify({ companyId: row.companyId, cin: row.cin, financialYear: fy, [field]: value }),
     });
     setLlpSaving(false);
-    setLlpEditingId(null);
+    setLlpModal(null);
     loadLlp(fy);
   }
 
@@ -1070,172 +1073,265 @@ export default function ComplianceMonitorPage() {
                 </div>
               )}
 
-              {!llpLoading && llpRows.length > 0 && (
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <table className="min-w-[1100px] w-full text-sm border-collapse">
-                    <thead className="sticky top-0 z-10">
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="sticky left-0 z-20 bg-slate-50 px-2 py-2.5 text-center text-[10px] font-semibold text-slate-400 uppercase w-8">#</th>
-                        <th className="sticky left-8 z-20 bg-slate-50 px-3 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase min-w-[170px] border-r border-slate-200">LLP Name</th>
-                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[110px]">Doc Status</th>
-                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[110px]">Work Status</th>
-                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">Form 8 SRN</th>
-                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">Form 11 SRN</th>
-                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">ITR Status</th>
-                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">UDIN</th>
-                        <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[130px]">Remarks</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {llpRows.map((row, idx) => {
-                        const isEditing = llpEditingId === row.companyId;
-                        const form8Done = !!row.form8Srn;
-                        const form11Done = !!row.form11Srn;
-                        const allDone = form8Done && form11Done && row.workStatus === "completed";
+              {!llpLoading && llpRows.length > 0 && (() => {
+                // ── pill helpers ──────────────────────────────────────────────
+                const okP  = "inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200 cursor-pointer hover:bg-emerald-100";
+                const errP = "inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200 cursor-pointer hover:bg-red-100";
+                const infoP= "inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 cursor-pointer hover:bg-blue-100";
+                const naP  = "inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-slate-100 text-slate-500 border-slate-200 cursor-pointer hover:bg-slate-200";
+                const warnP= "inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 cursor-pointer hover:bg-amber-100";
 
-                        const statusColors: Record<string, string> = {
-                          awaited: "bg-gray-100 text-gray-600",
-                          received: "bg-blue-100 text-blue-700",
-                          "in-progress": "bg-yellow-100 text-yellow-700",
-                          completed: "bg-green-100 text-green-700",
-                          pending: "bg-orange-100 text-orange-700",
-                          declined: "bg-red-100 text-red-600",
-                          na: "bg-slate-100 text-slate-500",
-                        };
+                const docPill = (row: LlpRow) => {
+                  const open = () => openLlpEdit(row, "docStatus", { docStatus: row.docStatus, docStatusRemarks: row.docStatusRemarks });
+                  if (row.docStatus === "received")    return <span className={okP}   onClick={open}>✓ Received</span>;
+                  if (row.docStatus === "in-progress") return <span className={warnP} onClick={open}>⏳ In Progress</span>;
+                  if (row.docStatus === "completed")   return <span className={okP}   onClick={open}>✓ Completed</span>;
+                  if (row.docStatus === "na")          return <span className={naP}   onClick={open}>N/A</span>;
+                  return <span className={errP} onClick={open}>⏳ Awaited</span>;
+                };
 
-                        return (
-                          <tr key={row.companyId}
-                            onClick={() => { if (!llpEditingId) { setLlpEditingId(row.companyId); setLlpEditValues({ docStatus: row.docStatus, workStatus: row.workStatus, form8Srn: row.form8Srn, form11Srn: row.form11Srn, itrStatus: row.itrStatus, udinStatutory: row.udinStatutory, remarks: row.remarks }); } }}
-                            className={`border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer ${allDone ? "bg-green-50/30" : ""} ${isEditing ? "bg-blue-50/50" : ""}`}>
-                            <td className="sticky left-0 z-10 bg-white px-2 py-2.5 text-center text-xs text-slate-400">{idx + 1}</td>
-                            <td className="sticky left-8 z-10 bg-white px-3 py-2.5 border-r border-slate-200">
-                              <div className="font-medium text-slate-800 text-xs leading-tight">{row.companyName}</div>
-                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">{row.cin}</div>
-                            </td>
+                const workPill = (row: LlpRow) => {
+                  const open = () => openLlpEdit(row, "workStatus", { workStatus: row.workStatus, workStatusRemarks: row.workStatusRemarks });
+                  if (row.workStatus === "completed") return <span className={okP}   onClick={open}>✓ Completed</span>;
+                  if (row.workStatus === "declined")  return <span className={naP}   onClick={open}>Declined</span>;
+                  if (row.workStatus === "in-progress") return <span className={warnP} onClick={open}>⏳ In Progress</span>;
+                  if (row.workStatus === "na")        return <span className={naP}   onClick={open}>N/A</span>;
+                  return <span className={errP} onClick={open}>Pending</span>;
+                };
 
-                            {/* Doc Status */}
-                            <td className="px-3 py-2.5">
-                              {isEditing && llpEditValues.docStatus !== undefined ? (
-                                <select value={llpEditValues.docStatus} onChange={e => setLlpEditValues(v => ({ ...v, docStatus: e.target.value }))}
-                                  className="text-xs border border-slate-300 rounded px-1.5 py-1 w-full">
-                                  {["awaited","received","in-progress","completed"].map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                              ) : (
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[row.docStatus] || "bg-gray-100 text-gray-600"}`}>
-                                  {row.docStatus}
-                                </span>
-                              )}
-                            </td>
+                const srnPill = (val: string, field: "form8" | "form11", row: LlpRow) => {
+                  const dbField = field === "form8" ? "form8Srn" : "form11Srn";
+                  const open = () => openLlpEdit(row, field, { [dbField]: val });
+                  if (val) return <span className={infoP} onClick={open} title={`SRN: ${val} — Click to edit`}>#{val} ✏</span>;
+                  return <span className={errP} onClick={open}>Pending</span>;
+                };
 
-                            {/* Work Status */}
-                            <td className="px-3 py-2.5">
-                              {isEditing && llpEditValues.workStatus !== undefined ? (
-                                <select value={llpEditValues.workStatus} onChange={e => setLlpEditValues(v => ({ ...v, workStatus: e.target.value }))}
-                                  className="text-xs border border-slate-300 rounded px-1.5 py-1 w-full">
-                                  {["pending","in-progress","completed","declined","na"].map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                              ) : (
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[row.workStatus] || "bg-gray-100 text-gray-600"}`}>
-                                  {row.workStatus}
-                                </span>
-                              )}
-                            </td>
-
-                            {/* Form 8 SRN */}
-                            <td className="px-3 py-2.5">
-                              {isEditing ? (
-                                <input value={llpEditValues.form8Srn ?? row.form8Srn} onChange={e => setLlpEditValues(v => ({ ...v, form8Srn: e.target.value }))}
-                                  placeholder="SRN…" className="text-xs border border-slate-300 rounded px-2 py-1 w-28 font-mono" />
-                              ) : row.form8Srn ? (
-                                <span className="text-xs font-mono bg-green-50 text-green-700 px-2 py-0.5 rounded">{row.form8Srn}</span>
-                              ) : (
-                                <span className="text-xs text-slate-300">—</span>
-                              )}
-                            </td>
-
-                            {/* Form 11 SRN */}
-                            <td className="px-3 py-2.5">
-                              {isEditing ? (
-                                <input value={llpEditValues.form11Srn ?? row.form11Srn} onChange={e => setLlpEditValues(v => ({ ...v, form11Srn: e.target.value }))}
-                                  placeholder="SRN…" className="text-xs border border-slate-300 rounded px-2 py-1 w-28 font-mono" />
-                              ) : row.form11Srn ? (
-                                <span className="text-xs font-mono bg-green-50 text-green-700 px-2 py-0.5 rounded">{row.form11Srn}</span>
-                              ) : (
-                                <span className="text-xs text-slate-300">—</span>
-                              )}
-                            </td>
-
-                            {/* ITR Status */}
-                            <td className="px-3 py-2.5">
-                              {isEditing ? (
-                                <select value={llpEditValues.itrStatus ?? row.itrStatus} onChange={e => setLlpEditValues(v => ({ ...v, itrStatus: e.target.value }))}
-                                  className="text-xs border border-slate-300 rounded px-1.5 py-1">
-                                  {["pending","filed","na"].map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                              ) : (
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusColors[row.itrStatus] || "bg-gray-100 text-gray-600"}`}>
-                                  {row.itrStatus}
-                                </span>
-                              )}
-                            </td>
-
-                            {/* UDIN */}
-                            <td className="px-3 py-2.5">
-                              {isEditing ? (
-                                <input value={llpEditValues.udinStatutory ?? row.udinStatutory} onChange={e => setLlpEditValues(v => ({ ...v, udinStatutory: e.target.value }))}
-                                  placeholder="UDIN…" className="text-xs border border-slate-300 rounded px-2 py-1 w-32 font-mono" />
-                              ) : row.udinStatutory ? (
-                                <span className="text-xs font-mono text-slate-600">{row.udinStatutory}</span>
-                              ) : (
-                                <span className="text-xs text-slate-300">—</span>
-                              )}
-                            </td>
-
-                            {/* Remarks */}
-                            <td className="px-3 py-2.5">
-                              {isEditing ? (
-                                <input value={llpEditValues.remarks ?? row.remarks} onChange={e => setLlpEditValues(v => ({ ...v, remarks: e.target.value }))}
-                                  placeholder="Remarks…" className="text-xs border border-slate-300 rounded px-2 py-1 w-full" />
-                              ) : (
-                                <span className="text-xs text-slate-500">{row.remarks || "—"}</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-
-                  {/* Edit row actions */}
-                  {llpEditingId && (
-                    <div className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3 flex items-center gap-3">
-                      <span className="text-sm text-slate-600 flex-1">
-                        Editing: <strong>{llpRows.find(r => r.companyId === llpEditingId)?.companyName}</strong>
-                      </span>
-                      <button onClick={() => { setLlpEditingId(null); setLlpEditValues({}); }}
-                        className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</button>
-                      <button disabled={llpSaving} onClick={async () => {
-                        const row = llpRows.find(r => r.companyId === llpEditingId);
-                        if (!row) return;
-                        await fetch("/api/llp-compliance", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ companyId: row.companyId, cin: row.cin, financialYear: fy, ...llpEditValues }),
-                        });
-                        setLlpEditingId(null); setLlpEditValues({});
-                        loadLlp(fy);
-                      }} className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium">
-                        {llpSaving ? "Saving…" : "Save"}
-                      </button>
+                const itrPill = (row: LlpRow) => {
+                  const open = () => openLlpEdit(row, "itr", { itrStatus: row.itrStatus, itrAckNo: row.itrAckNo });
+                  if (row.itrStatus === "filed") return (
+                    <div className="flex flex-col gap-0.5">
+                      <span className={okP} onClick={open}>✓ Filed</span>
+                      {row.itrAckNo && <div className="text-[9px] text-slate-400 font-mono truncate max-w-[110px]" title={row.itrAckNo}>{row.itrAckNo}</div>}
                     </div>
-                  )}
-                </div>
-              )}
+                  );
+                  if (row.itrStatus === "na") return <span className={naP} onClick={open}>N/A</span>;
+                  return <span className={errP} onClick={open}>Pending</span>;
+                };
 
-              {/* Edit row trigger — click on row */}
-              {!llpLoading && llpRows.length > 0 && !llpEditingId && (
-                <p className="text-xs text-slate-400 mt-2 text-center">Click any row to edit compliance details</p>
-              )}
+                const udinPill = (row: LlpRow) => {
+                  const open = () => openLlpEdit(row, "udin", { udinStatutory: row.udinStatutory });
+                  if (row.udinStatutory === "na") return <span className={naP} onClick={open}>N/A</span>;
+                  if (row.udinStatutory) return <span className={infoP} onClick={open} title={row.udinStatutory}>{row.udinStatutory.slice(0,14)}{row.udinStatutory.length > 14 ? "…" : ""} ✏</span>;
+                  return <span className={errP} onClick={open}>Pending</span>;
+                };
+
+                return (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <table className="min-w-[1000px] w-full text-sm border-collapse">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="sticky left-0 z-20 bg-slate-50 px-2 py-2.5 text-center text-[10px] font-semibold text-slate-400 uppercase w-8">#</th>
+                          <th className="sticky left-8 z-20 bg-slate-50 px-3 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase min-w-[170px] border-r border-slate-200">LLP Name</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[110px]">Doc Status</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[110px]">Work Status</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">Form 8 SRN</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">Form 11 SRN</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">ITR Filing</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left whitespace-nowrap">UDIN</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold text-slate-400 uppercase text-left min-w-[120px]">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {llpRows.map((row, idx) => {
+                          const allDone = !!row.form8Srn && !!row.form11Srn && row.workStatus === "completed";
+                          return (
+                            <tr key={row.companyId} className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${allDone ? "bg-green-50/20" : ""}`}>
+                              <td className="sticky left-0 z-10 bg-white px-2 py-3 text-center text-xs text-slate-400">{idx + 1}</td>
+                              <td className="sticky left-8 z-10 bg-white px-3 py-3 border-r border-slate-200">
+                                <div className="font-semibold text-slate-800 text-xs leading-tight">{row.companyName}</div>
+                                <div className="text-[10px] text-slate-400 font-mono mt-0.5">{row.cin}</div>
+                                {row.incorporationDate && <div className="text-[9px] text-slate-300 mt-0.5">DOI: {row.incorporationDate}</div>}
+                              </td>
+                              <td className="px-3 py-3">{docPill(row)}</td>
+                              <td className="px-3 py-3">{workPill(row)}</td>
+                              <td className="px-3 py-3">{srnPill(row.form8Srn, "form8", row)}</td>
+                              <td className="px-3 py-3">{srnPill(row.form11Srn, "form11", row)}</td>
+                              <td className="px-3 py-3">{itrPill(row)}</td>
+                              <td className="px-3 py-3">{udinPill(row)}</td>
+                              <td className="px-3 py-3">
+                                <span className="text-xs text-slate-500 cursor-pointer hover:text-slate-700"
+                                  onClick={() => openLlpEdit(row, "remarks", { remarks: row.remarks })}>
+                                  {row.remarks || <span className="text-slate-300">—</span>}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+
+              {/* LLP Edit Modal */}
+              {llpModal && (() => {
+                const row = llpRows.find(r => r.companyId === llpModal.companyId);
+                if (!row) return null;
+                const vals = llpModal.values;
+                const setVals = (upd: Record<string, string>) => setLlpModal(m => m ? { ...m, values: { ...m.values, ...upd } } : m);
+
+                const fieldLabel: Record<string, string> = {
+                  docStatus: "Document Status", workStatus: "Work Status",
+                  form8: "Form 8 (Statement of Account & Solvency) SRN",
+                  form11: "Form 11 (Annual Return) SRN",
+                  itr: "ITR Filing Status", udin: "UDIN (Statutory Audit)", remarks: "Remarks",
+                };
+                const selBtn = (active: boolean, cls: string) =>
+                  `px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${active ? cls.replace("50","600").replace("700","white").replace("border-","bg-").replace("bg-emerald-600","bg-emerald-600 text-white border-emerald-600") : cls + " hover:opacity-80"}`;
+
+                const renderField = () => {
+                  switch (llpModal.field) {
+                    case "docStatus": return (
+                      <div className="space-y-3">
+                        <div className="flex gap-2 flex-wrap">
+                          {[
+                            { v: "awaited",     label: "Awaited",     cls: "bg-slate-50 text-slate-600 border-slate-300" },
+                            { v: "received",    label: "✓ Received",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                            { v: "in-progress", label: "In Progress", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+                            { v: "completed",   label: "✓ Completed", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                            { v: "na",          label: "N/A",         cls: "bg-slate-100 text-slate-500 border-slate-300" },
+                          ].map(({ v, label, cls }) => (
+                            <button key={v} onClick={() => setVals({ docStatus: v })}
+                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${vals.docStatus === v ? "bg-blue-600 text-white border-blue-600" : cls + " hover:opacity-80"}`}>{label}</button>
+                          ))}
+                        </div>
+                        <textarea value={vals.docStatusRemarks || ""} onChange={e => setVals({ docStatusRemarks: e.target.value })}
+                          placeholder="Remarks (optional)" rows={2}
+                          className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                    );
+                    case "workStatus": return (
+                      <div className="space-y-3">
+                        <div className="flex gap-2 flex-wrap">
+                          {[
+                            { v: "pending",     label: "Pending",     cls: "bg-red-50 text-red-600 border-red-200" },
+                            { v: "in-progress", label: "In Progress", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+                            { v: "completed",   label: "✓ Completed", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                            { v: "declined",    label: "Declined",    cls: "bg-slate-100 text-slate-600 border-slate-300" },
+                            { v: "na",          label: "N/A",         cls: "bg-slate-100 text-slate-500 border-slate-300" },
+                          ].map(({ v, label, cls }) => (
+                            <button key={v} onClick={() => setVals({ workStatus: v })}
+                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${vals.workStatus === v ? "bg-blue-600 text-white border-blue-600" : cls + " hover:opacity-80"}`}>{label}</button>
+                          ))}
+                        </div>
+                        <textarea value={vals.workStatusRemarks || ""} onChange={e => setVals({ workStatusRemarks: e.target.value })}
+                          placeholder="Remarks (optional)" rows={2}
+                          className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                    );
+                    case "form8":
+                    case "form11": {
+                      const dbField = llpModal.field === "form8" ? "form8Srn" : "form11Srn";
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <input value={vals[dbField] || ""} onChange={e => setVals({ [dbField]: e.target.value.toUpperCase() })}
+                              placeholder="SRN — e.g. A12345678" autoFocus
+                              className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            {vals[dbField] && (
+                              <button onClick={() => setVals({ [dbField]: "" })}
+                                className="px-3 py-2 text-xs rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 whitespace-nowrap">Clear SRN</button>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400">SRN issued by MCA portal. Enter to mark filing done; clear to undo.</p>
+                        </div>
+                      );
+                    }
+                    case "itr": return (
+                      <div className="space-y-3">
+                        <div className="flex gap-2 flex-wrap">
+                          {[
+                            { v: "filed",   label: "✓ Filed",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                            { v: "pending", label: "Pending",   cls: "bg-red-50 text-red-600 border-red-200" },
+                            { v: "na",      label: "N/A",       cls: "bg-slate-100 text-slate-500 border-slate-300" },
+                          ].map(({ v, label, cls }) => (
+                            <button key={v} onClick={() => setVals({ itrStatus: v })}
+                              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${vals.itrStatus === v ? "bg-blue-600 text-white border-blue-600" : cls + " hover:opacity-80"}`}>{label}</button>
+                          ))}
+                        </div>
+                        {vals.itrStatus === "filed" && (
+                          <input value={vals.itrAckNo || ""} onChange={e => setVals({ itrAckNo: e.target.value })}
+                            placeholder="Acknowledgement number (optional)" autoFocus
+                            className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        )}
+                      </div>
+                    );
+                    case "udin": return (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <input value={vals.udinStatutory || ""} onChange={e => setVals({ udinStatutory: e.target.value })}
+                            placeholder="UDIN for statutory audit" autoFocus
+                            className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <button onClick={() => setVals({ udinStatutory: "na" })}
+                            className="px-3 py-2 text-xs rounded-lg bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 whitespace-nowrap">Mark N/A</button>
+                        </div>
+                      </div>
+                    );
+                    case "remarks": return (
+                      <textarea value={vals.remarks || ""} onChange={e => setVals({ remarks: e.target.value })}
+                        placeholder="Notes / remarks for this LLP" rows={3} autoFocus
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    );
+                    default: return null;
+                  }
+                };
+
+                const handleLlpSave = async () => {
+                  setLlpSaving(true);
+                  // Map modal field to DB fields
+                  const payload: Record<string, string> = {};
+                  if (llpModal.field === "docStatus")  { payload.docStatus = vals.docStatus; payload.docStatusRemarks = vals.docStatusRemarks || ""; }
+                  else if (llpModal.field === "workStatus") { payload.workStatus = vals.workStatus; payload.workStatusRemarks = vals.workStatusRemarks || ""; }
+                  else if (llpModal.field === "form8")  payload.form8Srn = vals.form8Srn || "";
+                  else if (llpModal.field === "form11") payload.form11Srn = vals.form11Srn || "";
+                  else if (llpModal.field === "itr")    { payload.itrStatus = vals.itrStatus; payload.itrAckNo = vals.itrAckNo || ""; }
+                  else if (llpModal.field === "udin")   payload.udinStatutory = vals.udinStatutory || "";
+                  else if (llpModal.field === "remarks") payload.remarks = vals.remarks || "";
+
+                  await fetch("/api/llp-compliance", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ companyId: row.companyId, cin: row.cin, financialYear: fy, ...payload }),
+                  });
+                  setLlpModal(null);
+                  setLlpSaving(false);
+                  loadLlp(fy);
+                };
+
+                return (
+                  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+                    onClick={() => setLlpModal(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+                      <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between">
+                        <div>
+                          <p className="text-xs text-slate-400 font-mono truncate max-w-[300px]">{row.companyName}</p>
+                          <h3 className="font-bold text-slate-800 mt-0.5">{fieldLabel[llpModal.field] || llpModal.field}</h3>
+                        </div>
+                        <button onClick={() => setLlpModal(null)} className="text-slate-400 hover:text-slate-600 text-xl leading-none mt-1">×</button>
+                      </div>
+                      <div className="px-5 py-4">{renderField()}</div>
+                      <div className="px-5 py-3 border-t border-slate-100 flex gap-3 justify-end">
+                        <button onClick={() => setLlpModal(null)}
+                          className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</button>
+                        <button onClick={handleLlpSave} disabled={llpSaving}
+                          className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium">
+                          {llpSaving ? "Saving…" : "Save"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
