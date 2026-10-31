@@ -2022,6 +2022,7 @@ interface MasterData {
   subcategory: string | null; classOfCompany: string | null;
   jurisdiction: string | null; smallCompany: boolean;
   directors: MasterDataDirector[]; charges: MasterDataCharge[];
+  _partial?: boolean;
 }
 interface DinRecord {
   id: string; din: string | null; name: string; designation: string | null;
@@ -2188,6 +2189,15 @@ function MasterDataModal({ cin, onClose }: { cin: string; onClose: () => void })
             <div className="text-center py-12">
               <p className="text-slate-500 font-semibold">Master data not available</p>
               <p className="text-xs text-slate-400 mt-1">Upload the MCA Excel for this company to populate master data.</p>
+            </div>
+          )}
+          {data?._partial && (
+            <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2">
+              <span className="text-amber-500 text-sm shrink-0">⚠</span>
+              <div>
+                <p className="text-xs font-semibold text-amber-700">Basic info only — Full master data not available</p>
+                <p className="text-xs text-amber-600 mt-0.5">Upload the MCA Excel for this company to populate directors, capital, charges and all other details.</p>
+              </div>
             </div>
           )}
           {data && (
