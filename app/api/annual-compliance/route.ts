@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
       `SELECT id, "companyName", cin, "incorporationDate", "entityType", "regAddress"
        FROM csi_companies
        WHERE "userId" = ANY($1::text[])
+         AND (LOWER("entityType") != 'llp' OR "entityType" IS NULL)
        ORDER BY LOWER("companyName") ASC`,
       memberIds
     );
