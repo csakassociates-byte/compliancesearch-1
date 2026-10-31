@@ -589,11 +589,16 @@ function AnnualFilingTool() {
   const [autoAuditorLoading, setAutoAuditorLoading] = useState(false);
 
   // ── Financial document auto-fill (Step 3) ────────────────────────────
-  type FinExtracted = { label: string; fKey: string; prevKey: string; currentValue: number|null; prevValue: number|null; found: boolean; };
+  type FinExtracted = { label: string; fKey: string; prevKey: string; currentValue: number|null; prevValue: number|null; found: boolean; aiAssisted?: boolean; };
   const [finDocResult, setFinDocResult] = useState<{ fields: FinExtracted[]; fileName: string; applied: boolean; } | null>(null);
   const [finDocParsing, setFinDocParsing] = useState(false);
   const [finDocError, setFinDocError]     = useState<string|null>(null);
   const finDocRef = useRef<HTMLInputElement>(null);
+  const [aiValidating, setAiValidating] = useState(false);
+  const [aiValidResult, setAiValidResult] = useState<{ valid: boolean; warnings: string[]; errors: string[] } | null>(null);
+  const [aiPreflight, setAiPreflight] = useState(false);
+  const [aiPreflightResult, setAiPreflightResult] = useState<{ ready: boolean; score: number; critical: string[]; warnings: string[]; suggestions: string[] } | null>(null);
+  const aiEnabled = !!(session?.user as { ai_enabled?: boolean })?.ai_enabled;
   const [autoSaving, setAutoSaving] = useState(false);
   // Ref holding latest auto-save logic — avoids stale closures inside the debounce timer
   const autoSaveFnRef = useRef<(() => Promise<void>) | undefined>(undefined);
@@ -1313,6 +1318,70 @@ function AnnualFilingTool() {
     }
     patchFin(patch as Partial<AnnualFilingData["financials"]>);
     setFinDocResult(prev => prev ? { ...prev, applied: true } : null);
+  }
+
+  async function aiValidateFinancials() {
+    setAiValidating(true);
+    setAiValidResult(null);
+    try {
+      const fin = data.financials;
+      const res = await fetch("/api/ai-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task: "validate_financials",
+          data: {
+            revenueFromOperations: fin.revenueFromOperations || null,
+            otherIncome: fin.otherIncome || null,
+            profitAfterTax: fin.profitAfterTax || null,
+            paidUpCapital: fin.paidUpCapital || null,
+            totalAssets: fin.totalAssets || null,
+            totalLiabilities: fin.totalLiabilities || null,
+          },
+        }),
+      });
+      const json = await res.json() as { success?: boolean; data?: { valid: boolean; warnings: string[]; errors: string[] }; error?: string };
+      if (json.success && json.data) setAiValidResult(json.data);
+    } catch { /* silent */ }
+    setAiValidating(false);
+  }
+
+  async function runAiPreflight() {
+    setAiPreflight(true);
+    setAiPreflightResult(null);
+    try {
+      const res = await fetch("/api/ai-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task: "preflight_check",
+          data: {
+            companyName: data.companyName,
+            companyType: data.companyType,
+            financialYear: data.financialYear,
+            auditorFirmName: data.auditor.firmName,
+            auditorPartnerName: data.auditor.partnerName,
+            auditReportDate: data.auditor.reportDate,
+            hasUdin: !!data.auditor.udin,
+            boardMeetingsCount: data.boardMeetings.length,
+            directorsCount: data.directors.length,
+            shareholdersCount: data.shareholders.length,
+            hasSignatoryDirector: !!data.signatoryDirectors.director1.name,
+            revenueFromOperations: data.financials.revenueFromOperations,
+            profitAfterTax: data.financials.profitAfterTax,
+            paidUpCapital: data.financials.paidUpCapital,
+            totalAssets: data.financials.totalAssets,
+            totalLiabilities: data.financials.totalLiabilities,
+            hasSubsidiaries: data.hasSubsidiaries,
+            hasRPT: data.hasRPT,
+            dateOfReport: data.dateOfReport,
+          },
+        }),
+      });
+      const json = await res.json() as { success?: boolean; data?: { ready: boolean; score: number; critical: string[]; warnings: string[]; suggestions: string[] }; error?: string };
+      if (json.success && json.data) setAiPreflightResult(json.data);
+    } catch { /* silent */ }
+    setAiPreflight(false);
   }
 
   // ── Silent auto-save on step navigation (no confirm dialog) ──────────
@@ -2824,6 +2893,9 @@ function AnnualFilingTool() {
                   <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: "#dcfce7", color: "#166534" }}>
                     {finDocResult.fields.filter(f => f.found).length}/{finDocResult.fields.length} identified
                   </span>
+                  {finDocResult.fields.some(f => f.aiAssisted) && (
+                    <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700">🤖 AI assisted</span>
+                  )}
                 </div>
                 {finDocResult.applied ? (
                   <span className="flex-shrink-0 text-xs font-bold text-emerald-600">✓ Applied to form</span>
@@ -2841,7 +2913,7 @@ function AnnualFilingTool() {
               <div className="divide-y divide-slate-100">
                 {finDocResult.fields.map(f => (
                   <div key={f.fKey} className={`flex items-center gap-3 px-4 py-2 ${f.found ? "bg-white" : "bg-slate-50/60"}`}>
-                    <span className="text-sm flex-shrink-0">{f.found ? "✅" : "❌"}</span>
+                    <span className="text-sm flex-shrink-0">{f.aiAssisted ? "🤖" : f.found ? "✅" : "❌"}</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-semibold text-slate-700 truncate">{f.label}</div>
                     </div>
@@ -2867,6 +2939,32 @@ function AnnualFilingTool() {
             </div>
           )}
         </div>
+
+        {/* AI Validate button — shown when AI is enabled and financials have data */}
+        {aiEnabled && data.financials.revenueFromOperations && (
+          <div className="mb-4">
+            <button
+              onClick={() => void aiValidateFinancials()}
+              disabled={aiValidating}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-60"
+            >
+              {aiValidating ? "⏳ AI Checking…" : "🤖 AI Validate Financials"}
+            </button>
+          </div>
+        )}
+        {aiValidResult && (
+          <div className={`mb-4 p-3 rounded-lg border text-xs ${aiValidResult.valid ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+            <div className="font-bold mb-1 flex items-center gap-1">
+              {aiValidResult.valid ? "✅ AI: Financials look good" : "🤖 AI Review"}
+            </div>
+            {aiValidResult.errors.map((e, i) => (
+              <div key={i} className="text-red-700 mt-0.5">✗ {e}</div>
+            ))}
+            {aiValidResult.warnings.map((w, i) => (
+              <div key={i} className="text-amber-700 mt-0.5">⚠ {w}</div>
+            ))}
+          </div>
+        )}
 
         {/* Validation alerts */}
         {(isLoss || bsImbalance || authLtPaid) && (
@@ -4943,6 +5041,32 @@ function AnnualFilingTool() {
               </div>
             );
           })()}
+
+          {/* AI Pre-flight Check */}
+          {aiEnabled && (
+            <div className="mb-4">
+              <button
+                onClick={() => void runAiPreflight()}
+                disabled={aiPreflight || generating}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-60 mb-3"
+              >
+                {aiPreflight ? "⏳ AI Reviewing…" : "🤖 AI Pre-flight Check"}
+              </button>
+              {aiPreflightResult && (
+                <div className={`p-3 rounded-lg border text-xs ${aiPreflightResult.ready ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+                  <div className="flex items-center gap-2 font-bold mb-2">
+                    {aiPreflightResult.ready ? "✅ AI: Ready to generate" : "🤖 AI Review"}
+                    <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold ${aiPreflightResult.score >= 80 ? "bg-green-100 text-green-700" : aiPreflightResult.score >= 60 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
+                      Score: {aiPreflightResult.score}/100
+                    </span>
+                  </div>
+                  {aiPreflightResult.critical.map((c, i) => <div key={i} className="text-red-700 mt-0.5">✗ {c}</div>)}
+                  {aiPreflightResult.warnings.map((w, i) => <div key={i} className="text-amber-700 mt-0.5">⚠ {w}</div>)}
+                  {aiPreflightResult.suggestions.map((s, i) => <div key={i} className="text-blue-700 mt-0.5">💡 {s}</div>)}
+                </div>
+              )}
+            </div>
+          )}
 
           <button
             onClick={handleGenerate}

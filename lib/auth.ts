@@ -31,7 +31,7 @@ export const authOptions: NextAuthOptions = {
           passwordHash: string | null; plan: string;
           mustChangePassword: boolean | null;
         }>>(
-          `SELECT id, name, email, "passwordHash", plan, "mustChangePassword"
+          `SELECT id, name, email, "passwordHash", plan, "mustChangePassword", ai_enabled
            FROM csi_users WHERE email = $1`,
           email
         );
@@ -49,6 +49,7 @@ export const authOptions: NextAuthOptions = {
           email:             user.email,
           plan:              user.plan,
           mustChangePassword: !!user.mustChangePassword,
+          ai_enabled:        !!(user as { ai_enabled?: boolean }).ai_enabled,
         };
       },
     }),
@@ -60,6 +61,7 @@ export const authOptions: NextAuthOptions = {
         token.id                = user.id;
         token.plan              = (user as { plan?: string }).plan ?? "free";
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword ?? false;
+        token.ai_enabled        = (user as { ai_enabled?: boolean }).ai_enabled ?? false;
       }
       return token;
     },
@@ -69,6 +71,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as { plan?: string }).plan                = token.plan as string;
         (session.user as { mustChangePassword?: boolean }).mustChangePassword
           = token.mustChangePassword as boolean ?? false;
+        (session.user as { ai_enabled?: boolean }).ai_enabled   = token.ai_enabled as boolean ?? false;
       }
       return session;
     },

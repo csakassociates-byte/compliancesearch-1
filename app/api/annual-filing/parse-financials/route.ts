@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import Anthropic from "@anthropic-ai/sdk";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CIN EXTRACTION
@@ -269,6 +272,7 @@ function detectMultiplier(text: string): number {
 type ExtractedField = {
   label: string; fKey: string; prevKey: string;
   currentValue: number | null; prevValue: number | null; found: boolean;
+  aiAssisted?: boolean;
 };
 
 type FieldDef = typeof FIELD_DEFS[number];
@@ -486,6 +490,75 @@ export async function POST(req: NextRequest) {
         { error: "Unsupported file type. Please upload a PDF or Excel file (.pdf / .xlsx / .xls)." },
         { status: 400 }
       );
+    }
+
+    // ── AI fallback: if many fields not found AND user has AI enabled ──
+    const foundCount = fields.filter(f => f.found).length;
+    const useAI = req.nextUrl.searchParams.get("ai") === "1";
+
+    if ((foundCount < fields.length / 2 || useAI) && rawTextSample) {
+      const session = await getServerSession(authOptions);
+      const aiEnabled = (session?.user as { ai_enabled?: boolean })?.ai_enabled;
+
+      if (aiEnabled && process.env.ANTHROPIC_API_KEY) {
+        try {
+          const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+          const msg = await anthropic.messages.create({
+            model: "claude-haiku-5-5",
+            max_tokens: 1024,
+            messages: [{
+              role: "user",
+              content: `Extract financial data from this Indian company balance sheet/P&L text. Return ONLY a JSON object with these keys (number values in rupees, null if not found):
+{
+  "revenueFromOperations": number|null,
+  "otherIncome": number|null,
+  "totalRevenue": number|null,
+  "totalExpenses": number|null,
+  "profitBeforeTax": number|null,
+  "profitAfterTax": number|null,
+  "paidUpCapital": number|null,
+  "reservesAndSurplus": number|null,
+  "totalAssets": number|null,
+  "totalLiabilities": number|null,
+  "prevRevenueFromOperations": number|null,
+  "prevOtherIncome": number|null,
+  "prevTotalRevenue": number|null,
+  "prevTotalExpenses": number|null,
+  "prevProfitBeforeTax": number|null,
+  "prevProfitAfterTax": number|null,
+  "prevPaidUpCapital": number|null,
+  "prevReservesAndSurplus": number|null,
+  "prevTotalAssets": number|null,
+  "prevTotalLiabilities": number|null
+}
+
+Text:\n${rawTextSample.slice(0, 4000)}`,
+            }],
+          });
+
+          const text = msg.content[0].type === "text" ? msg.content[0].text : "";
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const aiData = JSON.parse(jsonMatch[0]) as Record<string, number | null>;
+            // Merge AI results into fields that regex missed
+            const keyMap: Record<string, { fKey: string; prevKey: string }> = {};
+            for (const fd of fields) keyMap[fd.fKey] = { fKey: fd.fKey, prevKey: fd.prevKey };
+
+            fields = fields.map(f => {
+              if (f.found) return f; // keep regex result
+              const aiVal = aiData[f.fKey];
+              const aiPrev = aiData[f.prevKey];
+              if (aiVal !== null && aiVal !== undefined) {
+                return { ...f, found: true, currentValue: aiVal, prevValue: aiPrev ?? null, aiAssisted: true };
+              }
+              return f;
+            });
+          }
+        } catch (aiErr) {
+          console.error("[parse-financials] AI fallback error:", aiErr);
+          // non-fatal: return regex results
+        }
+      }
     }
 
     return NextResponse.json({ fields, fileName: file.name, extractedCIN, rawTextSample });
