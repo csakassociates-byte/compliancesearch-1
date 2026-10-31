@@ -44,7 +44,7 @@ model BlogPost {
   views         Int           @default(0)
   publishedAt   DateTime?
   createdAt     DateTime      @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime      @updatedAt
   adminNotes    String?
   BlogComment   BlogComment[]
   BlogLike      BlogLike[]
@@ -64,7 +64,7 @@ model CalendarEvent {
   link         String?
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime
+  updatedAt    DateTime  @updatedAt
 }
 
 model CompanyCharge {
@@ -77,7 +77,7 @@ model CompanyCharge {
   address        String?
   isSatisfied    Boolean        @default(false)
   createdAt      DateTime       @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime       @updatedAt
   company        CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
@@ -92,7 +92,7 @@ model CompanyDirector {
   ceasedAt       String?
   isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime       @updatedAt
   company        CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
@@ -108,7 +108,7 @@ model CompanyProfile {
   isListed           Boolean           @default(false)
   sourceFile         String?
   createdAt          DateTime          @default(now())
-  updatedAt          DateTime
+  updatedAt          DateTime          @updatedAt
   gstNumber          String?
   mobile             String?
   authorisedCapital  String?
@@ -145,7 +145,7 @@ model ComplianceRule {
   tags             String
   conditionJson    String
   createdAt        DateTime @default(now())
-  updatedAt        DateTime
+  updatedAt        DateTime @updatedAt
   documentsJson    String   @default("[]")
 }
 
@@ -178,7 +178,7 @@ model Notice {
   issuedDate DateTime @default(now())
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
-  updatedAt  DateTime
+  updatedAt  DateTime @updatedAt
 }
 
 model csi_activity_log {
