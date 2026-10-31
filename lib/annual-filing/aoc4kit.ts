@@ -136,7 +136,8 @@ export async function loadFieldMap(zip: JSZip, sheetPath: string): Promise<{ fie
   while ((rm = rowRegex.exec(sheetXml)) !== null) {
     const rowNum = parseInt(rm[1]);
     const rowContent = rm[2];
-    const cellRegex = /<c r="([A-Z]+\d+)"([^>]*)>([\s\S]*?)<\/c>/g;
+    // Exclude self-closing cells (<c r="X1" s="5"/>) by requiring attrs don't end with /
+    const cellRegex = /<c r="([A-Z]+\d+)"((?:[^>/]|\/(?!>))*)>([\s\S]*?)<\/c>/g;
     let cm: RegExpExecArray | null;
     while ((cm = cellRegex.exec(rowContent)) !== null) {
       const cellRef = cm[1];
