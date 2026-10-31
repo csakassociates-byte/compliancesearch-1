@@ -27,7 +27,7 @@ const ANNUAL_FORMS = [
     name: "Filing of Financial Statements",
     who: "All companies (other than OPC, XBRL companies)",
     due: "30 days from AGM",
-    fy2526: "29 October 2025*",
+    fy2526: "31 December 2026 ✦ Extended",
     penalty: "₹100/day after due date",
     color: "blue",
   },
@@ -36,7 +36,7 @@ const ANNUAL_FORMS = [
     name: "Consolidated Financial Statements",
     who: "Holding companies",
     due: "30 days from AGM",
-    fy2526: "29 October 2025*",
+    fy2526: "31 December 2026 ✦ Extended",
     penalty: "₹100/day after due date",
     color: "blue",
   },
@@ -45,7 +45,7 @@ const ANNUAL_FORMS = [
     name: "Financial Statements in XBRL format",
     who: "Listed companies, companies with paid-up capital ≥ ₹5 Cr or T/O ≥ ₹100 Cr",
     due: "60 days from AGM",
-    fy2526: "28 November 2025*",
+    fy2526: "31 December 2026 ✦ Extended",
     penalty: "₹100/day after due date",
     color: "blue",
   },
@@ -54,7 +54,7 @@ const ANNUAL_FORMS = [
     name: "Annual Return (e-form)",
     who: "All companies except OPC and Small Companies",
     due: "60 days from AGM",
-    fy2526: "28 November 2025*",
+    fy2526: "31 January 2027 ✦ Extended",
     penalty: "₹100/day (min ₹50,000, max ₹5,00,000) + director liability",
     color: "purple",
   },
@@ -63,7 +63,7 @@ const ANNUAL_FORMS = [
     name: "Annual Return — OPC & Small Companies",
     who: "One Person Companies (OPC) & Small Companies",
     due: "60 days from AGM / Board Meeting date",
-    fy2526: "28 November 2025*",
+    fy2526: "31 January 2027 ✦ Extended",
     penalty: "₹100/day",
     color: "purple",
   },
@@ -249,16 +249,16 @@ export default function ROCFilingDueDatesPage() {
             </div>
             <span className="text-purple-400 text-xl hidden sm:block">→</span>
             <div className="bg-blue-50 rounded-xl border border-blue-200 px-4 py-2 text-blue-700 text-center">
-              <p className="text-xs text-slate-400 mb-0.5">AOC-4 (AGM +30d)</p>
-              <p className="font-bold">29 Oct 2025</p>
+              <p className="text-xs text-slate-400 mb-0.5">AOC-4 (Extended)</p>
+              <p className="font-bold">31 Dec 2026</p>
             </div>
             <span className="text-purple-400 text-xl hidden sm:block">→</span>
             <div className="bg-purple-100 rounded-xl border border-purple-300 px-4 py-2 text-purple-800 text-center">
-              <p className="text-xs text-slate-400 mb-0.5">MGT-7 (AGM +60d)</p>
-              <p className="font-bold">28 Nov 2025</p>
+              <p className="text-xs text-slate-400 mb-0.5">MGT-7 (Extended)</p>
+              <p className="font-bold">31 Jan 2027</p>
             </div>
           </div>
-          <p className="text-xs text-slate-500 mt-3">* Assuming AGM held on last day — 30 September 2025. Earlier AGM = earlier deadlines.</p>
+          <p className="text-xs text-slate-500 mt-3">✦ MCA has extended AOC-4 to 31 Dec 2026 and MGT-7/7A to 31 Jan 2027 for FY 2025-26 via General Circular.</p>
         </div>
 
         {/* Important Note */}

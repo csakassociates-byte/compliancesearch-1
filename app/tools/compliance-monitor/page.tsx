@@ -107,6 +107,13 @@ function hasPendingItems(r: ComplianceRow): boolean {
 
 function getDueDates(fyStr: string): { aoc4: Date; mgt7: Date } {
   const fyEndYear = parseInt(fyStr.split("-")[0]) + 1;
+  // FY 2025-26 extended per MCA circular: AOC-4 → 31 Dec 2026, MGT-7 → 31 Jan 2027
+  if (fyStr === "2025-26") {
+    return {
+      aoc4: new Date(2026, 11, 31), // 31 December 2026
+      mgt7: new Date(2027, 0, 31),  // 31 January 2027
+    };
+  }
   return {
     aoc4: new Date(fyEndYear, 9, 30),  // October 30
     mgt7: new Date(fyEndYear, 10, 29), // November 29

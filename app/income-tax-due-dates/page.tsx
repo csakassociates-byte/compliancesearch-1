@@ -19,9 +19,9 @@ const ADVANCE_TAX = [
 
 const ITR_DEADLINES = [
   { taxpayer: "Individuals, HUF, AOP, BOI (No Audit Required)", itr: "ITR-1, 2, 3, 4", due: "31 July 2026", note: "Standard deadline" },
-  { taxpayer: "Business / Profession requiring Tax Audit (Sec 44AB)", itr: "ITR-3, 5, 6", due: "31 October 2026", note: "Audit report due 30 Sep 2026" },
-  { taxpayer: "Companies (all)", itr: "ITR-6", due: "31 October 2026", note: "Tax audit mandatory for most" },
-  { taxpayer: "Partners of firms requiring audit / working partners", itr: "ITR-2, 3", due: "31 October 2026", note: "Extended along with firm" },
+  { taxpayer: "Business / Profession requiring Tax Audit (Sec 44AB)", itr: "ITR-3, 5, 6", due: "21 November 2026 ✦ Extended", note: "CBDT Circular 07/2026 — Audit report extended to 21 Oct 2026" },
+  { taxpayer: "Companies (all)", itr: "ITR-6", due: "21 November 2026 ✦ Extended", note: "CBDT Circular 07/2026 dated 28 Sep 2026" },
+  { taxpayer: "Partners of firms requiring audit / working partners", itr: "ITR-2, 3", due: "21 November 2026 ✦ Extended", note: "Extended along with firm — Circular 07/2026" },
   { taxpayer: "Transfer Pricing cases (Sec 92E)", itr: "All applicable", due: "30 November 2026", note: "TP report due 31 Oct 2026" },
   { taxpayer: "Revised Return (all)", itr: "Any ITR", due: "31 December 2026", note: "Before end of relevant AY" },
   { taxpayer: "Belated Return (all)", itr: "Any ITR", due: "31 December 2026", note: "With late filing fee u/s 234F" },
@@ -323,7 +323,7 @@ export default function IncomeTaxDueDatesPage() {
             {[
               {
                 q: "What is the last date to file ITR for FY 2025-26?",
-                a: "For individuals and HUF not requiring audit: 31 July 2026. For businesses/professions requiring audit and companies: 31 October 2026. For transfer pricing cases: 30 November 2026. The belated return deadline is 31 December 2026.",
+                a: "For individuals and HUF not requiring audit: 31 July 2026. For businesses/professions requiring audit and companies (ITR-6): 21 November 2026 (extended via CBDT Circular 07/2026). For transfer pricing cases: 30 November 2026. The belated return deadline is 31 December 2026.",
               },
               {
                 q: "What happens if I miss advance tax payment?",
