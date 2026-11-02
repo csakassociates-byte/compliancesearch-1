@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
 import { findFormSheet, loadFieldMap, applyCellValues } from "@/lib/annual-filing/aoc4kit";
+import { generateMcaV3GuideText } from "@/lib/annual-filing/mca-v3-guide";
 import type { AnnualFilingData } from "@/lib/annual-filing/types";
 
 export const maxDuration = 300;
@@ -101,7 +102,6 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const financialPdf = formData.get("financialPdf") as File | null;
   const aoc4Excel    = formData.get("mcaZip") as File | null;
-  const guideFile    = formData.get("guide") as File | null;
   const saveId       = formData.get("saveId") as string | null;
 
   if (!financialPdf || !aoc4Excel) {
@@ -126,33 +126,8 @@ export async function POST(req: NextRequest) {
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
 
-  // ── Step 1: Read guide text ───────────────────────────────────────────────────
-  let guideText = "";
-  if (guideFile) {
-    try {
-      const guideBuf = await guideFile.arrayBuffer();
-      if (guideFile.name.endsWith(".html") || guideFile.name.endsWith(".htm")) {
-        guideText = Buffer.from(guideBuf).toString("utf-8")
-          .replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").slice(0, 10000);
-      } else {
-        const base64Guide = Buffer.from(guideBuf).toString("base64");
-        const guideMsg = await anthropic.messages.create({
-          model: "claude-sonnet-5-5",
-          max_tokens: 4096,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Guide } } as unknown as { type: "text"; text: string },
-              { type: "text", text: "Extract all field names, descriptions, and filling instructions from this MCA AOC-4 filling guide. Return as plain text." },
-            ],
-          }],
-        });
-        guideText = ((guideMsg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "").slice(0, 10000);
-      }
-    } catch (e) {
-      console.error("[fill-aoc4] Guide read failed:", e);
-    }
-  }
+  // ── Step 1: Generate guide text from saved filing data (no upload needed) ───
+  const guideText = generateMcaV3GuideText(filingData);
 
   // ── Step 2: Extract financials from PDF ──────────────────────────────────────
   let financialSummary = "";

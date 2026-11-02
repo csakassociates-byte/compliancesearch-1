@@ -689,3 +689,224 @@ function flashBtn(btn) {
 </body>
 </html>`;
 }
+
+/**
+ * Server-side plain-text version of the MCA V3 Guide.
+ * Used by fill-aoc4, fill-eauditor, fill-edirector APIs to inject guide
+ * content into Claude's prompt without requiring a PDF upload from the user.
+ */
+export function generateMcaV3GuideText(data: AnnualFilingData): string {
+  const fy      = data.financialYear;
+  const fyEnd   = fyEndYear(fy);
+  const endDate = `31st March, ${fyEnd}`;
+  const isOPC   = data.companyType === "opc";
+  const isSml   = data.companyType === "private_small";
+  const isSec8  = data.companyType === "section8";
+
+  const activeDirCount = data.directors.filter(d => d.isActive).length;
+  const boardMeetings  = data.boardMeetings || [];
+  const bmCount        = boardMeetings.length;
+  const lastBM         = boardMeetings[bmCount - 1];
+  const bmDate         = lastBM ? fmtDateDMY(lastBM.date) : "";
+  const committeeMeetingCount = data.committeeMeetings?.length ?? 0;
+
+  const pat  = num(data.financials.profitAfterTax);
+  const rev  = num(data.financials.revenueFromOperations);
+  const paidupCap = num(data.financials.paidUpCapital);
+  const reserves  = num(data.financials.reservesAndSurplus);
+  const netWorth  = num(data.financials.netWorth) || (paidupCap + reserves);
+
+  const fxEarn = num(data.foreignExchangeEarnings);
+  const fxOut  = num(data.foreignExchangeOutgo);
+  const fxText = (fxEarn === 0 && fxOut === 0)
+    ? "Foreign exchange earnings: NIL. Foreign exchange outgo: NIL."
+    : `Foreign Exchange Earnings: ₹${fmtIndian(fxEarn)}\nForeign Exchange Outgo: ₹${fmtIndian(fxOut)}`;
+
+  const empM = data.employeesMale   ?? 0;
+  const empF = data.employeesFemale ?? 0;
+  const empO = data.employeesOther  ?? 0;
+
+  const fraudText = data.fraudReported
+    ? (data.fraudDetails || "Fraud has been reported.")
+    : "No cases regarding frauds have been filed during the year under the Act.";
+
+  const indepText = (isOPC || isSml || isSec8)
+    ? "The provision regarding appointment of Independent Director is not applicable to this Company."
+    : "All the Independent Directors have given their declarations that they meet the criteria of independence as laid down under Section 149(6) of the Companies Act, 2013.";
+
+  const materialChg = data.materialChangesAfterFY
+    ? (data.materialChangesDetails || "Material changes have occurred after FY end. [Add details]")
+    : "There have been no material changes and commitments affecting the financial position of the Company between the end of the financial year and the date of this Report.";
+
+  const evalText = (isOPC || isSml)
+    ? "Formal annual evaluation of Board performance is not mandatorily applicable to the Company as per Section 134(3)(p)."
+    : "The Board of Directors has carried out an annual evaluation of its own performance, the performance of the committees and individual directors.";
+
+  const ordersText = data.significantOrders
+    ? (data.significantOrdersDetails || "Significant/material orders have been passed. [Add details]")
+    : "There are no significant or material orders passed by any Regulators or Courts or Tribunals which would impact the going concern status of the Company.";
+
+  const depositsText = data.hasDeposits
+    ? "The Company has accepted deposits. [Add details per Sections 73–76]"
+    : "During the year under review, the Company has not accepted any deposits from the public within the meaning of Sections 73 to 76 of the Companies Act, 2013 and rules made thereunder.";
+
+  const DRS = `Directors state that:\ni. In the preparation of Annual Accounts, applicable accounting standards have been followed;\nii. Accounting policies are applied consistently and estimates are reasonable and prudent;\niii. Proper and sufficient care has been taken for maintenance of adequate accounting records;\niv. Annual accounts prepared on a going concern basis;\nv. Proper systems to ensure compliance with provisions of all applicable laws are in place.`;
+
+  const lines: string[] = [
+    `=== MCA V3 FILLING GUIDE — ${data.companyName} — FY ${fy} ===`,
+    `Company: ${data.companyName}`,
+    `CIN: ${data.cin}`,
+    `Financial Year: ${fy} (ending ${endDate})`,
+    `Company Type: ${data.companyType || "private"}`,
+    ``,
+    `=== SECTION A: EDIRECTOR / BOARD'S REPORT / DIRECTOR'S REPORT ===`,
+    ``,
+    `FIELD: noOfBoardMeetingHeld (M17) = ${bmCount}`,
+    `FIELD: noOfCommitteeMeetingHeld (M27) = ${committeeMeetingCount}`,
+    ``,
+    `FIELD: directorResponsibilityStatement (B36):`,
+    DRS,
+    ``,
+    `FIELD: fraudReportedByAuditors (B39):`,
+    fraudText,
+    ``,
+    `FIELD: disclosureOfStatementOnDecalaration / Independent Directors (B42):`,
+    indepText,
+    ``,
+    `FIELD: disclosureForCompaniesOnDirectorAppointmentAndReumeration (B45):`,
+    buildDirectorChanges(data),
+    ``,
+    `FIELD: briefDetails / Related Party (B74):`,
+    "All related party transactions during the financial year were on arm's length basis and in the ordinary course of business. Details are given in the notes to Financial Statements.",
+    ``,
+    `FIELD: noOfTransactionForEnquiringDetails (M77) = 0`,
+    ``,
+    `FIELD: descriptionOfStateOfCompanyAffairs (B83):`,
+    buildStateOfAffairs(data),
+    ``,
+    `FIELD: reserveDetails.briefDescription (B87):`,
+    `The Company has transferred Rs. NIL to its Reserves in the Balance Sheet during the year under review.`,
+    `FIELD: reserveDetails.amount (M89) = 0`,
+    ``,
+    `FIELD: dividendDetails.briefDescription (B92):`,
+    buildDividend(data),
+    `FIELD: dividendDetails.amount (M94) = 0`,
+    ``,
+    `FIELD: detailsOfMaterialChangesAndCommitment (B98):`,
+    materialChg,
+    ``,
+    `FIELD: disclosureOfStementOnDevelopmentAndImplemetationOfRiskMgmt (B100):`,
+    data.riskManagementDetails || "The Management has framed a risk management policy. There is no material risk which in the opinion of the Board might threaten the existence of the Company.",
+    ``,
+    `FIELD: csrDetails.turnover (M107) = ${rev}`,
+    `FIELD: csrDetails.netWorth (M109) = ${netWorth}`,
+    ``,
+    `FIELD: detRegardTechAbsorptionAsperRule83B (B156):`,
+    data.technologyAbsorptionDetails || "The Company has not imported any technology during the period under review.",
+    ``,
+    `FIELD: detRegardEngyConserRule83A (B158):`,
+    data.energyConservationDetails || "The Company has taken adequate measures to ensure optimum utilization of all equipment and resources so as to conserve energy.",
+    ``,
+    `FIELD: detForeignExngeEarnOutgoAsPerRul83C (B160):`,
+    fxText,
+    ``,
+    `FIELD: rule8Disclosure.reportOnHighlightOfPerformance (B163):`,
+    `Revenue from Operations: ₹${fmtIndian(rev)}. ${pat >= 0 ? "Net Profit" : "Net Loss"} after Tax: ₹${fmtIndian(Math.abs(pat))}.`,
+    ``,
+    `FIELD: rule8Disclosure.disclosureOfCompanies (B168): Not Applicable`,
+    ``,
+    `FIELD: stmtRegBoardOpinion (B171):`,
+    evalText,
+    ``,
+    `FIELD: detInResOfAdequacy (B173):`,
+    "The Board has ensured that all mandatory board committees have been constituted as required by the Companies Act, 2013.",
+    ``,
+    `FIELD: disWhetherMaintananceCRReq (B176):`,
+    "The maintenance of cost records is not mandated under Companies (Cost Records and Audit) Rules, 2014, for the business activities carried out by the Company.",
+    ``,
+    `FIELD: detProceedingPending (B179):`,
+    ordersText,
+    ``,
+    `FIELD: detDiffBetweenValuationAmt (B182): Not Applicable`,
+    ``,
+    `FIELD: rule8Disclosure.disclsoreOfFinancialSummaryOrHighlight (B184):`,
+    `Financial Year ${fy}: Revenue ₹${fmtIndian(rev)}, PAT ₹${fmtIndian(pat)}.`,
+    ``,
+    `FIELD: rule8Disclosure.disclosureOfChangeInNatureOfBusiness (B186):`,
+    `There has been no change in the nature of the business of the Company during the financial year ended ${endDate}.`,
+    ``,
+    `FIELD: rule8Disclosure.detailsOfDirectorsOrKeyManagerialAppointedOrresignedDuringYear (B188):`,
+    buildDirectorChanges(data),
+    ``,
+    `FIELD: All deposit fields (M191–M207) = 0 (${depositsText})`,
+    ``,
+    `FIELD: rule8Disclosure.detailsOfSinificantAndMaterialOrderPassedByRegulator (B211):`,
+    ordersText,
+    ``,
+    `FIELD: stmtIndicatingAnnualEval (B214):`,
+    evalText,
+    ``,
+    `FIELD: stmtUnderSexualHarassAct (B219):`,
+    "The Company has complied with the provisions relating to the constitution of Internal Complaints Committee under the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013.",
+    `FIELD: numOfSHComplaintsRcvd (M221) = 0`,
+    `FIELD: numOfSHComplaintsDispOff (M223) = 0`,
+    `FIELD: numOfSHComplaintsBeyond90Days (M225) = 0`,
+    ``,
+    `FIELD: stmtCompiledMaternityBenefit (B228):`,
+    "The Board of Directors confirms that the Company has complied with the provisions of the Maternity Benefit Act, 1961.",
+    `FIELD: numOfFemaleEmployee (M231) = ${empF}`,
+    `FIELD: numOfMaleEmployee (M233) = ${empM}`,
+    `FIELD: numOfTransEmployee (M235) = ${empO}`,
+    ``,
+    `FIELD: noOfMatterToBeIncludedInDirectorReport (M237) = 0`,
+    `FIELD: headingForTheMatter (B240) = Nil`,
+    `FIELD: referenceToSectionRuleItPertains (B242) = Nil`,
+    `FIELD: briefDescriptionOfMatter (B244) = Nil`,
+    ``,
+    `FIELD: declaration.resolutionNo (I249) = 4`,
+    `FIELD: declaration.decalartionDate (C250) = ${bmDate}`,
+    `FIELD: declaration.pan (J266) = ${data.directors[0]?.pan || data.directors[0]?.din || ""}`,
+    ``,
+    `=== SECTION B: EAUDITOR / AUDITOR'S REPORT ===`,
+    ``,
+    `FIELD: opinionOfTheAuditor1 (B13):`,
+    buildAuditOpinion(data),
+    ``,
+    `FIELD: basisOfOpinion1 (B16):`,
+    buildBasisOfOpinion(),
+    ``,
+    `FIELD: emphasisOfMatter1 (B19):`,
+    buildEmphasis(),
+    ``,
+    `FIELD: keyAuditMatter1 (H21):`,
+    buildKeyAuditMatters(),
+    ``,
+    `FIELD: otherInformation1 (H23):`,
+    buildOtherInfo(),
+    ``,
+    `FIELD: noOfQualification (J27) = 0`,
+    ``,
+    `FIELD: mamagementResponsibility1 (B36):`,
+    buildMgmtResponsibility(data),
+    ``,
+    `FIELD: auditorResponsibility1 (B41):`,
+    buildAuditorResponsibility(),
+    ``,
+    `FIELD: stateAnyMatter1 (B49): Nothing to report`,
+    ``,
+    `FIELD: reportOnLegalAndRegulatory1 (B52):`,
+    buildSection143(data),
+    ``,
+    `FIELD: reportingOnInternetFinancialControls1 (B83):`,
+    buildIFC(data),
+    ``,
+    `FIELD: otherMattersAsPerRule11I (B46):`,
+    buildRule11(data),
+    ``,
+    `FIELD: declaration.name (J94) = ${data.auditor?.name || ""}`,
+    `FIELD: declaration.decalartionId (J99) = ${data.auditor?.membershipNo || data.auditor?.registrationNo || ""}`,
+  ];
+
+  return lines.join("\n");
+}
+

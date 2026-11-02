@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
 import { applyCellValues } from "@/lib/annual-filing/aoc4kit";
+import { generateMcaV3GuideText } from "@/lib/annual-filing/mca-v3-guide";
 import type { AnnualFilingData } from "@/lib/annual-filing/types";
 
 export const maxDuration = 300;
@@ -24,7 +25,6 @@ export async function POST(req: NextRequest) {
 
   const formData = await req.formData();
   const edirectorFile = formData.get("edirectorFile") as File | null;
-  const guideFile     = formData.get("guide") as File | null;
   const saveId        = formData.get("saveId") as string | null;
 
   if (!edirectorFile) return NextResponse.json({ error: "EDIRECTOR Excel file is required" }, { status: 400 });
@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
     if (rows[0]) try { filingData = JSON.parse(rows[0].formDataJson) as AnnualFilingData; } catch { /* ignore */ }
   }
   if (!filingData) return NextResponse.json({ error: "Filing data not found. Please save your filing first." }, { status: 404 });
+
+  // Generate guide text from saved filing data — no PDF upload needed
+  const guideText = generateMcaV3GuideText(filingData);
 
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
@@ -81,7 +84,8 @@ Financial Highlights (FY ${fy}):
 - Reserves & Surplus: ₹${reserves.toLocaleString("en-IN")}
 - Net Worth: ₹${netWorth.toLocaleString("en-IN")}
 
-${guideFile ? "The MCA V3 Filling Guide PDF is attached above. Read the EDIRECTOR / Director's Report / Board's Report section carefully and follow its instructions for each field.\n" : ""}
+MCA V3 FILLING GUIDE (EDIRECTOR / Board's Report section — copy exact texts from here for each field):
+${guideText}
 
 CELLS TO FILL:
 M17  | noOfBoardMeetingHeld

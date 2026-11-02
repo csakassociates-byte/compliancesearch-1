@@ -577,7 +577,6 @@ function AnnualFilingTool() {
   // AOC-4 AI filler
   const [aocFinPdf, setAocFinPdf]         = useState<File | null>(null);
   const [aocMcaZip, setAocMcaZip]         = useState<File | null>(null);
-  const [aocGuide, setAocGuide]           = useState<File | null>(null);
   const [eauditorFile, setEauditorFile]   = useState<File | null>(null);
   const [edirectorFile, setEdirectorFile] = useState<File | null>(null);
   const [aocFilling, setAocFilling]       = useState(false);
@@ -5256,7 +5255,7 @@ function AnnualFilingTool() {
                   <span className="text-lg">🤖</span>
                   <div>
                     <p className="text-white font-bold text-sm">Fill AOC-4 Excel with Compliance AI</p>
-                    <p className="text-violet-200 text-[11px]">Upload your financial PDF + MCA guide + ZIP → AI fills AOC-4 automatically</p>
+                    <p className="text-violet-200 text-[11px]">Upload your financial PDF + Excel files → AI fills automatically using saved company data</p>
                   </div>
                 </div>
                 <div className="p-4 space-y-3">
@@ -5368,28 +5367,10 @@ function AnnualFilingTool() {
                         </div>
                       </div>
 
-                      {/* Upload 2: MCA Guide */}
+                      {/* Upload 2: AOC-4 Excel */}
                       <div>
                         <label className="block text-xs font-semibold text-violet-800 mb-1">
-                          📋 Step 2 — Upload MCA V3 Filling Guide
-                          <span className="font-normal text-violet-600 ml-1">(click "Generate MCA V3 Filling Guide" above → save as PDF → upload here)</span>
-                        </label>
-                        <div
-                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocGuide ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
-                          onClick={() => document.getElementById("aoc-guide-pdf")?.click()}
-                        >
-                          <input id="aoc-guide-pdf" type="file" accept=".pdf,.html,.htm" className="hidden"
-                            onChange={e => { setAocGuide(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
-                          {aocGuide
-                            ? <span className="text-xs text-violet-700 font-semibold">✅ {aocGuide.name}</span>
-                            : <span className="text-xs text-slate-500">Click to upload MCA V3 Guide (PDF or HTML)</span>}
-                        </div>
-                      </div>
-
-                      {/* Upload 3: AOC-4 Excel */}
-                      <div>
-                        <label className="block text-xs font-semibold text-violet-800 mb-1">
-                          📊 Step 3 — Upload AOC-4 Excel File
+                          📊 Step 2 — Upload AOC-4 Excel File
                           <span className="font-normal text-violet-600 ml-1">(extract from MCA ZIP → upload only AOC-4 .xlsx)</span>
                         </label>
                         <div
@@ -5407,7 +5388,7 @@ function AnnualFilingTool() {
                       {/* Upload 4: EAUDITOR Excel (optional) */}
                       <div>
                         <label className="block text-xs font-semibold text-teal-800 mb-1">
-                          🔍 Step 4 — Upload EAUDITOR Standalone Excel
+                          🔍 Step 3 — Upload EAUDITOR Standalone Excel
                           <span className="font-normal text-teal-600 ml-1">(optional — Auditor&apos;s Report)</span>
                         </label>
                         <div
@@ -5425,7 +5406,7 @@ function AnnualFilingTool() {
                       {/* Upload 5: EDIRECTOR Excel (optional) */}
                       <div>
                         <label className="block text-xs font-semibold text-indigo-800 mb-1">
-                          📝 Step 5 — Upload EDIRECTOR Excel
+                          📝 Step 4 — Upload EDIRECTOR Excel
                           <span className="font-normal text-indigo-600 ml-1">(optional — Director&apos;s Report)</span>
                         </label>
                         <div
@@ -5462,7 +5443,6 @@ function AnnualFilingTool() {
                             const aocFd = new FormData();
                             aocFd.append("financialPdf", aocFinPdf);
                             aocFd.append("mcaZip", aocMcaZip);
-                            if (aocGuide) aocFd.append("guide", aocGuide);
                             aocFd.append("saveId", saveId);
 
                             const promises: Promise<Response>[] = [
@@ -5473,7 +5453,6 @@ function AnnualFilingTool() {
                               const audFd = new FormData();
                               audFd.append("eauditorFile", eauditorFile);
                               audFd.append("saveId", saveId);
-                              if (aocGuide) audFd.append("guide", aocGuide);
                               promises.push(fetch("/api/annual-filing/fill-eauditor", { method: "POST", body: audFd }));
                             }
 
@@ -5481,7 +5460,6 @@ function AnnualFilingTool() {
                               const dirFd = new FormData();
                               dirFd.append("edirectorFile", edirectorFile);
                               dirFd.append("saveId", saveId);
-                              if (aocGuide) dirFd.append("guide", aocGuide);
                               promises.push(fetch("/api/annual-filing/fill-edirector", { method: "POST", body: dirFd }));
                             }
 
