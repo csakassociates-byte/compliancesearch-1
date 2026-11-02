@@ -88,18 +88,17 @@ export async function POST(req: NextRequest) {
         return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; })()
     : "30/09/2026";
 
-  // Board meeting dates table (C=date, D=total dirs, E=attended, F=% attendance)
+  // Board meeting dates table: C=date, F=total dirs, G=attended (H=% is an Excel formula)
   const bmDateCells: Record<string, string | number> = {};
   boardMeetings.slice(0, 12).forEach((bm, i) => {
     const d = new Date(bm.date);
     const formatted = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
     const totalDirs = directors.length || 1;
     const attended = (bm.directorsPresent && bm.directorsPresent.length > 0) ? bm.directorsPresent.length : totalDirs;
-    const pct = Math.round((attended / totalDirs) * 10000) / 100;
     bmDateCells[`C${21 + i}`] = formatted;
-    bmDateCells[`D${21 + i}`] = totalDirs;
-    bmDateCells[`E${21 + i}`] = attended;
-    bmDateCells[`F${21 + i}`] = pct;
+    bmDateCells[`F${21 + i}`] = totalDirs;  // Total Number of directors as on date
+    bmDateCells[`G${21 + i}`] = attended;   // Number of directors attended
+    // H col = % attendance formula in Excel — do not override
   });
 
   const isOpc = (filingData.companyType || "").toLowerCase().includes("opc") || (filingData.companyType || "").toLowerCase().includes("one person");
