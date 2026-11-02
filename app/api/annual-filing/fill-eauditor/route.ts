@@ -63,13 +63,13 @@ export async function POST(req: NextRequest) {
     "B16": "We conducted our audit in accordance with the Standards on Auditing (SAs) specified under Section 143(10) of the Companies Act, 2013. Our responsibilities under those Standards are further described in the Auditor's Responsibilities for the Audit of the Financial Statements section of our report. We are independent of the Company in accordance with the Code of Ethics issued by the Institute of Chartered Accountants of India together with the ethical requirements that are relevant to our audit of the financial statements under the provisions of the Companies Act, 2013 and the Rules thereunder, and we have fulfilled our other ethical responsibilities in accordance with these requirements and the Code of Ethics. We believe that the audit evidence we have obtained is sufficient and appropriate to provide a basis for our opinion.",
 
     // B19 — Emphasis of Matter
-    "B19": "Not applicable.",
+    "B19": "There are no matters to be emphasized in the financial statements. Accordingly, no Emphasis of Matter paragraph has been reported.",
 
     // H21 — Key Audit Matter
-    "H21": "Not applicable. Key Audit Matters are not required to be reported for companies other than listed entities.",
+    "H21": "Key Audit Matters are not required to be communicated for companies other than listed entities. Accordingly, we have nothing to report under this section.",
 
     // H23 — Other Information
-    "H23": "The Company's management and Board of Directors are responsible for the other information. The other information comprises the information included in the Company's Annual Report but does not include the financial statements and our auditor's report thereon. Our opinion on the financial statements does not cover the other information and we do not express any form of assurance conclusion thereon.",
+    "H23": "The Company's management and Board of Directors are responsible for the other information. The other information comprises the information included in the Company's Annual Report but does not include the financial statements and our auditor's report thereon. Our opinion on the financial statements does not cover the other information and we do not express any form of assurance conclusion thereon. In connection with our audit of the financial statements, our responsibility is to read the other information and, in doing so, consider whether the other information is materially inconsistent with the financial statements or our knowledge obtained in the audit or otherwise appears to be materially misstated. If, based on the work we have performed, we conclude that there is a material misstatement of this other information, we are required to report that fact. We have nothing to report in this regard.",
 
     // J27 — Number of qualifications
     "J27": 0,
@@ -81,10 +81,10 @@ export async function POST(req: NextRequest) {
     "B41": "Our objectives are to obtain reasonable assurance about whether the financial statements as a whole are free from material misstatement, whether due to error, and to issue an auditor's report that includes our opinion. Reasonable assurance is a high level of assurance but is not a guarantee that an audit conducted in accordance with SAs will always detect a material misstatement when it exists. Misstatements can arise from error and are considered material if, individually or in the aggregate, they could reasonably be expected to influence the economic decisions of users taken on the basis of these financial statements.",
 
     // B49 — State any matter
-    "B49": "Nil",
+    "B49": "There are no other matters to be stated in the Auditor's Report.",
 
     // B46 — Other matters Rule 11(i)
-    "B46": "As required by Section 197(16) of the Act, based on our examination of the records of the Company, we report that the Company has not paid or provided for any managerial remuneration during the year. Accordingly, reporting under Section 197(16) is not applicable to the Company.",
+    "B46": "As required by Rule 11 of the Companies (Audit and Auditors) Rules, 2014, as amended, in our opinion and to the best of our information and according to the explanations given to us: (i) The Company does not have any pending litigations which would impact its financial position. (ii) The Company did not have any long-term contracts including derivative contracts for which there were any material foreseeable losses. (iii) There were no amounts which were required to be transferred to the Investor Education and Protection Fund by the Company.",
 
     // B52 — Legal & Regulatory report (Section 143)
     "B52": "As required by Section 143(3) of the Companies Act, 2013, we report that: (a) We have sought and obtained all the information and explanations which to the best of our knowledge and belief were necessary for the purposes of our audit. (b) In our opinion, proper books of account as required by law have been kept by the Company so far as it appears from our examination of those books. (c) The Balance Sheet, the Statement of Profit and Loss, and Cash Flow Statement dealt with by this Report are in agreement with the books of account. (d) In our opinion, the aforesaid financial statements comply with the Accounting Standards specified under Section 133 of the Act. (e) On the basis of the written representations received from the directors as on 31 March " + fyEnd + " taken on record by the Board of Directors, none of the directors is disqualified as on 31 March " + fyEnd + " from being appointed as a director in terms of Section 164(2) of the Act. (f) With respect to the adequacy of the internal financial controls over financial reporting of the Company and the operating effectiveness of such controls, refer to our separate Report in Annexure. " + caroText,
