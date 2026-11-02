@@ -130,6 +130,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Filing data not found. Please save your filing first." }, { status: 404 });
   }
 
+  // ── Company mismatch guard ────────────────────────────────────────────────
+  // MCA V3 Excel filename contains CIN (e.g. AOC4_L21091KA2020PTC135689.xlsx)
+  {
+    const cinRe = /[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{2,3}\d{6}/i;
+    const excelCin = (aoc4Excel.name.match(cinRe) || [])[0]?.toUpperCase();
+    const guideCin = (filingData.cin || "").replace(/\s/g, "").toUpperCase();
+    if (excelCin && guideCin && excelCin !== guideCin) {
+      return NextResponse.json({
+        error: "Company mismatch: AOC-4 Excel belongs to " + excelCin + " but the guide is for " + guideCin + ". Please upload the correct Excel file."
+      }, { status: 400 });
+    }
+  }
+
   const fin = filingData.financials || {};
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";

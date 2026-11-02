@@ -42,6 +42,18 @@ export async function POST(req: NextRequest) {
   }
   if (!filingData) return NextResponse.json({ error: "Filing data not found. Upload Guide JSON or save your filing first." }, { status: 404 });
 
+  // ── Company mismatch guard ────────────────────────────────────────────────
+  {
+    const cinRe = /[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{2,3}\d{6}/i;
+    const excelCin = (eauditorFile.name.match(cinRe) || [])[0]?.toUpperCase();
+    const guideCin = (filingData.cin || "").replace(/\s/g, "").toUpperCase();
+    if (excelCin && guideCin && excelCin !== guideCin) {
+      return NextResponse.json({
+        error: "Company mismatch: EAUDITOR Excel belongs to " + excelCin + " but the guide is for " + guideCin + ". Please upload the correct Excel file."
+      }, { status: 400 });
+    }
+  }
+
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
   const fy = filingData.financialYear || "2025-2026";
