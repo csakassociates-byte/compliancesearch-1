@@ -11,6 +11,62 @@ export const runtime = "nodejs";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Fields that must ALWAYS stay blank — never write anything (not even 0)
+const ALWAYS_BLANK_PATTERNS = [
+  /reasonForChange/i,
+  /reason.*change/i,
+  /Premium/,           // "Total premium" column always blank per MCA rule
+  /premium/i,
+];
+
+// Fields that must be zeroed out when not provided (from aoc4kit ZERO_FIELDS)
+const BS = "balanceSheet."; const LIA = BS + "equityAndLiabilities."; const AS_ = BS + "assets.";
+const DB = "detailedBS."; const PL = "statementOfProfitAndLoss."; const FP = "financialParameters."; const FPM = "financialPM.";
+const ZERO_FIELD_PREFIXES = [
+  LIA + "shareHoldersFund.shareCapitalIn",
+  LIA + "shareHoldersFund.reservsAndSurplusIn",
+  LIA + "shareHoldersFund.moneyRecievedAgainestShareWarrantsIn",
+  LIA + "shareApplicationMoneyIn",
+  LIA + "nonCurrentLiabilities.longTermBorrowingsIn",
+  LIA + "nonCurrentLiabilities.deferredTaxLiabilitiesIn",
+  LIA + "nonCurrentLiabilities.otherLongTermLiabilitiesIn",
+  LIA + "nonCurrentLiabilities.longTermProvisionsIn",
+  LIA + "currentLiabilities.shortTermBorrowingsIn",
+  LIA + "currentLiabilities.totaloutstandingduesMicroSmallEntCurrent",
+  LIA + "currentLiabilities.totaloutduesOtherthanMicroSmallEntCurrent",
+  LIA + "currentLiabilities.otherCurrentLiabilitiesIn",
+  LIA + "currentLiabilities.shortTermProvisionsIn",
+  AS_ + "nonCurrentAssets.propertyAndEquipmentsIn",
+  AS_ + "nonCurrentAssets.intangibleAssetsIn",
+  AS_ + "nonCurrentAssets.capitalWorkInProgressIn",
+  AS_ + "nonCurrentAssets.intangibleAssetsUnderDevelopmentIn",
+  AS_ + "nonCurrentAssets.nonCurrentInvestmentsIn",
+  AS_ + "nonCurrentAssets.deferredTaxAssetsIn",
+  AS_ + "nonCurrentAssets.longTermLoansIn",
+  AS_ + "nonCurrentAssets.otherNonCurrentAssetsIn",
+  AS_ + "currentAssets.currentInvestmentIn",
+  AS_ + "currentAssets.inventoriesIn",
+  AS_ + "currentAssets.tradeReceivablesIn",
+  AS_ + "currentAssets.cashAndCashEquivalentsIn",
+  AS_ + "currentAssets.shortTermLoansAndAdvancesIn",
+  AS_ + "currentAssets.otherCurrentAssetsIn",
+  DB + "detailOfLongTermBorrowings.",
+  DB + "detailOfShortTermBorrowings.",
+  DB + "detailsOfLongTermLoansGood.",
+  DB + "detailsOfTradeReceivables.",
+  PL + "current",
+  "raisedShareCapital.equityShare.atTheBeginningOfTheYear",
+];
+
+function shouldAlwaysBlank(fieldName: string): boolean {
+  return ALWAYS_BLANK_PATTERNS.some(p => p.test(fieldName));
+}
+
+function shouldPreZero(fieldName: string): boolean {
+  if (shouldAlwaysBlank(fieldName)) return false;
+  return ZERO_FIELD_PREFIXES.some(prefix => fieldName.startsWith(prefix));
+}
+
 function extractJson(text: string): Record<string, unknown> {
   const stripped = text.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "");
   const m = stripped.match(/\{[\s\S]*\}/);
@@ -50,7 +106,7 @@ export async function POST(req: NextRequest) {
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
 
-  // ── Step 1: Read guide text (if uploaded) ────────────────────────────────────
+  // ── Step 1: Read guide text ───────────────────────────────────────────────────
   let guideText = "";
   if (guideFile) {
     try {
@@ -67,7 +123,7 @@ export async function POST(req: NextRequest) {
             role: "user",
             content: [
               { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Guide } } as unknown as { type: "text"; text: string },
-              { type: "text", text: "Extract all field names, descriptions, and filling instructions from this MCA AOC-4 filling guide. List each field with what value/format is expected. Return as plain text." },
+              { type: "text", text: "Extract all field names, descriptions, and filling instructions from this MCA AOC-4 filling guide. Return as plain text." },
             ],
           }],
         });
@@ -92,115 +148,49 @@ export async function POST(req: NextRequest) {
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } } as unknown as { type: "text"; text: string },
           {
             type: "text",
-            text: `You are reading audited financial statements of an Indian company for MCA AOC-4 filing.
+            text: `Extract ALL financial figures from this Indian company's audited financial statements for MCA AOC-4 filing.
 Company: ${companyName}
-
-Extract ALL financial figures. All amounts in actual Indian Rupees (NOT lakhs/crores).
-Return ONLY raw JSON (no markdown):
-{
-  "share_capital": null,
-  "reserves_surplus": null,
-  "authorized_capital": null,
-  "lt_borrowings": null,
-  "dt_liabilities": null,
-  "other_lt_liabilities": null,
-  "lt_provisions": null,
-  "st_borrowings": null,
-  "trade_payables_msme": null,
-  "trade_payables_other": null,
-  "other_current_liabilities": null,
-  "st_provisions": null,
-  "total_equity_liabilities": null,
-  "ppe_net": null,
-  "ppe_gross": null,
-  "intangible_assets": null,
-  "cwip": null,
-  "intangible_under_dev": null,
-  "nc_investments": null,
-  "dt_assets": null,
-  "lt_loans_advances": null,
-  "other_nc_assets": null,
-  "current_investments": null,
-  "inventories": null,
-  "trade_receivables": null,
-  "cash_equivalents": null,
-  "st_loans_advances": null,
-  "other_current_assets": null,
-  "total_assets": null,
-  "revenue_from_operations": null,
-  "other_income": null,
-  "total_revenue": null,
-  "cost_materials": null,
-  "purchases_stock": null,
-  "changes_inventories": null,
-  "employee_expenses": null,
-  "managerial_remuneration": null,
-  "auditor_fees": null,
-  "finance_costs": null,
-  "depreciation": null,
-  "other_expenses": null,
-  "exceptional_items": null,
-  "profit_before_tax": null,
-  "current_tax": null,
-  "deferred_tax": null,
-  "profit_after_tax": null,
-  "net_worth": null,
-  "total_shares": null,
-  "nominal_value_per_share": null,
-  "eps_basic": null,
-  "eps_diluted": null,
-  "rent_paid": null,
-  "insurance": null,
-  "power_fuel": null,
-  "trade_rec_unsecured_over6m": null,
-  "lt_borrowings_term_bank": null,
-  "st_borrowings_bank": null,
-  "rpt_gross_value": null,
-  "prev_revenue_from_operations": null,
-  "prev_profit_after_tax": null,
-  "prev_total_assets": null,
-  "prev_net_worth": null
-}`,
+All amounts in actual Indian Rupees (NOT lakhs/crores).
+Return ONLY raw JSON:
+{"share_capital":null,"reserves_surplus":null,"authorized_capital":null,"lt_borrowings":null,"dt_liabilities":null,"other_lt_liabilities":null,"lt_provisions":null,"st_borrowings":null,"trade_payables_msme":null,"trade_payables_other":null,"other_current_liabilities":null,"st_provisions":null,"total_equity_liabilities":null,"ppe_net":null,"ppe_gross":null,"intangible_assets":null,"cwip":null,"intangible_under_dev":null,"nc_investments":null,"dt_assets":null,"lt_loans_advances":null,"other_nc_assets":null,"current_investments":null,"inventories":null,"trade_receivables":null,"cash_equivalents":null,"st_loans_advances":null,"other_current_assets":null,"total_assets":null,"revenue_from_operations":null,"other_income":null,"total_revenue":null,"cost_materials":null,"purchases_stock":null,"changes_inventories":null,"employee_expenses":null,"managerial_remuneration":null,"auditor_fees":null,"finance_costs":null,"depreciation":null,"other_expenses":null,"exceptional_items":null,"profit_before_tax":null,"current_tax":null,"deferred_tax":null,"profit_after_tax":null,"net_worth":null,"total_shares":null,"nominal_value_per_share":null,"eps_basic":null,"eps_diluted":null,"rent_paid":null,"insurance":null,"power_fuel":null,"trade_rec_unsecured_over6m":null,"lt_borrowings_term_bank":null,"st_borrowings_bank":null,"rpt_gross_value":null,"prev_revenue_from_operations":null,"prev_profit_after_tax":null,"prev_total_assets":null,"prev_net_worth":null}`,
           },
         ],
       }],
     });
     const text = (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";
     const parsed = extractJson(text) as Record<string, number | null>;
-    // Build a human-readable summary for the next Claude call
-    const lines = Object.entries(parsed)
-      .filter(([, v]) => v !== null)
-      .map(([k, v]) => `  ${k}: ${v}`);
+    const lines = Object.entries(parsed).filter(([, v]) => v !== null).map(([k, v]) => `  ${k}: ${v}`);
     financialSummary = lines.join("\n");
   } catch (e) {
     console.error("[fill-aoc4] PDF extraction failed:", e);
   }
 
-  // ── Step 3: Build field→cellRef table from AOC-4 FORM sheet ──────────────────
+  // ── Step 3: Build field→cellRef table from FORM sheet ────────────────────────
   const aoc4Buf = await aoc4Excel.arrayBuffer();
-  // fieldTable: [{fieldName: "balanceSheet...shareCapital", cellRef: "G208"}, ...]
-  let fieldTable: Array<{ fieldName: string; cellRef: string }> = [];
+  let allFields: Record<string, string> = {};  // fieldName → cellRef
   try {
     const JSZip = (await import("jszip")).default;
     const zip = await JSZip.loadAsync(aoc4Buf);
     const sheetPath = await findFormSheet(zip);
     const { fields } = await loadFieldMap(zip, sheetPath);
-    fieldTable = Object.entries(fields)
-      .filter(([name]) =>
-        !name.startsWith("requestBody.formName") &&
-        !name.startsWith("requestBody.operation") &&
-        !name.includes("formIntegrationId") &&
-        !name.includes("formDataVersion") &&
-        !name.includes("status")
-      )
-      .map(([fieldName, cellRef]) => ({ fieldName, cellRef }));
+    allFields = fields;
   } catch (e) {
     return NextResponse.json({
       error: `Could not read AOC-4 Excel: ${e instanceof Error ? e.message : String(e)}`,
     }, { status: 400 });
   }
 
-  // ── Step 4: Claude fills — returns {cellRef: value} directly ─────────────────
+  // ── Step 3.5: Pre-zero all financial cells ───────────────────────────────────
+  // First write 0 to every financial cell — same as Python kit's ZERO_GROUPS
+  // This ensures no financial cell is left blank even if Claude misses it
+  const preZeroCells: Record<string, string | number | null> = {};
+  for (const [fieldName, cellRef] of Object.entries(allFields)) {
+    if (shouldPreZero(fieldName)) {
+      preZeroCells[cellRef] = 0;
+    }
+  }
+
+  // ── Step 4: Build field table for Claude (exclude reason + premium fields) ────
   const boardMeetings = (filingData.boardMeetings || []).map(bm => {
     const d = new Date(bm.date);
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
@@ -222,15 +212,23 @@ Return ONLY raw JSON (no markdown):
     productCode4 = "9993"; productCode8 = "99935900"; productDesc = "Health and social care services";
   }
 
-  // Format field table for Claude — show fieldName + cellRef together
-  const fieldTableText = fieldTable
+  // Only send Claude the fields it should fill — exclude reason/premium
+  const fieldTableForClaude = Object.entries(allFields)
+    .filter(([fieldName]) =>
+      !shouldAlwaysBlank(fieldName) &&
+      !fieldName.startsWith("requestBody.formName") &&
+      !fieldName.startsWith("requestBody.operation") &&
+      !fieldName.includes("formIntegrationId") &&
+      !fieldName.includes("formDataVersion") &&
+      !fieldName.includes("status")
+    )
     .slice(0, 300)
-    .map(({ fieldName, cellRef }) => `${cellRef} | ${fieldName}`)
+    .map(([fieldName, cellRef]) => `${cellRef} | ${fieldName}`)
     .join("\n");
 
-  let cellValueMap: Record<string, string | number | null> = {};
+  let claudeCellValues: Record<string, string | number | null> = {};
   try {
-    const prompt = `You are an expert Chartered Accountant and MCA company secretary filling an AOC-4 (Annual Financial Statement) form for an Indian private limited company.
+    const prompt = `You are an expert Chartered Accountant filling an MCA V3 AOC-4 (Annual Financial Statement) form for an Indian private limited company.
 
 ═══ COMPANY DETAILS ═══
 Company Name: ${companyName}
@@ -248,10 +246,10 @@ Product/Service Code (8-digit): ${productCode8}
 Product Description: ${productDesc}
 Turnover from Principal Product: ₹${revenue}
 
-═══ FINANCIAL DATA (from audited statements, all amounts in actual ₹) ═══
-${financialSummary || "No financial data extracted — use 0 for all financial fields"}
+═══ FINANCIAL DATA (all amounts in actual ₹, NOT lakhs/crores) ═══
+${financialSummary || "(No financial data extracted — use 0 for all financial fields)"}
 
-═══ ADDITIONAL FORM DATA ═══
+═══ ADDITIONAL DATA FROM FILING FORM ═══
 Paid Up Capital: ₹${fin.paidUpCapital || "0"}
 Reserves & Surplus: ₹${fin.reservesAndSurplus || "0"}
 Revenue from Operations: ₹${fin.revenueFromOperations || "0"}
@@ -267,35 +265,36 @@ Previous Year PAT: ₹${fin.prevProfitAfterTax || "0"}
 
 ${guideText ? `═══ MCA FILLING GUIDE ═══\n${guideText}\n` : ""}
 
-═══ AOC-4 FORM CELLS (cellRef | fieldName) ═══
-Each row shows the EXACT Excel cell address and its field name.
-You must return values keyed by the cell reference (left column).
+═══ FORM CELLS TO FILL (cellRef | fieldName) ═══
+Return values keyed by the cell reference (left column).
 
-${fieldTableText}
+${fieldTableForClaude}
 
-═══ YOUR TASK ═══
-Fill ALL the above cells with correct values from the financial data and company details.
-
-RULES:
+═══ STRICT FILLING RULES ═══
 1. Return ONLY a JSON object: {"G208": 500000, "B13": "01/09/2026", ...}
-2. Keys = EXACT cell references from the table above (e.g. "G208", "B15", "H21")
-3. For all monetary fields: use actual Indian Rupees (numbers only, no ₹ symbol)
-4. Fields with "InCurrentDate" = current year value
-5. Fields with "InPreviousDate" = previous year value (use 0 if not available)
-6. For "designation" fields: use 1 (means Director)
-7. For "identificationNumber", "pan", "decalartionId" fields: use "${signDin}"
-8. For date fields: use "${bmDate}" format DD/MM/YYYY
-9. For "numberOfMembers": 0
-10. For "authorisedCapital": ${fin.authorisedCapital || "500000"}
-11. For "totalNumberOfProduct": 1
-12. For "whetherSmallCompany": "Yes"
-13. For all financial fields not found in data: use 0 (never leave blank)
-14. For "productCode" (4-digit): "${productCode4}"
-15. For 8-digit product code: "${productCode8}"
-16. For product description: "${productDesc}"
-17. Total shares = Paid up capital ÷ 10 (nominal value)
+2. Keys = EXACT cell references shown above (e.g. "G208", "B15")
+3. All monetary amounts = actual Indian Rupees (plain number, no ₹ symbol)
+4. Fields ending "InCurrentDate" = current year value
+5. Fields ending "InPreviousDate" = previous year value (0 if not available)
+6. Fields ending "InCurrentYear" = current year; "InPreviousYear" = previous year
+7. For "designation" fields → 1 (means Director)
+8. For "identificationNumber", "pan", "decalartionId" fields → "${signDin}"
+9. For date fields → "${bmDate}" (DD/MM/YYYY format)
+10. For "numberOfMembers" → 0
+11. For "authorisedCapital" → ${fin.authorisedCapital || "500000"}
+12. For "totalNumberOfProduct" → 1
+13. For "whetherSmallCompany" → "Yes"
+14. For "productCode" (4-digit) → "${productCode4}"
+15. For 8-digit product code → "${productCode8}"
+16. For product description → "${productDesc}"
+17. Total shares = Paid up capital ÷ 10 (nominal value per share = 10)
+18. EPS = Profit After Tax ÷ Total shares (if PAT < 0, EPS is negative)
+19. ⚠️ DO NOT fill any "reasonForChange" fields — they are NOT in the table above
+20. ⚠️ DO NOT fill any "Premium" fields — they are NOT in the table above
+21. ⚠️ For ALL financial numeric fields: if value is unknown → use 0 (never leave blank)
+22. For break-up fields (ltb_*, stb_*, lla_*, tr_*): sum must equal main line item
 
-Fill every single cell in the table. Return ONLY the JSON, no explanation.`;
+Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.`;
 
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5-5",
@@ -303,25 +302,43 @@ Fill every single cell in the table. Return ONLY the JSON, no explanation.`;
       messages: [{ role: "user", content: prompt }],
     });
     const text = (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";
-    cellValueMap = extractJson(text) as Record<string, string | number | null>;
+    claudeCellValues = extractJson(text) as Record<string, string | number | null>;
   } catch (e) {
     console.error("[fill-aoc4] Claude fill failed:", e);
     return NextResponse.json({ error: `AI fill failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 
-  // ── Step 5: Write cell values directly — no field name lookup ────────────────
+  // ── Step 5: Safety filter — remove any reason/premium cells Claude returned ───
+  // Build reverse map: cellRef → fieldName (to check what Claude wrote)
+  const cellRefToFieldName: Record<string, string> = {};
+  for (const [fieldName, cellRef] of Object.entries(allFields)) {
+    cellRefToFieldName[cellRef] = fieldName;
+  }
+  const filteredClaudeCells: Record<string, string | number | null> = {};
+  for (const [cellRef, value] of Object.entries(claudeCellValues)) {
+    const fieldName = cellRefToFieldName[cellRef] ?? "";
+    if (shouldAlwaysBlank(fieldName)) continue;  // skip reason/premium
+    if (!/^[A-Z]{1,3}\d+$/.test(cellRef.trim())) continue;  // skip invalid refs
+    filteredClaudeCells[cellRef] = value;
+  }
+
+  // ── Step 6: Apply in order: zeros first, then Claude's values ────────────────
   let filledAoc: Uint8Array;
   try {
-    filledAoc = await applyCellValues(aoc4Buf, cellValueMap);
+    // Pass 1: pre-zero all financial cells
+    filledAoc = await applyCellValues(aoc4Buf, preZeroCells);
+    // Pass 2: apply Claude's values (overrides zeros with actual values)
+    filledAoc = await applyCellValues(filledAoc.buffer as ArrayBuffer, filteredClaudeCells);
   } catch (e) {
     return NextResponse.json({ error: `Excel write failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 
-  // ── Step 6: Return filled AOC-4 ──────────────────────────────────────────────
+  // ── Step 7: Return filled AOC-4 ──────────────────────────────────────────────
   const aocName = (aoc4Excel.name || "AOC-4.xlsx").replace(".xlsx", "_FILLED.xlsx");
   return NextResponse.json({
     fieldsFound: financialSummary.split("\n").length,
-    fieldsFilled: Object.keys(cellValueMap).length,
+    fieldsFilled: Object.keys(filteredClaudeCells).length,
+    preZeroed: Object.keys(preZeroCells).length,
     aoc: { name: aocName, data: Buffer.from(filledAoc).toString("base64") },
   });
 }
