@@ -5401,25 +5401,23 @@ function AnnualFilingTool() {
                         </div>
                       </div>
 
-                      {/* Upload: Guide JSON (optional — for EAUDITOR + EDIRECTOR) */}
-                      {(eauditorFile || edirectorFile) && (
-                        <div>
-                          <label className="block text-xs font-semibold text-amber-800 mb-1">
-                            📂 Guide JSON — Upload Filing Data JSON
-                            <span className="font-normal text-amber-600 ml-1">(download from &quot;Download Guide JSON&quot; button above)</span>
-                          </label>
-                          <div
-                            className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${guideJsonFile ? "border-amber-400 bg-amber-50" : "border-amber-200 bg-white hover:border-amber-400"}`}
-                            onClick={() => document.getElementById("guide-json-file")?.click()}
-                          >
-                            <input id="guide-json-file" type="file" accept=".json" className="hidden"
-                              onChange={e => { setGuideJsonFile(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
-                            {guideJsonFile
-                              ? <span className="text-xs text-amber-700 font-semibold">✅ {guideJsonFile.name}</span>
-                              : <span className="text-xs text-slate-500">Upload the downloaded JSON file (required for EAUDITOR/EDIRECTOR)</span>}
-                          </div>
+                      {/* Upload: Guide JSON (for EAUDITOR + EDIRECTOR) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-amber-800 mb-1">
+                          📂 Guide JSON — Upload Filing Data JSON
+                          <span className="font-normal text-amber-600 ml-1">(click &quot;Download Guide JSON&quot; above → upload here)</span>
+                        </label>
+                        <div
+                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${guideJsonFile ? "border-amber-400 bg-amber-50" : "border-amber-200 bg-white hover:border-amber-400"}`}
+                          onClick={() => document.getElementById("guide-json-file")?.click()}
+                        >
+                          <input id="guide-json-file" type="file" accept=".json" className="hidden"
+                            onChange={e => { setGuideJsonFile(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
+                          {guideJsonFile
+                            ? <span className="text-xs text-amber-700 font-semibold">✅ {guideJsonFile.name}</span>
+                            : <span className="text-xs text-slate-500">Upload JSON file (needed for EAUDITOR + EDIRECTOR fill)</span>}
                         </div>
-                      )}
+                      </div>
 
                       {/* Upload 4: EAUDITOR Excel (optional) */}
                       <div>
