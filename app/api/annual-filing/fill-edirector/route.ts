@@ -198,7 +198,7 @@ Numeric fields:
 - M207 = 0 (no non-compliant deposits)
 - M221 = 0, M223 = 0, M225 = 0 (sexual harassment complaints)
 - M231 = 0, M233 = 0, M235 = 0 (employee counts — fill with 0 if unknown)
-- M237 = 0 (no additional matters in director report)
+- M237 = count of additional matters beyond standard disclosures (e.g. details of loans given u/s 186, investments, guarantees, related party contracts u/s 188, etc.) — use 0 only if truly none exist; check filing data (hasLoansGiven, hasDeposits, hasSubsidiaries fields)
 - I249 = "4" (board resolution number)
 - C250 = "${bmDate}" (board meeting date DD/MM/YYYY)
 - J266 = "${firstDirPan}" (signing director's PAN or DIN)
@@ -231,7 +231,7 @@ Text fields (use standard professional language):
 - B214 (Annual Evaluation): "The Board of Directors has carried out an annual evaluation of its own performance, board committees and individual directors."
 - B219 (Sexual Harassment): "The Company has complied with the provisions relating to the constitution of Internal Complaints Committee under the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013."
 - B228 (Maternity Benefit): "The Company has complied with the provisions of the Maternity Benefit (Amendment) Act, 2017."
-- B240 = "Nil", B242 = "Nil", B244 = "Nil" (no additional matters)
+- B240, B242, B244 — if M237 > 0, fill with the heading, section reference, and brief description of the additional matter(s). If M237 = 0, set all three to "Nil".
 
 Return ONLY a JSON object: {"M17": 4, "B36": "text...", ...}`;
 
@@ -247,6 +247,14 @@ Return ONLY a JSON object: {"M17": 4, "B36": "text...", ...}`;
   } catch (e) {
     return NextResponse.json({ error: `AI fill failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
+
+  // Auto-correct M237: count non-nil "other matters" entries filled by AI
+  const otherMatterCells = ["B240", "B242", "B244"];
+  const nonNilMatters = otherMatterCells.filter(c => {
+    const v = String(cellValues[c] || "").trim().toLowerCase();
+    return v && v !== "nil" && v !== "n/a" && v !== "not applicable";
+  }).length;
+  if (nonNilMatters > 0) cellValues["M237"] = nonNilMatters;
 
   // Hardcode mandatory fields that AI tends to miss
   // B14 — OPC / Small Company flag
