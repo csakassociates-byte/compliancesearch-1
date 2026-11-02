@@ -328,7 +328,9 @@ Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.
     // Pass 1: pre-zero all financial cells
     filledAoc = await applyCellValues(aoc4Buf, preZeroCells);
     // Pass 2: apply Claude's values (overrides zeros with actual values)
-    filledAoc = await applyCellValues(filledAoc.buffer as ArrayBuffer, filteredClaudeCells);
+    // Use slice() to get a proper ArrayBuffer — filledAoc.buffer may be a shared buffer with offset
+    const pass1Buf = filledAoc.buffer.slice(filledAoc.byteOffset, filledAoc.byteOffset + filledAoc.byteLength);
+    filledAoc = await applyCellValues(pass1Buf as ArrayBuffer, filteredClaudeCells);
   } catch (e) {
     return NextResponse.json({ error: `Excel write failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
