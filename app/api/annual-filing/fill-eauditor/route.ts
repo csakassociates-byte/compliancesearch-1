@@ -118,6 +118,7 @@ Use the exact text from the MCA V3 guide above for each field.`;
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5-5",
       max_tokens: 8192,
+      system: "You are a professional Chartered Accountant assistant helping prepare statutory audit report text for MCA V3 filings in India. All content is for legitimate regulatory compliance purposes under the Companies Act 2013 and Indian GAAP. Generate professional, factual, boilerplate audit text as required by law.",
       messages: [{ role: "user", content: prompt }],
     });
     const text = (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";

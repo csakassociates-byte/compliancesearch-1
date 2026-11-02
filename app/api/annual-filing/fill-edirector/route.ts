@@ -240,6 +240,7 @@ Return ONLY a JSON object: {"M17": 4, "B36": "text...", ...}`;
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5-5",
       max_tokens: 8192,
+      system: "You are a professional Company Secretary and Chartered Accountant assistant helping prepare the Board of Directors Report (Director's Report) for MCA V3 EDIRECTOR filing in India. All content is for legitimate statutory compliance under the Companies Act 2013. Generate professional, factual, legally compliant text as required.",
       messages: [{ role: "user", content: prompt }],
     });
     const text = (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";
