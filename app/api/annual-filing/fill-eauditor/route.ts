@@ -18,12 +18,36 @@ function extractJson(text: string): Record<string, unknown> {
   try { return JSON.parse(m[0]) as Record<string, unknown>; } catch { return {}; }
 }
 
+async function extractGuideText(guideFile: File, anthropicClient: Anthropic): Promise<string> {
+  try {
+    const guideBuf = await guideFile.arrayBuffer();
+    if (guideFile.name.endsWith(".html") || guideFile.name.endsWith(".htm")) {
+      return Buffer.from(guideBuf).toString("utf-8")
+        .replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").slice(0, 12000);
+    }
+    const base64Guide = Buffer.from(guideBuf).toString("base64");
+    const guideMsg = await anthropicClient.messages.create({
+      model: "claude-sonnet-5-5",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Guide } } as unknown as { type: "text"; text: string },
+          { type: "text", text: "Extract all filling instructions, field descriptions, and guidelines from this MCA V3 guide for EAUDITOR / Auditor's Report. Return as plain text with field names and what to write." },
+        ],
+      }],
+    });
+    return ((guideMsg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "").slice(0, 12000);
+  } catch { return ""; }
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const formData = await req.formData();
   const eauditorFile = formData.get("eauditorFile") as File | null;
+  const guideFile    = formData.get("guide") as File | null;
   const saveId       = formData.get("saveId") as string | null;
 
   if (!eauditorFile) return NextResponse.json({ error: "EAUDITOR Excel file is required" }, { status: 400 });
@@ -37,17 +61,19 @@ export async function POST(req: NextRequest) {
   }
   if (!filingData) return NextResponse.json({ error: "Filing data not found. Please save your filing first." }, { status: 404 });
 
+  // Extract guide instructions if provided
+  const guideText = guideFile ? await extractGuideText(guideFile, anthropic) : "";
+
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
   const fy = filingData.financialYear || "2025-2026";
-  const [fyStart, fyEnd] = fy.split("-");
+  const [, fyEnd] = fy.split("-");
   const fin = filingData.financials || {};
   const auditor = filingData.auditor || {};
   const auditorName = auditor.name || "";
   const auditorFirm = auditor.firmName || auditor.name || "";
   const auditorReg  = auditor.registrationNo || auditor.regNo || "";
   const auditorMem  = auditor.membershipNo || auditor.membershipNumber || "";
-  const auditorPAN  = auditor.pan || "";
 
   const boardMeetings = (filingData.boardMeetings || []);
   const lastBoardDate = boardMeetings.length > 0
@@ -67,8 +93,8 @@ Auditor Membership No: ${auditorMem}
 PAT (Profit After Tax): ₹${fin.profitAfterTax || "0"}
 Net Worth: ₹${fin.netWorth || "0"}
 Total Assets: ₹${fin.totalAssets || "0"}
-
-Fill ALL the following cells with appropriate standard professional text for a small private limited company with an UNQUALIFIED audit opinion (no qualifications or emphasis of matter for a clean audit).
+${guideText ? `\nMCA V3 FILLING GUIDE (EAUDITOR section — follow these instructions exactly):\n${guideText}\n` : ""}
+Fill ALL the following cells with appropriate standard professional text for a small private limited company with an UNQUALIFIED audit opinion (no qualifications or emphasis of matter for a clean audit). Where the MCA guide above gives specific instructions for a field, follow those exactly.
 
 CELLS TO FILL (cell reference | field name):
 B13  | opinionOfTheAuditor1

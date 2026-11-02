@@ -18,12 +18,36 @@ function extractJson(text: string): Record<string, unknown> {
   try { return JSON.parse(m[0]) as Record<string, unknown>; } catch { return {}; }
 }
 
+async function extractGuideText(guideFile: File, anthropicClient: Anthropic): Promise<string> {
+  try {
+    const guideBuf = await guideFile.arrayBuffer();
+    if (guideFile.name.endsWith(".html") || guideFile.name.endsWith(".htm")) {
+      return Buffer.from(guideBuf).toString("utf-8")
+        .replace(/<[^>]+>/g, " ").replace(/\s{2,}/g, " ").slice(0, 12000);
+    }
+    const base64Guide = Buffer.from(guideBuf).toString("base64");
+    const guideMsg = await anthropicClient.messages.create({
+      model: "claude-sonnet-5-5",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Guide } } as unknown as { type: "text"; text: string },
+          { type: "text", text: "Extract all filling instructions, field descriptions, and guidelines from this MCA V3 guide for EDIRECTOR / Director's Report / Board's Report. Return as plain text with field names and what to write." },
+        ],
+      }],
+    });
+    return ((guideMsg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "").slice(0, 12000);
+  } catch { return ""; }
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const formData = await req.formData();
   const edirectorFile = formData.get("edirectorFile") as File | null;
+  const guideFile     = formData.get("guide") as File | null;
   const saveId        = formData.get("saveId") as string | null;
 
   if (!edirectorFile) return NextResponse.json({ error: "EDIRECTOR Excel file is required" }, { status: 400 });
@@ -36,6 +60,9 @@ export async function POST(req: NextRequest) {
     if (rows[0]) try { filingData = JSON.parse(rows[0].formDataJson) as AnnualFilingData; } catch { /* ignore */ }
   }
   if (!filingData) return NextResponse.json({ error: "Filing data not found. Please save your filing first." }, { status: 404 });
+
+  // Extract guide instructions if provided
+  const guideText = guideFile ? await extractGuideText(guideFile, anthropic) : "";
 
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
@@ -79,6 +106,7 @@ Financial Highlights (FY ${fy}):
 - Paid-up Capital: ₹${paidupCap.toLocaleString("en-IN")}
 - Reserves & Surplus: ₹${reserves.toLocaleString("en-IN")}
 - Net Worth: ₹${netWorth.toLocaleString("en-IN")}
+${guideText ? `\nMCA V3 FILLING GUIDE (EDIRECTOR section — follow these instructions exactly):\n${guideText}\n` : ""}
 
 CELLS TO FILL:
 M17  | noOfBoardMeetingHeld
@@ -138,7 +166,7 @@ I249 | declaration.resolutionNo
 C250 | declaration.decalartionDate
 J266 | declaration.pan
 
-FILLING INSTRUCTIONS (for a small private limited company with no CSR obligation):
+FILLING INSTRUCTIONS (for a small private limited company with no CSR obligation — where MCA guide above gives specific instructions, follow those exactly):
 
 Numeric fields:
 - M17 = ${bmCount} (number of board meetings held)

@@ -5473,6 +5473,7 @@ function AnnualFilingTool() {
                               const audFd = new FormData();
                               audFd.append("eauditorFile", eauditorFile);
                               audFd.append("saveId", saveId);
+                              if (aocGuide) audFd.append("guide", aocGuide);
                               promises.push(fetch("/api/annual-filing/fill-eauditor", { method: "POST", body: audFd }));
                             }
 
@@ -5480,6 +5481,7 @@ function AnnualFilingTool() {
                               const dirFd = new FormData();
                               dirFd.append("edirectorFile", edirectorFile);
                               dirFd.append("saveId", saveId);
+                              if (aocGuide) dirFd.append("guide", aocGuide);
                               promises.push(fetch("/api/annual-filing/fill-edirector", { method: "POST", body: dirFd }));
                             }
 
