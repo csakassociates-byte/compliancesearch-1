@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
 import { findFormSheet, loadFieldMap, applyCellValues } from "@/lib/annual-filing/aoc4kit";
-import { generateMcaV3GuideText } from "@/lib/annual-filing/mca-v3-guide";
 import type { AnnualFilingData } from "@/lib/annual-filing/types";
 
 export const maxDuration = 300;
@@ -126,8 +125,7 @@ export async function POST(req: NextRequest) {
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
 
-  // ── Step 1: Generate guide text from saved filing data (no upload needed) ───
-  const guideText = generateMcaV3GuideText(filingData);
+  // guideText is only needed for EAUDITOR/EDIRECTOR paragraph fields — not used in AOC-4
 
   // ── Step 2: Extract financials from PDF ──────────────────────────────────────
   let financialSummary = "";
@@ -257,7 +255,6 @@ Net Worth: ₹${fin.netWorth || "0"}
 Previous Year Revenue: ₹${fin.prevRevenueFromOperations || "0"}
 Previous Year PAT: ₹${fin.prevProfitAfterTax || "0"}
 
-${guideText ? `═══ MCA FILLING GUIDE ═══\n${guideText}\n` : ""}
 
 ═══ FORM CELLS TO FILL (cellRef | fieldName) ═══
 Return values keyed by the cell reference (left column).
