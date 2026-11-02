@@ -47,10 +47,10 @@ export async function POST(req: NextRequest) {
   const [, fyEnd] = fy.split("-");
   const fin = filingData.financials || {};
   const auditor = filingData.auditor || {};
-  const auditorName = auditor.name || "";
-  const auditorFirm = (auditor as Record<string,string>).firmName || auditor.name || "";
-  const auditorReg  = (auditor as Record<string,string>).registrationNo || (auditor as Record<string,string>).regNo || "";
-  const auditorMem  = (auditor as Record<string,string>).membershipNo || (auditor as Record<string,string>).membershipNumber || "";
+  const auditorName = auditor.partnerName || auditor.firmName || "";
+  const auditorFirm = auditor.firmName || auditor.partnerName || "";
+  const auditorReg  = auditor.frn || "";
+  const auditorMem  = auditor.membershipNo || "";
 
   const prompt = `You are an expert Chartered Accountant filling the MCA V3 EAUDITOR (Independent Auditor's Report) Excel form for an Indian private limited company.
 

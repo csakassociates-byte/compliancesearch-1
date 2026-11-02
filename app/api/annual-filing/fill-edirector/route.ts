@@ -196,24 +196,12 @@ Text fields (use standard professional language):
 
 Return ONLY a JSON object: {"M17": 4, "B36": "text...", ...}`;
 
-  // Build content — attach guide PDF if provided, then text prompt
-  type ContentBlock = { type: "text"; text: string } | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } };
-  const content: ContentBlock[] = [];
-  if (guideFile) {
-    try {
-      const guideBuf = await guideFile.arrayBuffer();
-      const base64Guide = Buffer.from(guideBuf).toString("base64");
-      content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Guide } });
-    } catch { /* skip guide if unreadable */ }
-  }
-  content.push({ type: "text", text: prompt });
-
   let cellValues: Record<string, string | number | null> = {};
   try {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-5-5",
       max_tokens: 8192,
-      messages: [{ role: "user", content: content as Parameters<typeof anthropic.messages.create>[0]["messages"][0]["content"] }],
+      messages: [{ role: "user", content: prompt }],
     });
     const text = (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";
     cellValues = extractJson(text) as Record<string, string | number | null>;

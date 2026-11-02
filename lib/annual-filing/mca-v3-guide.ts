@@ -903,8 +903,8 @@ export function generateMcaV3GuideText(data: AnnualFilingData): string {
     `FIELD: otherMattersAsPerRule11I (B46):`,
     buildRule11(data),
     ``,
-    `FIELD: declaration.name (J94) = ${data.auditor?.name || ""}`,
-    `FIELD: declaration.decalartionId (J99) = ${data.auditor?.membershipNo || data.auditor?.registrationNo || ""}`,
+    `FIELD: declaration.name (J94) = ${data.auditor?.partnerName || data.auditor?.firmName || ""}`,
+    `FIELD: declaration.decalartionId (J99) = ${data.auditor?.membershipNo || ""}`,
   ];
 
   return lines.join("\n");
