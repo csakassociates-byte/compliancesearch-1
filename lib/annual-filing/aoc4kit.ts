@@ -24,7 +24,8 @@ function splitRef(ref: string): [string, number] {
 function setCellInXml(xml: string, ref: string, value: string | number | null): string {
   if (value === null || value === undefined) return xml;
   const [col, row] = splitRef(ref);
-  const strVal = String(value);
+  // Excel cell text limit is 32,767 characters — truncate long strings
+  const strVal = typeof value === "string" && value.length > 32767 ? value.slice(0, 32767) : String(value);
   const isNum = typeof value === "number" || (typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value.trim()) && value.trim() !== "");
 
   // Build new cell XML, always preserving the original style attribute (s="N")

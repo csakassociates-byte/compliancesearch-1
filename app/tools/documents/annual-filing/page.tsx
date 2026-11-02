@@ -5251,7 +5251,9 @@ function AnnualFilingTool() {
               </button>
               <button
                 onClick={() => {
-                  const json = JSON.stringify(data, null, 2);
+                  // Strip large base64 images — not needed for filling, only bloat the JSON
+                  const stripped = { ...data, auditor: data.auditor ? { ...data.auditor, signatureBase64: undefined, sealBase64: undefined } : data.auditor, directors: (data.directors || []).map(d => ({ ...d, signatureBase64: undefined })) };
+                  const json = JSON.stringify(stripped, null, 2);
                   const blob = new Blob([json], { type: "application/json" });
                   const a = document.createElement("a");
                   a.href = URL.createObjectURL(blob);
@@ -5473,36 +5475,15 @@ function AnnualFilingTool() {
                           setAocFillMsg(null);
                           setAocFilledFiles(null);
                           try {
-                            // Call all three APIs in parallel
+                            const result: { aoc: {name:string;data:string}; aud?: {name:string;data:string}; dir?: {name:string;data:string} } = { aoc: { name: "", data: "" } };
+                            const msgParts: string[] = [];
+
+                            // Step 1: AOC-4 (sequential — large PDF upload)
                             const aocFd = new FormData();
                             aocFd.append("financialPdf", aocFinPdf);
                             aocFd.append("mcaZip", aocMcaZip);
                             aocFd.append("saveId", saveId);
-
-                            const promises: Promise<Response>[] = [
-                              fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: aocFd }),
-                            ];
-
-                            if (eauditorFile) {
-                              const audFd = new FormData();
-                              audFd.append("eauditorFile", eauditorFile);
-                              audFd.append("saveId", saveId);
-                              if (guideJsonFile) audFd.append("guideJson", guideJsonFile);
-                              promises.push(fetch("/api/annual-filing/fill-eauditor", { method: "POST", body: audFd }));
-                            }
-
-                            if (edirectorFile) {
-                              const dirFd = new FormData();
-                              dirFd.append("edirectorFile", edirectorFile);
-                              dirFd.append("saveId", saveId);
-                              if (guideJsonFile) dirFd.append("guideJson", guideJsonFile);
-                              promises.push(fetch("/api/annual-filing/fill-edirector", { method: "POST", body: dirFd }));
-                            }
-
-                            const responses = await Promise.all(promises);
-
-                            // Parse AOC-4 result (always first)
-                            const aocRes = responses[0];
+                            const aocRes = await fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: aocFd });
                             if (!aocRes.ok) {
                               const text = await aocRes.text().catch(() => "");
                               let errMsg = `AOC-4 error HTTP ${aocRes.status}`;
@@ -5510,32 +5491,51 @@ function AnnualFilingTool() {
                               throw new Error(errMsg);
                             }
                             const aocJson = await aocRes.json() as { fieldsFound?: number; fieldsFilled?: number; aoc: {name:string;data:string} };
+                            result.aoc = aocJson.aoc;
+                            msgParts.push(`AOC-4: ${aocJson.fieldsFilled ?? "?"} cells filled`);
 
-                            const result: { aoc: {name:string;data:string}; aud?: {name:string;data:string}; dir?: {name:string;data:string} } = { aoc: aocJson.aoc };
-                            let msgParts = [`AOC-4: ${aocJson.fieldsFilled ?? "?"} cells filled`];
-                            let resIdx = 1;
+                            // Step 2: EAUDITOR + EDIRECTOR in parallel (smaller payloads — just Excel + JSON)
+                            const audEdirPromises: Promise<void>[] = [];
 
-                            if (eauditorFile && responses[resIdx]) {
-                              const audRes = responses[resIdx++];
-                              if (audRes.ok) {
-                                const audJson = await audRes.json() as { fieldsFilled?: number; eauditor: {name:string;data:string} };
-                                result.aud = audJson.eauditor;
-                                msgParts.push(`EAUDITOR: ${audJson.fieldsFilled ?? "?"} cells filled`);
-                              } else {
-                                msgParts.push("EAUDITOR: fill failed (check console)");
-                              }
+                            if (eauditorFile) {
+                              audEdirPromises.push((async () => {
+                                const audFd = new FormData();
+                                audFd.append("eauditorFile", eauditorFile);
+                                audFd.append("saveId", saveId);
+                                if (guideJsonFile) audFd.append("guideJson", guideJsonFile);
+                                const audRes = await fetch("/api/annual-filing/fill-eauditor", { method: "POST", body: audFd });
+                                if (audRes.ok) {
+                                  const audJson = await audRes.json() as { fieldsFilled?: number; eauditor: {name:string;data:string} };
+                                  result.aud = audJson.eauditor;
+                                  msgParts.push(`EAUDITOR: ${audJson.fieldsFilled ?? "?"} cells filled`);
+                                } else {
+                                  const t = await audRes.text().catch(() => "");
+                                  let em = "fill failed"; try { em = (JSON.parse(t) as {error?:string}).error ?? em; } catch { /**/ }
+                                  msgParts.push(`EAUDITOR: ${em}`);
+                                }
+                              })());
                             }
 
-                            if (edirectorFile && responses[resIdx]) {
-                              const dirRes = responses[resIdx];
-                              if (dirRes.ok) {
-                                const dirJson = await dirRes.json() as { fieldsFilled?: number; edirector: {name:string;data:string} };
-                                result.dir = dirJson.edirector;
-                                msgParts.push(`EDIRECTOR: ${dirJson.fieldsFilled ?? "?"} cells filled`);
-                              } else {
-                                msgParts.push("EDIRECTOR: fill failed (check console)");
-                              }
+                            if (edirectorFile) {
+                              audEdirPromises.push((async () => {
+                                const dirFd = new FormData();
+                                dirFd.append("edirectorFile", edirectorFile);
+                                dirFd.append("saveId", saveId);
+                                if (guideJsonFile) dirFd.append("guideJson", guideJsonFile);
+                                const dirRes = await fetch("/api/annual-filing/fill-edirector", { method: "POST", body: dirFd });
+                                if (dirRes.ok) {
+                                  const dirJson = await dirRes.json() as { fieldsFilled?: number; edirector: {name:string;data:string} };
+                                  result.dir = dirJson.edirector;
+                                  msgParts.push(`EDIRECTOR: ${dirJson.fieldsFilled ?? "?"} cells filled`);
+                                } else {
+                                  const t = await dirRes.text().catch(() => "");
+                                  let em = "fill failed"; try { em = (JSON.parse(t) as {error?:string}).error ?? em; } catch { /**/ }
+                                  msgParts.push(`EDIRECTOR: ${em}`);
+                                }
+                              })());
                             }
+
+                            await Promise.all(audEdirPromises);
 
                             setAocFilledFiles(result);
                             setAocFillMsg({ ok: true, text: msgParts.join(" · ") });

@@ -53,12 +53,13 @@ export async function POST(req: NextRequest) {
   const auditorReg  = auditor.frn || "";
   const auditorMem  = auditor.membershipNo || "";
 
-  // Pass raw filing data as JSON context to Claude
+  // Pass raw filing data as JSON context — strip base64 images (not needed, just bloat)
+  const auditorClean = filingData.auditor ? { ...filingData.auditor, signatureBase64: undefined, sealBase64: undefined } : undefined;
   const guideText = JSON.stringify({
     companyName, cin, financialYear: fy,
-    auditor: filingData.auditor,
+    auditor: auditorClean,
     financials: filingData.financials,
-    directors: filingData.directors,
+    directors: (filingData.directors || []).map(d => ({ ...d, signatureBase64: undefined })),
     boardMeetings: filingData.boardMeetings,
     companyType: filingData.companyType,
     stateOfAffairs: filingData.stateOfAffairs,
