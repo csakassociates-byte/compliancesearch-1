@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
 import { applyCellValues } from "@/lib/annual-filing/aoc4kit";
-import { generateMcaV3GuideText } from "@/lib/annual-filing/mca-v3-guide";
 import type { AnnualFilingData } from "@/lib/annual-filing/types";
 
 export const maxDuration = 300;
@@ -26,20 +25,22 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const eauditorFile = formData.get("eauditorFile") as File | null;
   const saveId       = formData.get("saveId") as string | null;
+  const guideJsonRaw = formData.get("guideJson") as File | null;
 
   if (!eauditorFile) return NextResponse.json({ error: "EAUDITOR Excel file is required" }, { status: 400 });
 
+  // Try uploaded JSON first, then fall back to DB
   let filingData: AnnualFilingData | null = null;
-  if (saveId) {
+  if (guideJsonRaw) {
+    try { filingData = JSON.parse(await guideJsonRaw.text()) as AnnualFilingData; } catch { /* fall through */ }
+  }
+  if (!filingData && saveId) {
     const rows = await prisma.$queryRawUnsafe<Array<{ formDataJson: string }>>(
       `SELECT "formDataJson" FROM csi_documents WHERE id = $1 LIMIT 1`, saveId
     );
     if (rows[0]) try { filingData = JSON.parse(rows[0].formDataJson) as AnnualFilingData; } catch { /* ignore */ }
   }
-  if (!filingData) return NextResponse.json({ error: "Filing data not found. Please save your filing first." }, { status: 404 });
-
-  // Generate guide text from saved filing data — no PDF upload needed
-  const guideText = generateMcaV3GuideText(filingData);
+  if (!filingData) return NextResponse.json({ error: "Filing data not found. Upload Guide JSON or save your filing first." }, { status: 404 });
 
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
@@ -51,6 +52,22 @@ export async function POST(req: NextRequest) {
   const auditorFirm = auditor.firmName || auditor.partnerName || "";
   const auditorReg  = auditor.frn || "";
   const auditorMem  = auditor.membershipNo || "";
+
+  // Pass raw filing data as JSON context to Claude
+  const guideText = JSON.stringify({
+    companyName, cin, financialYear: fy,
+    auditor: filingData.auditor,
+    financials: filingData.financials,
+    directors: filingData.directors,
+    boardMeetings: filingData.boardMeetings,
+    companyType: filingData.companyType,
+    stateOfAffairs: filingData.stateOfAffairs,
+    dividendDeclared: filingData.dividendDeclared,
+    dividendDetails: filingData.dividendDetails,
+    csrApplicable: filingData.csrApplicable,
+    foreignExchangeEarnings: filingData.foreignExchangeEarnings,
+    foreignExchangeOutgo: filingData.foreignExchangeOutgo,
+  }, null, 2);
 
   const prompt = `You are an expert Chartered Accountant filling the MCA V3 EAUDITOR (Independent Auditor's Report) Excel form for an Indian private limited company.
 
@@ -65,10 +82,10 @@ PAT (Profit After Tax): ₹${fin.profitAfterTax || "0"}
 Net Worth: ₹${fin.netWorth || "0"}
 Total Assets: ₹${fin.totalAssets || "0"}
 
-MCA V3 FILLING GUIDE (EAUDITOR / Auditor's Report section — use these exact texts for each field):
+FILING DATA (JSON — use this to write appropriate professional text for each field):
 ${guideText}
 
-Using the guide above, fill ALL cells below. Copy the exact text from the guide for each field.
+Using the company data above, fill ALL cells below with appropriate professional audit report text.
 
 CELLS TO FILL (cell reference | field name):
 B13  | opinionOfTheAuditor1

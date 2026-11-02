@@ -579,6 +579,7 @@ function AnnualFilingTool() {
   const [aocMcaZip, setAocMcaZip]         = useState<File | null>(null);
   const [eauditorFile, setEauditorFile]   = useState<File | null>(null);
   const [edirectorFile, setEdirectorFile] = useState<File | null>(null);
+  const [guideJsonFile, setGuideJsonFile] = useState<File | null>(null);
   const [aocFilling, setAocFilling]       = useState(false);
   const [aocFillMsg, setAocFillMsg]       = useState<{ ok: boolean; text: string } | null>(null);
   const [aocFilledFiles, setAocFilledFiles] = useState<{ aoc: {name:string;data:string}; aud?: {name:string;data:string}; dir?: {name:string;data:string} } | null>(null);
@@ -5237,16 +5238,31 @@ function AnnualFilingTool() {
               </button>
             )}
 
-            <button
-              onClick={() => {
-                const html = generateMcaV3GuideHtml(data);
-                const blob = new Blob([html], { type: "text/html" });
-                window.open(URL.createObjectURL(blob), "_blank");
-              }}
-              className="w-full mt-3 py-2 border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              📋 Generate MCA V3 Filling Guide
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => {
+                  const html = generateMcaV3GuideHtml(data);
+                  const blob = new Blob([html], { type: "text/html" });
+                  window.open(URL.createObjectURL(blob), "_blank");
+                }}
+                className="flex-1 py-2 border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1"
+              >
+                📋 Generate MCA V3 Filling Guide
+              </button>
+              <button
+                onClick={() => {
+                  const json = JSON.stringify(data, null, 2);
+                  const blob = new Blob([json], { type: "application/json" });
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `filing-data-${data.cin || "company"}-${data.financialYear || "FY"}.json`;
+                  a.click();
+                }}
+                className="flex-1 py-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1"
+              >
+                📥 Download Guide JSON
+              </button>
+            </div>
 
             {/* ── AI Fill AOC-4 ─────────────────────────────────────────── */}
             {isLocked && saveId && (
@@ -5385,6 +5401,26 @@ function AnnualFilingTool() {
                         </div>
                       </div>
 
+                      {/* Upload: Guide JSON (optional — for EAUDITOR + EDIRECTOR) */}
+                      {(eauditorFile || edirectorFile) && (
+                        <div>
+                          <label className="block text-xs font-semibold text-amber-800 mb-1">
+                            📂 Guide JSON — Upload Filing Data JSON
+                            <span className="font-normal text-amber-600 ml-1">(download from &quot;Download Guide JSON&quot; button above)</span>
+                          </label>
+                          <div
+                            className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${guideJsonFile ? "border-amber-400 bg-amber-50" : "border-amber-200 bg-white hover:border-amber-400"}`}
+                            onClick={() => document.getElementById("guide-json-file")?.click()}
+                          >
+                            <input id="guide-json-file" type="file" accept=".json" className="hidden"
+                              onChange={e => { setGuideJsonFile(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
+                            {guideJsonFile
+                              ? <span className="text-xs text-amber-700 font-semibold">✅ {guideJsonFile.name}</span>
+                              : <span className="text-xs text-slate-500">Upload the downloaded JSON file (required for EAUDITOR/EDIRECTOR)</span>}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Upload 4: EAUDITOR Excel (optional) */}
                       <div>
                         <label className="block text-xs font-semibold text-teal-800 mb-1">
@@ -5453,6 +5489,7 @@ function AnnualFilingTool() {
                               const audFd = new FormData();
                               audFd.append("eauditorFile", eauditorFile);
                               audFd.append("saveId", saveId);
+                              if (guideJsonFile) audFd.append("guideJson", guideJsonFile);
                               promises.push(fetch("/api/annual-filing/fill-eauditor", { method: "POST", body: audFd }));
                             }
 
@@ -5460,6 +5497,7 @@ function AnnualFilingTool() {
                               const dirFd = new FormData();
                               dirFd.append("edirectorFile", edirectorFile);
                               dirFd.append("saveId", saveId);
+                              if (guideJsonFile) dirFd.append("guideJson", guideJsonFile);
                               promises.push(fetch("/api/annual-filing/fill-edirector", { method: "POST", body: dirFd }));
                             }
 

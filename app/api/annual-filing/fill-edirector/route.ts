@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
 import { applyCellValues } from "@/lib/annual-filing/aoc4kit";
-import { generateMcaV3GuideText } from "@/lib/annual-filing/mca-v3-guide";
 import type { AnnualFilingData } from "@/lib/annual-filing/types";
 
 export const maxDuration = 300;
@@ -26,20 +25,48 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const edirectorFile = formData.get("edirectorFile") as File | null;
   const saveId        = formData.get("saveId") as string | null;
+  const guideJsonRaw  = formData.get("guideJson") as File | null;
 
   if (!edirectorFile) return NextResponse.json({ error: "EDIRECTOR Excel file is required" }, { status: 400 });
 
+  // Try uploaded JSON first, then fall back to DB
   let filingData: AnnualFilingData | null = null;
-  if (saveId) {
+  if (guideJsonRaw) {
+    try { filingData = JSON.parse(await guideJsonRaw.text()) as AnnualFilingData; } catch { /* fall through */ }
+  }
+  if (!filingData && saveId) {
     const rows = await prisma.$queryRawUnsafe<Array<{ formDataJson: string }>>(
       `SELECT "formDataJson" FROM csi_documents WHERE id = $1 LIMIT 1`, saveId
     );
     if (rows[0]) try { filingData = JSON.parse(rows[0].formDataJson) as AnnualFilingData; } catch { /* ignore */ }
   }
-  if (!filingData) return NextResponse.json({ error: "Filing data not found. Please save your filing first." }, { status: 404 });
+  if (!filingData) return NextResponse.json({ error: "Filing data not found. Upload Guide JSON or save your filing first." }, { status: 404 });
 
-  // Generate guide text from saved filing data — no PDF upload needed
-  const guideText = generateMcaV3GuideText(filingData);
+  // Pass raw filing data as JSON context to Claude
+  const guideText = JSON.stringify({
+    companyName: filingData.companyName,
+    cin: filingData.cin,
+    financialYear: filingData.financialYear,
+    companyType: filingData.companyType,
+    auditor: filingData.auditor,
+    financials: filingData.financials,
+    directors: filingData.directors,
+    boardMeetings: filingData.boardMeetings,
+    committeeMeetings: filingData.committeeMeetings,
+    stateOfAffairs: filingData.stateOfAffairs,
+    dividendDeclared: filingData.dividendDeclared,
+    dividendDetails: filingData.dividendDetails,
+    csrApplicable: filingData.csrApplicable,
+    foreignExchangeEarnings: filingData.foreignExchangeEarnings,
+    foreignExchangeOutgo: filingData.foreignExchangeOutgo,
+    hasLoansGiven: filingData.hasLoansGiven,
+    hasDeposits: filingData.hasDeposits,
+    hasSubsidiaries: filingData.hasSubsidiaries,
+    signatoryDirectors: filingData.signatoryDirectors,
+    employeesMale: filingData.employeesMale,
+    employeesFemale: filingData.employeesFemale,
+    employeesOther: filingData.employeesOther,
+  }, null, 2);
 
   const companyName = filingData.companyName || "";
   const cin = filingData.cin || "";
@@ -84,7 +111,7 @@ Financial Highlights (FY ${fy}):
 - Reserves & Surplus: ₹${reserves.toLocaleString("en-IN")}
 - Net Worth: ₹${netWorth.toLocaleString("en-IN")}
 
-MCA V3 FILLING GUIDE (EDIRECTOR / Board's Report section — copy exact texts from here for each field):
+FILING DATA (JSON — use this to write appropriate professional text for each field):
 ${guideText}
 
 CELLS TO FILL:
