@@ -251,13 +251,12 @@ Return ONLY a JSON object: {"M17": 4, "B36": "text...", ...}`;
     return NextResponse.json({ error: `AI fill failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 
-  // Auto-correct M237: count non-nil "other matters" entries filled by AI
-  const otherMatterCells = ["B240", "B242", "B244"];
-  const nonNilMatters = otherMatterCells.filter(c => {
-    const v = String(cellValues[c] || "").trim().toLowerCase();
-    return v && v !== "nil" && v !== "n/a" && v !== "not applicable";
-  }).length;
-  if (nonNilMatters > 0) cellValues["M237"] = nonNilMatters;
+  // M237 + Other Matters (Section 24): standard 18 disclosures per Companies Act 2013
+  // Cross-reference text is standard practice — details are in the physical Director's Report
+  cellValues["M237"] = 18;
+  cellValues["B240"] = "Refer to Directors' Report for the same";
+  cellValues["B242"] = "Refer to Directors' Report for the same";
+  cellValues["B244"] = "Refer to Directors' Report for the same";
 
   // Hardcode mandatory fields that AI tends to miss
   // B14 — OPC / Small Company flag
