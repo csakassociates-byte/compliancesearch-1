@@ -107,6 +107,12 @@ J99  | declaration.decalartionId
 Return ONLY a JSON object: {"B13": "text...", "B16": "text...", "J27": 0, ...}
 Use the exact text from the MCA V3 guide above for each field.`;
 
+  const isOpcAud = (filingData.companyType || "").toLowerCase().includes("opc") || (filingData.companyType || "").toLowerCase().includes("one person");
+  const totalAssets = parseFloat(fin.totalAssets || "0") || 0;
+  const paidupCapAud = parseFloat(fin.paidUpCapital || "0") || 0;
+  // CARO 2020 not applicable if: OPC, or (paid-up < 1Cr AND turnover < 10Cr AND borrowings < 1Cr)
+  const caroNotApplicable = isOpcAud || (paidupCapAud < 10000000 && totalAssets < 10000000);
+
   let cellValues: Record<string, string | number | null> = {};
   try {
     const msg = await anthropic.messages.create({
@@ -118,6 +124,20 @@ Use the exact text from the MCA V3 guide above for each field.`;
     cellValues = extractJson(text) as Record<string, string | number | null>;
   } catch (e) {
     return NextResponse.json({ error: `AI fill failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
+  }
+
+  // Hardcode mandatory fields AI tends to miss
+  // J99 — auditor declaration ID (membership number)
+  if (auditorMem) cellValues["J99"] = auditorMem;
+
+  // CARO applicability — J27 (qualifications count stays 0), add CARO text in B52 if not applicable
+  if (caroNotApplicable) {
+    const existingB52 = String(cellValues["B52"] || "");
+    if (!existingB52.toLowerCase().includes("caro")) {
+      cellValues["B52"] = (existingB52 ? existingB52 + " " : "") +
+        "The Companies (Auditor's Report) Order, 2020 (CARO 2020) is not applicable to the Company as it is a " +
+        (isOpcAud ? "One Person Company (OPC)" : "company meeting the exemption criteria under CARO 2020") + ".";
+    }
   }
 
   let filledBuf: Uint8Array;

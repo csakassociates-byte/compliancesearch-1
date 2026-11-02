@@ -192,6 +192,17 @@ Return ONLY raw JSON:
   const signDin = filingData.signatoryDirectors?.director1?.din || (filingData.directors || [])[0]?.din || "";
   const revenue = parseFloat(fin.revenueFromOperations || "0") || 0;
 
+  // Auto-calculate PAT if missing or zero but expenses exist
+  const totalExpenses = parseFloat(fin.totalExpenses || "0") || 0;
+  const totalIncome = parseFloat(fin.totalIncome || fin.revenueFromOperations || "0") || 0;
+  const rawPat = parseFloat(fin.profitAfterTax || "0") || 0;
+  const computedPat = rawPat !== 0 ? rawPat : (totalIncome - totalExpenses);
+
+  // OPC / Small Company detection
+  const companyTypeLower = (filingData.companyType || "").toLowerCase();
+  const isOpcAoc = companyTypeLower.includes("opc") || companyTypeLower.includes("one person");
+  const membersCount = isOpcAoc ? 1 : null;
+
   const nicCode = cin.substring(1, 6);
   let productCode4 = "9983", productCode8 = "99831300";
   let productDesc = "Information technology (IT) consulting and support services";
@@ -345,7 +356,17 @@ Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.
     "C610": bmDate,               // Date of board resolution (DD/MM/YYYY)
     "AA622": 1,                   // Designation dropdown: 1 = Director
     "J626": signDin,              // DIN of signing director
+    // Members count (L17 = current year, L18 = previous year)
+    ...(membersCount !== null ? { "L17": membersCount, "L18": membersCount } : {}),
   };
+
+  // Inject computed PAT into Claude's cells if JSON had 0 but expenses exist
+  if (computedPat !== 0 && rawPat === 0) {
+    const patField = "statementOfProfitAndLoss.profitOrLossForThePeriodIn";
+    if (allFields[patField]) {
+      directCells[allFields[patField]] = computedPat;
+    }
+  }
 
   // ── Step 6: Apply in order: zeros first, then Claude's values, then direct ────
   let filledAoc: Uint8Array;

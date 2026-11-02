@@ -89,6 +89,17 @@ export async function POST(req: NextRequest) {
         return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; })()
     : "30/09/2026";
 
+  // Board meeting dates for table (C21, C22, C23... up to 12)
+  const bmDateCells: Record<string, string> = {};
+  boardMeetings.slice(0, 12).forEach((bm, i) => {
+    const d = new Date(bm.date);
+    const formatted = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    bmDateCells[`C${21 + i}`] = formatted;
+  });
+
+  const isOpc = (filingData.companyType || "").toLowerCase().includes("opc") || (filingData.companyType || "").toLowerCase().includes("one person");
+  const isSmallCompany = (filingData.companyType || "").toLowerCase().includes("small") || isOpc;
+
   const pat = parseFloat(fin.profitAfterTax || "0") || 0;
   const revenue = parseFloat(fin.revenueFromOperations || "0") || 0;
   const paidupCap = parseFloat(fin.paidUpCapital || "0") || 0;
@@ -235,6 +246,29 @@ Return ONLY a JSON object: {"M17": 4, "B36": "text...", ...}`;
     cellValues = extractJson(text) as Record<string, string | number | null>;
   } catch (e) {
     return NextResponse.json({ error: `AI fill failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
+  }
+
+  // Hardcode mandatory fields that AI tends to miss
+  // B14 — OPC / Small Company flag
+  cellValues["B14"] = isOpc ? "Yes" : (isSmallCompany ? "Yes" : "No");
+
+  // Board meeting dates table (C21, C22, ... up to C32)
+  Object.assign(cellValues, bmDateCells);
+
+  // Employee counts from filing data
+  const empMale = filingData.employeesMale != null ? Number(filingData.employeesMale) : null;
+  const empFemale = filingData.employeesFemale != null ? Number(filingData.employeesFemale) : null;
+  const empOther = filingData.employeesOther != null ? Number(filingData.employeesOther) : null;
+  if (empMale !== null) cellValues["M233"] = empMale;
+  if (empFemale !== null) cellValues["M231"] = empFemale;
+  if (empOther !== null) cellValues["M235"] = empOther;
+
+  // OPC-specific overrides
+  if (isOpc) {
+    cellValues["B42"] = "Not applicable. The Company is a One Person Company (OPC) and does not have Independent Directors.";
+    cellValues["B171"] = "Not applicable. The Company is a One Person Company (OPC) and does not require an evaluation of Independent Directors.";
+    cellValues["B173"] = "Not applicable. The Company is a One Person Company (OPC) and is exempt from mandatory committee requirements.";
+    cellValues["B214"] = "Not applicable. The Company is a One Person Company (OPC) with a single Director. The concept of annual evaluation of Board performance is not applicable.";
   }
 
   let filledBuf: Uint8Array;
