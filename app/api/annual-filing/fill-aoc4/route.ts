@@ -127,49 +127,62 @@ export async function POST(req: NextRequest) {
 
   // guideText is only needed for EAUDITOR/EDIRECTOR paragraph fields — not used in AOC-4
 
-  // ── Step 2: Extract financials from PDF ──────────────────────────────────────
+  // ── Steps 2+3 in PARALLEL: PDF extraction + field map load ─────────────────
+  const pdfBuf = await financialPdf.arrayBuffer();
+  const base64Pdf = Buffer.from(pdfBuf).toString("base64");
+  const aoc4Buf = await aoc4Excel.arrayBuffer();
+
   let financialSummary = "";
-  try {
-    const pdfBuf = await financialPdf.arrayBuffer();
-    const base64Pdf = Buffer.from(pdfBuf).toString("base64");
-    const msg = await anthropic.messages.create({
-      model: "claude-sonnet-5-5",
-      max_tokens: 4000,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } } as unknown as { type: "text"; text: string },
-          {
-            type: "text",
-            text: `Extract ALL financial figures from this Indian company's audited financial statements for MCA AOC-4 filing.
+  let allFields: Record<string, string> = {};
+
+  const [pdfResult, fieldResult] = await Promise.allSettled([
+    // Task A: Extract financials from PDF via Claude
+    (async () => {
+      const msg = await anthropic.messages.create({
+        model: "claude-haiku-5-5",   // faster model for extraction-only step
+        max_tokens: 2000,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Pdf } } as unknown as { type: "text"; text: string },
+            {
+              type: "text",
+              text: `Extract ALL financial figures from this Indian company's audited financial statements for MCA AOC-4 filing.
 Company: ${companyName}
 All amounts in actual Indian Rupees (NOT lakhs/crores).
 Return ONLY raw JSON:
 {"share_capital":null,"reserves_surplus":null,"authorized_capital":null,"lt_borrowings":null,"dt_liabilities":null,"other_lt_liabilities":null,"lt_provisions":null,"st_borrowings":null,"trade_payables_msme":null,"trade_payables_other":null,"other_current_liabilities":null,"st_provisions":null,"total_equity_liabilities":null,"ppe_net":null,"ppe_gross":null,"intangible_assets":null,"cwip":null,"intangible_under_dev":null,"nc_investments":null,"dt_assets":null,"lt_loans_advances":null,"other_nc_assets":null,"current_investments":null,"inventories":null,"trade_receivables":null,"cash_equivalents":null,"st_loans_advances":null,"other_current_assets":null,"total_assets":null,"revenue_from_operations":null,"other_income":null,"total_revenue":null,"cost_materials":null,"purchases_stock":null,"changes_inventories":null,"employee_expenses":null,"managerial_remuneration":null,"auditor_fees":null,"finance_costs":null,"depreciation":null,"other_expenses":null,"exceptional_items":null,"profit_before_tax":null,"current_tax":null,"deferred_tax":null,"profit_after_tax":null,"net_worth":null,"total_shares":null,"nominal_value_per_share":null,"eps_basic":null,"eps_diluted":null,"rent_paid":null,"insurance":null,"power_fuel":null,"trade_rec_unsecured_over6m":null,"lt_borrowings_term_bank":null,"st_borrowings_bank":null,"rpt_gross_value":null,"prev_revenue_from_operations":null,"prev_profit_after_tax":null,"prev_total_assets":null,"prev_net_worth":null}`,
-          },
-        ],
-      }],
-    });
-    const text = (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";
-    const parsed = extractJson(text) as Record<string, number | null>;
-    const lines = Object.entries(parsed).filter(([, v]) => v !== null).map(([k, v]) => `  ${k}: ${v}`);
-    financialSummary = lines.join("\n");
-  } catch (e) {
-    console.error("[fill-aoc4] PDF extraction failed:", e);
+            },
+          ],
+        }],
+      });
+      return (msg.content.find(c => c.type === "text") as { text: string } | undefined)?.text ?? "";
+    })(),
+    // Task B: Load field map from AOC-4 Excel
+    (async () => {
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(aoc4Buf);
+      const sheetPath = await findFormSheet(zip);
+      const { fields } = await loadFieldMap(zip, sheetPath);
+      return fields;
+    })(),
+  ]);
+
+  if (pdfResult.status === "fulfilled") {
+    try {
+      const parsed = extractJson(pdfResult.value) as Record<string, number | null>;
+      const lines = Object.entries(parsed).filter(([, v]) => v !== null).map(([k, v]) => `  ${k}: ${v}`);
+      financialSummary = lines.join("\n");
+    } catch { /* ignore parse errors */ }
+  } else {
+    console.error("[fill-aoc4] PDF extraction failed:", pdfResult.reason);
   }
 
-  // ── Step 3: Build field→cellRef table from FORM sheet ────────────────────────
-  const aoc4Buf = await aoc4Excel.arrayBuffer();
-  let allFields: Record<string, string> = {};  // fieldName → cellRef
-  try {
-    const JSZip = (await import("jszip")).default;
-    const zip = await JSZip.loadAsync(aoc4Buf);
-    const sheetPath = await findFormSheet(zip);
-    const { fields } = await loadFieldMap(zip, sheetPath);
-    allFields = fields;
-  } catch (e) {
+  if (fieldResult.status === "fulfilled") {
+    allFields = fieldResult.value;
+  } else {
     return NextResponse.json({
-      error: `Could not read AOC-4 Excel: ${e instanceof Error ? e.message : String(e)}`,
+      error: `Could not read AOC-4 Excel: ${fieldResult.reason instanceof Error ? fieldResult.reason.message : String(fieldResult.reason)}`,
     }, { status: 400 });
   }
 
