@@ -21,8 +21,9 @@ const ALWAYS_BLANK_PATTERNS = [
 
 // Fields that must be zeroed out when not provided (from aoc4kit ZERO_FIELDS)
 const BS = "balanceSheet."; const LIA = BS + "equityAndLiabilities."; const AS_ = BS + "assets.";
-const DB = "detailedBS."; const PL = "statementOfProfitAndLoss."; const FP = "financialParameters."; const FPM = "financialPM.";
+const DB = "detailedBS."; const PL = "statementOfProfitAndLoss.";
 const ZERO_FIELD_PREFIXES = [
+  // Balance sheet — equity & liabilities breakdowns
   LIA + "shareHoldersFund.shareCapitalIn",
   LIA + "shareHoldersFund.reservsAndSurplusIn",
   LIA + "shareHoldersFund.moneyRecievedAgainestShareWarrantsIn",
@@ -36,6 +37,7 @@ const ZERO_FIELD_PREFIXES = [
   LIA + "currentLiabilities.totaloutduesOtherthanMicroSmallEntCurrent",
   LIA + "currentLiabilities.otherCurrentLiabilitiesIn",
   LIA + "currentLiabilities.shortTermProvisionsIn",
+  // Balance sheet — assets breakdowns
   AS_ + "nonCurrentAssets.propertyAndEquipmentsIn",
   AS_ + "nonCurrentAssets.intangibleAssetsIn",
   AS_ + "nonCurrentAssets.capitalWorkInProgressIn",
@@ -50,12 +52,30 @@ const ZERO_FIELD_PREFIXES = [
   AS_ + "currentAssets.cashAndCashEquivalentsIn",
   AS_ + "currentAssets.shortTermLoansAndAdvancesIn",
   AS_ + "currentAssets.otherCurrentAssetsIn",
+  // Balance sheet totals (G and J columns)
+  LIA + "totalIn",
+  AS_ + "totalIn",
+  // Detailed BS sections
   DB + "detailOfLongTermBorrowings.",
   DB + "detailOfShortTermBorrowings.",
   DB + "detailsOfLongTermLoansGood.",
+  DB + "detailsOfLongTermLoansDoubtful.",
   DB + "detailsOfTradeReceivables.",
-  PL + "current",
+  // P&L — ALL sub-items and totals (Claude overrides with actual values)
+  PL,
+  // Share capital movement (increase/decrease rows — not beginning/end totals)
   "raisedShareCapital.equityShare.atTheBeginningOfTheYear",
+  "raisedShareCapital.equityShare.increaseDuringTheYear",
+  "raisedShareCapital.equityShare.decreaseDuringTheYear",
+  "raisedShareCapital.equityShare.atTheEndOfTheYear",
+  "raisedShareCapital.equityShare.increaseAmount.",
+  "raisedShareCapital.equityShare.decreaseAmount.",
+  "raisedShareCapital.preferenceShare.",  // all preference share rows = 0
+  // SBN demonetization (2016) — most companies = 0
+  "sBNDetails.",
+  // Financial parameters percentages
+  "financialParameters.paidupCapitalFgnCmpnyPercent",
+  "financialParameters.paidupCapitalFgnHoldPercent",
 ];
 
 function shouldAlwaysBlank(fieldName: string): boolean {
@@ -222,7 +242,6 @@ Return ONLY raw JSON:
       !fieldName.includes("formDataVersion") &&
       !fieldName.includes("status")
     )
-    .slice(0, 300)
     .map(([fieldName, cellRef]) => `${cellRef} | ${fieldName}`)
     .join("\n");
 
@@ -293,6 +312,23 @@ ${fieldTableForClaude}
 20. ⚠️ DO NOT fill any "Premium" fields — they are NOT in the table above
 21. ⚠️ For ALL financial numeric fields: if value is unknown → use 0 (never leave blank)
 22. For break-up fields (ltb_*, stb_*, lla_*, tr_*): sum must equal main line item
+23. P&L SECTION MAPPING (statementOfProfitAndLoss.*):
+    - currentDomesticSaleOrSupplyOfServices = Revenue from Operations (domestic services)
+    - currentTotalIncome = Total Income (Revenue from Operations + Other Income)
+    - prevTotalIncome = Previous year Total Income
+    - coNetGainLoss = 0 (not applicable), coNonOperatingIncome = 0
+    - currenttotalExpenses = Total Expenses (sum of all expense line items)
+    - previoustotalExpenses = Previous year Total Expenses
+    - currentprofitBeforeExceptionalAndExtraordinaryItems = EBIT equivalent = currentTotalIncome - currenttotalExpenses
+    - previousprofitBeforeExceptionalAndExtraordinaryItems = prev year same
+    - currentprofitBeforeExtraordinaryItems = same as above (no exceptional items)
+    - currentprofitBeforeTax = Profit Before Tax
+    - previousprofitBeforeTax = Previous year PBT
+    - currentPLforThePeriodFromContinuingOperations = Profit After Tax (PAT)
+    - previousPLforThePeriodFromContinuingOperations = Previous year PAT
+    - currentPLFromDiscontinuingOperationsAfterTax = 0 (no discontinuing operations)
+    - currentProfitAndLossForThePeriod = PAT (same as continuing operations)
+    - Fields ending "InCurrentYear" = current year figure; "InPreviousYear" = previous year figure
 
 Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.`;
 
