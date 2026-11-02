@@ -177,9 +177,16 @@ Return ONLY raw JSON:
   // First write 0 to every financial cell — same as Python kit's ZERO_GROUPS
   // This ensures no financial cell is left blank even if Claude misses it
   const preZeroCells: Record<string, string | number | null> = {};
+  const naTextCells: Record<string, string> = {};  // "Others, specify" → "NA"
   for (const [fieldName, cellRef] of Object.entries(allFields)) {
     if (shouldPreZero(fieldName)) {
       preZeroCells[cellRef] = 0;
+    }
+    // "Others, specify" text/description fields → fill "NA" when blank
+    // Covers: share capital table (x Others, iv Others), debenture others, etc.
+    if (/[Oo]thers?[A-Z].*(?:name|desc|specify|particular|detail)|(?:name|desc|particular).*[Oo]thers?[A-Z]/i.test(fieldName) ||
+        /[Oo]ther[Ss]pecif/i.test(fieldName)) {
+      naTextCells[cellRef] = "NA";
     }
   }
 
@@ -371,8 +378,8 @@ Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.
   // ── Step 6: Apply in order: zeros first, then Claude's values, then direct ────
   let filledAoc: Uint8Array;
   try {
-    // Pass 1: pre-zero all financial cells
-    filledAoc = await applyCellValues(aoc4Buf, preZeroCells);
+    // Pass 1: pre-zero all financial cells + fill "Others, specify" as "NA"
+    filledAoc = await applyCellValues(aoc4Buf, { ...preZeroCells, ...naTextCells });
     // Pass 2: apply Claude's values (overrides zeros with actual values)
     // Use slice() to get a proper ArrayBuffer — filledAoc.buffer may be a shared buffer with offset
     const pass1Buf = filledAoc.buffer.slice(filledAoc.byteOffset, filledAoc.byteOffset + filledAoc.byteLength);
