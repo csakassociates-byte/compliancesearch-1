@@ -40,10 +40,11 @@ function buildStateOfAffairs(data: AnnualFilingData): string {
   if (data.stateOfAffairs) return data.stateOfAffairs;
   const fy = data.financialYear;
   const fyEnd = fyEndYear(fy);
-  const rev  = num(data.financials.revenueFromOperations);
-  const pbt  = num(data.financials.profitBeforeTax);
-  const pat  = num(data.financials.profitAfterTax);
-  const prevPbt = num(data.financials.prevProfitBeforeTax);
+  const fin_ = data.financials || {};
+  const rev  = num(fin_.revenueFromOperations);
+  const pbt  = num(fin_.profitBeforeTax);
+  const pat  = num(fin_.profitAfterTax);
+  const prevPbt = num(fin_.prevProfitBeforeTax);
   const revStr  = rev === 0 ? "NIL" : `₹${fmtIndian(Math.abs(rev))}`;
   const pbtLbl  = pbt < 0 ? "Net Loss before Tax" : "Net Profit before Tax";
   const patLbl  = pat < 0 ? "Net Loss after Tax"  : "Net Profit after Tax";
@@ -70,7 +71,7 @@ function buildDividend(data: AnnualFilingData): string {
 
 function buildDirectorChanges(data: AnnualFilingData): string {
   const fyEnd   = `31st March, ${fyEndYear(data.financialYear)}`;
-  const changed = data.directors.filter(d => d.changedDuringYear && d.changeType);
+  const changed = (data.directors || []).filter(d => d.changedDuringYear && d.changeType);
   if (changed.length === 0) {
     return `During the financial year ended ${fyEnd}, there were no appointments or resignations of directors or key managerial personnel in the Company.`;
   }
@@ -101,7 +102,7 @@ function buildAuditOpinion(data: AnnualFilingData): string {
   const co    = data.companyName;
   const fyEnd = fyEndYear(data.financialYear);
   const date  = `March 31, ${fyEnd}`;
-  const pl    = num(data.financials.profitAfterTax) < 0 ? "loss" : "profit";
+  const pl    = num((data.financials || {}).profitAfterTax) < 0 ? "loss" : "profit";
   return (
     `We have audited the accompanying standalone financial statements of ${co} (the Company), ` +
     `which comprise the Balance Sheet as at ${date}, the Statement of Profit and Loss for the year then ended, ` +
@@ -220,7 +221,7 @@ function buildRule11g(): string {
 function buildSection143(data: AnnualFilingData): string {
   const fyEnd    = fyEndYear(data.financialYear);
   const date     = `31st March, ${fyEnd}`;
-  const rev      = num(data.financials.revenueFromOperations);
+  const rev      = num((data.financials || {}).revenueFromOperations);
   const isOPC    = data.companyType === "opc";
   const isSml    = data.companyType === "private_small";
   // OPC and small companies are exempt from Cash Flow Statement (Schedule III amendment)
@@ -245,7 +246,7 @@ function buildSection143(data: AnnualFilingData): string {
 }
 
 function buildIFC(data: AnnualFilingData): string {
-  const rev = num(data.financials.revenueFromOperations);
+  const rev = num((data.financials || {}).revenueFromOperations);
   if (rev < 500000000) {
     return (
       `With respect to the adequacy of the internal financial controls over financial reporting of the Company: ` +
@@ -703,18 +704,20 @@ export function generateMcaV3GuideText(data: AnnualFilingData): string {
   const isSml   = data.companyType === "private_small";
   const isSec8  = data.companyType === "section8";
 
-  const activeDirCount = data.directors.filter(d => d.isActive).length;
+  const directors      = data.directors || [];
+  const activeDirCount = directors.filter(d => d.isActive).length;
   const boardMeetings  = data.boardMeetings || [];
   const bmCount        = boardMeetings.length;
   const lastBM         = boardMeetings[bmCount - 1];
   const bmDate         = lastBM ? fmtDateDMY(lastBM.date) : "";
   const committeeMeetingCount = data.committeeMeetings?.length ?? 0;
 
-  const pat  = num(data.financials.profitAfterTax);
-  const rev  = num(data.financials.revenueFromOperations);
-  const paidupCap = num(data.financials.paidUpCapital);
-  const reserves  = num(data.financials.reservesAndSurplus);
-  const netWorth  = num(data.financials.netWorth) || (paidupCap + reserves);
+  const fin  = data.financials || {};
+  const pat  = num(fin.profitAfterTax);
+  const rev  = num(fin.revenueFromOperations);
+  const paidupCap = num(fin.paidUpCapital);
+  const reserves  = num(fin.reservesAndSurplus);
+  const netWorth  = num(fin.netWorth) || (paidupCap + reserves);
 
   const fxEarn = num(data.foreignExchangeEarnings);
   const fxOut  = num(data.foreignExchangeOutgo);
