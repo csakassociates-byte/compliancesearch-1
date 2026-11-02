@@ -17,6 +17,15 @@ const ALWAYS_BLANK_PATTERNS = [
   /reason.*change/i,
   /Premium/,           // "Total premium" column always blank per MCA rule
   /premium/i,
+  // Secretarial audit observations — only when secretarial audit is applicable (not OPC/small)
+  /numberOfObservations/i,
+  /secretarialAudit.*observation/i,
+  /observation.*secretarial/i,
+  // Declaration — resolution number and date left blank (user fills manually)
+  /boardResolutionNumber/i,
+  /dateOfBoardResolution/i,
+  /declaration.*resolutionNumber/i,
+  /declaration.*date/i,
 ];
 
 // Fields that must be zeroed out when not provided (from aoc4kit ZERO_FIELDS)
@@ -76,15 +85,6 @@ const ZERO_FIELD_PREFIXES = [
   // Financial parameters percentages
   "financialParameters.paidupCapitalFgnCmpnyPercent",
   "financialParameters.paidupCapitalFgnHoldPercent",
-  // Secretarial audit observations — only filled when secretarial audit is applicable
-  /numberOfObservations/i,
-  /secretarialAudit.*observation/i,
-  /observation.*secretarial/i,
-  // Declaration — resolution number and date left blank (user fills manually)
-  /declaration.*resolution/i,
-  /declaration.*date/i,
-  /boardResolutionNumber/i,
-  /dateOfBoardResolution/i,
 ];
 
 function shouldAlwaysBlank(fieldName: string): boolean {
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
     // Task A: Extract financials from PDF via Claude
     (async () => {
       const msg = await anthropic.messages.create({
-        model: "claude-haiku-5-5",   // faster model for extraction-only step
+        model: "claude-sonnet-5-5",
         max_tokens: 2000,
         messages: [{
           role: "user",
