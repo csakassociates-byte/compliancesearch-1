@@ -125,8 +125,8 @@ Company: ${companyName}`,
 
   // ── Step 4: Claude fills AOC-4 ───────────────────────────────────────────────
   const fieldList = Object.keys(aocFields)
-    .filter(f => !f.startsWith("requestBody.formName") && !f.startsWith("requestBody.operation") && !f.includes("status") && !f.includes("formIntegrationId"))
-    .slice(0, 150)
+    .filter(f => !f.startsWith("requestBody.formName") && !f.startsWith("requestBody.operation") && !f.includes("status") && !f.includes("formIntegrationId") && !f.includes("formDataVersion"))
+    .slice(0, 250)
     .join("\n");
 
   const boardMeetings = (filingData.boardMeetings || []).map(bm => {

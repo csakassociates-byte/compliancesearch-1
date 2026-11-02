@@ -27,31 +27,36 @@ function setCellInXml(xml: string, ref: string, value: string | number | null): 
   const strVal = String(value);
   const isNum = typeof value === "number" || (typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value.trim()) && value.trim() !== "");
 
-  // Build the new cell XML
-  let cellXml: string;
-  if (isNum) {
-    cellXml = `<c r="${ref}"><v>${strVal}</v></c>`;
-  } else {
+  // Build new cell XML, always preserving the original style attribute (s="N")
+  function buildCellXml(existingAttrs: string): string {
+    const sMatch = existingAttrs.match(/\bs="(\d+)"/);
+    const sAttr = sMatch ? ` s="${sMatch[1]}"` : "";
+    if (isNum) {
+      return `<c r="${ref}"${sAttr}><v>${strVal}</v></c>`;
+    }
     const escaped = strVal
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
-    cellXml = `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${escaped}</t></is></c>`;
+    return `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${escaped}</t></is></c>`;
   }
 
-  // First check: self-closing empty cell like <c r="E42" s="5"/>  — replace directly
-  const selfClose = new RegExp(`<c r="${ref}"[^>]*/>`);
-  if (selfClose.test(xml)) {
-    return xml.replace(selfClose, cellXml);
+  // Self-closing empty cell like <c r="E42" s="5"/> — safe to fill, preserve style
+  const selfCloseRegex = new RegExp(`<c r="${ref}"([^>]*)\/>`);
+  const scMatch = xml.match(selfCloseRegex);
+  if (scMatch) {
+    return xml.replace(selfCloseRegex, buildCellXml(scMatch[1]));
   }
 
-  // Second check: normal cell with content — replace (but never overwrite formula cells)
-  const cellRegex = new RegExp(`<c r="${ref}"[^>]*>[\\s\\S]*?<\\/c>`);
-  const existing = xml.match(cellRegex);
-  if (existing) {
-    if (existing[0].includes("<f>")) return xml; // formula cell — skip
-    return xml.replace(cellRegex, cellXml);
+  // Full cell — skip formula cells, preserve style on others
+  const cellRegex = new RegExp(`<c r="${ref}"([^>]*)>([\\s\\S]*?)<\\/c>`);
+  const cellMatch = xml.match(cellRegex);
+  if (cellMatch) {
+    const content = cellMatch[2];
+    // Never overwrite formula cells (any <f or <f> tag)
+    if (/<f[\s>]/.test(content) || content.includes("<f>")) return xml;
+    return xml.replace(cellRegex, buildCellXml(cellMatch[1]));
   }
 
   // Insert into the correct row, in column order
@@ -59,32 +64,29 @@ function setCellInXml(xml: string, ref: string, value: string | number | null): 
   const rowMatch = xml.match(rowRegex);
   if (rowMatch) {
     const rowContent = rowMatch[2];
-    // Find insertion point (sorted by column)
     const cellsInRow = [...rowContent.matchAll(/<c r="([A-Z]+)\d+"[^>]*>/g)];
     let insertBefore = "";
     for (const cm of cellsInRow) {
       if (colNum(cm[1]) > colNum(col)) { insertBefore = cm[0]; break; }
     }
+    const newCell = buildCellXml("");
     const newRowContent = insertBefore
-      ? rowContent.replace(insertBefore, cellXml + insertBefore)
-      : rowContent + cellXml;
+      ? rowContent.replace(insertBefore, newCell + insertBefore)
+      : rowContent + newCell;
     return xml.replace(rowRegex, rowMatch[1] + newRowContent + rowMatch[3]);
   }
 
   // Row doesn't exist — insert before next row with higher number
   const allRowsRegex = /<row r="(\d+)"[^>]*>/g;
   let insertBeforeRow = "";
-  let lastMatch: RegExpExecArray | null = null;
   let m: RegExpExecArray | null;
   while ((m = allRowsRegex.exec(xml)) !== null) {
     if (parseInt(m[1]) > row) { insertBeforeRow = m[0]; break; }
-    lastMatch = m;
   }
-  const newRow = `<row r="${row}">${cellXml}</row>`;
+  const newRow = `<row r="${row}">${buildCellXml("")}</row>`;
   if (insertBeforeRow) {
     return xml.replace(insertBeforeRow, newRow + insertBeforeRow);
   }
-  // Append before </sheetData>
   return xml.replace("</sheetData>", newRow + "</sheetData>");
 }
 
