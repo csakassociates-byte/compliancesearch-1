@@ -577,12 +577,21 @@ function AnnualFilingTool() {
   // AOC-4 AI filler
   const [aocFinPdf, setAocFinPdf]         = useState<File | null>(null);
   const [aocMcaZip, setAocMcaZip]         = useState<File | null>(null);
-  const [eauditorFile, setEauditorFile]   = useState<File | null>(null);
-  const [edirectorFile, setEdirectorFile] = useState<File | null>(null);
-  const [guideJsonFile, setGuideJsonFile] = useState<File | null>(null);
   const [aocFilling, setAocFilling]       = useState(false);
   const [aocFillMsg, setAocFillMsg]       = useState<{ ok: boolean; text: string } | null>(null);
   const [aocFilledFiles, setAocFilledFiles] = useState<{ aoc: {name:string;data:string}; aud?: {name:string;data:string}; dir?: {name:string;data:string} } | null>(null);
+  // Shared guide JSON for EAUDITOR + EDIRECTOR
+  const [guideJsonFile, setGuideJsonFile] = useState<File | null>(null);
+  // EAUDITOR — independent
+  const [eauditorFile, setEauditorFile]   = useState<File | null>(null);
+  const [eauditorFilling, setEauditorFilling] = useState(false);
+  const [eauditorMsg, setEauditorMsg]     = useState<{ ok: boolean; text: string } | null>(null);
+  const [eauditorResult, setEauditorResult] = useState<{name:string;data:string} | null>(null);
+  // EDIRECTOR — independent
+  const [edirectorFile, setEdirectorFile] = useState<File | null>(null);
+  const [edirectorFilling, setEdirectorFilling] = useState(false);
+  const [edirectorMsg, setEdirectorMsg]   = useState<{ ok: boolean; text: string } | null>(null);
+  const [edirectorResult, setEdirectorResult] = useState<{name:string;data:string} | null>(null);
   const [prevYearDraft, setPrevYearDraft] = useState<{
     id: string; companyName: string | null; financialYear: string | null;
     updatedAt: string; formDataJson: string;
@@ -5266,293 +5275,168 @@ function AnnualFilingTool() {
               </button>
             </div>
 
-            {/* ── AI Fill AOC-4 ─────────────────────────────────────────── */}
+            {/* ── AI Fill — 3 separate sections ──────────────────────────── */}
             {isLocked && saveId && (
-              <div className="mt-4 rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50 overflow-hidden">
-                <div className="px-4 py-3 bg-violet-600 flex items-center gap-2">
-                  <span className="text-lg">🤖</span>
-                  <div>
-                    <p className="text-white font-bold text-sm">Fill AOC-4 Excel with Compliance AI</p>
-                    <p className="text-violet-200 text-[11px]">Upload your financial PDF + Excel files → AI fills automatically using saved company data</p>
+              <div className="mt-4 space-y-3">
+
+                {/* ── CARD 1: AOC-4 ─────────────────────────────────────── */}
+                <div className="rounded-xl border border-violet-200 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-violet-600 flex items-center gap-2">
+                    <span>🤖</span>
+                    <div>
+                      <p className="text-white font-bold text-sm">Part 1 — Generate AOC-4</p>
+                      <p className="text-violet-200 text-[11px]">Upload Financial PDF + AOC-4 Excel → AI fills balance sheet, P&L</p>
+                    </div>
+                  </div>
+                  <div className="p-3 space-y-2 bg-violet-50">
+                    {aocFilling && (
+                      <div className="rounded-lg bg-white border border-violet-200 p-4 text-center space-y-2">
+                        <svg className="w-8 h-8 text-violet-500 animate-spin mx-auto" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        <p className="text-violet-800 font-bold text-xs">AI is filling AOC-4... please wait (1-2 min)</p>
+                      </div>
+                    )}
+                    {aocFilledFiles?.aoc && !aocFilling && (
+                      <div className="space-y-2">
+                        <button onClick={() => { const f=aocFilledFiles!.aoc; const b=new Blob([Uint8Array.from(atob(f.data),c=>c.charCodeAt(0))],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}); const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=f.name; a.click(); }} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2">
+                          <Download className="w-4 h-4" /> Download AOC-4 Excel <span className="text-[10px] opacity-75">{aocFilledFiles.aoc.name}</span>
+                        </button>
+                        {aocFillMsg && <p className="text-xs text-center text-emerald-600">{aocFillMsg.text}</p>}
+                        <button onClick={() => { setAocFilledFiles(null); setAocFillMsg(null); }} className="w-full py-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg">Fill again</button>
+                      </div>
+                    )}
+                    {!aocFilling && !aocFilledFiles?.aoc && (<>
+                      <div>
+                        <label className="block text-xs font-semibold text-violet-800 mb-1">📄 Step 1 — Financial Statements PDF</label>
+                        <div className={`border-2 border-dashed rounded-lg px-3 py-2 text-center cursor-pointer ${aocFinPdf?"border-violet-400 bg-violet-100":"border-violet-300 bg-white hover:border-violet-400"}`} onClick={()=>document.getElementById("aoc-fin-pdf")?.click()}>
+                          <input id="aoc-fin-pdf" type="file" accept=".pdf" className="hidden" onChange={e=>{setAocFinPdf(e.target.files?.[0]??null);setAocFillMsg(null);}}/>
+                          <span className={`text-xs ${aocFinPdf?"text-violet-700 font-semibold":"text-slate-500"}`}>{aocFinPdf?`✅ ${aocFinPdf.name}`:"Click to upload Balance Sheet / P&L PDF"}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-violet-800 mb-1">📊 Step 2 — AOC-4 Excel <span className="font-normal text-violet-600">(from MCA ZIP)</span></label>
+                        <div className={`border-2 border-dashed rounded-lg px-3 py-2 text-center cursor-pointer ${aocMcaZip?"border-violet-400 bg-violet-100":"border-violet-300 bg-white hover:border-violet-400"}`} onClick={()=>document.getElementById("aoc-mca-zip")?.click()}>
+                          <input id="aoc-mca-zip" type="file" accept=".xlsx" className="hidden" onChange={e=>{setAocMcaZip(e.target.files?.[0]??null);setAocFillMsg(null);}}/>
+                          <span className={`text-xs ${aocMcaZip?"text-violet-700 font-semibold":"text-slate-500"}`}>{aocMcaZip?`✅ ${aocMcaZip.name}`:"Click to upload AOC-4 .xlsx"}</span>
+                        </div>
+                      </div>
+                      {aocFillMsg && !aocFillMsg.ok && <p className="text-xs text-red-600 font-semibold">{aocFillMsg.text}</p>}
+                      <button onClick={async()=>{
+                        if(!aocFinPdf||!aocMcaZip){setAocFillMsg({ok:false,text:"Upload Financial PDF and AOC-4 Excel first."});return;}
+                        setAocFilling(true);setAocFillMsg(null);setAocFilledFiles(null);
+                        try{
+                          const fd=new FormData();fd.append("financialPdf",aocFinPdf);fd.append("mcaZip",aocMcaZip);fd.append("saveId",saveId);
+                          const res=await fetch("/api/annual-filing/fill-aoc4",{method:"POST",body:fd});
+                          if(!res.ok){const t=await res.text().catch(()=>"");let e=`HTTP ${res.status}`;try{e=(JSON.parse(t) as{error?:string}).error??e;}catch{e=t.slice(0,150)||e;}throw new Error(e);}
+                          const j=await res.json() as{fieldsFilled?:number;aoc:{name:string;data:string}};
+                          setAocFilledFiles({aoc:j.aoc});setAocFillMsg({ok:true,text:`AOC-4: ${j.fieldsFilled??"?"} cells filled`});
+                        }catch(e){setAocFillMsg({ok:false,text:`❌ ${e instanceof Error?e.message:String(e)}`);}
+                        finally{setAocFilling(false);}
+                      }} disabled={!aocFinPdf||!aocMcaZip} className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2">
+                        🤖 Generate AOC-4
+                      </button>
+                    </>)}
                   </div>
                 </div>
-                <div className="p-4 space-y-3">
 
-                  {/* ── "Please wait" overlay while filling ── */}
-                  {aocFilling && (
-                    <div className="rounded-xl bg-violet-50 border-2 border-violet-300 p-5 text-center space-y-3">
-                      <div className="flex justify-center">
-                        <svg className="w-10 h-10 text-violet-500 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                        </svg>
-                      </div>
-                      <p className="text-violet-800 font-bold text-sm">Please wait, we are working on it...</p>
-                      <p className="text-violet-600 text-xs">AI is reading your financial statements and filling the AOC-4 Excel. This may take 1-2 minutes. Please do not close this tab.</p>
-                      <div className="flex justify-center gap-1">
-                        {[0,1,2].map(i => (
-                          <span key={i} className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Download button after completion ── */}
-                  {aocFilledFiles && !aocFilling && (
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-3">
-                      <p className="text-emerald-700 font-bold text-sm text-center">✅ Excel files are ready!</p>
-                      <p className="text-emerald-600 text-xs text-center">Download → Open in Excel → Save → Upload to MCA portal</p>
-                      {aocFilledFiles.aoc && (
-                        <button
-                          onClick={() => {
-                            const file = aocFilledFiles!.aoc;
-                            const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
-                            const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url; a.download = file.name; a.click();
-                            setTimeout(() => URL.revokeObjectURL(url), 5000);
-                          }}
-                          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2"
-                        >
-                          <Download className="w-4 h-4" /> Download AOC-4 Excel
-                          <span className="text-[10px] opacity-75 ml-1">{aocFilledFiles.aoc.name}</span>
-                        </button>
-                      )}
-                      {aocFilledFiles.aud && (
-                        <button
-                          onClick={() => {
-                            const file = aocFilledFiles!.aud!;
-                            const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
-                            const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url; a.download = file.name; a.click();
-                            setTimeout(() => URL.revokeObjectURL(url), 5000);
-                          }}
-                          className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2"
-                        >
-                          <Download className="w-4 h-4" /> Download EAUDITOR Excel
-                          <span className="text-[10px] opacity-75 ml-1">{aocFilledFiles.aud.name}</span>
-                        </button>
-                      )}
-                      {aocFilledFiles.dir && (
-                        <button
-                          onClick={() => {
-                            const file = aocFilledFiles!.dir!;
-                            const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
-                            const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url; a.download = file.name; a.click();
-                            setTimeout(() => URL.revokeObjectURL(url), 5000);
-                          }}
-                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2"
-                        >
-                          <Download className="w-4 h-4" /> Download EDIRECTOR Excel
-                          <span className="text-[10px] opacity-75 ml-1">{aocFilledFiles.dir.name}</span>
-                        </button>
-                      )}
-                      {aocFillMsg && (
-                        <p className="text-xs text-emerald-600 text-center">{aocFillMsg.text}</p>
-                      )}
-                      <button
-                        onClick={() => { setAocFilledFiles(null); setAocFillMsg(null); }}
-                        className="w-full py-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg"
-                      >
-                        Fill again with different files
-                      </button>
-                    </div>
-                  )}
-
-                  {/* ── Upload form ── */}
-                  {!aocFilling && !aocFilledFiles && (
-                    <>
-                      {/* Upload 1: Financial PDF */}
-                      <div>
-                        <label className="block text-xs font-semibold text-violet-800 mb-1">
-                          📄 Step 1 — Upload Financial Statements (PDF)
-                        </label>
-                        <div
-                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocFinPdf ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
-                          onClick={() => document.getElementById("aoc-fin-pdf")?.click()}
-                        >
-                          <input id="aoc-fin-pdf" type="file" accept=".pdf" className="hidden"
-                            onChange={e => { setAocFinPdf(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
-                          {aocFinPdf
-                            ? <span className="text-xs text-violet-700 font-semibold">✅ {aocFinPdf.name}</span>
-                            : <span className="text-xs text-slate-500">Click to upload Balance Sheet / P&L PDF</span>}
-                        </div>
-                      </div>
-
-                      {/* Upload 2: AOC-4 Excel */}
-                      <div>
-                        <label className="block text-xs font-semibold text-violet-800 mb-1">
-                          📊 Step 2 — Upload AOC-4 Excel File
-                          <span className="font-normal text-violet-600 ml-1">(extract from MCA ZIP → upload only AOC-4 .xlsx)</span>
-                        </label>
-                        <div
-                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocMcaZip ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
-                          onClick={() => document.getElementById("aoc-mca-zip")?.click()}
-                        >
-                          <input id="aoc-mca-zip" type="file" accept=".xlsx" className="hidden"
-                            onChange={e => { setAocMcaZip(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
-                          {aocMcaZip
-                            ? <span className="text-xs text-violet-700 font-semibold">✅ {aocMcaZip.name}</span>
-                            : <span className="text-xs text-slate-500">Click to upload AOC-4 Excel (.xlsx file)</span>}
-                        </div>
-                      </div>
-
-                      {/* Upload: Guide JSON (for EAUDITOR + EDIRECTOR) */}
-                      <div>
-                        <label className="block text-xs font-semibold text-amber-800 mb-1">
-                          📂 Guide JSON — Upload Filing Data JSON
-                          <span className="font-normal text-amber-600 ml-1">(click &quot;Download Guide JSON&quot; above → upload here)</span>
-                        </label>
-                        <div
-                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${guideJsonFile ? "border-amber-400 bg-amber-50" : "border-amber-200 bg-white hover:border-amber-400"}`}
-                          onClick={() => document.getElementById("guide-json-file")?.click()}
-                        >
-                          <input id="guide-json-file" type="file" accept=".json" className="hidden"
-                            onChange={e => { setGuideJsonFile(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
-                          {guideJsonFile
-                            ? <span className="text-xs text-amber-700 font-semibold">✅ {guideJsonFile.name}</span>
-                            : <span className="text-xs text-slate-500">Upload JSON file (needed for EAUDITOR + EDIRECTOR fill)</span>}
-                        </div>
-                      </div>
-
-                      {/* Upload 4: EAUDITOR Excel (optional) */}
-                      <div>
-                        <label className="block text-xs font-semibold text-teal-800 mb-1">
-                          🔍 Step 3 — Upload EAUDITOR Standalone Excel
-                          <span className="font-normal text-teal-600 ml-1">(optional — Auditor&apos;s Report)</span>
-                        </label>
-                        <div
-                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${eauditorFile ? "border-teal-400 bg-teal-50" : "border-teal-200 bg-white hover:border-teal-400"}`}
-                          onClick={() => document.getElementById("eauditor-xlsx")?.click()}
-                        >
-                          <input id="eauditor-xlsx" type="file" accept=".xlsx" className="hidden"
-                            onChange={e => { setEauditorFile(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
-                          {eauditorFile
-                            ? <span className="text-xs text-teal-700 font-semibold">✅ {eauditorFile.name}</span>
-                            : <span className="text-xs text-slate-500">Click to upload EAUDITOR .xlsx (leave blank to skip)</span>}
-                        </div>
-                      </div>
-
-                      {/* Upload 5: EDIRECTOR Excel (optional) */}
-                      <div>
-                        <label className="block text-xs font-semibold text-indigo-800 mb-1">
-                          📝 Step 4 — Upload EDIRECTOR Excel
-                          <span className="font-normal text-indigo-600 ml-1">(optional — Director&apos;s Report)</span>
-                        </label>
-                        <div
-                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${edirectorFile ? "border-indigo-400 bg-indigo-50" : "border-indigo-200 bg-white hover:border-indigo-400"}`}
-                          onClick={() => document.getElementById("edirector-xlsx")?.click()}
-                        >
-                          <input id="edirector-xlsx" type="file" accept=".xlsx" className="hidden"
-                            onChange={e => { setEdirectorFile(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
-                          {edirectorFile
-                            ? <span className="text-xs text-indigo-700 font-semibold">✅ {edirectorFile.name}</span>
-                            : <span className="text-xs text-slate-500">Click to upload EDIRECTOR .xlsx (leave blank to skip)</span>}
-                        </div>
-                      </div>
-
-                      {/* Status message */}
-                      {aocFillMsg && (
-                        <div className={`p-2.5 rounded-lg text-xs font-semibold ${aocFillMsg.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
-                          {aocFillMsg.text}
-                        </div>
-                      )}
-
-                      {/* Fill button */}
-                      <button
-                        onClick={async () => {
-                          if (!aocFinPdf || !aocMcaZip) {
-                            setAocFillMsg({ ok: false, text: "Please upload Financial PDF and AOC-4 Excel (Steps 1 & 3) first." });
-                            return;
-                          }
-                          setAocFilling(true);
-                          setAocFillMsg(null);
-                          setAocFilledFiles(null);
-                          try {
-                            const result: { aoc: {name:string;data:string}; aud?: {name:string;data:string}; dir?: {name:string;data:string} } = { aoc: { name: "", data: "" } };
-                            const msgParts: string[] = [];
-
-                            // Step 1: AOC-4 (sequential — large PDF upload)
-                            const aocFd = new FormData();
-                            aocFd.append("financialPdf", aocFinPdf);
-                            aocFd.append("mcaZip", aocMcaZip);
-                            aocFd.append("saveId", saveId);
-                            const aocRes = await fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: aocFd });
-                            if (!aocRes.ok) {
-                              const text = await aocRes.text().catch(() => "");
-                              let errMsg = `AOC-4 error HTTP ${aocRes.status}`;
-                              try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { errMsg = text.slice(0, 200) || errMsg; }
-                              throw new Error(errMsg);
-                            }
-                            const aocJson = await aocRes.json() as { fieldsFound?: number; fieldsFilled?: number; aoc: {name:string;data:string} };
-                            result.aoc = aocJson.aoc;
-                            msgParts.push(`AOC-4: ${aocJson.fieldsFilled ?? "?"} cells filled`);
-
-                            // Step 2: EAUDITOR + EDIRECTOR in parallel (smaller payloads — just Excel + JSON)
-                            const audEdirPromises: Promise<void>[] = [];
-
-                            if (eauditorFile) {
-                              audEdirPromises.push((async () => {
-                                const audFd = new FormData();
-                                audFd.append("eauditorFile", eauditorFile);
-                                audFd.append("saveId", saveId);
-                                if (guideJsonFile) audFd.append("guideJson", guideJsonFile);
-                                const audRes = await fetch("/api/annual-filing/fill-eauditor", { method: "POST", body: audFd });
-                                if (audRes.ok) {
-                                  const audJson = await audRes.json() as { fieldsFilled?: number; eauditor: {name:string;data:string} };
-                                  result.aud = audJson.eauditor;
-                                  msgParts.push(`EAUDITOR: ${audJson.fieldsFilled ?? "?"} cells filled`);
-                                } else {
-                                  const t = await audRes.text().catch(() => "");
-                                  let em = "fill failed"; try { em = (JSON.parse(t) as {error?:string}).error ?? em; } catch { /**/ }
-                                  msgParts.push(`EAUDITOR: ${em}`);
-                                }
-                              })());
-                            }
-
-                            if (edirectorFile) {
-                              audEdirPromises.push((async () => {
-                                const dirFd = new FormData();
-                                dirFd.append("edirectorFile", edirectorFile);
-                                dirFd.append("saveId", saveId);
-                                if (guideJsonFile) dirFd.append("guideJson", guideJsonFile);
-                                const dirRes = await fetch("/api/annual-filing/fill-edirector", { method: "POST", body: dirFd });
-                                if (dirRes.ok) {
-                                  const dirJson = await dirRes.json() as { fieldsFilled?: number; edirector: {name:string;data:string} };
-                                  result.dir = dirJson.edirector;
-                                  msgParts.push(`EDIRECTOR: ${dirJson.fieldsFilled ?? "?"} cells filled`);
-                                } else {
-                                  const t = await dirRes.text().catch(() => "");
-                                  let em = "fill failed"; try { em = (JSON.parse(t) as {error?:string}).error ?? em; } catch { /**/ }
-                                  msgParts.push(`EDIRECTOR: ${em}`);
-                                }
-                              })());
-                            }
-
-                            await Promise.all(audEdirPromises);
-
-                            setAocFilledFiles(result);
-                            setAocFillMsg({ ok: true, text: msgParts.join(" · ") });
-                          } catch (e) {
-                            setAocFillMsg({ ok: false, text: `❌ ${e instanceof Error ? e.message : String(e)}` });
-                          } finally {
-                            setAocFilling(false);
-                          }
-                        }}
-                        disabled={!aocFinPdf || !aocMcaZip}
-                        className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <span>🤖</span> Fill with AI {eauditorFile || edirectorFile ? `(${[aocMcaZip && "AOC-4", eauditorFile && "EAUDITOR", edirectorFile && "EDIRECTOR"].filter(Boolean).join(" + ")})` : "AOC-4"}
-                      </button>
-                    </>
-                  )}
+                {/* ── Shared Guide JSON ──────────────────────────────────── */}
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <label className="block text-xs font-semibold text-amber-800 mb-1">📂 Guide JSON <span className="font-normal text-amber-600">(download above → upload here — used for EAUDITOR + EDIRECTOR)</span></label>
+                  <div className={`border-2 border-dashed rounded-lg px-3 py-2 text-center cursor-pointer ${guideJsonFile?"border-amber-400 bg-white":"border-amber-300 bg-white hover:border-amber-400"}`} onClick={()=>document.getElementById("guide-json-file")?.click()}>
+                    <input id="guide-json-file" type="file" accept=".json" className="hidden" onChange={e=>setGuideJsonFile(e.target.files?.[0]??null)}/>
+                    <span className={`text-xs ${guideJsonFile?"text-amber-700 font-semibold":"text-slate-500"}`}>{guideJsonFile?`✅ ${guideJsonFile.name}`:"Click to upload filing-data JSON"}</span>
+                  </div>
                 </div>
+
+                {/* ── CARD 2: EAUDITOR + EDIRECTOR together ─────────────── */}
+                <div className="rounded-xl border border-teal-200 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-gradient-to-r from-teal-600 to-indigo-600 flex items-center gap-2">
+                    <span>🔍📝</span>
+                    <div>
+                      <p className="text-white font-bold text-sm">Part 2 — Generate EAUDITOR + EDIRECTOR</p>
+                      <p className="text-teal-100 text-[11px]">Upload both Excel files + Guide JSON → AI fills Auditor&apos;s Report &amp; Director&apos;s Report together</p>
+                    </div>
+                  </div>
+                  <div className="p-3 space-y-2 bg-gradient-to-b from-teal-50 to-indigo-50">
+                    {(eauditorFilling || edirectorFilling) && (
+                      <div className="rounded-lg bg-white border border-teal-200 p-4 text-center space-y-2">
+                        <svg className="w-8 h-8 text-teal-500 animate-spin mx-auto" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        <p className="text-teal-800 font-bold text-xs">AI is filling EAUDITOR &amp; EDIRECTOR... please wait (2-3 min)</p>
+                      </div>
+                    )}
+                    {(eauditorResult || edirectorResult) && !eauditorFilling && !edirectorFilling && (
+                      <div className="space-y-2">
+                        {eauditorResult && (
+                          <button onClick={()=>{const f=eauditorResult!;const b=new Blob([Uint8Array.from(atob(f.data),c=>c.charCodeAt(0))],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=f.name;a.click();}} className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2">
+                            <Download className="w-4 h-4"/> Download EAUDITOR Excel <span className="text-[10px] opacity-75">{eauditorResult.name}</span>
+                          </button>
+                        )}
+                        {edirectorResult && (
+                          <button onClick={()=>{const f=edirectorResult!;const b=new Blob([Uint8Array.from(atob(f.data),c=>c.charCodeAt(0))],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=f.name;a.click();}} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2">
+                            <Download className="w-4 h-4"/> Download EDIRECTOR Excel <span className="text-[10px] opacity-75">{edirectorResult.name}</span>
+                          </button>
+                        )}
+                        {eauditorMsg && <p className="text-xs text-center text-teal-600">{eauditorMsg.text}</p>}
+                        {edirectorMsg && <p className="text-xs text-center text-indigo-600">{edirectorMsg.text}</p>}
+                        <button onClick={()=>{setEauditorResult(null);setEauditorMsg(null);setEdirectorResult(null);setEdirectorMsg(null);}} className="w-full py-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg">Fill again</button>
+                      </div>
+                    )}
+                    {!eauditorFilling && !edirectorFilling && !eauditorResult && !edirectorResult && (<>
+                      <div>
+                        <label className="block text-xs font-semibold text-teal-800 mb-1">🔍 EAUDITOR Standalone Excel <span className="font-normal text-teal-600">(Auditor&apos;s Report)</span></label>
+                        <div className={`border-2 border-dashed rounded-lg px-3 py-2 text-center cursor-pointer ${eauditorFile?"border-teal-400 bg-teal-100":"border-teal-200 bg-white hover:border-teal-400"}`} onClick={()=>document.getElementById("eauditor-xlsx")?.click()}>
+                          <input id="eauditor-xlsx" type="file" accept=".xlsx" className="hidden" onChange={e=>{setEauditorFile(e.target.files?.[0]??null);setEauditorMsg(null);}}/>
+                          <span className={`text-xs ${eauditorFile?"text-teal-700 font-semibold":"text-slate-500"}`}>{eauditorFile?`✅ ${eauditorFile.name}`:"Click to upload EAUDITOR .xlsx"}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-indigo-800 mb-1">📝 EDIRECTOR Excel <span className="font-normal text-indigo-600">(Director&apos;s Report)</span></label>
+                        <div className={`border-2 border-dashed rounded-lg px-3 py-2 text-center cursor-pointer ${edirectorFile?"border-indigo-400 bg-indigo-100":"border-indigo-200 bg-white hover:border-indigo-400"}`} onClick={()=>document.getElementById("edirector-xlsx")?.click()}>
+                          <input id="edirector-xlsx" type="file" accept=".xlsx" className="hidden" onChange={e=>{setEdirectorFile(e.target.files?.[0]??null);setEdirectorMsg(null);}}/>
+                          <span className={`text-xs ${edirectorFile?"text-indigo-700 font-semibold":"text-slate-500"}`}>{edirectorFile?`✅ ${edirectorFile.name}`:"Click to upload EDIRECTOR .xlsx"}</span>
+                        </div>
+                      </div>
+                      {(eauditorMsg && !eauditorMsg.ok) && <p className="text-xs text-red-600 font-semibold">{eauditorMsg.text}</p>}
+                      {(edirectorMsg && !edirectorMsg.ok) && <p className="text-xs text-red-600 font-semibold">{edirectorMsg.text}</p>}
+                      <button onClick={async()=>{
+                        if(!eauditorFile && !edirectorFile){setEauditorMsg({ok:false,text:"Upload at least one Excel file (EAUDITOR or EDIRECTOR)."});return;}
+                        setEauditorFilling(true);setEdirectorFilling(true);
+                        setEauditorMsg(null);setEdirectorMsg(null);
+                        setEauditorResult(null);setEdirectorResult(null);
+                        const promises: Promise<void>[] = [];
+                        if(eauditorFile){
+                          promises.push((async()=>{
+                            try{
+                              const fd=new FormData();fd.append("eauditorFile",eauditorFile);fd.append("saveId",saveId);
+                              if(guideJsonFile)fd.append("guideJson",guideJsonFile);
+                              const res=await fetch("/api/annual-filing/fill-eauditor",{method:"POST",body:fd});
+                              if(!res.ok){const t=await res.text().catch(()=>"");let e=`HTTP ${res.status}`;try{e=(JSON.parse(t) as{error?:string}).error??e;}catch{e=t.slice(0,150)||e;}throw new Error(e);}
+                              const j=await res.json() as{fieldsFilled?:number;eauditor:{name:string;data:string}};
+                              setEauditorResult(j.eauditor);setEauditorMsg({ok:true,text:`EAUDITOR: ${j.fieldsFilled??"?"} cells filled`});
+                            }catch(e){setEauditorMsg({ok:false,text:`❌ EAUDITOR: ${e instanceof Error?e.message:String(e)}`});}
+                            finally{setEauditorFilling(false);}
+                          })());
+                        } else { setEauditorFilling(false); }
+                        if(edirectorFile){
+                          promises.push((async()=>{
+                            try{
+                              const fd=new FormData();fd.append("edirectorFile",edirectorFile);fd.append("saveId",saveId);
+                              if(guideJsonFile)fd.append("guideJson",guideJsonFile);
+                              const res=await fetch("/api/annual-filing/fill-edirector",{method:"POST",body:fd});
+                              if(!res.ok){const t=await res.text().catch(()=>"");let e=`HTTP ${res.status}`;try{e=(JSON.parse(t) as{error?:string}).error??e;}catch{e=t.slice(0,150)||e;}throw new Error(e);}
+                              const j=await res.json() as{fieldsFilled?:number;edirector:{name:string;data:string}};
+                              setEdirectorResult(j.edirector);setEdirectorMsg({ok:true,text:`EDIRECTOR: ${j.fieldsFilled??"?"} cells filled`});
+                            }catch(e){setEdirectorMsg({ok:false,text:`❌ EDIRECTOR: ${e instanceof Error?e.message:String(e)}`});}
+                            finally{setEdirectorFilling(false);}
+                          })());
+                        } else { setEdirectorFilling(false); }
+                        await Promise.all(promises);
+                      }} disabled={!eauditorFile && !edirectorFile} className="w-full py-2.5 bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 disabled:bg-slate-300 disabled:bg-none text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2">
+                        🤖 Generate EAUDITOR + EDIRECTOR
+                      </button>
+                    </>)}
+                  </div>
+                </div>
+
               </div>
             )}
 
