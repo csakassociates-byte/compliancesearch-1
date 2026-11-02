@@ -76,6 +76,15 @@ const ZERO_FIELD_PREFIXES = [
   // Financial parameters percentages
   "financialParameters.paidupCapitalFgnCmpnyPercent",
   "financialParameters.paidupCapitalFgnHoldPercent",
+  // Secretarial audit observations — only filled when secretarial audit is applicable
+  /numberOfObservations/i,
+  /secretarialAudit.*observation/i,
+  /observation.*secretarial/i,
+  // Declaration — resolution number and date left blank (user fills manually)
+  /declaration.*resolution/i,
+  /declaration.*date/i,
+  /boardResolutionNumber/i,
+  /dateOfBoardResolution/i,
 ];
 
 function shouldAlwaysBlank(fieldName: string): boolean {
@@ -371,9 +380,7 @@ Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.
     "F543": productCode8,         // ITC/NPCS 8-digit contributing product code
     "H543": productDesc,          // Description of highest contributing product
     "I543": revenue,              // Turnover of highest contributing product
-    // Declaration section
-    "J609": "4",                  // Board resolution number
-    "C610": bmDate,               // Date of board resolution (DD/MM/YYYY)
+    // Declaration section — resolution no. and date left blank (user fills manually)
     "AA622": 1,                   // Designation dropdown: 1 = Director
     "J626": signDin,              // DIN of signing director
     // Members count (L17 = current year, L18 = previous year)
