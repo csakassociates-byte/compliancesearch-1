@@ -578,6 +578,8 @@ function AnnualFilingTool() {
   const [aocFinPdf, setAocFinPdf]         = useState<File | null>(null);
   const [aocMcaZip, setAocMcaZip]         = useState<File | null>(null);
   const [aocGuide, setAocGuide]           = useState<File | null>(null);
+  const [eauditorFile, setEauditorFile]   = useState<File | null>(null);
+  const [edirectorFile, setEdirectorFile] = useState<File | null>(null);
   const [aocFilling, setAocFilling]       = useState(false);
   const [aocFillMsg, setAocFillMsg]       = useState<{ ok: boolean; text: string } | null>(null);
   const [aocFilledFiles, setAocFilledFiles] = useState<{ aoc: {name:string;data:string}; aud?: {name:string;data:string}; dir?: {name:string;data:string} } | null>(null);
@@ -5281,12 +5283,12 @@ function AnnualFilingTool() {
                   {/* ── Download button after completion ── */}
                   {aocFilledFiles && !aocFilling && (
                     <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-3">
-                      <p className="text-emerald-700 font-bold text-sm text-center">✅ AOC-4 is ready!</p>
+                      <p className="text-emerald-700 font-bold text-sm text-center">✅ Excel files are ready!</p>
                       <p className="text-emerald-600 text-xs text-center">Download → Open in Excel → Save → Upload to MCA portal</p>
                       {aocFilledFiles.aoc && (
                         <button
                           onClick={() => {
-                            const file = aocFilledFiles.aoc!;
+                            const file = aocFilledFiles!.aoc;
                             const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
                             const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
                             const url = URL.createObjectURL(blob);
@@ -5298,6 +5300,40 @@ function AnnualFilingTool() {
                         >
                           <Download className="w-4 h-4" /> Download AOC-4 Excel
                           <span className="text-[10px] opacity-75 ml-1">{aocFilledFiles.aoc.name}</span>
+                        </button>
+                      )}
+                      {aocFilledFiles.aud && (
+                        <button
+                          onClick={() => {
+                            const file = aocFilledFiles!.aud!;
+                            const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
+                            const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url; a.download = file.name; a.click();
+                            setTimeout(() => URL.revokeObjectURL(url), 5000);
+                          }}
+                          className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2"
+                        >
+                          <Download className="w-4 h-4" /> Download EAUDITOR Excel
+                          <span className="text-[10px] opacity-75 ml-1">{aocFilledFiles.aud.name}</span>
+                        </button>
+                      )}
+                      {aocFilledFiles.dir && (
+                        <button
+                          onClick={() => {
+                            const file = aocFilledFiles!.dir!;
+                            const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
+                            const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url; a.download = file.name; a.click();
+                            setTimeout(() => URL.revokeObjectURL(url), 5000);
+                          }}
+                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2"
+                        >
+                          <Download className="w-4 h-4" /> Download EDIRECTOR Excel
+                          <span className="text-[10px] opacity-75 ml-1">{aocFilledFiles.dir.name}</span>
                         </button>
                       )}
                       {aocFillMsg && (
@@ -5368,6 +5404,42 @@ function AnnualFilingTool() {
                         </div>
                       </div>
 
+                      {/* Upload 4: EAUDITOR Excel (optional) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-teal-800 mb-1">
+                          🔍 Step 4 — Upload EAUDITOR Standalone Excel
+                          <span className="font-normal text-teal-600 ml-1">(optional — Auditor&apos;s Report)</span>
+                        </label>
+                        <div
+                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${eauditorFile ? "border-teal-400 bg-teal-50" : "border-teal-200 bg-white hover:border-teal-400"}`}
+                          onClick={() => document.getElementById("eauditor-xlsx")?.click()}
+                        >
+                          <input id="eauditor-xlsx" type="file" accept=".xlsx" className="hidden"
+                            onChange={e => { setEauditorFile(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
+                          {eauditorFile
+                            ? <span className="text-xs text-teal-700 font-semibold">✅ {eauditorFile.name}</span>
+                            : <span className="text-xs text-slate-500">Click to upload EAUDITOR .xlsx (leave blank to skip)</span>}
+                        </div>
+                      </div>
+
+                      {/* Upload 5: EDIRECTOR Excel (optional) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-indigo-800 mb-1">
+                          📝 Step 5 — Upload EDIRECTOR Excel
+                          <span className="font-normal text-indigo-600 ml-1">(optional — Director&apos;s Report)</span>
+                        </label>
+                        <div
+                          className={`border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${edirectorFile ? "border-indigo-400 bg-indigo-50" : "border-indigo-200 bg-white hover:border-indigo-400"}`}
+                          onClick={() => document.getElementById("edirector-xlsx")?.click()}
+                        >
+                          <input id="edirector-xlsx" type="file" accept=".xlsx" className="hidden"
+                            onChange={e => { setEdirectorFile(e.target.files?.[0] ?? null); setAocFillMsg(null); }} />
+                          {edirectorFile
+                            ? <span className="text-xs text-indigo-700 font-semibold">✅ {edirectorFile.name}</span>
+                            : <span className="text-xs text-slate-500">Click to upload EDIRECTOR .xlsx (leave blank to skip)</span>}
+                        </div>
+                      </div>
+
                       {/* Status message */}
                       {aocFillMsg && (
                         <div className={`p-2.5 rounded-lg text-xs font-semibold ${aocFillMsg.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
@@ -5379,28 +5451,78 @@ function AnnualFilingTool() {
                       <button
                         onClick={async () => {
                           if (!aocFinPdf || !aocMcaZip) {
-                            setAocFillMsg({ ok: false, text: "Please upload Financial PDF and MCA ZIP first." });
+                            setAocFillMsg({ ok: false, text: "Please upload Financial PDF and AOC-4 Excel (Steps 1 & 3) first." });
                             return;
                           }
                           setAocFilling(true);
                           setAocFillMsg(null);
                           setAocFilledFiles(null);
                           try {
-                            const fd = new FormData();
-                            fd.append("financialPdf", aocFinPdf);
-                            fd.append("mcaZip", aocMcaZip);
-                            if (aocGuide) fd.append("guide", aocGuide);
-                            fd.append("saveId", saveId);
-                            const res = await fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: fd });
-                            if (!res.ok) {
-                              const text = await res.text().catch(() => "");
-                              let errMsg = `HTTP ${res.status}`;
+                            // Call all three APIs in parallel
+                            const aocFd = new FormData();
+                            aocFd.append("financialPdf", aocFinPdf);
+                            aocFd.append("mcaZip", aocMcaZip);
+                            if (aocGuide) aocFd.append("guide", aocGuide);
+                            aocFd.append("saveId", saveId);
+
+                            const promises: Promise<Response>[] = [
+                              fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: aocFd }),
+                            ];
+
+                            if (eauditorFile) {
+                              const audFd = new FormData();
+                              audFd.append("eauditorFile", eauditorFile);
+                              audFd.append("saveId", saveId);
+                              promises.push(fetch("/api/annual-filing/fill-eauditor", { method: "POST", body: audFd }));
+                            }
+
+                            if (edirectorFile) {
+                              const dirFd = new FormData();
+                              dirFd.append("edirectorFile", edirectorFile);
+                              dirFd.append("saveId", saveId);
+                              promises.push(fetch("/api/annual-filing/fill-edirector", { method: "POST", body: dirFd }));
+                            }
+
+                            const responses = await Promise.all(promises);
+
+                            // Parse AOC-4 result (always first)
+                            const aocRes = responses[0];
+                            if (!aocRes.ok) {
+                              const text = await aocRes.text().catch(() => "");
+                              let errMsg = `AOC-4 error HTTP ${aocRes.status}`;
                               try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { errMsg = text.slice(0, 200) || errMsg; }
                               throw new Error(errMsg);
                             }
-                            const json = await res.json() as { fieldsFound?: number; fieldsFilled?: number; aoc: {name:string;data:string} };
-                            setAocFilledFiles({ aoc: json.aoc });
-                            setAocFillMsg({ ok: true, text: `AI extracted ${json.fieldsFound ?? "?"} financial fields, filled ${json.fieldsFilled ?? "?"} cells.` });
+                            const aocJson = await aocRes.json() as { fieldsFound?: number; fieldsFilled?: number; aoc: {name:string;data:string} };
+
+                            const result: { aoc: {name:string;data:string}; aud?: {name:string;data:string}; dir?: {name:string;data:string} } = { aoc: aocJson.aoc };
+                            let msgParts = [`AOC-4: ${aocJson.fieldsFilled ?? "?"} cells filled`];
+                            let resIdx = 1;
+
+                            if (eauditorFile && responses[resIdx]) {
+                              const audRes = responses[resIdx++];
+                              if (audRes.ok) {
+                                const audJson = await audRes.json() as { fieldsFilled?: number; eauditor: {name:string;data:string} };
+                                result.aud = audJson.eauditor;
+                                msgParts.push(`EAUDITOR: ${audJson.fieldsFilled ?? "?"} cells filled`);
+                              } else {
+                                msgParts.push("EAUDITOR: fill failed (check console)");
+                              }
+                            }
+
+                            if (edirectorFile && responses[resIdx]) {
+                              const dirRes = responses[resIdx];
+                              if (dirRes.ok) {
+                                const dirJson = await dirRes.json() as { fieldsFilled?: number; edirector: {name:string;data:string} };
+                                result.dir = dirJson.edirector;
+                                msgParts.push(`EDIRECTOR: ${dirJson.fieldsFilled ?? "?"} cells filled`);
+                              } else {
+                                msgParts.push("EDIRECTOR: fill failed (check console)");
+                              }
+                            }
+
+                            setAocFilledFiles(result);
+                            setAocFillMsg({ ok: true, text: msgParts.join(" · ") });
                           } catch (e) {
                             setAocFillMsg({ ok: false, text: `❌ ${e instanceof Error ? e.message : String(e)}` });
                           } finally {
@@ -5410,7 +5532,7 @@ function AnnualFilingTool() {
                         disabled={!aocFinPdf || !aocMcaZip}
                         className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
-                        <span>🤖</span> Fill AOC-4 with AI
+                        <span>🤖</span> Fill with AI {eauditorFile || edirectorFile ? `(${[aocMcaZip && "AOC-4", eauditorFile && "EAUDITOR", edirectorFile && "EDIRECTOR"].filter(Boolean).join(" + ")})` : "AOC-4"}
                       </button>
                     </>
                   )}
