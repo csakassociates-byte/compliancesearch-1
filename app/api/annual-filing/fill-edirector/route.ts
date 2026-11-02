@@ -78,7 +78,6 @@ export async function POST(req: NextRequest) {
   const firstDir = directors[0] || {};
   const firstDirName = firstDir.name || "";
   const firstDirDin = firstDir.din || "";
-  const firstDirPan = firstDir.pan || firstDirDin; // fallback to DIN
   const firstDirDesig = firstDir.designation || "Director";
 
   const boardMeetings = filingData.boardMeetings || [];
@@ -89,12 +88,18 @@ export async function POST(req: NextRequest) {
         return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; })()
     : "30/09/2026";
 
-  // Board meeting dates for table (C21, C22, C23... up to 12)
-  const bmDateCells: Record<string, string> = {};
+  // Board meeting dates table (C=date, D=total dirs, E=attended, F=% attendance)
+  const bmDateCells: Record<string, string | number> = {};
   boardMeetings.slice(0, 12).forEach((bm, i) => {
     const d = new Date(bm.date);
     const formatted = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    const totalDirs = directors.length || 1;
+    const attended = (bm.directorsPresent && bm.directorsPresent.length > 0) ? bm.directorsPresent.length : totalDirs;
+    const pct = Math.round((attended / totalDirs) * 10000) / 100;
     bmDateCells[`C${21 + i}`] = formatted;
+    bmDateCells[`D${21 + i}`] = totalDirs;
+    bmDateCells[`E${21 + i}`] = attended;
+    bmDateCells[`F${21 + i}`] = pct;
   });
 
   const isOpc = (filingData.companyType || "").toLowerCase().includes("opc") || (filingData.companyType || "").toLowerCase().includes("one person");
@@ -180,9 +185,7 @@ M237 | noOfMatterToBeIncludedInDirectorReport
 B240 | headingForTheMatter
 B242 | referenceToSectionRuleItPertains
 B244 | briefDescriptionOfMatter
-I249 | declaration.resolutionNo
-C250 | declaration.decalartionDate
-J266 | declaration.pan
+J266 | declaration.din
 
 FILLING INSTRUCTIONS (for a small private limited company with no CSR obligation — where MCA guide above gives specific instructions, follow those exactly):
 
@@ -199,9 +202,9 @@ Numeric fields:
 - M221 = 0, M223 = 0, M225 = 0 (sexual harassment complaints)
 - M231 = 0, M233 = 0, M235 = 0 (employee counts — fill with 0 if unknown)
 - M237 = count of additional matters beyond standard disclosures (e.g. details of loans given u/s 186, investments, guarantees, related party contracts u/s 188, etc.) — use 0 only if truly none exist; check filing data (hasLoansGiven, hasDeposits, hasSubsidiaries fields)
-- I249 = "4" (board resolution number)
-- C250 = "${bmDate}" (board meeting date DD/MM/YYYY)
-- J266 = "${firstDirPan}" (signing director's PAN or DIN)
+- I249 = leave blank (user will fill board resolution number manually)
+- C250 = leave blank (user will fill declaration date manually)
+- J266 = "${firstDirDin}" (Director Identification Number of signing director — NOT PAN)
 
 Text fields (use standard professional language):
 - B36 (Directors' Responsibility Statement): Standard statement per Section 134(5) — directors confirm financial statements give true & fair view, proper accounting records maintained, applicable accounting standards followed, internal financial controls adequate, proper systems to ensure compliance with laws.
@@ -279,6 +282,11 @@ Return ONLY a JSON object: {"M17": 4, "B36": "text...", ...}`;
     cellValues["B173"] = "Not applicable. The Company is a One Person Company (OPC) and is exempt from mandatory committee requirements.";
     cellValues["B214"] = "Not applicable. The Company is a One Person Company (OPC) with a single Director. The concept of annual evaluation of Board performance is not applicable.";
   }
+
+  // Declaration fields — always override AI: DIN (not PAN), leave date/resolution blank
+  if (firstDirDin) cellValues["J266"] = firstDirDin;
+  delete cellValues["I249"];  // user fills resolution number manually
+  delete cellValues["C250"];  // user fills declaration date manually
 
   let filledBuf: Uint8Array;
   try {
