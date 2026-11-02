@@ -492,6 +492,40 @@ export async function applyFieldValues(
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
 }
 
+/**
+ * Apply exact cell-reference→value map directly to an Excel file.
+ * No field name lookup — Claude returns {"G208": 5000000} and we write straight to G208.
+ */
+export async function applyCellValues(
+  xlsBuf: ArrayBuffer,
+  cellValues: Record<string, string | number | null>,
+): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(xlsBuf);
+  const sheetPath = await findFormSheet(zip);
+
+  let sheetXml = await zip.file(sheetPath)!.async("string");
+  for (const [cellRef, value] of Object.entries(cellValues)) {
+    if (value === null || value === undefined) continue;
+    // Validate it looks like a cell ref (e.g. G208, B13, AA5)
+    if (!/^[A-Z]{1,3}\d+$/.test(cellRef.trim())) continue;
+    sheetXml = setCellInXml(sheetXml, cellRef.trim(), value);
+  }
+  zip.file(sheetPath, sheetXml);
+  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+}
+
+/**
+ * Build a table of {fieldName, cellRef} for Claude — so Claude can return cellRef→value pairs directly.
+ */
+export async function buildFieldCellTable(
+  xlsBuf: ArrayBuffer,
+): Promise<Array<{ fieldName: string; cellRef: string }>> {
+  const zip = await JSZip.loadAsync(xlsBuf);
+  const sheetPath = await findFormSheet(zip);
+  const { fields } = await loadFieldMap(zip, sheetPath);
+  return Object.entries(fields).map(([fieldName, cellRef]) => ({ fieldName, cellRef }));
+}
+
 // ── Main fill function ────────────────────────────────────────────────────────
 
 export interface AocFillData {
