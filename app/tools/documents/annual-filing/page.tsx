@@ -5329,7 +5329,7 @@ function AnnualFilingTool() {
                           if(!res.ok){const t=await res.text().catch(()=>"");let e=`HTTP ${res.status}`;try{e=(JSON.parse(t) as{error?:string}).error??e;}catch{e=t.slice(0,150)||e;}throw new Error(e);}
                           const j=await res.json() as{fieldsFilled?:number;aoc:{name:string;data:string}};
                           setAocFilledFiles({aoc:j.aoc});setAocFillMsg({ok:true,text:`AOC-4: ${j.fieldsFilled??"?"} cells filled`});
-                        }catch(e){setAocFillMsg({ok:false,text:`❌ ${e instanceof Error?e.message:String(e)}`);}
+                        }catch(e){const em=e instanceof Error?e.message:String(e);setAocFillMsg({ok:false,text:"❌ "+em});}
                         finally{setAocFilling(false);}
                       }} disabled={!aocFinPdf||!aocMcaZip} className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2">
                         🤖 Generate AOC-4
@@ -5412,7 +5412,7 @@ function AnnualFilingTool() {
                               if(!res.ok){const t=await res.text().catch(()=>"");let e=`HTTP ${res.status}`;try{e=(JSON.parse(t) as{error?:string}).error??e;}catch{e=t.slice(0,150)||e;}throw new Error(e);}
                               const j=await res.json() as{fieldsFilled?:number;eauditor:{name:string;data:string}};
                               setEauditorResult(j.eauditor);setEauditorMsg({ok:true,text:`EAUDITOR: ${j.fieldsFilled??"?"} cells filled`});
-                            }catch(e){setEauditorMsg({ok:false,text:`❌ EAUDITOR: ${e instanceof Error?e.message:String(e)}`});}
+                            }catch(e){const em=e instanceof Error?e.message:String(e);setEauditorMsg({ok:false,text:"❌ EAUDITOR: "+em});}
                             finally{setEauditorFilling(false);}
                           })());
                         } else { setEauditorFilling(false); }
@@ -5425,7 +5425,7 @@ function AnnualFilingTool() {
                               if(!res.ok){const t=await res.text().catch(()=>"");let e=`HTTP ${res.status}`;try{e=(JSON.parse(t) as{error?:string}).error??e;}catch{e=t.slice(0,150)||e;}throw new Error(e);}
                               const j=await res.json() as{fieldsFilled?:number;edirector:{name:string;data:string}};
                               setEdirectorResult(j.edirector);setEdirectorMsg({ok:true,text:`EDIRECTOR: ${j.fieldsFilled??"?"} cells filled`});
-                            }catch(e){setEdirectorMsg({ok:false,text:`❌ EDIRECTOR: ${e instanceof Error?e.message:String(e)}`});}
+                            }catch(e){const em=e instanceof Error?e.message:String(e);setEdirectorMsg({ok:false,text:"❌ EDIRECTOR: "+em});}
                             finally{setEdirectorFilling(false);}
                           })());
                         } else { setEdirectorFilling(false); }
