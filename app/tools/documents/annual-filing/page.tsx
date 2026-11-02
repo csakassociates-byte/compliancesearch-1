@@ -579,6 +579,7 @@ function AnnualFilingTool() {
   const [aocMcaZip, setAocMcaZip]         = useState<File | null>(null);
   const [aocFilling, setAocFilling]       = useState(false);
   const [aocFillMsg, setAocFillMsg]       = useState<{ ok: boolean; text: string } | null>(null);
+  const [aocFilledFiles, setAocFilledFiles] = useState<{ aoc: {name:string;data:string}; aud: {name:string;data:string}; dir: {name:string;data:string} } | null>(null);
   const [prevYearDraft, setPrevYearDraft] = useState<{
     id: string; companyName: string | null; financialYear: string | null;
     updatedAt: string; formDataJson: string;
@@ -5256,112 +5257,168 @@ function AnnualFilingTool() {
                   </div>
                 </div>
                 <div className="p-4 space-y-3">
-                  {/* Upload 1: Financial PDF */}
-                  <div>
-                    <label className="block text-xs font-semibold text-violet-800 mb-1">
-                      📄 Upload Financial Statements (PDF)
-                    </label>
-                    <div
-                      className={`relative border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocFinPdf ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
-                      onClick={() => document.getElementById("aoc-fin-pdf")?.click()}
-                    >
-                      <input
-                        id="aoc-fin-pdf"
-                        type="file"
-                        accept=".pdf"
-                        className="hidden"
-                        onChange={e => { setAocFinPdf(e.target.files?.[0] ?? null); setAocFillMsg(null); }}
-                      />
-                      {aocFinPdf ? (
-                        <span className="text-xs text-violet-700 font-semibold">✅ {aocFinPdf.name}</span>
-                      ) : (
-                        <span className="text-xs text-slate-500">Click to upload Balance Sheet PDF</span>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Upload 2: MCA ZIP */}
-                  <div>
-                    <label className="block text-xs font-semibold text-violet-800 mb-1">
-                      🗜️ Upload MCA Portal ZIP (AOC-4 + EAUDITOR + EDIRECTOR)
-                    </label>
-                    <div
-                      className={`relative border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocMcaZip ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
-                      onClick={() => document.getElementById("aoc-mca-zip")?.click()}
-                    >
-                      <input
-                        id="aoc-mca-zip"
-                        type="file"
-                        accept=".zip"
-                        className="hidden"
-                        onChange={e => { setAocMcaZip(e.target.files?.[0] ?? null); setAocFillMsg(null); }}
-                      />
-                      {aocMcaZip ? (
-                        <span className="text-xs text-violet-700 font-semibold">✅ {aocMcaZip.name}</span>
-                      ) : (
-                        <span className="text-xs text-slate-500">Click to upload MCA portal ZIP file</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Status message */}
-                  {aocFillMsg && (
-                    <div className={`p-2.5 rounded-lg text-xs font-semibold ${aocFillMsg.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
-                      {aocFillMsg.text}
+                  {/* ── "Please wait" overlay while filling ── */}
+                  {aocFilling && (
+                    <div className="rounded-xl bg-violet-50 border-2 border-violet-300 p-5 text-center space-y-3">
+                      <div className="flex justify-center">
+                        <svg className="w-10 h-10 text-violet-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                      </div>
+                      <p className="text-violet-800 font-bold text-sm">Please wait, we are working on it...</p>
+                      <p className="text-violet-600 text-xs">AI is reading your financial statements and carefully filling all 3 Excel templates. This may take 1-2 minutes. Please do not close this tab.</p>
+                      <div className="flex justify-center gap-1">
+                        {[0,1,2].map(i => (
+                          <span key={i} className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {/* Action info */}
-                  <div className="flex items-start gap-2 text-[11px] text-violet-700 bg-violet-100 rounded-lg p-2.5">
-                    <span className="flex-shrink-0">ℹ️</span>
-                    <span>AI will extract all financial figures from your PDF and auto-fill all 3 Excel files. Board meetings, directors, and auditor data are auto-pulled from your saved filing. Download the filled ZIP and open each file in Excel → Save → Upload to MCA.</span>
-                  </div>
+                  {/* ── Download buttons after completion ── */}
+                  {aocFilledFiles && !aocFilling && (
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-3">
+                      <p className="text-emerald-700 font-bold text-sm text-center">✅ All 3 Excel files are ready!</p>
+                      <p className="text-emerald-600 text-xs text-center">Download each file → Open in Excel → Save → Upload to MCA portal</p>
+                      <div className="space-y-2">
+                        {([
+                          { key: "aoc" as const, label: "📊 AOC-4 (Balance Sheet & P&L)", color: "bg-blue-600 hover:bg-blue-700" },
+                          { key: "aud" as const, label: "📋 EAUDITOR (Auditor Report)", color: "bg-emerald-600 hover:bg-emerald-700" },
+                          { key: "dir" as const, label: "📝 EDIRECTOR (Board Report)", color: "bg-purple-600 hover:bg-purple-700" },
+                        ]).map(({ key, label, color }) => {
+                          const file = aocFilledFiles[key];
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
+                                const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url; a.download = file.name; a.click();
+                                setTimeout(() => URL.revokeObjectURL(url), 5000);
+                              }}
+                              className={`w-full py-2.5 ${color} text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2`}
+                            >
+                              <Download className="w-3.5 h-3.5" /> {label}
+                              <span className="text-[10px] opacity-75 ml-1">{file.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={() => { setAocFilledFiles(null); setAocFillMsg(null); }}
+                        className="w-full py-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg"
+                      >
+                        Fill again with different files
+                      </button>
+                    </div>
+                  )}
 
-                  {/* Fill button */}
-                  <button
-                    onClick={async () => {
-                      if (!aocFinPdf || !aocMcaZip) {
-                        setAocFillMsg({ ok: false, text: "Please upload both files first." });
-                        return;
-                      }
-                      setAocFilling(true);
-                      setAocFillMsg(null);
-                      try {
-                        const fd = new FormData();
-                        fd.append("financialPdf", aocFinPdf);
-                        fd.append("mcaZip", aocMcaZip);
-                        fd.append("saveId", saveId);
-                        const res = await fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: fd });
-                        if (!res.ok) {
-                          const text = await res.text().catch(() => "");
-                          let errMsg = `HTTP ${res.status}`;
-                          try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { errMsg = text.slice(0, 120) || errMsg; }
-                          throw new Error(errMsg);
-                        }
-                        const fieldsFound = res.headers.get("X-AI-Fields-Found");
-                        const blob = await res.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `${data.cin || "AOC4"}_FILLED.zip`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        setAocFillMsg({ ok: true, text: `✅ Download started! AI extracted ${fieldsFound ?? "?"} financial fields. Open each Excel → Save → Upload to MCA.` });
-                      } catch (e) {
-                        setAocFillMsg({ ok: false, text: `❌ ${e instanceof Error ? e.message : String(e)}` });
-                      } finally {
-                        setAocFilling(false);
-                      }
-                    }}
-                    disabled={aocFilling || !aocFinPdf || !aocMcaZip}
-                    className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    {aocFilling ? (
-                      <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> AI is reading & filling… (30-60 sec)</>
-                    ) : (
-                      <><span>🤖</span> Generate Filled AOC-4 ZIP</>
-                    )}
-                  </button>
+                  {/* ── Upload form (hidden while filling or after completion) ── */}
+                  {!aocFilling && !aocFilledFiles && (
+                    <>
+                      {/* Upload 1: Financial PDF */}
+                      <div>
+                        <label className="block text-xs font-semibold text-violet-800 mb-1">
+                          📄 Upload Financial Statements (PDF)
+                        </label>
+                        <div
+                          className={`relative border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocFinPdf ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
+                          onClick={() => document.getElementById("aoc-fin-pdf")?.click()}
+                        >
+                          <input
+                            id="aoc-fin-pdf"
+                            type="file"
+                            accept=".pdf"
+                            className="hidden"
+                            onChange={e => { setAocFinPdf(e.target.files?.[0] ?? null); setAocFillMsg(null); }}
+                          />
+                          {aocFinPdf ? (
+                            <span className="text-xs text-violet-700 font-semibold">✅ {aocFinPdf.name}</span>
+                          ) : (
+                            <span className="text-xs text-slate-500">Click to upload Balance Sheet PDF</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Upload 2: MCA ZIP */}
+                      <div>
+                        <label className="block text-xs font-semibold text-violet-800 mb-1">
+                          🗜️ Upload MCA Portal ZIP (AOC-4 + EAUDITOR + EDIRECTOR)
+                        </label>
+                        <div
+                          className={`relative border-2 border-dashed rounded-lg px-3 py-2.5 text-center cursor-pointer transition-colors ${aocMcaZip ? "border-violet-400 bg-violet-100" : "border-violet-300 bg-white hover:border-violet-400"}`}
+                          onClick={() => document.getElementById("aoc-mca-zip")?.click()}
+                        >
+                          <input
+                            id="aoc-mca-zip"
+                            type="file"
+                            accept=".zip"
+                            className="hidden"
+                            onChange={e => { setAocMcaZip(e.target.files?.[0] ?? null); setAocFillMsg(null); }}
+                          />
+                          {aocMcaZip ? (
+                            <span className="text-xs text-violet-700 font-semibold">✅ {aocMcaZip.name}</span>
+                          ) : (
+                            <span className="text-xs text-slate-500">Click to upload MCA portal ZIP file</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Status message */}
+                      {aocFillMsg && (
+                        <div className={`p-2.5 rounded-lg text-xs font-semibold ${aocFillMsg.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
+                          {aocFillMsg.text}
+                        </div>
+                      )}
+
+                      {/* Info */}
+                      <div className="flex items-start gap-2 text-[11px] text-violet-700 bg-violet-100 rounded-lg p-2.5">
+                        <span className="flex-shrink-0">ℹ️</span>
+                        <span>AI reads your financial PDF and auto-fills all 3 Excel files. Board meetings, directors, and auditor data are auto-pulled from your saved filing. Each file downloads separately — open in Excel → Save → Upload to MCA.</span>
+                      </div>
+
+                      {/* Fill button */}
+                      <button
+                        onClick={async () => {
+                          if (!aocFinPdf || !aocMcaZip) {
+                            setAocFillMsg({ ok: false, text: "Please upload both files first." });
+                            return;
+                          }
+                          setAocFilling(true);
+                          setAocFillMsg(null);
+                          setAocFilledFiles(null);
+                          try {
+                            const fd = new FormData();
+                            fd.append("financialPdf", aocFinPdf);
+                            fd.append("mcaZip", aocMcaZip);
+                            fd.append("saveId", saveId);
+                            const res = await fetch("/api/annual-filing/fill-aoc4", { method: "POST", body: fd });
+                            if (!res.ok) {
+                              const text = await res.text().catch(() => "");
+                              let errMsg = `HTTP ${res.status}`;
+                              try { errMsg = (JSON.parse(text) as { error?: string }).error ?? errMsg; } catch { errMsg = text.slice(0, 120) || errMsg; }
+                              throw new Error(errMsg);
+                            }
+                            const json = await res.json() as { fieldsFound?: number; aoc: {name:string;data:string}; aud: {name:string;data:string}; dir: {name:string;data:string} };
+                            setAocFilledFiles({ aoc: json.aoc, aud: json.aud, dir: json.dir });
+                            setAocFillMsg({ ok: true, text: `✅ AI extracted ${json.fieldsFound ?? "?"} financial fields. Download each Excel file below.` });
+                          } catch (e) {
+                            setAocFillMsg({ ok: false, text: `❌ ${e instanceof Error ? e.message : String(e)}` });
+                          } finally {
+                            setAocFilling(false);
+                          }
+                        }}
+                        disabled={!aocFinPdf || !aocMcaZip}
+                        className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        <span>🤖</span> Fill All 3 Excel Files with AI
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}

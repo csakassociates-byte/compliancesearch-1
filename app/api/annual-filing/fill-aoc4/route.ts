@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
-import JSZip from "jszip";
 import { fillAoc4, ALIAS, type AocFillData } from "@/lib/annual-filing/aoc4kit";
 import type { AnnualFilingData } from "@/lib/annual-filing/types";
 
@@ -382,20 +381,13 @@ Company name: ${companyName}`,
     return NextResponse.json({ error: `Failed to fill Excel: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 
-  // ── Step 5: Return as ZIP of 3 filled files ───────────────────────────────
-  const outZip = new JSZip();
-  outZip.file(fillResult.aocName, fillResult.aocXlsx);
-  outZip.file(fillResult.audName, fillResult.audXlsx);
-  outZip.file(fillResult.dirName, fillResult.dirXlsx);
+  // ── Step 5: Return 3 individual files as base64 JSON ─────────────────────
+  const toB64 = (u8: Uint8Array) => Buffer.from(u8).toString("base64");
 
-  const zipBuffer = await outZip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
-
-  return new NextResponse(Buffer.from(zipBuffer.buffer) as unknown as BodyInit, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${cin}_AOC4_FILLED.zip"`,
-      "X-AI-Fields-Found": String(Object.values(aiFinancials).filter(v => v !== null).length),
-    },
+  return NextResponse.json({
+    fieldsFound: Object.values(aiFinancials).filter(v => v !== null).length,
+    aoc: { name: fillResult.aocName, data: toB64(fillResult.aocXlsx) },
+    aud: { name: fillResult.audName, data: toB64(fillResult.audXlsx) },
+    dir: { name: fillResult.dirName, data: toB64(fillResult.dirXlsx) },
   });
 }
