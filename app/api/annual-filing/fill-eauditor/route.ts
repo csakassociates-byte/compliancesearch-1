@@ -92,9 +92,7 @@ export async function POST(req: NextRequest) {
     // B83 — Internal Financial Controls
     "B83": "We have audited the internal financial controls over financial reporting of " + companyName + " as of 31 March " + fyEnd + " in conjunction with our audit of the financial statements of the Company for the year ended on that date. The Company's management is responsible for establishing and maintaining internal financial controls based on the internal control over financial reporting criteria established by the Company considering the essential components of internal control stated in the Guidance Note on Audit of Internal Financial Controls over Financial Reporting issued by the Institute of Chartered Accountants of India. In our opinion, the Company has, in all material respects, an adequate internal financial controls system over financial reporting and such internal financial controls over financial reporting were operating effectively as at 31 March " + fyEnd + ".",
 
-    // Declaration
-    "J94": auditorName,
-    "J99": auditorMem,
+    // Declaration — J94 (name) and J99 (membership no.) left blank for manual entry
   };
 
   let filledBuf: Uint8Array;
