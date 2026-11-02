@@ -454,6 +454,42 @@ const ZERO_FIELDS = [
   "raisedShareCapital.equityShare.atTheBeginningOfTheYearTotalPaidupAmount",
 ];
 
+// ── Field extractor (for Claude-guided filling) ───────────────────────────────
+
+export interface FormField {
+  fieldName: string;   // without requestBody.formData. prefix
+  dataCell: string;    // e.g. "G208", "B13"
+  type: string;        // "Field" | "Dropdown" | "Hidden" etc.
+}
+
+/** Extract all fillable fields from an Excel file's FORM sheet. */
+export async function getExcelFields(xlsBuf: ArrayBuffer): Promise<FormField[]> {
+  const zip = await JSZip.loadAsync(xlsBuf);
+  const sheetPath = await findFormSheet(zip);
+  const { fields } = await loadFieldMap(zip, sheetPath);
+  return Object.entries(fields).map(([fieldName, dataCell]) => ({ fieldName, dataCell, type: "Field" }));
+}
+
+/** Apply a fieldName→value map to an Excel file. Returns filled Uint8Array. */
+export async function applyFieldValues(
+  xlsBuf: ArrayBuffer,
+  values: Record<string, string | number | null>,
+): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(xlsBuf);
+  const sheetPath = await findFormSheet(zip);
+  const { fields } = await loadFieldMap(zip, sheetPath);
+
+  let sheetXml = await zip.file(sheetPath)!.async("string");
+  for (const [rawKey, value] of Object.entries(values)) {
+    if (value === null || value === undefined) continue;
+    const key = rawKey.replace("requestBody.formData.", "").trim();
+    const dataCell = fields[key];
+    if (dataCell) sheetXml = setCellInXml(sheetXml, dataCell, value);
+  }
+  zip.file(sheetPath, sheetXml);
+  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+}
+
 // ── Main fill function ────────────────────────────────────────────────────────
 
 export interface AocFillData {
