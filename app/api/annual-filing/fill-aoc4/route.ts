@@ -206,7 +206,9 @@ Return ONLY raw JSON:
     }
     // "Others, specify" text/description fields → fill "NA" when blank
     // Covers: share capital table (x Others, iv Others), debenture others, etc.
-    if (/[Oo]thers?[A-Z].*(?:name|desc|specify|particular|detail)|(?:name|desc|particular).*[Oo]thers?[A-Z]/i.test(fieldName) ||
+    if (/[Oo]thers?s?[Ss]pecif/i.test(fieldName) ||
+        /[Oo]thers?[A-Z].*(?:name|desc|specify|particular|detail)/i.test(fieldName) ||
+        /(?:name|desc|particular).*[Oo]thers?[A-Z]/i.test(fieldName) ||
         /[Oo]ther[Ss]pecif/i.test(fieldName)) {
       naTextCells[cellRef] = "NA";
     }
@@ -367,6 +369,11 @@ Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.
     const fieldName = cellRefToFieldName[cellRef] ?? "";
     if (shouldAlwaysBlank(fieldName)) continue;  // skip reason/premium
     if (!/^[A-Z]{1,3}\d+$/.test(cellRef.trim())) continue;  // skip invalid refs
+    // Don't let Claude blank out "NA" cells — if Claude returns blank/nil, keep "NA"
+    if (naTextCells[cellRef] !== undefined) {
+      const v = value == null ? "" : String(value).trim().toLowerCase();
+      if (v === "" || v === "nil" || v === "n/a" || v === "not applicable") continue;
+    }
     filteredClaudeCells[cellRef] = value;
   }
 
