@@ -5322,15 +5322,23 @@ function AnnualFilingTool() {
                       {aocFillMsg && !aocFillMsg.ok && <p className="text-xs text-red-600 font-semibold">{aocFillMsg.text}</p>}
                       <button onClick={async()=>{
                         if(!aocFinPdf||!aocMcaZip){setAocFillMsg({ok:false,text:"Upload Financial PDF and AOC-4 Excel first."});return;}
+                        if(aocFinPdf.size > 15 * 1024 * 1024){setAocFillMsg({ok:false,text:"PDF is too large (max 15 MB). Please compress it first."});return;}
                         setAocFilling(true);setAocFillMsg(null);setAocFilledFiles(null);
+                        const ctrl=new AbortController();
+                        const timer=setTimeout(()=>ctrl.abort(),280000);
                         try{
                           const fd=new FormData();fd.append("financialPdf",aocFinPdf);fd.append("mcaZip",aocMcaZip);fd.append("saveId",saveId);
-                          const res=await fetch("/api/annual-filing/fill-aoc4",{method:"POST",body:fd});
+                          const res=await fetch("/api/annual-filing/fill-aoc4",{method:"POST",body:fd,signal:ctrl.signal});
                           if(!res.ok){const t=await res.text().catch(()=>"");let e=`HTTP ${res.status}`;try{e=(JSON.parse(t) as{error?:string}).error??e;}catch{e=t.slice(0,150)||e;}throw new Error(e);}
                           const j=await res.json() as{fieldsFilled?:number;aoc:{name:string;data:string}};
                           setAocFilledFiles({aoc:j.aoc});setAocFillMsg({ok:true,text:`AOC-4: ${j.fieldsFilled??"?"} cells filled`});
-                        }catch(e){const em=e instanceof Error?e.message:String(e);setAocFillMsg({ok:false,text:"❌ "+em});}
-                        finally{setAocFilling(false);}
+                        }catch(e){
+                          const em=e instanceof Error?e.message:String(e);
+                          const msg=em.includes("abort")||em.includes("signal")||em.includes("fetch")
+                            ?"Request timed out. PDF bahut bada ho sakta hai — compress karke try karo, ya dobara click karo."
+                            :"❌ "+em;
+                          setAocFillMsg({ok:false,text:msg});
+                        }finally{clearTimeout(timer);setAocFilling(false);}
                       }} disabled={!aocFinPdf||!aocMcaZip} className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg flex items-center justify-center gap-2">
                         🤖 Generate AOC-4
                       </button>
