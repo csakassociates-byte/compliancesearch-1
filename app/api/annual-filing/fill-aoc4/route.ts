@@ -358,7 +358,24 @@ Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.
     filteredClaudeCells[cellRef] = value;
   }
 
-  // ── Step 6: Apply in order: zeros first, then Claude's values ────────────────
+  // ── Step 5.5: Hardcode cells that are outside BB/BE field map ─────────────────
+  // Product/service table (rows 543-557 in Excel) — directly referenced cells
+  const directCells: Record<string, string | number | null> = {
+    // Product table — row 543 (first product entry)
+    "B543": productCode4,         // ITC/NPCS 4-digit category code
+    "C543": productDesc,          // Category description
+    "E543": revenue,              // Turnover of product/service category (in ₹)
+    "F543": productCode8,         // ITC/NPCS 8-digit contributing product code
+    "H543": productDesc,          // Description of highest contributing product
+    "I543": revenue,              // Turnover of highest contributing product
+    // Declaration section
+    "J609": "4",                  // Board resolution number
+    "C610": bmDate,               // Date of board resolution (DD/MM/YYYY)
+    "AA622": 1,                   // Designation dropdown: 1 = Director
+    "J626": signDin,              // DIN of signing director
+  };
+
+  // ── Step 6: Apply in order: zeros first, then Claude's values, then direct ────
   let filledAoc: Uint8Array;
   try {
     // Pass 1: pre-zero all financial cells
@@ -367,6 +384,9 @@ Fill EVERY cell in the table above. Return ONLY the JSON object, no explanation.
     // Use slice() to get a proper ArrayBuffer — filledAoc.buffer may be a shared buffer with offset
     const pass1Buf = filledAoc.buffer.slice(filledAoc.byteOffset, filledAoc.byteOffset + filledAoc.byteLength);
     filledAoc = await applyCellValues(pass1Buf as ArrayBuffer, filteredClaudeCells);
+    // Pass 3: apply hardcoded direct cells (product table + declaration)
+    const pass2Buf = filledAoc.buffer.slice(filledAoc.byteOffset, filledAoc.byteOffset + filledAoc.byteLength);
+    filledAoc = await applyCellValues(pass2Buf as ArrayBuffer, directCells);
   } catch (e) {
     return NextResponse.json({ error: `Excel write failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
