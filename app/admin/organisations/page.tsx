@@ -12,7 +12,7 @@ type Org = {
   id: string; userId: string; balance: number; lifetimeCredits: number;
   isFreeUnlimited: boolean; freeLimit: number | null; createdAt: string;
   totalDocsGenerated: number; annualFilingCount: number; clientCount: number;
-  csi_users: { id: string; name: string | null; email: string; createdAt: string; ai_enabled?: boolean | null; ai_model?: string | null };
+  csi_users: { id: string; name: string | null; email: string; createdAt: string; ai_enabled?: boolean | null; ai_model?: string | null; phone?: string | null; firmName?: string | null };
   csi_credit_txns: Txn[];
   csi_utr_requests: UtrReq[];
 };
@@ -305,7 +305,13 @@ export default function AdminOrganisationsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-gray-900 text-base truncate">{profile.csi_users.name || "—"}</div>
+                {profile.csi_users.firmName && (
+                  <div className="text-xs text-indigo-600 font-medium truncate">{profile.csi_users.firmName}</div>
+                )}
                 <div className="text-sm text-gray-500 truncate">{profile.csi_users.email}</div>
+                {profile.csi_users.phone && (
+                  <div className="text-xs text-gray-500">📞 +91 {profile.csi_users.phone}</div>
+                )}
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   {profileBadge && (
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${profileBadge.color}`}>{profileBadge.label}</span>
@@ -392,16 +398,18 @@ export default function AdminOrganisationsPage() {
                   <Bot className="w-4 h-4 text-violet-600" />
                   <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">AI Settings</span>
                 </div>
-                <div className="flex gap-2 flex-wrap items-center">
+                <div className="flex items-center gap-4 flex-wrap">
+                  {/* Toggle switch */}
                   <button
                     onClick={() => toggleAI(profile)}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border font-medium transition-all ${
-                      profile.csi_users.ai_enabled
-                        ? "bg-violet-100 text-violet-700 border-violet-300"
-                        : "bg-white text-gray-600 border-gray-300 hover:bg-violet-50 hover:border-violet-300"
-                    }`}
+                    className="flex items-center gap-3 group"
                   >
-                    🤖 {profile.csi_users.ai_enabled ? "AI Enabled — Disable" : "Enable AI"}
+                    <div className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${profile.csi_users.ai_enabled ? "bg-violet-600" : "bg-gray-300"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${profile.csi_users.ai_enabled ? "translate-x-6" : "translate-x-0"}`} />
+                    </div>
+                    <span className={`text-sm font-semibold ${profile.csi_users.ai_enabled ? "text-violet-700" : "text-gray-500"}`}>
+                      🤖 AI {profile.csi_users.ai_enabled ? "Enabled" : "Disabled"}
+                    </span>
                   </button>
                   {profile.csi_users.ai_enabled && (
                     <select

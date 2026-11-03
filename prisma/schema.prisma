@@ -555,6 +555,8 @@ model csi_users {
   mustChangePassword  Boolean?             @default(false)
   ai_enabled          Boolean?             @default(false)
   ai_model            String?              @default("haiku")
+  phone               String?
+  firmName            String?
   csi_companies       csi_companies[]
   csi_credit_accounts csi_credit_accounts?
   csi_documents       csi_documents[]

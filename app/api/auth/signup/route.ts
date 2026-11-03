@@ -7,8 +7,8 @@ import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, password, otp } = await req.json() as {
-      name: string; email: string; password: string; otp: string;
+    const { name, firmName, email, phone, password, otp } = await req.json() as {
+      name: string; firmName?: string; email: string; phone?: string; password: string; otp: string;
     };
 
     if (!name || !email || !password || !otp)
@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     const now = new Date();
 
     await prisma.$executeRawUnsafe(
-      `INSERT INTO csi_users (id, name, email, "passwordHash", "emailVerified", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6)`,
-      id, name.trim(), emailLower, passwordHash, now, now
+      `INSERT INTO csi_users (id, name, "firmName", email, phone, "passwordHash", "emailVerified", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      id, name.trim(), firmName?.trim() || null, emailLower, phone?.trim() || null, passwordHash, now, now
     );
 
     // Auto-create a solo team for this new user
