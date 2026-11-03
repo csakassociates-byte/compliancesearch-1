@@ -494,10 +494,16 @@ export async function POST(req: NextRequest) {
 
     const session = await getServerSession(authOptions);
     const aiEnabled = (session?.user as { ai_enabled?: boolean })?.ai_enabled;
+    const aiModel = (session?.user as { ai_model?: string })?.ai_model;
     const scannedMode = req.nextUrl.searchParams.get("scanned") === "1";
 
+    // Scanned mode available to all logged-in users (Haiku); AI plan users get their chosen model
+    const scannedApiModel = aiEnabled
+      ? (aiModel === "sonnet" ? "claude-sonnet-5-5" : "claude-haiku-5-5")
+      : "claude-haiku-5-5";
+
     // ── AI Scanned Mode: Claude reads the PDF/Excel directly (handles scanned docs) ──
-    if (scannedMode && aiEnabled && process.env.ANTHROPIC_API_KEY && ext === "pdf") {
+    if (scannedMode && session?.user && process.env.ANTHROPIC_API_KEY && ext === "pdf") {
       try {
         const anthropic = new Anthropic({
           apiKey: process.env.ANTHROPIC_API_KEY,
@@ -507,7 +513,7 @@ export async function POST(req: NextRequest) {
         });
         const base64Pdf = buffer.toString("base64");
         const msg = await anthropic.messages.create({
-          model: "claude-sonnet-5-5", // sonnet for better vision accuracy
+          model: scannedApiModel,
           max_tokens: 1024,
           messages: [{
             role: "user",

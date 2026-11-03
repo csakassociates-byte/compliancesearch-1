@@ -22,13 +22,6 @@ export async function POST(req: NextRequest) {
     select: { ai_enabled: true, ai_model: true },
   });
 
-  if (!user?.ai_enabled) {
-    return NextResponse.json(
-      { error: "AI features not enabled for your organization" },
-      { status: 403 }
-    );
-  }
-
   const body = await req.json();
   const { task, data } = body as { task: string; data: Record<string, unknown> };
 
@@ -36,11 +29,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing task or data" }, { status: 400 });
   }
 
+  // Tasks available to ALL logged-in users (normal plan) — always use Haiku
+  const normalPlanTasks = ["extract_financials", "validate_financials", "preflight_check"];
+
+  // Premium tasks require ai_enabled
+  if (!normalPlanTasks.includes(task) && !user?.ai_enabled) {
+    return NextResponse.json(
+      { error: "AI features not enabled for your account. Please upgrade to AI plan." },
+      { status: 403 }
+    );
+  }
+
   const modelMap: Record<string, string> = {
     haiku: "claude-haiku-5-5",
     sonnet: "claude-sonnet-5-5",
   };
-  const model = modelMap[user.ai_model ?? "haiku"] ?? "claude-haiku-5-5";
+  // Normal plan users always get Haiku; AI plan users get their chosen model
+  const model = user?.ai_enabled
+    ? (modelMap[user.ai_model ?? "haiku"] ?? "claude-haiku-5-5")
+    : "claude-haiku-5-5";
 
   try {
     if (task === "extract_financials") {
