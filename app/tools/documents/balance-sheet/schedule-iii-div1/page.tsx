@@ -500,6 +500,12 @@ function ScheduleIIIDivIInner() {
   const [prevYearData, setPrevYearData] = useState<BalanceSheetData | null>(null);
   const [prevYearChecked, setPrevYearChecked] = useState(false);
 
+  // AI Fill state
+  const [aiFillOpen, setAiFillOpen] = useState(false);
+  const [aiFillFile, setAiFillFile] = useState<File | null>(null);
+  const [aiFilling, setAiFilling] = useState(false);
+  const [aiFillMsg, setAiFillMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoggedIn = useRef(false);
 
@@ -937,6 +943,157 @@ function ScheduleIIIDivIInner() {
 
           {/* Scrollable step content */}
           <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px" }}>
+
+            {/* ── AI Fill from PDF ──────────────────────────────────────────── */}
+            <div style={{
+              marginBottom: 20,
+              background: aiFillOpen ? "#f5f3ff" : "linear-gradient(135deg, #7c3aed08 0%, #6d28d908 100%)",
+              border: `1px solid ${aiFillOpen ? "#c4b5fd" : "#e2e8f0"}`,
+              borderRadius: 12,
+              overflow: "hidden",
+            }}>
+              {/* Header / toggle */}
+              <button
+                onClick={() => { setAiFillOpen(o => !o); setAiFillMsg(null); }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>🤖</span>
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: "#4c1d95" }}>AI Fill from Financial PDF</div>
+                    <div style={{ fontSize: 11, color: "#7c3aed", fontWeight: 500 }}>Upload Balance Sheet PDF → AI auto-fills all Notes</div>
+                  </div>
+                </div>
+                <span style={{ fontSize: 14, color: "#7c3aed", fontWeight: 700 }}>{aiFillOpen ? "▲" : "▼"}</span>
+              </button>
+
+              {aiFillOpen && (
+                <div style={{ padding: "0 16px 16px" }}>
+                  {/* Instruction banner */}
+                  <div style={{
+                    background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8,
+                    padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#92400e",
+                  }}>
+                    <strong>⚠️ Important instructions before uploading:</strong>
+                    <ul style={{ margin: "6px 0 0 0", paddingLeft: 18, lineHeight: 1.7 }}>
+                      <li><strong>Text-based PDF only</strong> — scanned/image PDFs will not work</li>
+                      <li><strong>Amounts must be in ₹ Rupees</strong> — do not upload PDFs in lakhs/crores/thousands</li>
+                      <li>Upload the complete financial statements (Balance Sheet + P&amp;L + Notes)</li>
+                      <li>AI will fill all available fields; review and correct after filling</li>
+                    </ul>
+                  </div>
+
+                  {/* Upload area */}
+                  <div
+                    onClick={() => document.getElementById("bs-ai-pdf")?.click()}
+                    style={{
+                      border: `2px dashed ${aiFillFile ? "#7c3aed" : "#c4b5fd"}`,
+                      borderRadius: 10, padding: "20px 16px", textAlign: "center",
+                      cursor: "pointer", background: aiFillFile ? "#f5f3ff" : "#fff",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <input
+                      id="bs-ai-pdf" type="file" accept=".pdf" className="hidden"
+                      onChange={e => { setAiFillFile(e.target.files?.[0] ?? null); setAiFillMsg(null); }}
+                    />
+                    {aiFillFile ? (
+                      <div>
+                        <div style={{ fontSize: 22, marginBottom: 4 }}>✅</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "#4c1d95" }}>{aiFillFile.name}</div>
+                        <div style={{ fontSize: 11, color: "#7c3aed", marginTop: 2 }}>
+                          {(aiFillFile.size / 1024 / 1024).toFixed(2)} MB — Click to change
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: 28, marginBottom: 6 }}>📄</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "#4c1d95" }}>Click to upload Financial Statements PDF</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Text-based PDF only · Max 10 MB · Amounts in ₹ Rupees</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  {aiFilling && (
+                    <div style={{
+                      background: "#ede9fe", borderRadius: 10, padding: "14px 16px",
+                      display: "flex", alignItems: "center", gap: 12, marginBottom: 12,
+                    }}>
+                      <svg style={{ width: 20, height: 20, color: "#7c3aed", flexShrink: 0 }} className="animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "#4c1d95" }}>AI is reading your financial statements...</div>
+                        <div style={{ fontSize: 11, color: "#7c3aed" }}>This may take 30–60 seconds. Please wait.</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {aiFillMsg && (
+                    <div style={{
+                      background: aiFillMsg.ok ? "#f0fdf4" : "#fef2f2",
+                      border: `1px solid ${aiFillMsg.ok ? "#86efac" : "#fca5a5"}`,
+                      borderRadius: 8, padding: "10px 14px", marginBottom: 12,
+                      fontSize: 12, color: aiFillMsg.ok ? "#166534" : "#991b1b", fontWeight: 600,
+                    }}>
+                      {aiFillMsg.text}
+                    </div>
+                  )}
+
+                  {/* Fill button */}
+                  <button
+                    disabled={!aiFillFile || aiFilling}
+                    onClick={async () => {
+                      if (!aiFillFile) return;
+                      if (aiFillFile.size > 10 * 1024 * 1024) {
+                        setAiFillMsg({ ok: false, text: "PDF too large. Max 10 MB allowed." });
+                        return;
+                      }
+                      setAiFilling(true);
+                      setAiFillMsg(null);
+                      try {
+                        const fd = new FormData();
+                        fd.append("financialPdf", aiFillFile);
+                        const res = await fetch("/api/balance-sheet/ai-fill", { method: "POST", body: fd });
+                        if (!res.ok) {
+                          const j = await res.json() as { error?: string };
+                          throw new Error(j.error ?? `HTTP ${res.status}`);
+                        }
+                        const j = await res.json() as { patch?: Partial<BalanceSheetData> };
+                        if (j.patch) {
+                          setData(prev => ({ ...prev, ...j.patch }));
+                          setAiFillMsg({ ok: true, text: "✅ AI has filled all detected fields. Please review each step and correct if needed." });
+                          setAiFillFile(null);
+                        } else {
+                          throw new Error("No data returned from AI.");
+                        }
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : String(e);
+                        setAiFillMsg({ ok: false, text: "❌ " + msg });
+                      } finally {
+                        setAiFilling(false);
+                      }
+                    }}
+                    style={{
+                      width: "100%", padding: "11px 0",
+                      background: !aiFillFile || aiFilling ? "#e2e8f0" : "#7c3aed",
+                      color: !aiFillFile || aiFilling ? "#94a3b8" : "#fff",
+                      border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13,
+                      cursor: !aiFillFile || aiFilling ? "default" : "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    }}
+                  >
+                    <span>🤖</span>
+                    <span>{aiFilling ? "AI is working..." : "Fill Balance Sheet with AI"}</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
             {step === 0 && (
               <Step0Setup
