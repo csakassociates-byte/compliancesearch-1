@@ -80,11 +80,8 @@ export default function AdminOrganisationsPage() {
     if (res.ok) {
       const data = await res.json();
       setOrgs(data);
-      // keep profile in sync if open
-      if (profile) {
-        const updated = data.find((o: Org) => o.id === profile.id);
-        if (updated) setProfile(updated);
-      }
+      // use functional update to avoid stale closure on profile
+      setProfile(prev => prev ? (data.find((o: Org) => o.id === prev.id) ?? prev) : null);
     }
     setLoading(false);
   }
