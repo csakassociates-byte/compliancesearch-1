@@ -341,6 +341,16 @@ export default function Navbar() {
               </Link>
             ))}
 
+            {session && (
+              <>
+                <div className="border-t border-slate-100 my-1" />
+                <Link href="/dashboard/credits" onClick={() => setMenuOpen(false)}
+                  className={`flex items-center gap-2 text-sm font-medium py-2.5 px-3 rounded-lg transition ${isActive("/dashboard/credits")?"text-emerald-700 bg-emerald-50 font-semibold":"text-emerald-700 hover:bg-emerald-50"}`}>
+                  🪙 Credits &amp; Billing
+                </Link>
+              </>
+            )}
+
           </div>
         )}
       </nav>
