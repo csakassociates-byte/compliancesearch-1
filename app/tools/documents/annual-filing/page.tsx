@@ -5275,8 +5275,8 @@ function AnnualFilingTool() {
               </button>
             </div>
 
-            {/* ── AI Fill — 3 separate sections ──────────────────────────── */}
-            {isLocked && saveId && (
+            {/* ── AI Fill — 3 separate sections (ai_enabled users only) ──── */}
+            {isLocked && saveId && aiEnabled && (
               <div className="mt-4 space-y-3">
 
                 {/* ── CARD 1: AOC-4 ─────────────────────────────────────── */}

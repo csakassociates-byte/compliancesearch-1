@@ -22,6 +22,14 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const user = await prisma.csi_users.findUnique({
+    where: { email: session.user.email! },
+    select: { ai_enabled: true },
+  });
+  if (!user?.ai_enabled) {
+    return NextResponse.json({ error: "AI Excel fill features are not enabled for your account." }, { status: 403 });
+  }
+
   const formData = await req.formData();
   const edirectorFile = formData.get("edirectorFile") as File | null;
   const saveId        = formData.get("saveId") as string | null;
