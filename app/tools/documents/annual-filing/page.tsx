@@ -4187,6 +4187,14 @@ function AnnualFilingTool() {
           </div>
         </SectionCard>
 
+        <SectionCard title="Foreign Exchange Earnings &amp; Outgo" color="blue">
+          <p className="text-xs text-slate-500 mb-3">As required under Rule 8(3)(C) of Companies (Accounts) Rules, 2014. Enter Nil if not applicable.</p>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Foreign Exchange Earnings (₹)" value={data.foreignExchangeEarnings || ""} onChange={v => patch({ foreignExchangeEarnings: v })} placeholder="Nil" />
+            <Field label="Foreign Exchange Outgo (₹)" value={data.foreignExchangeOutgo || ""} onChange={v => patch({ foreignExchangeOutgo: v })} placeholder="Nil" />
+          </div>
+        </SectionCard>
+
         {(data.companyType === "section8" || data.companyType === "fpc") && (
           <SectionCard title="Rule 8 — Additional Disclosures" color="blue">
             <div>
@@ -4196,10 +4204,6 @@ function AnnualFilingTool() {
               <label className="block text-sm font-semibold text-slate-700 mb-1">Technology Absorption</label>
               <textarea value={data.technologyAbsorptionDetails || ""} onChange={e => patch({ technologyAbsorptionDetails: e.target.value })}
                 rows={2} placeholder="Technology absorption details..." className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Foreign Exchange Earnings (₹)" value={data.foreignExchangeEarnings || ""} onChange={v => patch({ foreignExchangeEarnings: v })} placeholder="0" />
-              <Field label="Foreign Exchange Outgo (₹)" value={data.foreignExchangeOutgo || ""} onChange={v => patch({ foreignExchangeOutgo: v })} placeholder="0" />
             </div>
             <Toggle label="CSR Applicable (Sec. 135)" value={data.csrApplicable || false} onChange={v => patch({ csrApplicable: v })} hint="Net worth ≥ ₹500 cr OR turnover ≥ ₹1000 cr OR net profit ≥ ₹5 cr" />
             {data.csrApplicable && (
