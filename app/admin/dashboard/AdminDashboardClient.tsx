@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { signOut } from "next-auth/react";
 import {
-  Shield, LogOut, Search, Filter, ChevronDown, ChevronUp,
+  Search, Filter, ChevronDown, ChevronUp,
   Edit3, Save, X, Check, AlertCircle, ToggleLeft, ToggleRight,
   RefreshCw
 } from "lucide-react";
@@ -179,21 +178,16 @@ export default function AdminDashboardClient({ rules: initialRules }: { rules: R
     <div className="min-h-screen" style={{ background: "linear-gradient(135deg, #fff5f7 0%, #fdf2f8 40%, #fff8f9 100%)" }}>
 
       {/* Header */}
-      <header className="bg-white border-b border-pink-100 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #f472b6, #a855f7)" }}>
-              <Shield className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h1 className="text-sm font-bold text-gray-800">Compliance Admin Panel</h1>
-              <p className="text-xs text-pink-400">{activeCount} active rules</p>
-            </div>
+      <header className="bg-white border-b border-pink-100 sticky top-0 z-30 shadow-sm">
+        <div className="px-6 h-14 flex items-center justify-between">
+          <div>
+            <h1 className="text-sm font-bold text-gray-800">Compliance Rules</h1>
+            <p className="text-xs text-pink-400">{activeCount} active of {rules.length} total</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {saveStatus === "success" && (
               <span className="text-green-600 text-sm flex items-center gap-1 font-medium">
-                <Check className="w-4 h-4" /> Saved successfully
+                <Check className="w-4 h-4" /> Saved
               </span>
             )}
             {saveStatus === "error" && (
@@ -201,31 +195,6 @@ export default function AdminDashboardClient({ rules: initialRules }: { rules: R
                 <AlertCircle className="w-4 h-4" /> Save failed
               </span>
             )}
-            <a href="/admin/blog" className="text-sm font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 transition">
-              📝 Blog
-            </a>
-            <a href="/admin/calendar" className="text-sm font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 transition">
-              📅 Calendar
-            </a>
-            <a href="/admin/enquiries" className="text-sm font-semibold text-orange-600 hover:text-orange-800 px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 transition">
-              📩 Enquiries
-            </a>
-            <a href="/admin/credits" className="text-sm font-semibold text-emerald-600 hover:text-emerald-800 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 transition">
-              🪙 Credits
-            </a>
-            <a href="/admin/organisations" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 transition">
-              🏢 Organisations
-            </a>
-            <a href="/" className="text-gray-400 hover:text-pink-500 text-sm transition font-medium">
-              ← Back to App
-            </a>
-            <button
-              onClick={() => signOut({ callbackUrl: "/admin/login" })}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-red-500 text-sm transition font-medium"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign out
-            </button>
           </div>
         </div>
       </header>

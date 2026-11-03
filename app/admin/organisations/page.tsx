@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Building2, Coins, Infinity, Plus, Search, RefreshCw,
-  CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, ArrowLeft
+  CheckCircle, XCircle, Clock, ChevronDown, ChevronUp
 } from "lucide-react";
 import Link from "next/link";
 
@@ -175,9 +175,6 @@ export default function AdminOrganisationsPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/admin/dashboard" className="text-gray-400 hover:text-gray-600">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-emerald-600" />
             <h1 className="text-lg font-bold text-gray-800">Organisations</h1>
