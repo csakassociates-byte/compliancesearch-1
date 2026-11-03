@@ -81,7 +81,7 @@ export default function AdminOrganisationsPage() {
       const data = await res.json();
       setOrgs(data);
       // use functional update to avoid stale closure on profile
-      setProfile(prev => prev ? (data.find((o: Org) => o.id === prev.id) ?? prev) : null);
+      setProfile(prev => prev ? (data.find((o: Org) => o.userId === prev.userId) ?? prev) : null);
     }
     setLoading(false);
   }
