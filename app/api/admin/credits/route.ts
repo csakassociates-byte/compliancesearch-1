@@ -8,16 +8,30 @@ function isAdmin(session: any) {
   return !!session;
 }
 
+async function ensureHiddenColumn() {
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE csi_users ADD COLUMN IF NOT EXISTS "isHiddenFromAdmin" BOOLEAN NOT NULL DEFAULT false`
+    );
+  } catch { /* already exists */ }
+}
+
 // GET: list all orgs with credit info
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  await ensureHiddenColumn();
+
+  const url = new URL(req.url);
+  const showHidden = url.searchParams.get("showHidden") === "1";
 
   // Fetch ALL users, not just those with credit accounts
   const users = await prisma.csi_users.findMany({
     where: { plan: { not: "admin" } },
     select: {
       id: true, name: true, email: true, createdAt: true, ai_enabled: true, ai_model: true, phone: true, firmName: true,
+      isHiddenFromAdmin: true,
       csi_credit_accounts: {
         include: {
           csi_credit_txns: { orderBy: { createdAt: "desc" }, take: 20 },
@@ -28,8 +42,11 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
+  // Filter hidden unless showHidden requested
+  const visibleUsers = showHidden ? users : users.filter(u => !u.isHiddenFromAdmin);
+
   // Fetch per-user doc stats from csi_documents (accurate, all-time)
-  const userIds = users.map(u => u.id);
+  const userIds = visibleUsers.map(u => u.id);
 
   const [docCounts, annualFilingCounts, clientCounts] = await Promise.all([
     // Total documents generated per user
@@ -65,17 +82,19 @@ export async function GET() {
   });
 
   // Normalize: wrap users without a credit account into a consistent shape
-  const result = users.map((u) => {
+  const result = visibleUsers.map((u) => {
     const acc = u.csi_credit_accounts;
     const stats = {
       totalDocsGenerated: docCountMap[u.id] ?? 0,
       annualFilingCount: annualFilingMap[u.id] ?? 0,
       clientCount: clientCountMap[u.id]?.size ?? 0,
     };
+    const userInfo = { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt, ai_enabled: u.ai_enabled, ai_model: u.ai_model, phone: u.phone, firmName: u.firmName, isHiddenFromAdmin: u.isHiddenFromAdmin ?? false };
     if (acc) return {
       ...acc,
       ...stats,
-      csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt, ai_enabled: u.ai_enabled, ai_model: u.ai_model, phone: u.phone, firmName: u.firmName },
+      isHiddenFromAdmin: u.isHiddenFromAdmin ?? false,
+      csi_users: userInfo,
     };
     return {
       id: null,
@@ -85,10 +104,11 @@ export async function GET() {
       freeCreditsGiven: 0,
       isFreeUnlimited: false,
       freeLimit: null,
+      isHiddenFromAdmin: u.isHiddenFromAdmin ?? false,
       createdAt: u.createdAt,
       updatedAt: u.createdAt,
       ...stats,
-      csi_users: { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt, ai_enabled: u.ai_enabled, ai_model: u.ai_model, phone: u.phone, firmName: u.firmName },
+      csi_users: userInfo,
       csi_credit_txns: [],
       csi_utr_requests: [],
     };
@@ -109,13 +129,25 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, newBalance });
 }
 
-// PATCH: toggle free unlimited or set freeLimit
+// PATCH: toggle free unlimited, set freeLimit, or hide/unhide from admin
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { userId, isFreeUnlimited, freeLimit } = await req.json();
+  const body = await req.json();
+  const { userId, isFreeUnlimited, freeLimit, isHiddenFromAdmin } = body;
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+
+  // Handle hide/unhide — updates csi_users directly
+  if (isHiddenFromAdmin !== undefined) {
+    await ensureHiddenColumn();
+    await prisma.$executeRawUnsafe(
+      `UPDATE csi_users SET "isHiddenFromAdmin" = $1 WHERE id = $2`,
+      isHiddenFromAdmin,
+      userId
+    );
+    return NextResponse.json({ success: true });
+  }
 
   const account = await prisma.csi_credit_accounts.findUnique({ where: { userId } });
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });

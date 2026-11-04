@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import {
   Building2, Infinity, Plus, Search, RefreshCw,
-  CheckCircle, XCircle, Clock, X, CreditCard, Bot, BarChart2, Receipt
+  CheckCircle, XCircle, Clock, X, CreditCard, Bot, BarChart2, Receipt, EyeOff, Eye
 } from "lucide-react";
 
 type Txn = { id: string; type: string; amount: number; description: string; toolSlug?: string; createdAt: string };
 type UtrReq = { id: string; utrNumber: string; amount: number; credits: number; status: string; createdAt: string; adminNote?: string };
 type Org = {
   id: string; userId: string; balance: number; lifetimeCredits: number;
-  isFreeUnlimited: boolean; freeLimit: number | null; createdAt: string;
+  isFreeUnlimited: boolean; freeLimit: number | null; isHiddenFromAdmin: boolean; createdAt: string;
   totalDocsGenerated: number; annualFilingCount: number; clientCount: number;
-  csi_users: { id: string; name: string | null; email: string; createdAt: string; ai_enabled?: boolean | null; ai_model?: string | null; phone?: string | null; firmName?: string | null };
+  csi_users: { id: string; name: string | null; email: string; createdAt: string; ai_enabled?: boolean | null; ai_model?: string | null; phone?: string | null; firmName?: string | null; isHiddenFromAdmin?: boolean };
   csi_credit_txns: Txn[];
   csi_utr_requests: UtrReq[];
 };
@@ -56,6 +56,7 @@ export default function AdminOrganisationsPage() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [showHidden, setShowHidden] = useState(false);
 
   // Profile drawer
   const [profile, setProfile] = useState<Org | null>(null);
@@ -72,15 +73,14 @@ export default function AdminOrganisationsPage() {
   const [approveAi, setApproveAi] = useState<"with" | "without">("without");
   const [approveLoading, setApproveLoading] = useState(false);
 
-  useEffect(() => { fetchOrgs(); }, []);
+  useEffect(() => { fetchOrgs(); }, [showHidden]);
 
   async function fetchOrgs() {
     setLoading(true);
-    const res = await fetch("/api/admin/credits");
+    const res = await fetch(`/api/admin/credits${showHidden ? "?showHidden=1" : ""}`);
     if (res.ok) {
       const data = await res.json();
       setOrgs(data);
-      // use functional update to avoid stale closure on profile
       setProfile(prev => prev ? (data.find((o: Org) => o.userId === prev.userId) ?? prev) : null);
     }
     setLoading(false);
@@ -124,6 +124,15 @@ export default function AdminOrganisationsPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: org.userId, ai_model: model }),
+    });
+    fetchOrgs();
+  }
+
+  async function toggleHidden(org: Org) {
+    await fetch("/api/admin/credits", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: org.userId, isHiddenFromAdmin: !org.isHiddenFromAdmin }),
     });
     fetchOrgs();
   }
@@ -203,6 +212,17 @@ export default function AdminOrganisationsPage() {
               className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 w-64"
             />
           </div>
+          <button
+            onClick={() => setShowHidden(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border font-medium transition-all ${
+              showHidden
+                ? "bg-orange-100 text-orange-700 border-orange-300"
+                : "bg-white text-gray-500 border-gray-200 hover:border-orange-300 hover:text-orange-600"
+            }`}
+          >
+            {showHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            {showHidden ? "Showing Hidden" : "Show Hidden"}
+          </button>
           <button onClick={fetchOrgs} className="text-gray-400 hover:text-gray-600">
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -259,6 +279,11 @@ export default function AdminOrganisationsPage() {
                     )}
                     {org.csi_users.ai_enabled && (
                       <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-semibold">🤖 AI</span>
+                    )}
+                    {org.isHiddenFromAdmin && (
+                      <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5">
+                        <EyeOff className="w-2.5 h-2.5" /> Hidden
+                      </span>
                     )}
                     {pendingCount > 0 && (
                       <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-semibold">{pendingCount} UTR pending</span>
@@ -387,6 +412,32 @@ export default function AdminOrganisationsPage() {
                   />
                   <span className="text-xs text-gray-400">docs (blank = no free limit)</span>
                 </div>
+              </div>
+
+              {/* ── Section: Visibility ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <EyeOff className="w-4 h-4 text-orange-500" />
+                  <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">Admin Visibility</span>
+                </div>
+                <button
+                  onClick={() => toggleHidden(profile)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border font-medium transition-all ${
+                    profile.isHiddenFromAdmin
+                      ? "bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200"
+                      : "bg-white text-gray-600 border-gray-300 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600"
+                  }`}
+                >
+                  {profile.isHiddenFromAdmin
+                    ? <><Eye className="w-4 h-4" /> Unhide — Show in Admin List</>
+                    : <><EyeOff className="w-4 h-4" /> Hide from Admin List</>
+                  }
+                </button>
+                {profile.isHiddenFromAdmin && (
+                  <p className="text-xs text-orange-600 mt-2">
+                    This user is hidden from the default admin view. Their access is unaffected. Use &quot;Show Hidden&quot; to find them.
+                  </p>
+                )}
               </div>
 
               {/* ── Section: AI Settings ── */}

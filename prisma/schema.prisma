@@ -557,6 +557,7 @@ model csi_users {
   ai_model            String?              @default("haiku")
   phone               String?
   firmName            String?
+  isHiddenFromAdmin   Boolean              @default(false)
   csi_companies       csi_companies[]
   csi_credit_accounts csi_credit_accounts?
   csi_documents       csi_documents[]
