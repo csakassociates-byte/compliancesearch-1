@@ -521,11 +521,17 @@ ${data.significantOrders && data.significantOrdersDetails
 
 <!-- ══════════════ 36. INSOLVENCY PROCEEDINGS [Sec. 134(3)(l)] ══════════════ -->
 <h2>36. Proceedings Under Insolvency and Bankruptcy Code, 2016</h2>
-<p>No application has been made and no proceeding is pending under the Insolvency and Bankruptcy Code, 2016 against the Company during the Financial Year ${fy}.</p>
+${data.ibcPending
+  ? `<p>Proceedings under the Insolvency and Bankruptcy Code, 2016 (31 of 2016) are pending against the Company during the Financial Year ${fy}. The Company is taking appropriate legal steps in this regard.</p>`
+  : `<p>No application has been made and no proceeding is pending under the Insolvency and Bankruptcy Code, 2016 against the Company during the Financial Year ${fy}.</p>`
+}
 
 <!-- ══════════════ 37. ONE-TIME SETTLEMENT [Sec. 134(3)(m)] ══════════════ -->
 <h2>37. Details of Difference Between Amount of Valuation on One-Time Settlement</h2>
-<p>There were no instances of one-time settlement with any Bank or Financial Institution during the Financial Year ${fy}. Hence, no disclosure is required under this clause.</p>
+${data.otsPending
+  ? `<p>During the Financial Year ${fy}, the Company has entered into a one-time settlement with a Bank or Financial Institution. The difference between the amount of valuation done at the time of one-time settlement and the outstanding balance of the loan account has been disclosed in the financial statements in accordance with the applicable provisions.</p>`
+  : `<p>There were no instances of one-time settlement with any Bank or Financial Institution during the Financial Year ${fy}. Hence, no disclosure is required under this clause.</p>`
+}
 
 <!-- ══════════════ 38. PARTICULARS OF EMPLOYEES [Sec. 197(12)] ══════════════ -->
 <h2>38. Particulars of Employees</h2>
@@ -541,9 +547,9 @@ ${data.significantOrders && data.significantOrdersDetails
     <th style="width:70%">Particulars</th>
     <th class="right">Number</th>
   </tr>
-  <tr><td>Number of complaints received during the year</td><td class="right">Nil</td></tr>
-  <tr><td>Number of complaints disposed-off during the year</td><td class="right">Nil</td></tr>
-  <tr><td>Number of complaints pending as on end of the year</td><td class="right">Nil</td></tr>
+  <tr><td>Number of complaints received during the year</td><td class="right">${data.poshComplaintsReceived ?? 0 ? data.poshComplaintsReceived : "Nil"}</td></tr>
+  <tr><td>Number of complaints disposed-off during the year</td><td class="right">${data.poshComplaintsDisposed ?? 0 ? data.poshComplaintsDisposed : "Nil"}</td></tr>
+  <tr><td>Number of complaints pending as on end of the year</td><td class="right">${data.poshComplaintsPending ?? 0 ? data.poshComplaintsPending : "Nil"}</td></tr>
 </table>
 
 <!-- ══════════════ 40. MATERNITY BENEFIT ACT ══════════════ -->

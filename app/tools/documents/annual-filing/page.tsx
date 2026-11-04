@@ -4029,6 +4029,47 @@ function AnnualFilingTool() {
             <Field label="Order Details" value={data.significantOrdersDetails || ""} onChange={v => patch({ significantOrdersDetails: v })} placeholder="Details of significant orders..." />
           )}
 
+          {/* IBC & OTS */}
+          <Toggle label="Any IBC (Insolvency) Proceedings Pending Against Company" value={!!data.ibcPending} onChange={v => patch({ ibcPending: v })} hint="Default: No — standard 'no proceedings' text will appear in Board Report" />
+          <Toggle label="One-Time Settlement with Bank / FI During This Year" value={!!data.otsPending} onChange={v => patch({ otsPending: v })} hint="Default: No — standard 'no OTS' text will appear in Board Report" />
+
+          {/* POSH complaints */}
+          <div className="mt-2">
+            <p className="text-xs font-semibold text-slate-600 mb-2">POSH Complaints (Sexual Harassment) — Leave blank / 0 for Nil</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Received during year</label>
+                <input
+                  type="number" min="0"
+                  value={data.poshComplaintsReceived ?? ""}
+                  onChange={e => patch({ poshComplaintsReceived: e.target.value === "" ? undefined : parseInt(e.target.value) || 0 })}
+                  placeholder="0"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Disposed during year</label>
+                <input
+                  type="number" min="0"
+                  value={data.poshComplaintsDisposed ?? ""}
+                  onChange={e => patch({ poshComplaintsDisposed: e.target.value === "" ? undefined : parseInt(e.target.value) || 0 })}
+                  placeholder="0"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Pending at year end</label>
+                <input
+                  type="number" min="0"
+                  value={data.poshComplaintsPending ?? ""}
+                  onChange={e => patch({ poshComplaintsPending: e.target.value === "" ? undefined : parseInt(e.target.value) || 0 })}
+                  placeholder="0"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Dividend — used in Board Report + Audit Report Rule 11(v) */}
           <div className="mt-2 pt-3 border-t border-slate-100">
             <label className="block text-sm font-semibold text-slate-700 mb-2">

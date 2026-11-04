@@ -247,6 +247,13 @@ export interface AnnualFilingData {
   annualReturnWebLink?: string;  // Website link for annual return (Sec. 92(3))
   stateOfAffairs: string;        // Company's state of affairs narrative
   capitalChanges?: string;       // Changes in authorised/paid-up capital during year
+  // ── POSH / IBC / OTS ───────────────────────
+  poshComplaintsReceived?: number;   // complaints received during year (default 0 = Nil)
+  poshComplaintsDisposed?: number;   // complaints disposed during year (default 0 = Nil)
+  poshComplaintsPending?: number;    // complaints pending at year end (default 0 = Nil)
+  ibcPending?: boolean;              // any IBC proceedings pending (default false)
+  otsPending?: boolean;              // any one-time settlement during year (default false)
+
   // Section 8 / FPC specific
   csrApplicable?: boolean;
   csrDetails?: string;
