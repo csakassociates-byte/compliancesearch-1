@@ -276,6 +276,20 @@ export interface AnnualFilingData {
   employeesFemale?: number;
   employeesOther?: number;        // transgender / other
 
+  // ── Labour Law Compliance (threshold-triggered) ──────────────────
+  epfEsicRegistered?: boolean;        // 20+ employees → EPF & ESIC mandatory
+  creacheFacility?: boolean;          // 30+ women → Crèche mandatory
+
+  // ── Rule 5(1) — Remuneration Disclosures [Sec. 197(12)] ─────────
+  medianRemunerationCurrent?: string;      // Median employee remuneration — current FY (₹/year)
+  medianRemunerationPrev?: string;         // Median employee remuneration — previous FY (₹/year)
+  managerialRemunerationIncreasePct?: string;    // % increase in managerial remuneration
+  nonManagerialRemunerationIncreasePct?: string; // % increase in non-managerial remuneration
+  remunerationPolicyAffirmation?: boolean;       // Affirmation that remuneration is per company policy
+
+  // ── Rule 5(2) — Top 10 Earners ───────────────────────────────────
+  top10Earners?: { name: string; designation: string; remuneration: string }[];
+
   // ── Notes on Accounts — Accounting Policies ─
   depreciationMethod?: "wdv" | "slm";                   // WDV or SLM
   inventoryMethod?: "fifo" | "weighted_avg" | "na";     // inventory valuation

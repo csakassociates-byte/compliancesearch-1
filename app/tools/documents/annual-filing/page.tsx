@@ -4157,44 +4157,246 @@ function AnnualFilingTool() {
           </div>
         </SectionCard>
 
-        {/* Employee Count */}
-        <SectionCard title="Employee Count — Gender-wise [Sec. 197(12)]" color="slate">
-          <p className="text-xs text-slate-500 mb-3">As on 31st March {data.financialYear?.split("-")[1] ? "20" + data.financialYear.split("-")[1] : ""}. Required in the Board Report under Section 197(12).</p>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Male</label>
-              <input type="number" min="0"
-                value={data.employeesMale ?? ""}
-                onChange={e => patch({ employeesMale: e.target.value === "" ? undefined : parseInt(e.target.value) })}
-                placeholder="0"
-                className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Female</label>
-              <input type="number" min="0"
-                value={data.employeesFemale ?? ""}
-                onChange={e => patch({ employeesFemale: e.target.value === "" ? undefined : parseInt(e.target.value) })}
-                placeholder="0"
-                className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Transgender / Other</label>
-              <input type="number" min="0"
-                value={data.employeesOther ?? ""}
-                onChange={e => patch({ employeesOther: e.target.value === "" ? undefined : parseInt(e.target.value) })}
-                placeholder="0"
-                className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-          {(data.employeesMale != null || data.employeesFemale != null || data.employeesOther != null) && (
-            <p className="text-xs text-slate-500 mt-2">
-              Total: <strong>{(data.employeesMale || 0) + (data.employeesFemale || 0) + (data.employeesOther || 0)}</strong> employees
-            </p>
-          )}
-        </SectionCard>
+        {/* Employee Count + Smart Compliance Alerts */}
+        {(() => {
+          const totalEmp = (data.employeesMale || 0) + (data.employeesFemale || 0) + (data.employeesOther || 0);
+          const femaleEmp = data.employeesFemale || 0;
+          const hasAnyEmp = data.employeesMale != null || data.employeesFemale != null || data.employeesOther != null;
+
+          return (
+            <SectionCard title="Employee Count — Gender-wise [Sec. 197(12)]" color="slate">
+              <p className="text-xs text-slate-500 mb-3">As on 31st March {data.financialYear?.split("-")[1] ? "20" + data.financialYear.split("-")[1] : ""}. Required in the Board Report under Section 197(12).</p>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Male</label>
+                  <input type="number" min="0"
+                    value={data.employeesMale ?? ""}
+                    onChange={e => patch({ employeesMale: e.target.value === "" ? undefined : parseInt(e.target.value) })}
+                    placeholder="0"
+                    className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Female</label>
+                  <input type="number" min="0"
+                    value={data.employeesFemale ?? ""}
+                    onChange={e => patch({ employeesFemale: e.target.value === "" ? undefined : parseInt(e.target.value) })}
+                    placeholder="0"
+                    className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Transgender / Other</label>
+                  <input type="number" min="0"
+                    value={data.employeesOther ?? ""}
+                    onChange={e => patch({ employeesOther: e.target.value === "" ? undefined : parseInt(e.target.value) })}
+                    placeholder="0"
+                    className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+              {hasAnyEmp && (
+                <p className="text-xs text-slate-500 mt-2">
+                  Total: <strong className="text-slate-700">{totalEmp}</strong> employees
+                  {femaleEmp > 0 && <span className="ml-2 text-slate-400">({femaleEmp} female)</span>}
+                </p>
+              )}
+
+              {/* ── Compliance Threshold Alerts ── */}
+              {hasAnyEmp && totalEmp > 0 && (
+                <div className="mt-4 space-y-3">
+
+                  {/* ≥10: POSH ICC */}
+                  {totalEmp >= 10 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-amber-500 mt-0.5 text-base">⚠️</span>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-amber-800">10+ Employees — POSH Internal Complaints Committee (ICC) Mandatory</p>
+                          <p className="text-xs text-amber-700 mt-0.5">Section 4(1), POSH Act 2013. Penalty: up to ₹50,000 + licence cancellation if ICC not constituted.</p>
+                          <p className="text-xs text-amber-700">ICC annual report details are required in Board Report (Sec. 22). Fill POSH complaint counts in the IBC/OTS/POSH section above.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ≥20: EPF & ESIC */}
+                  {totalEmp >= 20 && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-red-500 mt-0.5 text-base">🔴</span>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-red-800">20+ Employees — EPF & ESIC Registration Mandatory</p>
+                          <p className="text-xs text-red-700 mt-0.5">EPF & MP Act 1952 (Sec. 1(3)(a)) + ESI Act 1948. Directors liable for prosecution if unregistered.</p>
+                          <div className="mt-2">
+                            <Toggle
+                              label="Company is registered under EPF & ESIC and making timely contributions"
+                              value={!!data.epfEsicRegistered}
+                              onChange={v => patch({ epfEsicRegistered: v })}
+                            />
+                            {data.epfEsicRegistered && (
+                              <p className="text-xs text-emerald-700 mt-1 ml-1">✓ EPF & ESIC compliance statement will be included in Board Report.</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ≥30 women: Crèche */}
+                  {femaleEmp >= 30 && (
+                    <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-orange-500 mt-0.5 text-base">🟠</span>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-orange-800">30+ Women Employees — Crèche Facility Mandatory</p>
+                          <p className="text-xs text-orange-700 mt-0.5">Factories Act 1948, Section 48. Employer must provide crèche facility for children of women employees.</p>
+                          <div className="mt-2">
+                            <Toggle
+                              label="Crèche facility has been provided as required"
+                              value={!!data.creacheFacility}
+                              onChange={v => patch({ creacheFacility: v })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ≥100: Standing Orders */}
+                  {totalEmp >= 100 && (
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-blue-500 mt-0.5 text-base">🔵</span>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-blue-800">100+ Employees — Standing Orders Certification Required</p>
+                          <p className="text-xs text-blue-700 mt-0.5">Industrial Employment (Standing Orders) Act, 1946 (Sec. 1(3)). Get Standing Orders certified from certifying officer.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ≥500: Welfare Officer */}
+                  {totalEmp >= 500 && (
+                    <div className="rounded-xl border border-purple-200 bg-purple-50 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-purple-500 mt-0.5 text-base">🟣</span>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-purple-800">500+ Employees — Welfare Officer Appointment Mandatory</p>
+                          <p className="text-xs text-purple-700 mt-0.5">Factories Act 1948, Section 49. A qualified Welfare Officer must be appointed.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {/* ── Rule 5(1) Remuneration Disclosures — always required when employees exist ── */}
+              {hasAnyEmp && totalEmp > 0 && (
+                <div className="mt-5 border-t border-slate-200 pt-4">
+                  <p className="text-xs font-bold text-slate-700 mb-3">Rule 5(1) Disclosures — Required in Board Report [Sec. 197(12)]</p>
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Median Employee Remuneration — Current FY (₹/year)</label>
+                      <input type="number" min="0"
+                        value={data.medianRemunerationCurrent ?? ""}
+                        onChange={e => patch({ medianRemunerationCurrent: e.target.value || undefined })}
+                        placeholder="e.g. 360000"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Median Employee Remuneration — Previous FY (₹/year)</label>
+                      <input type="number" min="0"
+                        value={data.medianRemunerationPrev ?? ""}
+                        onChange={e => patch({ medianRemunerationPrev: e.target.value || undefined })}
+                        placeholder="e.g. 330000"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  {data.medianRemunerationCurrent && data.medianRemunerationPrev && parseFloat(data.medianRemunerationPrev) > 0 && (
+                    <p className="text-xs text-emerald-700 mb-3 font-medium">
+                      Auto-calculated % increase in median remuneration: <strong>{(((parseFloat(data.medianRemunerationCurrent) - parseFloat(data.medianRemunerationPrev)) / parseFloat(data.medianRemunerationPrev)) * 100).toFixed(2)}%</strong>
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">% Increase in Non-Managerial Salaries</label>
+                      <input type="number" step="0.01"
+                        value={data.nonManagerialRemunerationIncreasePct ?? ""}
+                        onChange={e => patch({ nonManagerialRemunerationIncreasePct: e.target.value || undefined })}
+                        placeholder="e.g. 8.5"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">% Increase in Managerial / KMP Salaries</label>
+                      <input type="number" step="0.01"
+                        value={data.managerialRemunerationIncreasePct ?? ""}
+                        onChange={e => patch({ managerialRemunerationIncreasePct: e.target.value || undefined })}
+                        placeholder="e.g. 10"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <Toggle
+                    label="Board affirms remuneration is as per company's Remuneration Policy [Rule 5(1)(xii)]"
+                    value={data.remunerationPolicyAffirmation !== false}
+                    onChange={v => patch({ remunerationPolicyAffirmation: v })}
+                  />
+
+                  {/* Top 10 Earners */}
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-bold text-slate-700">Top 10 Earners — Rule 5(2) Third Proviso <span className="font-normal text-slate-400">(always required in Board Report)</span></label>
+                      <button
+                        onClick={() => patch({ top10Earners: [...(data.top10Earners || []), { name: "", designation: "", remuneration: "" }] })}
+                        className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-100"
+                        disabled={(data.top10Earners?.length || 0) >= 10}
+                      >+ Add Employee</button>
+                    </div>
+                    {(data.top10Earners || []).map((earner, idx) => (
+                      <div key={idx} className="grid grid-cols-7 gap-2 mb-2 items-center">
+                        <span className="text-xs text-slate-400 text-center col-span-1">{idx + 1}.</span>
+                        <input
+                          className="col-span-2 border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          placeholder="Employee Name"
+                          value={earner.name}
+                          onChange={e => { const arr = [...(data.top10Earners || [])]; arr[idx] = { ...arr[idx], name: e.target.value }; patch({ top10Earners: arr }); }}
+                        />
+                        <input
+                          className="col-span-2 border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          placeholder="Designation"
+                          value={earner.designation}
+                          onChange={e => { const arr = [...(data.top10Earners || [])]; arr[idx] = { ...arr[idx], designation: e.target.value }; patch({ top10Earners: arr }); }}
+                        />
+                        <input
+                          type="number" min="0"
+                          className="col-span-1 border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          placeholder="₹/year"
+                          value={earner.remuneration}
+                          onChange={e => { const arr = [...(data.top10Earners || [])]; arr[idx] = { ...arr[idx], remuneration: e.target.value }; patch({ top10Earners: arr }); }}
+                        />
+                        <button
+                          onClick={() => { const arr = [...(data.top10Earners || [])]; arr.splice(idx, 1); patch({ top10Earners: arr }); }}
+                          className="col-span-1 text-red-400 hover:text-red-600 text-xs text-center"
+                        >✕</button>
+                      </div>
+                    ))}
+                    {(!data.top10Earners || data.top10Earners.length === 0) && (
+                      <p className="text-xs text-slate-400 italic">No entries yet. Add top earners — they will appear in the Board Report.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </SectionCard>
+          );
+        })()}
 
         <SectionCard title="Annual Return Web Link" color="slate">
           <div className="mb-4">

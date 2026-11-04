@@ -568,10 +568,60 @@ ${data.otsPending
   : `<p>There were no instances of one-time settlement with any Bank or Financial Institution during the Financial Year ${fy}. Hence, no disclosure is required under this clause.</p>`
 }
 
-<!-- ══════════════ 37. PARTICULARS OF EMPLOYEES [Sec. 197(12)] ══════════════ -->
+<!-- ══════════════ 37. PARTICULARS OF EMPLOYEES [Sec. 197(12) + Rule 5] ══════════════ -->
 <h2>37. Particulars of Employees</h2>
-<p>The information required pursuant to Section 197(12) of the Companies Act, 2013 read with Rule 5(2) and 5(3) of the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 in respect of employees of the Company is as under:</p>
-<p>During the Financial Year ${fy}, no employee of the Company was in receipt of remuneration in excess of the limits prescribed under Rule 5(2) of the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014. Accordingly, no statement is required to be annexed to this Report.</p>
+<p>The information required pursuant to Section 197(12) of the Companies Act, 2013 read with Rule 5(1), 5(2) and 5(3) of the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014 in respect of employees of the Company is furnished hereunder:</p>
+
+${(() => {
+  const totalEmp = (data.employeesMale || 0) + (data.employeesFemale || 0) + (data.employeesOther || 0);
+  const medCurr = data.medianRemunerationCurrent;
+  const medPrev = data.medianRemunerationPrev;
+  const medPct = (medCurr && medPrev && parseFloat(medPrev) > 0)
+    ? (((parseFloat(medCurr) - parseFloat(medPrev)) / parseFloat(medPrev)) * 100).toFixed(2) + "%"
+    : (data.nonManagerialRemunerationIncreasePct ? data.nonManagerialRemunerationIncreasePct + "%" : "________________");
+
+  return `
+<p><strong>(i) Ratio of remuneration of each Director to the median remuneration of employees:</strong></p>
+<table>
+  <tr><th style="width:60%">Director / KMP</th><th class="right">Ratio to Median</th></tr>
+  ${data.directors?.filter(d => d.isKMP || ["Managing Director","Whole-time Director","Chief Executive Officer","Chief Financial Officer","Company Secretary"].includes(d.designation || "")).map(d => {
+    const rem = data.directorRemunerations?.find(r => r.directorName === d.name);
+    const remAmt = rem ? parseFloat(rem.remunerationCurrent || "0") : 0;
+    const ratio = (medCurr && remAmt > 0) ? (remAmt / parseFloat(medCurr)).toFixed(2) + " : 1" : "________________";
+    return `<tr><td>${d.name || "________________"} (${d.designation || "Director"})</td><td class="right">${ratio}</td></tr>`;
+  }).join("") || `<tr><td colspan="2"><em>No KMP/Director remuneration data provided</em></td></tr>`}
+</table>
+
+<p><strong>(ii) Percentage increase in remuneration of each Director, KMP and median employee remuneration during ${fy}:</strong></p>
+<table>
+  <tr><th style="width:60%">Particulars</th><th class="right">% Increase</th></tr>
+  ${data.directors?.filter(d => d.isKMP || ["Managing Director","Whole-time Director","Chief Executive Officer","Chief Financial Officer","Company Secretary"].includes(d.designation || "")).map(d => {
+    const rem = data.directorRemunerations?.find(r => r.directorName === d.name);
+    const curr = parseFloat(rem?.remunerationCurrent || "0");
+    const prev = parseFloat(rem?.remunerationPrev || "0");
+    const pct = (curr > 0 && prev > 0) ? (((curr - prev) / prev) * 100).toFixed(2) + "%" : "________________";
+    return `<tr><td>${d.name || "________________"} (${d.designation || "Director"})</td><td class="right">${pct}</td></tr>`;
+  }).join("") || ""}
+  <tr><td>Median remuneration of all employees</td><td class="right">${medPct}</td></tr>
+</table>
+
+<p><strong>(iii) Number of permanent employees on the rolls of the Company as on 31st March, ${fyEnd}:</strong> ${totalEmp > 0 ? totalEmp : "________________"}</p>
+
+<p><strong>(iv) Average percentile increase in salaries of non-managerial employees vs managerial employees during ${fy}:</strong><br>
+Average percentile increase in salaries of non-managerial employees: <strong>${data.nonManagerialRemunerationIncreasePct ? data.nonManagerialRemunerationIncreasePct + "%" : "________________"}</strong><br>
+Average percentile increase in salaries of managerial employees (KMP): <strong>${data.managerialRemunerationIncreasePct ? data.managerialRemunerationIncreasePct + "%" : "________________"}</strong></p>
+
+<p><strong>(v)</strong> ${data.remunerationPolicyAffirmation !== false ? `The Board of Directors affirms that the remuneration paid during the Financial Year ${fy} is as per the Remuneration Policy of the Company.` : `________________`}</p>
+
+${data.top10Earners && data.top10Earners.length > 0 ? `
+<p><strong>Statement of top 10 employees by remuneration drawn during the Financial Year ${fy} [Rule 5(2) third proviso]:</strong></p>
+<table>
+  <tr><th>Sr.</th><th>Name</th><th>Designation</th><th class="right">Remuneration (₹/year)</th></tr>
+  ${data.top10Earners.map((e, i) => `<tr><td>${i+1}</td><td>${e.name}</td><td>${e.designation}</td><td class="right">${e.remuneration ? "₹" + parseFloat(e.remuneration).toLocaleString("en-IN") : "________________"}</td></tr>`).join("")}
+</table>
+<p><em>Note: During the Financial Year ${fy}, no employee of the Company was in receipt of remuneration in excess of ₹1,02,00,000 per annum or ₹8,50,000 per month. Accordingly, no statement under Rule 5(2)(i)/(ii) is required to be annexed.</em></p>` : `<p>During the Financial Year ${fy}, no employee of the Company was in receipt of remuneration in excess of the limits prescribed under Rule 5(2) of the Companies (Appointment and Remuneration of Managerial Personnel) Rules, 2014. Accordingly, no statement is required to be annexed to this Report.</p>`}
+`;
+})()}
 
 <!-- ══════════════ 38. POSH ══════════════ -->
 <h2>38. Prevention of Sexual Harassment at Workplace (POSH)</h2>
@@ -590,6 +640,16 @@ ${data.otsPending
 <!-- ══════════════ 39. MATERNITY BENEFIT ACT ══════════════ -->
 <h2>39. Compliance with Maternity Benefit Act, 1961</h2>
 <p>The Company is in compliance with the applicable provisions of the Maternity Benefit Act, 1961. No employee availed maternity leave or filed any related complaint during the Financial Year ${fy}.</p>
+
+<!-- ══════════════ 39A. EPF & ESIC ══════════════ -->
+${(() => {
+  const totalEmp = (data.employeesMale || 0) + (data.employeesFemale || 0) + (data.employeesOther || 0);
+  if (totalEmp >= 20 || data.epfEsicRegistered) {
+    return `<h2>39A. Compliance with Employees' Provident Fund &amp; Miscellaneous Provisions Act, 1952 and Employees' State Insurance Act, 1948</h2>
+<p>The Company has ${totalEmp >= 20 ? "more than 20 employees on its rolls and accordingly is" : ""} duly registered under the Employees' Provident Funds and Miscellaneous Provisions Act, 1952 and the Employees' State Insurance Act, 1948. The Company has been making timely contributions and is in compliance with all applicable provisions of these Acts during the Financial Year ${fy}.</p>`;
+  }
+  return "";
+})()}
 
 <!-- ══════════════ 40. EMPLOYEE COUNT (GENDER-WISE) ══════════════ -->
 <h2>40. Particulars of Employees (Gender-wise) as on 31<sup>st</sup> March, ${fyEnd}</h2>
