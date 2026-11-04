@@ -171,12 +171,13 @@ export default function ComplianceMonitorPage() {
   const [udinPopup, setUdinPopup] = useState<{ companyId: string; field: "udinStat" | "udinTax"; val: string; step: 0 | 1 | 2 } | null>(null);
 
   // ── Client Notes state ─────────────────────────────────────────────────────
-  type NoteItem = { id: string; type: string; content: string; metadata: { field?: string; fromValue?: string; toValue?: string; remark?: string } | null; createdAt: string };
+  type NoteItem = { id: string; type: string; content: string; metadata: { field?: string; fieldLabel?: string; remark?: string } | null; createdAt: string };
   const [clientNotes, setClientNotes] = useState<NoteItem[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [newNoteText, setNewNoteText] = useState("");
   const [newNoteType, setNewNoteType] = useState<"note" | "call" | "email" | "whatsapp">("note");
   const [addingNote, setAddingNote] = useState(false);
+  const [editHistory, setEditHistory] = useState<NoteItem[]>([]);
   const editRef = useRef<HTMLDivElement>(null);
   // Close modal on Escape key
   useEffect(() => {
@@ -465,7 +466,22 @@ export default function ComplianceMonitorPage() {
     setEditingId(companyId);
     setEditField(field);
     setEditValues(initValues);
-    // no scroll needed — modal overlay
+    setEditHistory([]);
+    // Load past notes for this specific field
+    const row = rows.find(r => r.companyId === companyId);
+    if (row) {
+      const params = new URLSearchParams({ companyId });
+      if (row.cin) params.set("cin", row.cin);
+      fetch(`/api/client-notes?${params}`)
+        .then(r => r.json())
+        .then(d => {
+          const filtered = (d.notes || []).filter(
+            (n: NoteItem) => n.type === "status_change" && n.metadata?.field === field
+          );
+          setEditHistory(filtered);
+        })
+        .catch(() => {});
+    }
   }
 
   function closeEdit() {
@@ -519,14 +535,20 @@ export default function ComplianceMonitorPage() {
       if (oldVal !== newVal) changes.push(`${fieldMap[key]}: ${oldVal} → ${newVal}`);
     }
     if (!changes.length && !remark) return;
-    const content = [...changes, remark ? `Note: ${remark}` : ""].filter(Boolean).join(" | ");
+    const fieldLabel = fieldMap[editField as keyof typeof fieldMap] || FIELD_LABELS[editField] || editField;
+    // Always prefix with field name so notes tab shows context
+    const parts: string[] = [];
+    if (changes.length) parts.push(...changes);
+    else parts.push(`[${fieldLabel}]`);
+    if (remark) parts.push(`Remark: ${remark}`);
+    const content = parts.join(" | ");
     await fetch("/api/client-notes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         companyId: row.companyId, cin: row.cin, companyName: row.companyName,
         type: "status_change", content,
-        metadata: { field: editField, remark: remark || null },
+        metadata: { field: editField, fieldLabel, remark: remark || null },
       }),
     });
   }
@@ -1944,6 +1966,26 @@ export default function ComplianceMonitorPage() {
                   Cancel
                 </button>
               </div>
+
+              {/* Past remarks for this field */}
+              {editHistory.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Past Remarks</div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {editHistory.map(h => {
+                      const dt = new Date(h.createdAt);
+                      const dateStr = dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+                      const timeStr = dt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+                      return (
+                        <div key={h.id} className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          <div className="text-[10px] text-slate-400 mb-0.5">{dateStr} {timeStr}</div>
+                          <div className="text-xs text-slate-700">{h.content}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -2480,7 +2522,9 @@ export default function ComplianceMonitorPage() {
                               <div className="flex items-center gap-2 mb-1.5">
                                 <span className="text-sm">{cfg.icon}</span>
                                 <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                                  {note.type === "status_change" ? "Status Update" : note.type}
+                                  {note.type === "status_change"
+                                    ? `Status Update${note.metadata?.fieldLabel ? ` — ${note.metadata.fieldLabel}` : ""}`
+                                    : note.type}
                                 </span>
                                 <span className="ml-auto text-[10px] text-slate-400">{dateStr} {timeStr}</span>
                               </div>
