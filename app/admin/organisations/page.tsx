@@ -73,11 +73,11 @@ export default function AdminOrganisationsPage() {
   const [approveAi, setApproveAi] = useState<"with" | "without">("without");
   const [approveLoading, setApproveLoading] = useState(false);
 
-  useEffect(() => { fetchOrgs(); }, [showHidden]);
+  useEffect(() => { fetchOrgs(showHidden); }, [showHidden]);
 
-  async function fetchOrgs() {
+  async function fetchOrgs(withHidden = showHidden) {
     setLoading(true);
-    const res = await fetch(`/api/admin/credits${showHidden ? "?showHidden=1" : ""}`);
+    const res = await fetch(`/api/admin/credits${withHidden ? "?showHidden=1" : ""}`);
     if (res.ok) {
       const data = await res.json();
       setOrgs(data);
@@ -98,7 +98,7 @@ export default function AdminOrganisationsPage() {
     setAddModal(null);
     setAddMsg({ text: res.ok ? `${addAmt} credits added successfully` : "Failed to add credits", ok: res.ok });
     setTimeout(() => setAddMsg(null), 3000);
-    fetchOrgs();
+    fetchOrgs(showHidden);
   }
 
   async function toggleUnlimited(org: Org) {
@@ -107,7 +107,7 @@ export default function AdminOrganisationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: org.userId, isFreeUnlimited: !org.isFreeUnlimited }),
     });
-    fetchOrgs();
+    fetchOrgs(showHidden);
   }
 
   async function toggleAI(org: Org) {
@@ -116,7 +116,7 @@ export default function AdminOrganisationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: org.userId, ai_enabled: !org.csi_users.ai_enabled }),
     });
-    fetchOrgs();
+    fetchOrgs(showHidden);
   }
 
   async function setAiModel(org: Org, model: string) {
@@ -125,7 +125,7 @@ export default function AdminOrganisationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: org.userId, ai_model: model }),
     });
-    fetchOrgs();
+    fetchOrgs(showHidden);
   }
 
   async function toggleHidden(org: Org) {
@@ -134,7 +134,7 @@ export default function AdminOrganisationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: org.userId, isHiddenFromAdmin: !org.isHiddenFromAdmin }),
     });
-    fetchOrgs();
+    fetchOrgs(showHidden);
   }
 
   async function setFreeLimit(org: Org, val: string) {
@@ -144,7 +144,7 @@ export default function AdminOrganisationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: org.userId, freeLimit: limit }),
     });
-    fetchOrgs();
+    fetchOrgs(showHidden);
   }
 
   async function confirmApprove() {
@@ -162,7 +162,7 @@ export default function AdminOrganisationsPage() {
     });
     setApproveLoading(false);
     setApproveModal(null);
-    fetchOrgs();
+    fetchOrgs(showHidden);
   }
 
   async function rejectUtr(utr: UtrReq) {
@@ -171,7 +171,7 @@ export default function AdminOrganisationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ utrId: utr.id, action: "reject" }),
     });
-    fetchOrgs();
+    fetchOrgs(showHidden);
   }
 
   const filtered = orgs.filter(o =>
@@ -223,7 +223,7 @@ export default function AdminOrganisationsPage() {
             {showHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             {showHidden ? "Showing Hidden" : "Show Hidden"}
           </button>
-          <button onClick={fetchOrgs} className="text-gray-400 hover:text-gray-600">
+          <button onClick={() => fetchOrgs(showHidden)} className="text-gray-400 hover:text-gray-600">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
