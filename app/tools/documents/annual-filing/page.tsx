@@ -526,7 +526,7 @@ function AnnualFilingTool() {
     cashFlowIncluded: false,
     emphasisOfMatter: "",
     qualificationDetails: "",
-    auditTrailCompliant: false,
+    auditTrailCompliant: true,
     auditTrailSoftware: "",
   });
   const [saving, setSaving]         = useState(false);
@@ -1161,7 +1161,7 @@ function AnnualFilingTool() {
         cashFlowIncluded: false,
         emphasisOfMatter: "",
         qualificationDetails: "",
-        auditTrailCompliant: false,
+        auditTrailCompliant: true,
         auditTrailSoftware: "",
       });
       setSaveId(null);
@@ -2802,12 +2802,25 @@ function AnnualFilingTool() {
               </label>
             </div>
             {auditOpts.auditTrailCompliant && (
-              <input
-                value={auditOpts.auditTrailSoftware || ""}
-                onChange={e => setAuditOpts(o => ({ ...o, auditTrailSoftware: e.target.value }))}
-                placeholder="Software name (e.g. Tally Prime, Busy, QuickBooks)"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Software Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  value={auditOpts.auditTrailSoftware || ""}
+                  onChange={e => setAuditOpts(o => ({ ...o, auditTrailSoftware: e.target.value }))}
+                  placeholder="e.g. Tally Prime, Busy, QuickBooks"
+                  required
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    auditOpts.auditTrailCompliant && !auditOpts.auditTrailSoftware?.trim()
+                      ? "border-red-400 bg-red-50"
+                      : "border-slate-300"
+                  }`}
+                />
+                {auditOpts.auditTrailCompliant && !auditOpts.auditTrailSoftware?.trim() && (
+                  <p className="text-xs text-red-500 mt-1">Software name is required when audit trail is enabled.</p>
+                )}
+              </div>
             )}
           </div>
 
