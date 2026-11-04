@@ -430,10 +430,18 @@ ${isFPC ? `<p><em>Note: As a Producer Company, the Board determines remuneration
 
 <!-- ══════════════ 14. CSR COMMITTEE [Sec. 135] ══════════════ -->
 <h2>14. Corporate Social Responsibility (CSR)</h2>
-${data.csrApplicable && data.csrDetails
-  ? `<p>The Company is required to undertake CSR activities as per the provisions of Section 135 of the Companies Act, 2013. A CSR Committee has been constituted. Details of CSR activities and expenditure during the Financial Year ${fy} are as follows:</p>
-     <p>${data.csrDetails}</p>`
-  : `<p>The provisions of Section 135 of the Companies Act, 2013 regarding Corporate Social Responsibility are not applicable to the Company for the Financial Year ${fy} as the Company's net worth, turnover and net profit are below the prescribed thresholds under Section 135(1) of the Companies Act, 2013. Accordingly, the Company has not constituted a CSR Committee and no CSR expenditure was required to be made.</p>`
+${(() => {
+  const nc = (v: string) => parseFloat((v || "").replace(/,/g, "")) || 0;
+  const pat     = nc(data.financials?.profitAfterTax);
+  const prevPAT = nc(data.financials?.prevProfitAfterTax);
+  const avgPAT  = (pat + prevPAT) / 2;
+  const obligation = avgPAT > 0 ? Math.round(avgPAT * 0.02) : 0;
+  if (data.csrApplicable && data.csrDetails) {
+    return `<p>The Company is required to undertake CSR activities as per the provisions of Section 135 of the Companies Act, 2013 as the Company meets the prescribed threshold criteria. The CSR obligation for the Financial Year ${fy} is ₹${obligation > 0 ? obligation.toLocaleString("en-IN") : "________________"} (being 2% of average net profit of preceding financial years). A CSR Committee has been constituted. Details of CSR activities and expenditure during the Financial Year ${fy} are as follows:</p>
+<p>${data.csrDetails}</p>`;
+  }
+  return `<p>The provisions of Section 135 of the Companies Act, 2013 regarding Corporate Social Responsibility are not applicable to the Company for the Financial Year ${fy} as the Company's net worth, turnover and net profit are below the prescribed thresholds under Section 135(1) of the Companies Act, 2013. Accordingly, the Company has not constituted a CSR Committee and no CSR expenditure was required to be made.</p>`;
+})()
 }
 
 <!-- ══════════════ 15. STAKEHOLDERS RELATIONSHIP COMMITTEE ══════════════ -->
@@ -511,6 +519,22 @@ ${data.hasDeposits
 <!-- ══════════════ 27. SECRETARIAL AUDIT [Sec. 204] ══════════════ -->
 <h2>27. Secretarial Audit</h2>
 <p>The provisions of Section 204 of the Companies Act, 2013 relating to Secretarial Audit are applicable to public companies with paid-up share capital of ₹50 Crores or more, or turnover of ₹250 Crores or more. The Company does not meet the aforesaid thresholds. Accordingly, Secretarial Audit is not applicable to the Company for the Financial Year ${fy}.</p>
+
+<!-- ══════════════ 27A. INTERNAL AUDIT [Sec. 138] ══════════════ -->
+${(() => {
+  const nc = (v: string) => parseFloat((v || "").replace(/,/g, "")) || 0;
+  const paidUpCap = nc(data.financials?.paidUpCapital);
+  const turnover  = nc(data.financials?.revenueFromOperations);
+  const netWorth  = nc(data.financials?.netWorth);
+  const L = 100000;
+  const applicable = paidUpCap >= 50*L*100 || turnover >= 200*L*100 || netWorth >= 500*L*100;
+  if (applicable || data.internalAuditorName) {
+    return `<h2>27A. Internal Audit</h2>
+<p>Pursuant to the provisions of Section 138 of the Companies Act, 2013 read with Rule 13 of the Companies (Accounts) Rules, 2014, the Company is required to appoint an Internal Auditor. The Board of Directors has appointed <strong>${data.internalAuditorName || "________________"}</strong> as the Internal Auditor of the Company for the Financial Year ${fy}${data.internalAuditPeriod ? ` for the period ${data.internalAuditPeriod}` : ""}. The Internal Auditor has submitted their report to the Board, and the findings have been duly reviewed.</p>`;
+  }
+  return `<h2>27A. Internal Audit</h2>
+<p>The provisions of Section 138 of the Companies Act, 2013 relating to Internal Audit are not applicable to the Company for the Financial Year ${fy}, as the Company does not meet the prescribed thresholds under Rule 13 of the Companies (Accounts) Rules, 2014.</p>`;
+})()}
 
 <!-- ══════════════ 28. COST AUDIT [Sec. 148] ══════════════ -->
 <h2>28. Cost Audit</h2>

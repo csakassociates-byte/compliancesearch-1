@@ -276,6 +276,11 @@ export interface AnnualFilingData {
   employeesFemale?: number;
   employeesOther?: number;        // transgender / other
 
+  // ── Financial Threshold Compliance (auto-detected from financials) ─
+  internalAuditorName?: string;       // Sec. 138 — Internal Auditor name/firm
+  internalAuditPeriod?: string;       // period for which internal audit done
+  auditCommitteeConstituted?: boolean; // Sec. 177 — Audit Committee constituted
+
   // ── Labour Law Compliance (threshold-triggered) ──────────────────
   epfEsicRegistered?: boolean;        // 20+ employees → EPF & ESIC mandatory
   creacheFacility?: boolean;          // 30+ women → Crèche mandatory

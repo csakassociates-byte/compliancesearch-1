@@ -2857,13 +2857,27 @@ function AnnualFilingTool() {
     const pat        = parseFloat(fin.profitAfterTax) || 0;
     const isLoss     = pat < 0;
     const nc = (v: string) => parseFloat((v || "").replace(/,/g, "")) || 0;
-    const authCap    = nc(fin.authorisedCapital);
-    const paidUpCap  = nc(fin.paidUpCapital);
+    const authCap     = nc(fin.authorisedCapital);
+    const paidUpCap   = nc(fin.paidUpCapital);
     const totalAssets = nc(fin.totalAssets);
     const totalLiab   = nc(fin.totalLiabilities);
     const bsDiff      = Math.abs(totalAssets - totalLiab);
     const bsImbalance = totalAssets > 0 && totalLiab > 0 && bsDiff > 1;
     const authLtPaid  = authCap > 0 && paidUpCap > 0 && paidUpCap > authCap;
+
+    // ── Compliance threshold values (in lakhs for readability) ──
+    const turnover   = nc(fin.revenueFromOperations);   // ₹
+    const netWorth   = nc(fin.netWorth);                // ₹
+    const prevPAT    = nc(fin.prevProfitAfterTax);
+    const avgPAT     = (pat + prevPAT) / 2;            // simple 2-yr avg (3-yr needs older data)
+    const L = 100000; // 1 lakh
+    // Threshold flags
+    const csrApplicable   = turnover >= 1000 * L * 100 || netWorth >= 500 * L * 100 || avgPAT >= 5 * L * 100;
+    const internalAudit   = paidUpCap >= 50 * L * 100 || turnover >= 200 * L * 100 || netWorth >= 500 * L * 100;
+    const auditCommittee  = paidUpCap >= 10 * L * 100 || turnover >= 100 * L * 100;
+    const wholetimeCS     = paidUpCap >= 10 * L * 100;
+    const costAudit       = turnover >= 100 * L * 100; // simplified — sector-specific rules apply
+    const hasFinancials   = turnover > 0 || paidUpCap > 0 || netWorth > 0;
 
     function copyCurrentToPrev() {
       patchFin({
@@ -3181,6 +3195,132 @@ function AnnualFilingTool() {
             Copy Current → Previous Year
           </button>
         </div>
+
+        {/* ══ Smart Compliance Alerts — triggered by financial figures ══ */}
+        {hasFinancials && (csrApplicable || internalAudit || auditCommittee || wholetimeCS || costAudit) && (
+          <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-4 mb-2">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">⚡</span>
+              <p className="text-sm font-bold text-indigo-900">Compliance Triggered by Your Financial Figures</p>
+              <span className="ml-auto text-xs text-indigo-500 bg-indigo-100 px-2 py-0.5 rounded-full">Auto-detected</span>
+            </div>
+            <div className="space-y-3">
+
+              {/* CSR */}
+              {csrApplicable && (
+                <div className="rounded-xl border border-red-200 bg-white p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-base mt-0.5">🔴</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-red-800">CSR (Corporate Social Responsibility) — Section 135, Companies Act 2013</p>
+                      <p className="text-xs text-red-700 mt-0.5">
+                        {turnover >= 1000*L*100 ? `Turnover ≥ ₹1,000 Cr` : netWorth >= 500*L*100 ? `Net Worth ≥ ₹500 Cr` : `Average Net Profit ≥ ₹5 Cr`} → CSR mandatory. Spend 2% of average net profit of last 3 FYs on CSR activities.
+                      </p>
+                      <p className="text-xs text-red-600 font-medium mt-1">Penalty: ₹1 Cr company + ₹25 lakh officers. Fill CSR details in Step 4 (Board &amp; Compliance).</p>
+                      <div className="mt-2 p-2 bg-red-50 rounded-lg">
+                        <p className="text-xs text-red-700 font-semibold">Approx. CSR obligation this FY:</p>
+                        <p className="text-sm font-bold text-red-800 mt-0.5">
+                          ₹{avgPAT > 0 ? Math.round(avgPAT * 0.02).toLocaleString("en-IN") : "________________"}
+                          <span className="text-xs font-normal ml-1">(2% of avg PAT ₹{avgPAT > 0 ? Math.round(avgPAT).toLocaleString("en-IN") : "___"})</span>
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">Go to Step 4 → Enable CSR toggle → Fill activity details</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Internal Audit */}
+              {internalAudit && (
+                <div className="rounded-xl border border-orange-200 bg-white p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-base mt-0.5">🟠</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-orange-800">Internal Audit — Section 138, Companies Act 2013</p>
+                      <p className="text-xs text-orange-700 mt-0.5">
+                        {paidUpCap >= 50*L*100 ? `Paid-up Capital ≥ ₹50 Cr` : turnover >= 200*L*100 ? `Turnover ≥ ₹200 Cr` : `Net Worth ≥ ₹500 Cr`} → Internal Auditor appointment mandatory. Can be CA firm or CMA firm.
+                      </p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Internal Auditor Name / Firm</label>
+                          <input
+                            value={data.internalAuditorName || ""}
+                            onChange={e => patch({ internalAuditorName: e.target.value })}
+                            placeholder="e.g. M/s ABC & Co., Chartered Accountants"
+                            className="w-full border border-orange-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Period of Audit</label>
+                          <input
+                            value={data.internalAuditPeriod || ""}
+                            onChange={e => patch({ internalAuditPeriod: e.target.value })}
+                            placeholder={`FY ${fy}`}
+                            className="w-full border border-orange-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          />
+                        </div>
+                      </div>
+                      {data.internalAuditorName && (
+                        <p className="text-xs text-emerald-700 mt-1">✓ Internal Audit disclosure will appear in Board Report.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Audit Committee */}
+              {auditCommittee && (
+                <div className="rounded-xl border border-amber-200 bg-white p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-base mt-0.5">🟡</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-amber-800">Audit Committee — Section 177, Companies Act 2013</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        {paidUpCap >= 10*L*100 ? `Paid-up Capital ≥ ₹10 Cr` : `Turnover ≥ ₹100 Cr`} → Audit Committee mandatory for listed + other prescribed companies.
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">Note: This threshold applies to public companies. Private companies are generally exempt unless listed or meeting specific criteria.</p>
+                      <div className="mt-2">
+                        <Toggle
+                          label="Audit Committee has been constituted"
+                          value={!!data.auditCommitteeConstituted}
+                          onChange={v => patch({ auditCommitteeConstituted: v })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Whole-time Company Secretary */}
+              {wholetimeCS && (
+                <div className="rounded-xl border border-blue-200 bg-white p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-base mt-0.5">🔵</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-blue-800">Whole-time Company Secretary — Section 203, Companies Act 2013</p>
+                      <p className="text-xs text-blue-700 mt-0.5">Paid-up Capital ≥ ₹10 Cr → Whole-time CS mandatory. Penalty: ₹5 lakh company + ₹50,000/day officers.</p>
+                      <p className="text-xs text-slate-500 mt-1">Go to Step 5 (Directors) → Add CS as KMP with designation "Company Secretary".</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Cost Audit advisory */}
+              {costAudit && (
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-base mt-0.5">ℹ️</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-slate-700">Cost Audit — Companies (Cost Records & Audit) Rules, 2014</p>
+                      <p className="text-xs text-slate-600 mt-0.5">Turnover ≥ ₹100 Cr in certain regulated sectors (pharmaceuticals, chemicals, fertilizers, sugar, cement, etc.) may attract Cost Audit. Verify applicability with your Cost Accountant.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
 
         <SectionCard title="Capital Changes (if any)" color="slate">
           <Field
