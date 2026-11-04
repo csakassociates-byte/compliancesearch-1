@@ -149,7 +149,7 @@ export default function ComplianceMonitorPage() {
   const [editField, setEditField] = useState("");
   const [editValues, setEditValues] = useState<Record<string, string | boolean>>({});
   const [saving, setSaving] = useState(false);
-  const [confirmPending, setConfirmPending] = useState<{ patch: Partial<ComplianceRow> } | null>(null);
+  const [confirmPending, setConfirmPending] = useState<{ patch: Partial<ComplianceRow>; remark?: string } | null>(null);
   const [reminderRow, setReminderRow] = useState<ComplianceRow | null>(null);
   const [reminderText, setReminderText] = useState("");
   const [copied, setCopied] = useState(false);
@@ -169,6 +169,14 @@ export default function ComplianceMonitorPage() {
   } | null>(null);
   const [profileTab, setProfileTab] = useState("info");
   const [udinPopup, setUdinPopup] = useState<{ companyId: string; field: "udinStat" | "udinTax"; val: string; step: 0 | 1 | 2 } | null>(null);
+
+  // ── Client Notes state ─────────────────────────────────────────────────────
+  type NoteItem = { id: string; type: string; content: string; metadata: { field?: string; fromValue?: string; toValue?: string; remark?: string } | null; createdAt: string };
+  const [clientNotes, setClientNotes] = useState<NoteItem[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [newNoteText, setNewNoteText] = useState("");
+  const [newNoteType, setNewNoteType] = useState<"note" | "call" | "email" | "whatsapp">("note");
+  const [addingNote, setAddingNote] = useState(false);
   const editRef = useRef<HTMLDivElement>(null);
   // Close modal on Escape key
   useEffect(() => {
@@ -426,7 +434,7 @@ export default function ComplianceMonitorPage() {
     return true;
   });
 
-  async function save(row: ComplianceRow, patch: Partial<ComplianceRow>) {
+  async function save(row: ComplianceRow, patch: Partial<ComplianceRow>, remark?: string) {
     setRows(prev => prev.map(r => r.companyId === row.companyId ? { ...r, ...patch } : r));
     setSaving(true);
     try {
@@ -446,6 +454,8 @@ export default function ComplianceMonitorPage() {
       if (data.id && !row.recordId) {
         setRows(prev => prev.map(r => r.companyId === row.companyId ? { ...r, recordId: data.id } : r));
       }
+      // Auto-log status change in background (don't await — non-blocking)
+      logStatusChange(row, patch, remark).catch(() => {});
     } finally {
       setSaving(false);
     }
@@ -462,6 +472,63 @@ export default function ComplianceMonitorPage() {
     setEditingId(null);
     setEditField("");
     setEditValues({});
+  }
+
+  async function loadNotes(companyId: string, cin?: string) {
+    setNotesLoading(true);
+    setClientNotes([]);
+    const params = new URLSearchParams({ companyId });
+    if (cin) params.set("cin", cin);
+    try {
+      const res = await fetch(`/api/client-notes?${params}`);
+      const data = await res.json();
+      setClientNotes(data.notes || []);
+    } catch { /* silent */ }
+    setNotesLoading(false);
+  }
+
+  async function addNote(companyId: string, cin: string, companyName: string) {
+    if (!newNoteText.trim()) return;
+    setAddingNote(true);
+    try {
+      await fetch("/api/client-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, cin, companyName, type: newNoteType, content: newNoteText.trim() }),
+      });
+      setNewNoteText("");
+      setNewNoteType("note");
+      await loadNotes(companyId, cin);
+    } catch { /* silent */ }
+    setAddingNote(false);
+  }
+
+  async function logStatusChange(row: ComplianceRow, patch: Partial<ComplianceRow>, remark?: string) {
+    const fieldMap: Record<string, string> = {
+      docStatus: "Document Status", workStatus: "Work Status",
+      inc20aStatus: "INC-20A", balanceSheetReady: "Balance Sheet",
+      udinStatutory: "UDIN Statutory", udinTaxAudit: "UDIN Tax Audit",
+      aoc4Srn: "AOC-4 SRN", mgt7Srn: "MGT-7 SRN",
+      adt1Srn: "ADT-1 SRN", itrStatus: "ITR Status", dpt3Srn: "DPT-3 SRN",
+    };
+    const changes: string[] = [];
+    for (const key of Object.keys(patch) as (keyof ComplianceRow)[]) {
+      if (!(key in fieldMap)) continue;
+      const oldVal = String(row[key] ?? "—");
+      const newVal = String(patch[key] ?? "—");
+      if (oldVal !== newVal) changes.push(`${fieldMap[key]}: ${oldVal} → ${newVal}`);
+    }
+    if (!changes.length && !remark) return;
+    const content = [...changes, remark ? `Note: ${remark}` : ""].filter(Boolean).join(" | ");
+    await fetch("/api/client-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyId: row.companyId, cin: row.cin, companyName: row.companyName,
+        type: "status_change", content,
+        metadata: { field: editField, remark: remark || null },
+      }),
+    });
   }
 
   function handleSave() {
@@ -512,14 +579,16 @@ export default function ComplianceMonitorPage() {
         patch.remarks = editValues.remarks as string;
         break;
     }
+    // Extract remark (_remark is UI-only, not a ComplianceRow field)
+    const remark = (editValues._remark as string || "").trim() || undefined;
     // Show confirmation before saving
-    setConfirmPending({ patch });
+    setConfirmPending({ patch, remark });
   }
 
   function confirmSave() {
     const row = rows.find(r => r.companyId === editingId);
     if (!row || !confirmPending) return;
-    save(row, confirmPending.patch);
+    save(row, confirmPending.patch, confirmPending.remark);
     setConfirmPending(null);
     closeEdit();
   }
@@ -595,15 +664,24 @@ export default function ComplianceMonitorPage() {
         );
       case "bs":
         return (
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setEditValues(v => ({ ...v, balanceSheetReady: true }))}
-              className={selBtn(editValues.balanceSheetReady === true, "bg-emerald-50 text-emerald-700 border-emerald-200")}>
-              ✓ Ready / finalized
-            </button>
-            <button onClick={() => setEditValues(v => ({ ...v, balanceSheetReady: false }))}
-              className={selBtn(editValues.balanceSheetReady === false, "bg-red-50 text-red-700 border-red-200")}>
-              Pending
-            </button>
+          <div className="space-y-3">
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setEditValues(v => ({ ...v, balanceSheetReady: true }))}
+                className={selBtn(editValues.balanceSheetReady === true, "bg-emerald-50 text-emerald-700 border-emerald-200")}>
+                ✓ Ready / finalized
+              </button>
+              <button onClick={() => setEditValues(v => ({ ...v, balanceSheetReady: false }))}
+                className={selBtn(editValues.balanceSheetReady === false, "bg-red-50 text-red-700 border-red-200")}>
+                Pending
+              </button>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Remark (optional)</label>
+              <input value={editValues._remark as string || ""}
+                onChange={e => setEditValues(v => ({ ...v, _remark: e.target.value }))}
+                placeholder="e.g. Received from client via email"
+                className={inp} />
+            </div>
           </div>
         );
       case "udinStat":
@@ -651,6 +729,13 @@ export default function ComplianceMonitorPage() {
               )}
             </div>
             <p className="text-xs text-slate-400">SRN issued by MCA portal after AOC-4 submission. Filing marked done only when SRN is entered.</p>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Remark (optional)</label>
+              <input value={editValues._remark as string || ""}
+                onChange={e => setEditValues(v => ({ ...v, _remark: e.target.value }))}
+                placeholder="e.g. Filed on MCA, challan attached"
+                className={inp} />
+            </div>
           </div>
         );
       case "mgt7":
@@ -669,6 +754,13 @@ export default function ComplianceMonitorPage() {
               )}
             </div>
             <p className="text-xs text-slate-400">For Section 8 / OPC / Small companies, enter MGT-7A SRN here.</p>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Remark (optional)</label>
+              <input value={editValues._remark as string || ""}
+                onChange={e => setEditValues(v => ({ ...v, _remark: e.target.value }))}
+                placeholder="e.g. Filed on MCA portal"
+                className={inp} />
+            </div>
           </div>
         );
       case "adt1":
@@ -1743,6 +1835,9 @@ export default function ComplianceMonitorPage() {
                               setCompanyModal(row);
                               setProfileTab("info");
                               setCompanyProfile({ loading: true });
+                              setClientNotes([]);
+                              setNewNoteText("");
+                              loadNotes(row.companyId, row.cin || undefined);
                               fetch(`/api/company-profile?companyId=${row.companyId}`)
                                 .then(r => r.json())
                                 .then(d => setCompanyProfile({ loading: false, ...d }))
@@ -2051,6 +2146,7 @@ export default function ComplianceMonitorPage() {
           { id: "holders",  label: `Shareholders (${p?.shareholderSummary?.length ?? "…"})` },
           { id: "auditor",  label: "Auditor" },
           { id: "status",   label: "Compliance" },
+          { id: "notes",    label: `📝 Notes${clientNotes.length ? ` (${clientNotes.length})` : ""}` },
         ];
 
         return (
@@ -2323,6 +2419,75 @@ export default function ComplianceMonitorPage() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* ── Notes & Communications tab ───────────────────── */}
+                    {profileTab === "notes" && (
+                      <div className="space-y-4">
+                        {/* Add new note */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                          <div className="text-xs font-semibold text-slate-600">Add Note / Communication</div>
+                          <div className="flex gap-2 flex-wrap">
+                            {([
+                              { v: "note",      label: "📝 Note",      cls: "bg-slate-100 text-slate-700 border-slate-300" },
+                              { v: "call",      label: "📞 Call",      cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                              { v: "email",     label: "📧 Email",     cls: "bg-purple-50 text-purple-700 border-purple-200" },
+                              { v: "whatsapp",  label: "💬 WhatsApp",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                            ] as const).map(({ v, label, cls }) => (
+                              <button key={v} onClick={() => setNewNoteType(v)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${cls} ${newNoteType === v ? "ring-2 ring-offset-1 ring-blue-400" : "opacity-60 hover:opacity-100"}`}>
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <textarea
+                            value={newNoteText}
+                            onChange={e => setNewNoteText(e.target.value)}
+                            rows={3}
+                            placeholder="Write your note here… e.g. Called client, they will send documents by Friday"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                          />
+                          <button
+                            onClick={() => addNote(c.companyId, c.cin, c.companyName)}
+                            disabled={addingNote || !newNoteText.trim()}
+                            className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                            {addingNote ? "Saving…" : "Save Note"}
+                          </button>
+                        </div>
+
+                        {/* Notes list */}
+                        {notesLoading && (
+                          <div className="text-center py-6 text-slate-400 text-xs">Loading notes…</div>
+                        )}
+                        {!notesLoading && clientNotes.length === 0 && (
+                          <div className="text-center py-6 text-slate-400 text-xs">No notes yet. Add the first one above.</div>
+                        )}
+                        {!notesLoading && clientNotes.map(note => {
+                          const typeConfig: Record<string, { icon: string; color: string }> = {
+                            note:          { icon: "📝", color: "bg-slate-50 border-slate-200" },
+                            call:          { icon: "📞", color: "bg-blue-50 border-blue-200" },
+                            email:         { icon: "📧", color: "bg-purple-50 border-purple-200" },
+                            whatsapp:      { icon: "💬", color: "bg-emerald-50 border-emerald-200" },
+                            status_change: { icon: "🔄", color: "bg-amber-50 border-amber-200" },
+                          };
+                          const cfg = typeConfig[note.type] ?? typeConfig.note;
+                          const dt = new Date(note.createdAt);
+                          const dateStr = dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+                          const timeStr = dt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+                          return (
+                            <div key={note.id} className={`border rounded-xl px-4 py-3 ${cfg.color}`}>
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <span className="text-sm">{cfg.icon}</span>
+                                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                                  {note.type === "status_change" ? "Status Update" : note.type}
+                                </span>
+                                <span className="ml-auto text-[10px] text-slate-400">{dateStr} {timeStr}</span>
+                              </div>
+                              <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{note.content}</div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
