@@ -182,6 +182,18 @@ export default function Navbar() {
               Home
             </Link>
 
+            {/* Compliance Dashboard */}
+            <Link
+              href={session ? "/tools/compliance-monitor" : "/compliance-dashboard"}
+              className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-2 rounded-lg transition-all ${
+                pathname === "/tools/compliance-monitor" || pathname === "/compliance-dashboard"
+                  ? "text-indigo-700 bg-indigo-50"
+                  : "text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+              }`}
+            >
+              <span className="text-base leading-none">📊</span> Dashboard
+            </Link>
+
             {/* Tools Dropdown */}
             <div ref={toolsRef} className="relative">
               <button
@@ -303,6 +315,19 @@ export default function Navbar() {
             <Link href="/" onClick={() => setMenuOpen(false)}
               className={`text-sm font-medium py-2.5 px-3 rounded-lg transition ${isActive("/")?"text-blue-700 bg-blue-50 font-semibold":"text-slate-600 hover:bg-slate-50"}`}>
               Home
+            </Link>
+
+            {/* Compliance Dashboard — mobile */}
+            <Link
+              href={session ? "/tools/compliance-monitor" : "/compliance-dashboard"}
+              onClick={() => setMenuOpen(false)}
+              className={`flex items-center gap-2 text-sm font-semibold py-2.5 px-3 rounded-lg transition ${
+                pathname === "/tools/compliance-monitor" || pathname === "/compliance-dashboard"
+                  ? "text-indigo-700 bg-indigo-50"
+                  : "text-indigo-600 hover:bg-indigo-50"
+              }`}
+            >
+              📊 Dashboard
             </Link>
 
             {/* Mobile Tools Accordion */}
