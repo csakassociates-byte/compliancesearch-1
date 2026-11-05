@@ -391,31 +391,6 @@ const TOUR_STEPS: Record<number, { targetId: string; title: string; body: string
   ],
 };
 
-// ── Auto-Play Tour: flat list of all slides across all 8 steps ─────────────
-const AUTO_TOUR_SLIDES: { stepNo: number; stepLabel: string; title: string; body: string }[] = [
-  // Step 1
-  { stepNo: 1, stepLabel: "Company & FY", title: "Import Company Data — One Time", body: "Go to MCA Portal → Search Company → View Master Data → Download Excel (All Tab). Upload it here — ComplianceSearch.in saves all details permanently. You never need to upload again." },
-  { stepNo: 1, stepLabel: "Company & FY", title: "Search & Auto-Fill in Seconds", body: "After importing once, just type the company name in the search box. CIN, Directors, ROC, State, Address — everything fills automatically. No manual entry needed anywhere on this site." },
-  { stepNo: 1, stepLabel: "Company & FY", title: "Document Preferences", body: "Toggle letterhead ON to print company branding on every document. The Annual Report Number is auto-calculated from incorporation date — verify it matches your actual annual return sequence." },
-  { stepNo: 1, stepLabel: "Company & FY", title: "Business Details & State of Affairs", body: "Fill Principal Business Activity, Place of Signing, Board Report Date, Current & Previous AGM Dates. Click 'Generate Draft' and the tool writes the State of Affairs paragraph automatically — edit before finalizing." },
-  // Step 2
-  { stepNo: 2, stepLabel: "Auditor", title: "Auditor Details", body: "Enter the statutory auditor's name (firm name or individual), FRN or Membership Number, registered address, appointment date, tenure, and the date the audit report was signed. These appear on the Auditor's Report." },
-  // Step 3
-  { stepNo: 3, stepLabel: "Financials", title: "P&L Figures from Audited Accounts", body: "Enter Revenue from Operations, Other Income, Expenses, Current Tax and Deferred Tax from the CA-signed Profit & Loss statement. Total Income and PAT are auto-calculated. Use consistent denomination throughout." },
-  { stepNo: 3, stepLabel: "Financials", title: "Balance Sheet Figures", body: "Enter Authorised Capital, Paid-up Capital, Reserves & Surplus, Total Assets and Liabilities from the audited Balance Sheet. Net Worth is auto-computed. These figures drive CSR, CARO, and Internal Audit applicability." },
-  // Step 4
-  { stepNo: 4, stepLabel: "Board & Compliance", title: "Board Meetings, CSR, POSH & Deposits", body: "Enter all Board Meeting dates (min 4, no gap > 120 days). CSR applicability is auto-checked from financials. Toggle ICC/POSH status and enter complaint count. Indicate whether any public deposits were accepted." },
-  // Step 5
-  { stepNo: 5, stepLabel: "Directors", title: "Directors — Auto-filled from MCA Excel", body: "Directors populate automatically from the MCA Excel uploaded in Step 1. Mark at least 2 as signatories for the Board Report — one must be Managing Director or Whole-time Director (Section 134)." },
-  // Step 6
-  { stepNo: 6, stepLabel: "Shareholders", title: "Shareholding Pattern", body: "Enter each shareholder's name, PAN, folio number and shares held. Total Shares = Paid-up Capital ÷ Face Value. This data populates the MGT-7 / MGT-7A shareholding schedule automatically." },
-  // Step 7
-  { stepNo: 7, stepLabel: "AOC-1 / AOC-2", title: "Subsidiaries & Related Party Transactions", body: "AOC-1: required only if the company has subsidiaries or associates — fill their audited figures. AOC-2: required only for related party transactions outside arm's length under Section 188. Leave blank if not applicable — a Nil statement is auto-generated." },
-  // Step 8
-  { stepNo: 8, stepLabel: "Generate All", title: "Generate All Documents in One Click", body: "All 7 steps must show green ✓ in the sidebar. Click Generate All — Board Report, Auditor's Report, Notes on Accounts, Director & Shareholder Lists, AOC-1/AOC-2 are all created together. Download as ZIP or print individually on CA letterhead." },
-];
-
-const AUTO_TOUR_DURATION_MS = 7500; // 7.5s per slide → 12 slides × 7.5s ≈ 90s ≈ 1.5 min
 
 /** Deduplicate directors by DIN (preferred) or lowercased name — keeps first occurrence */
 function deduplicateDirs(dirs: DirectorRecord[]): DirectorRecord[] {
@@ -823,15 +798,14 @@ function AnnualFilingTool() {
   } | null>(null);
   const [resetting, setResetting]   = useState(false);
   const [isLocked, setIsLocked]     = useState(false);
-  const [showGuide, setShowGuide]       = useState(false);
-  const [tourStep, setTourStep]         = useState<number>(0); // 0 = not running
-  const [tourRect, setTourRect]         = useState<DOMRect | null>(null);
-  const [autoTourIdx, setAutoTourIdx]   = useState<number>(0); // current slide index (0-based)
-  const [autoTourOn, setAutoTourOn]     = useState(false);
-  const [autoTourPaused, setAutoTourPaused] = useState(false);
-  const [autoTourProgress, setAutoTourProgress] = useState(0); // 0-100
-  const autoTourTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoTourProgressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showGuide, setShowGuide]         = useState(false);
+  const [tourStep, setTourStep]           = useState<number>(0); // 0 = not running
+  const [tourRect, setTourRect]           = useState<DOMRect | null>(null);
+  const [autoMode, setAutoMode]           = useState(false);  // auto-play mode
+  const [autoPaused, setAutoPaused]       = useState(false);
+  const [autoProgress, setAutoProgress]   = useState(0); // 0–100 progress bar
+  const autoAdvTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoProgTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [finalizedBy, setFinalizedBy]   = useState<string | null>(null);
   const [finalizedAt, setFinalizedAt]   = useState<string | null>(null);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
@@ -1067,8 +1041,9 @@ function AnnualFilingTool() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
-  // ── Tour: auto-start every time user enters a step ───────────────────
+  // ── Tour: auto-start every time user enters a step (manual mode only) ─
   useEffect(() => {
+    if (autoMode) return; // auto-mode handles its own navigation
     const steps = TOUR_STEPS[step];
     if (steps && steps.length > 0) {
       const t = setTimeout(() => startTour(), 600);
@@ -1079,12 +1054,12 @@ function AnnualFilingTool() {
 
   function startTour() {
     setTourStep(1);
-    updateTourRect(1);
+    updateTourRect(1, step);
   }
 
-  function updateTourRect(idx: number) {
-    const steps = TOUR_STEPS[step] || [];
-    const s = steps[idx - 1];
+  function updateTourRect(idx: number, forStep: number) {
+    const stops = TOUR_STEPS[forStep] || [];
+    const s = stops[idx - 1];
     if (!s) return;
     const el = document.getElementById(s.targetId);
     if (el) {
@@ -1096,21 +1071,39 @@ function AnnualFilingTool() {
   }
 
   function tourNext() {
-    const steps = TOUR_STEPS[step] || [];
+    const stops = TOUR_STEPS[step] || [];
     const next = tourStep + 1;
-    if (next > steps.length) {
-      endTour();
+    if (next > stops.length) {
+      if (autoMode) {
+        // move to next filing step
+        const nextStep = step + 1;
+        if (nextStep > 8) { stopAutoMode(); return; }
+        clearAutoTimers();
+        setAutoProgress(0);
+        setStep(nextStep);
+        // The step-change useEffect is bypassed (autoMode=true), so kick off manually after render
+        setTimeout(() => {
+          setTourStep(1);
+          updateTourRect(1, nextStep);
+          if (!autoPaused) scheduleAutoNext(1, nextStep);
+        }, 700);
+      } else {
+        endTour();
+      }
     } else {
       setTourStep(next);
-      updateTourRect(next);
+      updateTourRect(next, step);
+      if (autoMode && !autoPaused) scheduleAutoNext(next, step);
     }
   }
 
   function tourPrev() {
     const prev = tourStep - 1;
     if (prev < 1) return;
+    clearAutoTimers();
     setTourStep(prev);
-    updateTourRect(prev);
+    updateTourRect(prev, step);
+    if (autoMode && !autoPaused) scheduleAutoNext(prev, step);
   }
 
   function endTour() {
@@ -1118,61 +1111,80 @@ function AnnualFilingTool() {
     setTourRect(null);
   }
 
-  // ── Auto Tour logic ───────────────────────────────────────────────────
-  function startAutoTour() {
-    setTourStep(0); setTourRect(null); // close manual tour if open
-    setAutoTourIdx(0);
-    setAutoTourProgress(0);
-    setAutoTourPaused(false);
-    setAutoTourOn(true);
+  // ── Auto-mode (How to Fill — walks through all steps automatically) ───
+  const AUTO_STEP_DURATION = 7000; // 7s per stop
+
+  function clearAutoTimers() {
+    if (autoAdvTimer.current) { clearTimeout(autoAdvTimer.current); autoAdvTimer.current = null; }
+    if (autoProgTimer.current) { clearInterval(autoProgTimer.current); autoProgTimer.current = null; }
   }
 
-  function stopAutoTour() {
-    if (autoTourTimer.current) clearInterval(autoTourTimer.current);
-    if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
-    setAutoTourOn(false);
-    setAutoTourProgress(0);
-  }
-
-  function autoTourGoTo(idx: number) {
-    if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
-    if (autoTourTimer.current) clearInterval(autoTourTimer.current);
-    setAutoTourProgress(0);
-    if (idx >= AUTO_TOUR_SLIDES.length) { stopAutoTour(); return; }
-    setAutoTourIdx(idx);
-    if (!autoTourPaused) scheduleAutoAdvance(idx);
-  }
-
-  function scheduleAutoAdvance(fromIdx: number) {
-    if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
-    if (autoTourTimer.current) clearInterval(autoTourTimer.current);
-    const TICK = 50;
-    const steps = AUTO_TOUR_DURATION_MS / TICK;
+  function scheduleAutoNext(currentTourStep: number, forStep: number) {
+    clearAutoTimers();
+    setAutoProgress(0);
+    const TICK = 60;
+    const totalTicks = AUTO_STEP_DURATION / TICK;
     let tick = 0;
-    autoTourProgressTimer.current = setInterval(() => {
+    autoProgTimer.current = setInterval(() => {
       tick++;
-      setAutoTourProgress(Math.min(100, (tick / steps) * 100));
+      setAutoProgress(Math.min(100, (tick / totalTicks) * 100));
     }, TICK);
-    autoTourTimer.current = setTimeout(() => {
-      if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
-      const next = fromIdx + 1;
-      if (next >= AUTO_TOUR_SLIDES.length) { stopAutoTour(); return; }
-      setAutoTourIdx(next);
-      setAutoTourProgress(0);
-      scheduleAutoAdvance(next);
-    }, AUTO_TOUR_DURATION_MS);
+    autoAdvTimer.current = setTimeout(() => {
+      clearAutoTimers();
+      // advance to next stop
+      const stops = TOUR_STEPS[forStep] || [];
+      const next = currentTourStep + 1;
+      if (next > stops.length) {
+        // move to next filing step
+        const nextStep = forStep + 1;
+        if (nextStep > 8) { stopAutoMode(); return; }
+        setAutoProgress(0);
+        setStep(nextStep);
+        setTimeout(() => {
+          setTourStep(1);
+          updateTourRect(1, nextStep);
+          scheduleAutoNext(1, nextStep);
+        }, 700);
+      } else {
+        setTourStep(next);
+        updateTourRect(next, forStep);
+        scheduleAutoNext(next, forStep);
+      }
+    }, AUTO_STEP_DURATION);
   }
 
-  useEffect(() => {
-    if (autoTourOn && !autoTourPaused) {
-      scheduleAutoAdvance(autoTourIdx);
+  function startAutoMode() {
+    clearAutoTimers();
+    setAutoMode(true);
+    setAutoPaused(false);
+    setAutoProgress(0);
+    // go to step 1 and start
+    setStep(1);
+    setTimeout(() => {
+      setTourStep(1);
+      updateTourRect(1, 1);
+      scheduleAutoNext(1, 1);
+    }, 700);
+  }
+
+  function stopAutoMode() {
+    clearAutoTimers();
+    setAutoMode(false);
+    setAutoPaused(false);
+    setAutoProgress(0);
+    setTourStep(0);
+    setTourRect(null);
+  }
+
+  function toggleAutoPause() {
+    if (autoPaused) {
+      setAutoPaused(false);
+      scheduleAutoNext(tourStep, step);
+    } else {
+      clearAutoTimers();
+      setAutoPaused(true);
     }
-    return () => {
-      if (autoTourTimer.current) clearInterval(autoTourTimer.current);
-      if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoTourOn, autoTourPaused]);
+  }
 
   // ── Company fill from Excel / Search ──────────────────────────────────
   function handleCompanyFill(co: CompanyData) {
@@ -6360,7 +6372,7 @@ function AnnualFilingTool() {
                   : "rgba(15,23,42,0.6)",
                 pointerEvents: "auto",
               }}
-              onClick={endTour}
+              onClick={autoMode ? stopAutoMode : endTour}
             />
             {/* Highlight ring around target element */}
             {tourRect && (
@@ -6391,13 +6403,20 @@ function AnnualFilingTool() {
                   <div className="w-3 h-3 bg-white border-t border-l border-amber-200 rotate-45 mx-auto -translate-y-1.5" />
                 </div>
               )}
+              {/* Auto-mode progress bar */}
+              {autoMode && (
+                <div className="h-1 bg-slate-100 rounded-t-2xl overflow-hidden">
+                  <div className="h-full bg-amber-400 transition-none" style={{ width: `${autoProgress}%` }} />
+                </div>
+              )}
               {/* Header */}
               <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-amber-100">
                 <div className="flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">{tourStep}</span>
                   <span className="text-[12px] font-bold text-slate-800 leading-tight">{current.title}</span>
+                  {autoMode && <span className="text-[9px] text-amber-500 font-semibold uppercase tracking-wider">Step {step}/8</span>}
                 </div>
-                <button onClick={endTour} className="text-slate-400 hover:text-slate-600 ml-1 flex-shrink-0">
+                <button onClick={autoMode ? stopAutoMode : endTour} className="text-slate-400 hover:text-slate-600 ml-1 flex-shrink-0">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -6413,16 +6432,30 @@ function AnnualFilingTool() {
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={endTour} className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">Skip</button>
-                  {tourStep > 1 && (
-                    <button onClick={tourPrev} className="px-2.5 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">← Prev</button>
+                  {autoMode ? (
+                    <>
+                      <button onClick={stopAutoMode} className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">Stop</button>
+                      <button onClick={toggleAutoPause} className="px-2.5 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                        {autoPaused ? "▶ Resume" : "⏸ Pause"}
+                      </button>
+                      {tourStep > 1 && (
+                        <button onClick={() => { clearAutoTimers(); setAutoPaused(false); tourPrev(); scheduleAutoNext(tourStep - 1, step); }} className="px-2.5 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">← Prev</button>
+                      )}
+                      <button onClick={() => { clearAutoTimers(); setAutoPaused(false); tourNext(); }} className="px-3 py-1 text-[11px] font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors">
+                        {isLast && step === 8 ? "Done ✓" : "Next →"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={endTour} className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">Skip</button>
+                      {tourStep > 1 && (
+                        <button onClick={tourPrev} className="px-2.5 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">← Prev</button>
+                      )}
+                      <button onClick={tourNext} className="px-3 py-1 text-[11px] font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors">
+                        {isLast ? "Done ✓" : "Next →"}
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={tourNext}
-                    className="px-3 py-1 text-[11px] font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors"
-                  >
-                    {isLast ? "Done ✓" : "Next →"}
-                  </button>
                 </div>
               </div>
             </div>
@@ -6430,80 +6463,6 @@ function AnnualFilingTool() {
         );
       })()}
 
-      {/* ── Auto-Play Tour Overlay ───────────────────────────────────────── */}
-      {autoTourOn && (() => {
-        const slide = AUTO_TOUR_SLIDES[autoTourIdx];
-        if (!slide) return null;
-        const isLast = autoTourIdx === AUTO_TOUR_SLIDES.length - 1;
-        const STEP_COLORS: Record<number, string> = { 1: "#10B981", 2: "#6366F1", 3: "#F59E0B", 4: "#3B82F6", 5: "#8B5CF6", 6: "#EC4899", 7: "#14B8A6", 8: "#EF4444" };
-        const color = STEP_COLORS[slide.stepNo] || "#F59E0B";
-        return (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: "rgba(15,23,42,0.65)", backdropFilter: "blur(3px)" }}>
-            <div className="relative w-full max-w-sm mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden border border-white/30" style={{ boxShadow: `0 0 0 1px ${color}30, 0 25px 50px rgba(0,0,0,0.3)` }}>
-              {/* Progress bar */}
-              <div className="h-1 bg-slate-100">
-                <div className="h-full transition-none" style={{ width: `${autoTourProgress}%`, background: color }} />
-              </div>
-              {/* Step badge + close */}
-              <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: color }}>
-                    Step {slide.stepNo} of 8 — {slide.stepLabel}
-                  </span>
-                  <span className="text-[10px] text-slate-400">{autoTourIdx + 1}/{AUTO_TOUR_SLIDES.length}</span>
-                </div>
-                <button onClick={stopAutoTour} className="text-slate-400 hover:text-slate-600">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-              {/* Content */}
-              <div className="px-5 py-3">
-                <h3 className="text-[14px] font-bold text-slate-800 mb-2 leading-snug">{slide.title}</h3>
-                <p className="text-[12.5px] text-slate-600 leading-relaxed">{slide.body}</p>
-              </div>
-              {/* Slide dots */}
-              <div className="px-5 pb-2 flex gap-1 flex-wrap">
-                {AUTO_TOUR_SLIDES.map((_, i) => (
-                  <div key={i} className="w-1.5 h-1.5 rounded-full transition-colors" style={{ background: i === autoTourIdx ? color : "#E2E8F0" }} />
-                ))}
-              </div>
-              {/* Controls */}
-              <div className="flex items-center justify-between px-5 pb-4 pt-1 border-t border-slate-100 mt-2">
-                <div className="flex items-center gap-2">
-                  <button onClick={stopAutoTour} className="text-[11px] text-slate-400 hover:text-slate-600">Skip All</button>
-                  <button
-                    onClick={() => {
-                      if (autoTourPaused) {
-                        setAutoTourPaused(false);
-                        scheduleAutoAdvance(autoTourIdx);
-                      } else {
-                        if (autoTourTimer.current) clearInterval(autoTourTimer.current);
-                        if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
-                        setAutoTourPaused(true);
-                      }
-                    }}
-                    className="text-[11px] font-medium px-2.5 py-1 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
-                  >
-                    {autoTourPaused ? "▶ Resume" : "⏸ Pause"}
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  {autoTourIdx > 0 && (
-                    <button onClick={() => { setAutoTourPaused(false); autoTourGoTo(autoTourIdx - 1); }} className="px-2.5 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">← Prev</button>
-                  )}
-                  <button
-                    onClick={() => { setAutoTourPaused(false); autoTourGoTo(autoTourIdx + 1); }}
-                    className="px-3 py-1 text-[11px] font-semibold text-white rounded-lg"
-                    style={{ background: color }}
-                  >
-                    {isLast ? "Done ✓" : "Next →"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Guide modal ──────────────────────────────────────────────────── */}
       {showGuide && (() => {
@@ -6741,7 +6700,7 @@ function AnnualFilingTool() {
                       Guide
                     </button>
                     <button
-                      onClick={() => startAutoTour()}
+                      onClick={() => startAutoMode()}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-lg transition-colors flex-shrink-0"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
