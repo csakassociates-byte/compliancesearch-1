@@ -235,7 +235,9 @@ export interface AnnualFilingData {
   hasSubsidiaries: boolean;
   hasRPT: boolean;            // Related Party Transactions not at arm's length or material
   hasDeposits: boolean;       // Accepted deposits from public
+  depositsDetails?: string;   // Details of deposits if hasDeposits is true
   hasLoansGiven: boolean;     // Loans/investments under Sec. 186
+  loansDetails?: string;      // Details of loans/guarantees/investments if hasLoansGiven is true
   fraudReported: boolean;     // Auditor reported fraud under Sec. 143(12)
   fraudDetails?: string;
   auditQualification: boolean;  // Qualified/adverse/disclaimer opinion

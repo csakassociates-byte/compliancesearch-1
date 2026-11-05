@@ -494,7 +494,7 @@ ${data.hasRPT
 <!-- ══════════════ 23. LOANS, GUARANTEES & INVESTMENTS [Sec. 186] ══════════════ -->
 <h2>23. Loans, Guarantees and Investments</h2>
 ${data.hasLoansGiven
-  ? `<p>The particulars of loans given, investments made, guarantees given and securities provided under Section 186 of the Companies Act, 2013 are provided in the Notes to the Financial Statements.</p>`
+  ? `<p>The particulars of loans given, investments made, guarantees given and securities provided under Section 186 of the Companies Act, 2013 are as under:${data.loansDetails ? ` ${data.loansDetails}` : " Details are provided in the Notes to the Financial Statements."}</p>`
   : `<p>The Company has not given any loans, provided any guarantees or made any investments falling under the provisions of Section 186 of the Companies Act, 2013 during the Financial Year ${fy}.</p>`
 }
 
@@ -508,7 +508,7 @@ ${data.hasSubsidiaries
 <!-- ══════════════ 25. DEPOSITS [Sec. 73-76] ══════════════ -->
 <h2>25. Deposits</h2>
 ${data.hasDeposits
-  ? `<p>The Company has accepted deposits during the Financial Year ${fy}. Details in compliance with Chapter V of the Companies Act, 2013 are disclosed in the Notes to Financial Statements.</p>`
+  ? `<p>The Company has accepted deposits during the Financial Year ${fy} in compliance with Chapter V of the Companies Act, 2013 and the Companies (Acceptance of Deposits) Rules, 2014.${data.depositsDetails ? ` ${data.depositsDetails}` : " Details are disclosed in the Notes to the Financial Statements."}</p>`
   : `<p>The Company has not accepted any deposits from the public within the meaning of Sections 73 and 74 of the Companies Act, 2013 read with the Companies (Acceptance of Deposits) Rules, 2014 during the Financial Year ${fy}. No amount of principal or interest was outstanding as on 31<sup>st</sup> March, ${fyEnd}.</p>`
 }
 

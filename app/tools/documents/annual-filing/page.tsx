@@ -4151,7 +4151,13 @@ function AnnualFilingTool() {
           <Toggle label="Company has Subsidiaries / Associates / JVs" value={data.hasSubsidiaries} onChange={v => patch({ hasSubsidiaries: v })} hint="If Yes → AOC-1 will be generated" />
           <Toggle label="Related Party Transactions (RPT) — not at arm's length or material" value={data.hasRPT} onChange={v => patch({ hasRPT: v })} hint="If Yes → AOC-2 will be generated" />
           <Toggle label="Accepted Deposits from Public (Sec. 73-76)" value={data.hasDeposits} onChange={v => patch({ hasDeposits: v })} />
+          {data.hasDeposits && (
+            <Field label="Deposits Details" value={data.depositsDetails || ""} onChange={v => patch({ depositsDetails: v || undefined })} placeholder="Amount, type, compliance status, any defaults..." />
+          )}
           <Toggle label="Loans/Guarantees/Investments under Sec. 186" value={data.hasLoansGiven} onChange={v => patch({ hasLoansGiven: v })} />
+          {data.hasLoansGiven && (
+            <Field label="Loans / Guarantees / Investments Details" value={data.loansDetails || ""} onChange={v => patch({ loansDetails: v || undefined })} placeholder="Particulars of loans given, guarantees provided, investments made..." />
+          )}
           <Toggle label="Fraud reported by Auditor under Sec. 143(12)" value={data.fraudReported} onChange={v => patch({ fraudReported: v })} />
           {data.fraudReported && (
             <Field label="Fraud Details" value={data.fraudDetails || ""} onChange={v => patch({ fraudDetails: v })} placeholder="Nature and amount of fraud..." />

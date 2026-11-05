@@ -444,7 +444,7 @@ ${data.hasRPT
 <!-- ══════════════ 23. LOANS, GUARANTEES & INVESTMENTS [Sec. 186] ══════════════ -->
 <h2>23. Loans, Guarantees and Investments</h2>
 ${data.hasLoansGiven
-  ? `<p>The particulars of loans given, investments made, guarantees given and securities provided under Section 186 of the Companies Act, 2013 are provided in the Notes to the Financial Statements.</p>`
+  ? `<p>The particulars of loans given, investments made, guarantees given and securities provided under Section 186 of the Companies Act, 2013 are as under:${data.loansDetails ? ` ${data.loansDetails}` : " Details are provided in the Notes to the Financial Statements."}</p>`
   : `<p>During the Financial Year ${fy}, the Company has not given any loans, provided any guarantees or made any investments falling under the provisions of Section 186 of the Companies Act, 2013.</p>`
 }
 
@@ -457,15 +457,23 @@ ${data.hasSubsidiaries
 
 <!-- ══════════════ 25. CSR [Sec. 135] ══════════════ -->
 <h2>25. Corporate Social Responsibility</h2>
-${data.csrApplicable && data.csrDetails
-  ? `<p>The Company is required to undertake CSR activities as per the provisions of Section 135 of the Companies Act, 2013. A CSR Committee has been constituted. Details of CSR activities and expenditure during the Financial Year ${fy} are as follows:</p><p>${data.csrDetails}</p>`
-  : `<p>The provisions of Section 135 of the Companies Act, 2013 regarding Corporate Social Responsibility are not applicable to the Company for the Financial Year ${fy} as the Company's net worth, turnover and net profit are below the prescribed thresholds under Section 135(1) of the Companies Act, 2013. Hence, no CSR activity is required to be undertaken and no disclosure is required under the Companies (Corporate Social Responsibility Policy) Rules, 2014.</p>`
-}
+${(() => {
+  const nc = (v: string) => parseFloat((v || "").replace(/,/g, "")) || 0;
+  const pat     = nc(data.financials?.profitAfterTax);
+  const prevPAT = nc(data.financials?.prevProfitAfterTax);
+  const avgPAT  = (pat + prevPAT) / 2;
+  const obligation = avgPAT > 0 ? Math.round(avgPAT * 0.02) : 0;
+  if (data.csrApplicable && data.csrDetails) {
+    return `<p>The Company is required to undertake CSR activities as per the provisions of Section 135 of the Companies Act, 2013 as the Company meets the prescribed threshold criteria. The CSR obligation for the Financial Year ${fy} is ₹${obligation > 0 ? obligation.toLocaleString("en-IN") : "________________"} (being 2% of average net profit of preceding financial years). A CSR Committee has been constituted. Details of CSR activities and expenditure during the Financial Year ${fy} are as follows:</p>
+<p>${data.csrDetails}</p>`;
+  }
+  return `<p>The provisions of Section 135 of the Companies Act, 2013 regarding Corporate Social Responsibility are not applicable to the Company for the Financial Year ${fy} as the Company's net worth, turnover and net profit are below the prescribed thresholds under Section 135(1) of the Companies Act, 2013. Hence, no CSR activity is required to be undertaken and no disclosure is required under the Companies (Corporate Social Responsibility Policy) Rules, 2014.</p>`;
+})()}
 
 <!-- ══════════════ 26. DEPOSITS [Sec. 73-76] ══════════════ -->
 <h2>26. Deposits</h2>
 ${data.hasDeposits
-  ? `<p>The Company has accepted deposits during the Financial Year ${fy}. Details in compliance with Chapter V of the Companies Act, 2013 are disclosed in the Notes to Financial Statements.</p>`
+  ? `<p>The Company has accepted deposits during the Financial Year ${fy} in compliance with Chapter V of the Companies Act, 2013 and the Companies (Acceptance of Deposits) Rules, 2014.${data.depositsDetails ? ` ${data.depositsDetails}` : " Details are disclosed in the Notes to the Financial Statements."}</p>`
   : `<p>The Company has not accepted any deposits from the public within the meaning of Sections 73 and 74 of the Companies Act, 2013 read with the Companies (Acceptance of Deposits) Rules, 2014 during the Financial Year ${fy}. There are no outstanding deposits and no amount of principal or interest was outstanding as on 31<sup>st</sup> March, ${fyEnd}.</p>`
 }
 
@@ -476,6 +484,21 @@ ${data.hasDeposits
 <!-- ══════════════ 28. SECRETARIAL AUDIT [Sec. 204] ══════════════ -->
 <h2>28. Secretarial Audit</h2>
 <p>The provisions of Section 204 of the Companies Act, 2013 relating to Secretarial Audit are applicable to public companies with paid-up share capital of ₹50 Crores or more, or turnover of ₹250 Crores or more. The Company is a private limited company and does not meet the aforesaid thresholds. Accordingly, Secretarial Audit is not applicable to the Company.</p>
+
+<!-- ══════════════ 28A. INTERNAL AUDIT [Sec. 138] ══════════════ -->
+${(() => {
+  const nc = (v: string) => parseFloat((v || "").replace(/,/g, "")) || 0;
+  const paidUpCap = nc(data.financials?.paidUpCapital);
+  const turnover  = nc(data.financials?.revenueFromOperations);
+  const netWorth  = nc(data.financials?.netWorth);
+  const L = 100000;
+  const applicable = paidUpCap >= 50*L*100 || turnover >= 200*L*100 || netWorth >= 500*L*100;
+  if (applicable || data.internalAuditorName) {
+    return `<h2>28A. Internal Audit</h2>
+<p>Pursuant to the provisions of Section 138 of the Companies Act, 2013 read with Rule 13 of the Companies (Accounts) Rules, 2014, the Company has appointed <strong>${data.internalAuditorName || "________________"}</strong> as the Internal Auditor of the Company for the Financial Year ${fy}${data.internalAuditPeriod ? ` for the period ${data.internalAuditPeriod}` : ""}. The Internal Auditor has submitted their report to the Board, and the findings have been duly reviewed.</p>`;
+  }
+  return "";
+})()}
 
 <!-- ══════════════ 29. COST AUDIT [Sec. 148] ══════════════ -->
 <h2>29. Cost Audit</h2>
