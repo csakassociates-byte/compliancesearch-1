@@ -228,9 +228,9 @@ function Toggle({
       <button
         type="button"
         onClick={() => onChange(!value)}
-        className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 ${value ? "bg-emerald-500" : "bg-slate-300"}`}
+        style={{ position: "relative", flexShrink: 0, width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", background: value ? "#10B981" : "#CBD5E1", transition: "background 0.2s" }}
       >
-        <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${value ? "translate-x-6" : "translate-x-1"}`} />
+        <span style={{ position: "absolute", top: 4, left: value ? 24 : 4, width: 16, height: 16, background: "#fff", borderRadius: "50%", boxShadow: "0 1px 3px rgba(0,0,0,0.25)", transition: "left 0.2s" }} />
       </button>
       <div>
         <p className="text-sm font-semibold text-slate-700">{label}</p>
