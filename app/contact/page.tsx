@@ -75,6 +75,13 @@ export default function ContactPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center flex-shrink-0">📞</div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Phone</p>
+                    <a href="tel:+917280031153" className="text-sm text-green-700 font-medium hover:underline">+91 72800 31153</a>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center flex-shrink-0">⏱️</div>
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Response Time</p>
