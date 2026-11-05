@@ -2797,6 +2797,7 @@ function AnnualFilingTool() {
           </SectionCard>
         )}
 
+        <div id="tour-auditor-name">
         <SectionCard title="Statutory Auditor Details" color="blue">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
             <Select
@@ -3131,6 +3132,7 @@ function AnnualFilingTool() {
             </div>
           )}
         </SectionCard>
+        </div>
 
         <SectionCard title="Audit Opinion" color="amber">
           <Select
@@ -3451,6 +3453,7 @@ function AnnualFilingTool() {
           </div>
         )}
 
+        <div id="tour-financials-pl">
         <SectionCard title={`Profit & Loss — FY ${fy} vs FY ${prevFY}`} color="emerald">
           <table className="w-full">
             <thead>
@@ -3505,7 +3508,9 @@ function AnnualFilingTool() {
             </tbody>
           </table>
         </SectionCard>
+        </div>
 
+        <div id="tour-financials-bs">
         <SectionCard title="Balance Sheet Items" color="blue">
           <table className="w-full">
             <thead>
@@ -3560,6 +3565,7 @@ function AnnualFilingTool() {
             </tbody>
           </table>
         </SectionCard>
+        </div>{/* /tour-financials-bs */}
 
         {/* Fetch previous year financials from saved draft */}
         {data.cin && session?.user && (
@@ -4036,6 +4042,7 @@ function AnnualFilingTool() {
 
     return (
       <>
+        <div id="tour-board-meetings">
         <SectionCard title={`Board Meetings — FY ${data.financialYear}`} color="emerald">
 
           {/* ── First-year banner ── */}
@@ -4382,6 +4389,7 @@ function AnnualFilingTool() {
             );
           })()}
         </SectionCard>
+        </div>{/* /tour-board-meetings */}
 
         {/* ══════════════ MEMBER MEETINGS (AGM / EGM) ══════════════ */}
         <SectionCard title="Member Meetings — AGM / EGM" color="blue">
@@ -5130,6 +5138,7 @@ function AnnualFilingTool() {
 
     return (
       <>
+        <div id="tour-directors">
         <SectionCard title={`Directors as on 31st March ${fyEndYr}`} color="emerald">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs text-slate-500">Directors are pre-filled from company data. Add KYC details for the full Director List document.</p>
@@ -5324,6 +5333,7 @@ function AnnualFilingTool() {
             <span className="text-lg leading-none">+</span> Add Director
           </button>
         </SectionCard>
+        </div>{/* /tour-directors */}
 
         <SectionCard title="Signatory Directors (for Board Report signature)" color="blue">
           <p className="text-xs text-slate-500 mb-4">
@@ -5563,6 +5573,7 @@ function AnnualFilingTool() {
           })()}
         </SectionCard>
 
+        <div id="tour-shareholders">
         <SectionCard title="Shareholders / Member Register" color="emerald">
           <p className="text-xs text-slate-500 mb-4">Add all shareholders as on 31st March {fyEndYr}. Required for MGT-7A/MGT-7 filing.</p>
           {(() => {
@@ -5651,6 +5662,7 @@ function AnnualFilingTool() {
             )}
           </div>
         </SectionCard>
+        </div>{/* /tour-shareholders */}
       </>
     );
   }
@@ -5661,6 +5673,7 @@ function AnnualFilingTool() {
   function renderStep7() {
     return (
       <>
+        <div id="tour-aoc">
         {!data.hasSubsidiaries && !data.hasRPT && (
           <div className="p-6 bg-green-50 border border-green-200 rounded-xl text-center">
             <p className="text-green-800 font-semibold text-sm">No Conditional Attachments Required</p>
@@ -5849,6 +5862,7 @@ function AnnualFilingTool() {
             ))}
           </SectionCard>
         )}
+        </div>{/* /tour-aoc */}
       </>
     );
   }
@@ -5875,6 +5889,7 @@ function AnnualFilingTool() {
 
     return (
       <>
+        <div id="tour-generate">
         <SectionCard title="Summary — Documents to be Generated" color="emerald">
           <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm">
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -5972,6 +5987,7 @@ function AnnualFilingTool() {
             )}
           </button>
         </SectionCard>
+        </div>{/* /tour-generate */}
 
         {Object.keys(generated).length > 0 && (
           <SectionCard title="Generated Documents" color="blue">
