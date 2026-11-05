@@ -391,6 +391,32 @@ const TOUR_STEPS: Record<number, { targetId: string; title: string; body: string
   ],
 };
 
+// ── Auto-Play Tour: flat list of all slides across all 8 steps ─────────────
+const AUTO_TOUR_SLIDES: { stepNo: number; stepLabel: string; title: string; body: string }[] = [
+  // Step 1
+  { stepNo: 1, stepLabel: "Company & FY", title: "Import Company Data — One Time", body: "Go to MCA Portal → Search Company → View Master Data → Download Excel (All Tab). Upload it here — ComplianceSearch.in saves all details permanently. You never need to upload again." },
+  { stepNo: 1, stepLabel: "Company & FY", title: "Search & Auto-Fill in Seconds", body: "After importing once, just type the company name in the search box. CIN, Directors, ROC, State, Address — everything fills automatically. No manual entry needed anywhere on this site." },
+  { stepNo: 1, stepLabel: "Company & FY", title: "Document Preferences", body: "Toggle letterhead ON to print company branding on every document. The Annual Report Number is auto-calculated from incorporation date — verify it matches your actual annual return sequence." },
+  { stepNo: 1, stepLabel: "Company & FY", title: "Business Details & State of Affairs", body: "Fill Principal Business Activity, Place of Signing, Board Report Date, Current & Previous AGM Dates. Click 'Generate Draft' and the tool writes the State of Affairs paragraph automatically — edit before finalizing." },
+  // Step 2
+  { stepNo: 2, stepLabel: "Auditor", title: "Auditor Details", body: "Enter the statutory auditor's name (firm name or individual), FRN or Membership Number, registered address, appointment date, tenure, and the date the audit report was signed. These appear on the Auditor's Report." },
+  // Step 3
+  { stepNo: 3, stepLabel: "Financials", title: "P&L Figures from Audited Accounts", body: "Enter Revenue from Operations, Other Income, Expenses, Current Tax and Deferred Tax from the CA-signed Profit & Loss statement. Total Income and PAT are auto-calculated. Use consistent denomination throughout." },
+  { stepNo: 3, stepLabel: "Financials", title: "Balance Sheet Figures", body: "Enter Authorised Capital, Paid-up Capital, Reserves & Surplus, Total Assets and Liabilities from the audited Balance Sheet. Net Worth is auto-computed. These figures drive CSR, CARO, and Internal Audit applicability." },
+  // Step 4
+  { stepNo: 4, stepLabel: "Board & Compliance", title: "Board Meetings, CSR, POSH & Deposits", body: "Enter all Board Meeting dates (min 4, no gap > 120 days). CSR applicability is auto-checked from financials. Toggle ICC/POSH status and enter complaint count. Indicate whether any public deposits were accepted." },
+  // Step 5
+  { stepNo: 5, stepLabel: "Directors", title: "Directors — Auto-filled from MCA Excel", body: "Directors populate automatically from the MCA Excel uploaded in Step 1. Mark at least 2 as signatories for the Board Report — one must be Managing Director or Whole-time Director (Section 134)." },
+  // Step 6
+  { stepNo: 6, stepLabel: "Shareholders", title: "Shareholding Pattern", body: "Enter each shareholder's name, PAN, folio number and shares held. Total Shares = Paid-up Capital ÷ Face Value. This data populates the MGT-7 / MGT-7A shareholding schedule automatically." },
+  // Step 7
+  { stepNo: 7, stepLabel: "AOC-1 / AOC-2", title: "Subsidiaries & Related Party Transactions", body: "AOC-1: required only if the company has subsidiaries or associates — fill their audited figures. AOC-2: required only for related party transactions outside arm's length under Section 188. Leave blank if not applicable — a Nil statement is auto-generated." },
+  // Step 8
+  { stepNo: 8, stepLabel: "Generate All", title: "Generate All Documents in One Click", body: "All 7 steps must show green ✓ in the sidebar. Click Generate All — Board Report, Auditor's Report, Notes on Accounts, Director & Shareholder Lists, AOC-1/AOC-2 are all created together. Download as ZIP or print individually on CA letterhead." },
+];
+
+const AUTO_TOUR_DURATION_MS = 7500; // 7.5s per slide → 12 slides × 7.5s ≈ 90s ≈ 1.5 min
+
 /** Deduplicate directors by DIN (preferred) or lowercased name — keeps first occurrence */
 function deduplicateDirs(dirs: DirectorRecord[]): DirectorRecord[] {
   const seen = new Set<string>();
@@ -797,9 +823,15 @@ function AnnualFilingTool() {
   } | null>(null);
   const [resetting, setResetting]   = useState(false);
   const [isLocked, setIsLocked]     = useState(false);
-  const [showGuide, setShowGuide]   = useState(false);
-  const [tourStep, setTourStep]     = useState<number>(0); // 0 = not running
-  const [tourRect, setTourRect]     = useState<DOMRect | null>(null);
+  const [showGuide, setShowGuide]       = useState(false);
+  const [tourStep, setTourStep]         = useState<number>(0); // 0 = not running
+  const [tourRect, setTourRect]         = useState<DOMRect | null>(null);
+  const [autoTourIdx, setAutoTourIdx]   = useState<number>(0); // current slide index (0-based)
+  const [autoTourOn, setAutoTourOn]     = useState(false);
+  const [autoTourPaused, setAutoTourPaused] = useState(false);
+  const [autoTourProgress, setAutoTourProgress] = useState(0); // 0-100
+  const autoTourTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoTourProgressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [finalizedBy, setFinalizedBy]   = useState<string | null>(null);
   const [finalizedAt, setFinalizedAt]   = useState<string | null>(null);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
@@ -1085,6 +1117,62 @@ function AnnualFilingTool() {
     setTourStep(0);
     setTourRect(null);
   }
+
+  // ── Auto Tour logic ───────────────────────────────────────────────────
+  function startAutoTour() {
+    setTourStep(0); setTourRect(null); // close manual tour if open
+    setAutoTourIdx(0);
+    setAutoTourProgress(0);
+    setAutoTourPaused(false);
+    setAutoTourOn(true);
+  }
+
+  function stopAutoTour() {
+    if (autoTourTimer.current) clearInterval(autoTourTimer.current);
+    if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
+    setAutoTourOn(false);
+    setAutoTourProgress(0);
+  }
+
+  function autoTourGoTo(idx: number) {
+    if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
+    if (autoTourTimer.current) clearInterval(autoTourTimer.current);
+    setAutoTourProgress(0);
+    if (idx >= AUTO_TOUR_SLIDES.length) { stopAutoTour(); return; }
+    setAutoTourIdx(idx);
+    if (!autoTourPaused) scheduleAutoAdvance(idx);
+  }
+
+  function scheduleAutoAdvance(fromIdx: number) {
+    if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
+    if (autoTourTimer.current) clearInterval(autoTourTimer.current);
+    const TICK = 50;
+    const steps = AUTO_TOUR_DURATION_MS / TICK;
+    let tick = 0;
+    autoTourProgressTimer.current = setInterval(() => {
+      tick++;
+      setAutoTourProgress(Math.min(100, (tick / steps) * 100));
+    }, TICK);
+    autoTourTimer.current = setTimeout(() => {
+      if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
+      const next = fromIdx + 1;
+      if (next >= AUTO_TOUR_SLIDES.length) { stopAutoTour(); return; }
+      setAutoTourIdx(next);
+      setAutoTourProgress(0);
+      scheduleAutoAdvance(next);
+    }, AUTO_TOUR_DURATION_MS);
+  }
+
+  useEffect(() => {
+    if (autoTourOn && !autoTourPaused) {
+      scheduleAutoAdvance(autoTourIdx);
+    }
+    return () => {
+      if (autoTourTimer.current) clearInterval(autoTourTimer.current);
+      if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoTourOn, autoTourPaused]);
 
   // ── Company fill from Excel / Search ──────────────────────────────────
   function handleCompanyFill(co: CompanyData) {
@@ -6342,6 +6430,81 @@ function AnnualFilingTool() {
         );
       })()}
 
+      {/* ── Auto-Play Tour Overlay ───────────────────────────────────────── */}
+      {autoTourOn && (() => {
+        const slide = AUTO_TOUR_SLIDES[autoTourIdx];
+        if (!slide) return null;
+        const isLast = autoTourIdx === AUTO_TOUR_SLIDES.length - 1;
+        const STEP_COLORS: Record<number, string> = { 1: "#10B981", 2: "#6366F1", 3: "#F59E0B", 4: "#3B82F6", 5: "#8B5CF6", 6: "#EC4899", 7: "#14B8A6", 8: "#EF4444" };
+        const color = STEP_COLORS[slide.stepNo] || "#F59E0B";
+        return (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: "rgba(15,23,42,0.65)", backdropFilter: "blur(3px)" }}>
+            <div className="relative w-full max-w-sm mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden border border-white/30" style={{ boxShadow: `0 0 0 1px ${color}30, 0 25px 50px rgba(0,0,0,0.3)` }}>
+              {/* Progress bar */}
+              <div className="h-1 bg-slate-100">
+                <div className="h-full transition-none" style={{ width: `${autoTourProgress}%`, background: color }} />
+              </div>
+              {/* Step badge + close */}
+              <div className="flex items-center justify-between px-5 pt-4 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: color }}>
+                    Step {slide.stepNo} of 8 — {slide.stepLabel}
+                  </span>
+                  <span className="text-[10px] text-slate-400">{autoTourIdx + 1}/{AUTO_TOUR_SLIDES.length}</span>
+                </div>
+                <button onClick={stopAutoTour} className="text-slate-400 hover:text-slate-600">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              {/* Content */}
+              <div className="px-5 py-3">
+                <h3 className="text-[14px] font-bold text-slate-800 mb-2 leading-snug">{slide.title}</h3>
+                <p className="text-[12.5px] text-slate-600 leading-relaxed">{slide.body}</p>
+              </div>
+              {/* Slide dots */}
+              <div className="px-5 pb-2 flex gap-1 flex-wrap">
+                {AUTO_TOUR_SLIDES.map((_, i) => (
+                  <div key={i} className="w-1.5 h-1.5 rounded-full transition-colors" style={{ background: i === autoTourIdx ? color : "#E2E8F0" }} />
+                ))}
+              </div>
+              {/* Controls */}
+              <div className="flex items-center justify-between px-5 pb-4 pt-1 border-t border-slate-100 mt-2">
+                <div className="flex items-center gap-2">
+                  <button onClick={stopAutoTour} className="text-[11px] text-slate-400 hover:text-slate-600">Skip All</button>
+                  <button
+                    onClick={() => {
+                      if (autoTourPaused) {
+                        setAutoTourPaused(false);
+                        scheduleAutoAdvance(autoTourIdx);
+                      } else {
+                        if (autoTourTimer.current) clearInterval(autoTourTimer.current);
+                        if (autoTourProgressTimer.current) clearInterval(autoTourProgressTimer.current);
+                        setAutoTourPaused(true);
+                      }
+                    }}
+                    className="text-[11px] font-medium px-2.5 py-1 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
+                  >
+                    {autoTourPaused ? "▶ Resume" : "⏸ Pause"}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {autoTourIdx > 0 && (
+                    <button onClick={() => { setAutoTourPaused(false); autoTourGoTo(autoTourIdx - 1); }} className="px-2.5 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">← Prev</button>
+                  )}
+                  <button
+                    onClick={() => { setAutoTourPaused(false); autoTourGoTo(autoTourIdx + 1); }}
+                    className="px-3 py-1 text-[11px] font-semibold text-white rounded-lg"
+                    style={{ background: color }}
+                  >
+                    {isLast ? "Done ✓" : "Next →"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Guide modal ──────────────────────────────────────────────────── */}
       {showGuide && (() => {
         const guide = STEP_GUIDES[step];
@@ -6569,13 +6732,20 @@ function AnnualFilingTool() {
                       <h1 className="text-[15px] font-semibold text-slate-900 leading-tight">{s.label}</h1>
                       <p className="text-[11.5px] text-slate-500 mt-0.5">{STEP_DESCRIPTIONS[step]}</p>
                     </div>
-                    {/* Guide button */}
+                    {/* Guide + How to Fill buttons */}
                     <button
                       onClick={() => { startTour(); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-lg transition-colors flex-shrink-0"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                       Guide
+                    </button>
+                    <button
+                      onClick={() => startAutoTour()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-lg transition-colors flex-shrink-0"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      How to Fill
                     </button>
                     {session?.user && (
                       <div className="flex items-center gap-2 flex-shrink-0">
