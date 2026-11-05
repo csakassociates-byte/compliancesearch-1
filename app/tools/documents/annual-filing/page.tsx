@@ -1035,16 +1035,12 @@ function AnnualFilingTool() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
-  // ── Tour: auto-start on first visit per step ──────────────────────────
+  // ── Tour: auto-start every time user enters a step ───────────────────
   useEffect(() => {
-    const key = `af_tour_seen_step${step}`;
-    if (typeof window !== "undefined" && !localStorage.getItem(key)) {
-      const steps = TOUR_STEPS[step];
-      if (steps && steps.length > 0) {
-        // Small delay so elements render first
-        const t = setTimeout(() => startTour(), 600);
-        return () => clearTimeout(t);
-      }
+    const steps = TOUR_STEPS[step];
+    if (steps && steps.length > 0) {
+      const t = setTimeout(() => startTour(), 600);
+      return () => clearTimeout(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -1086,8 +1082,6 @@ function AnnualFilingTool() {
   }
 
   function endTour() {
-    const key = `af_tour_seen_step${step}`;
-    if (typeof window !== "undefined") localStorage.setItem(key, "1");
     setTourStep(0);
     setTourRect(null);
   }
