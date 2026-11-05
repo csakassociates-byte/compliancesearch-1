@@ -359,6 +359,38 @@ const STEP_GUIDES: Record<number, { title: string; sections: { heading: string; 
   },
 };
 
+// ── Tour steps per filing step ─────────────────────────────────────────────
+const TOUR_STEPS: Record<number, { targetId: string; title: string; body: string; position: "bottom" | "top" | "left" | "right" }[]> = {
+  1: [
+    { targetId: "tour-import", title: "Import Company Data (One-Time)", body: "Download MCA Master Data Excel from MCA Portal → All Tab. Upload it here — ComplianceSearch.in saves all company details permanently.", position: "bottom" },
+    { targetId: "tour-company-search", title: "Search & Auto-Fill", body: "After importing, just type the company name here. All fields — CIN, Directors, ROC, State — fill automatically. No manual entry needed.", position: "bottom" },
+    { targetId: "tour-doc-prefs", title: "Document Preferences", body: "Toggle letterhead ON to print company branding on every document. Verify the Annual Report Number matches your actual annual return sequence.", position: "top" },
+    { targetId: "tour-business-details", title: "Business Details", body: "Fill Principal Activity, Place of Signing, Board Report Date, AGM Date, and Previous AGM Date. Then click 'Generate Draft' for the State of Affairs paragraph.", position: "top" },
+  ],
+  2: [
+    { targetId: "tour-auditor-name", title: "Auditor Name & Type", body: "Enter the statutory auditor's name — firm name if it's a CA firm, individual name if a sole practitioner. FRN for firm, Membership No. for individual.", position: "bottom" },
+  ],
+  3: [
+    { targetId: "tour-financials-pl", title: "P&L Figures", body: "Enter figures from the CA-signed audited P&L statement — Revenue from Operations, Other Income, Expenses, Tax. Use consistent denomination throughout.", position: "bottom" },
+    { targetId: "tour-financials-bs", title: "Balance Sheet Figures", body: "Enter Share Capital, Reserves, Total Assets and Liabilities from the audited Balance Sheet. Net Worth is auto-calculated.", position: "top" },
+  ],
+  4: [
+    { targetId: "tour-board-meetings", title: "Board Meetings", body: "Enter dates of all Board Meetings held during the FY. Minimum 4 required under Section 173 — no gap between two meetings should exceed 120 days.", position: "bottom" },
+  ],
+  5: [
+    { targetId: "tour-directors", title: "Directors — Auto-filled from MCA Excel", body: "Directors are auto-populated if you uploaded the MCA Excel in Step 1. Mark at least 2 as signatories — one must be the Managing Director.", position: "bottom" },
+  ],
+  6: [
+    { targetId: "tour-shareholders", title: "Shareholding Pattern", body: "Enter each shareholder's name, PAN, folio number and shares held. This data populates the MGT-7 / MGT-7A shareholding schedule.", position: "bottom" },
+  ],
+  7: [
+    { targetId: "tour-aoc", title: "AOC-1 & AOC-2 — Only If Applicable", body: "AOC-1: required only if the company has subsidiaries or associates. AOC-2: required only for related party transactions outside arm's length under Section 188. Leave blank if not applicable.", position: "bottom" },
+  ],
+  8: [
+    { targetId: "tour-generate", title: "Generate All Documents", body: "All steps must be complete (green ✓ in sidebar). Click 'Generate All' — Board Report, Auditor Report, Notes on Accounts, AOC-1/2 and all attachments are created together.", position: "top" },
+  ],
+};
+
 /** Deduplicate directors by DIN (preferred) or lowercased name — keeps first occurrence */
 function deduplicateDirs(dirs: DirectorRecord[]): DirectorRecord[] {
   const seen = new Set<string>();
@@ -766,6 +798,8 @@ function AnnualFilingTool() {
   const [resetting, setResetting]   = useState(false);
   const [isLocked, setIsLocked]     = useState(false);
   const [showGuide, setShowGuide]   = useState(false);
+  const [tourStep, setTourStep]     = useState<number>(0); // 0 = not running
+  const [tourRect, setTourRect]     = useState<DOMRect | null>(null);
   const [finalizedBy, setFinalizedBy]   = useState<string | null>(null);
   const [finalizedAt, setFinalizedAt]   = useState<string | null>(null);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
@@ -1000,6 +1034,63 @@ function AnnualFilingTool() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
+
+  // ── Tour: auto-start on first visit per step ──────────────────────────
+  useEffect(() => {
+    const key = `af_tour_seen_step${step}`;
+    if (typeof window !== "undefined" && !localStorage.getItem(key)) {
+      const steps = TOUR_STEPS[step];
+      if (steps && steps.length > 0) {
+        // Small delay so elements render first
+        const t = setTimeout(() => startTour(), 600);
+        return () => clearTimeout(t);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  function startTour() {
+    setTourStep(1);
+    updateTourRect(1);
+  }
+
+  function updateTourRect(idx: number) {
+    const steps = TOUR_STEPS[step] || [];
+    const s = steps[idx - 1];
+    if (!s) return;
+    const el = document.getElementById(s.targetId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => setTourRect(el.getBoundingClientRect()), 350);
+    } else {
+      setTourRect(null);
+    }
+  }
+
+  function tourNext() {
+    const steps = TOUR_STEPS[step] || [];
+    const next = tourStep + 1;
+    if (next > steps.length) {
+      endTour();
+    } else {
+      setTourStep(next);
+      updateTourRect(next);
+    }
+  }
+
+  function tourPrev() {
+    const prev = tourStep - 1;
+    if (prev < 1) return;
+    setTourStep(prev);
+    updateTourRect(prev);
+  }
+
+  function endTour() {
+    const key = `af_tour_seen_step${step}`;
+    if (typeof window !== "undefined") localStorage.setItem(key, "1");
+    setTourStep(0);
+    setTourRect(null);
+  }
 
   // ── Company fill from Excel / Search ──────────────────────────────────
   function handleCompanyFill(co: CompanyData) {
@@ -2152,11 +2243,14 @@ function AnnualFilingTool() {
 
     return (
       <>
+        <div id="tour-import">
         <SectionCard title="Import Company Data from MCA Excel" color="blue">
           <p className="text-xs text-slate-500 mb-3">Import from MCA Excel <strong>or</strong> type company name below to search from your saved companies.</p>
           <CompanyExcelUpload onFill={handleCompanyFill} accent="blue" note="Import company master data" />
         </SectionCard>
+        </div>
 
+        <div id="tour-company-search">
         <SectionCard title="Company Details" color="emerald">
           {/* Company Name — uses CompanySearch for suggestions from My Companies */}
           <div className="mb-4">
@@ -2265,7 +2359,9 @@ function AnnualFilingTool() {
             <Field label="GSTIN (optional)" value={data.gstin || ""} onChange={v => patch({ gstin: v })} placeholder="22AAAAA0000A1Z5" hint="Shown on letter head if entered" />
           </div>
         </SectionCard>
+        </div>
 
+        <div id="tour-doc-prefs">
         <SectionCard title="Document Preferences" color="violet">
           <Toggle
             label="Print Company Letter Head on Documents"
@@ -2352,7 +2448,9 @@ function AnnualFilingTool() {
             {data.companyType === "fpc" && <p className="text-xs text-amber-700">MGT-7 • Full Board Report (Rule 8) • Cash Flow REQUIRED • CARO conditionally exempt</p>}
           </div>
         </SectionCard>
+        </div>
 
+        <div id="tour-business-details">
         <SectionCard title="Business Details" color="slate">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
             <Field label="Principal Business Activity" value={data.principalActivity} onChange={v => patch({ principalActivity: v })} placeholder="e.g., Software Services, Trading in Goods" />
@@ -2523,6 +2621,7 @@ function AnnualFilingTool() {
             <p className="text-xs text-slate-400 mt-1">✦ Generate Draft creates a starting template — edit freely before finalizing.</p>
           </div>
         </SectionCard>
+        </div>
       </>
     );
   }
@@ -6139,6 +6238,116 @@ function AnnualFilingTool() {
   return (
     <div className="h-screen overflow-hidden bg-slate-50">
 
+      {/* ── Onboarding Tour Overlay ───────────────────────────────────────── */}
+      {tourStep > 0 && (() => {
+        const steps = TOUR_STEPS[step] || [];
+        const current = steps[tourStep - 1];
+        if (!current) return null;
+        const isLast = tourStep === steps.length;
+        const PAD = 8;
+        // Tooltip dimensions (approx)
+        const TW = 300, TH = 160;
+        // Position tooltip relative to highlighted element
+        let top = 0, left = 0;
+        if (tourRect) {
+          if (current.position === "bottom") {
+            top = tourRect.bottom + PAD;
+            left = Math.max(8, Math.min(tourRect.left + tourRect.width / 2 - TW / 2, window.innerWidth - TW - 8));
+          } else if (current.position === "top") {
+            top = tourRect.top - TH - PAD;
+            left = Math.max(8, Math.min(tourRect.left + tourRect.width / 2 - TW / 2, window.innerWidth - TW - 8));
+          } else if (current.position === "right") {
+            top = tourRect.top + tourRect.height / 2 - TH / 2;
+            left = tourRect.right + PAD;
+          } else {
+            top = tourRect.top + tourRect.height / 2 - TH / 2;
+            left = tourRect.left - TW - PAD;
+          }
+        } else {
+          top = window.innerHeight / 2 - TH / 2;
+          left = window.innerWidth / 2 - TW / 2;
+        }
+        return (
+          <>
+            {/* Dim overlay with spotlight cutout */}
+            <div
+              className="fixed inset-0 z-[200]"
+              style={{
+                background: tourRect
+                  ? `radial-gradient(ellipse ${tourRect.width + 24}px ${tourRect.height + 24}px at ${tourRect.left + tourRect.width / 2}px ${tourRect.top + tourRect.height / 2}px, transparent 0%, rgba(15,23,42,0.6) 100%)`
+                  : "rgba(15,23,42,0.6)",
+                pointerEvents: "auto",
+              }}
+              onClick={endTour}
+            />
+            {/* Highlight ring around target element */}
+            {tourRect && (
+              <div
+                className="fixed z-[201] rounded-xl pointer-events-none"
+                style={{
+                  top: tourRect.top - 4, left: tourRect.left - 4,
+                  width: tourRect.width + 8, height: tourRect.height + 8,
+                  boxShadow: "0 0 0 3px #F59E0B, 0 0 0 6px rgba(245,158,11,0.25)",
+                  transition: "all 0.3s ease",
+                }}
+              />
+            )}
+            {/* Tooltip bubble */}
+            <div
+              className="fixed z-[202] bg-white rounded-2xl shadow-2xl border border-amber-200"
+              style={{ top, left, width: TW, pointerEvents: "auto" }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Arrow indicator */}
+              {tourRect && current.position === "bottom" && (
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-2 overflow-hidden">
+                  <div className="w-3 h-3 bg-white border-t border-l border-amber-200 rotate-45 mx-auto -translate-y-1.5" />
+                </div>
+              )}
+              {tourRect && current.position === "top" && (
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-2 overflow-hidden rotate-180">
+                  <div className="w-3 h-3 bg-white border-t border-l border-amber-200 rotate-45 mx-auto -translate-y-1.5" />
+                </div>
+              )}
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-amber-100">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">{tourStep}</span>
+                  <span className="text-[12px] font-bold text-slate-800 leading-tight">{current.title}</span>
+                </div>
+                <button onClick={endTour} className="text-slate-400 hover:text-slate-600 ml-1 flex-shrink-0">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              {/* Body */}
+              <div className="px-4 py-3">
+                <p className="text-[11.5px] text-slate-600 leading-relaxed">{current.body}</p>
+              </div>
+              {/* Footer */}
+              <div className="flex items-center justify-between px-4 pb-3">
+                <div className="flex gap-1">
+                  {steps.map((_, i) => (
+                    <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i + 1 === tourStep ? "bg-amber-500" : "bg-slate-200"}`} />
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={endTour} className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors">Skip</button>
+                  {tourStep > 1 && (
+                    <button onClick={tourPrev} className="px-2.5 py-1 text-[11px] font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">← Prev</button>
+                  )}
+                  <button
+                    onClick={tourNext}
+                    className="px-3 py-1 text-[11px] font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors"
+                  >
+                    {isLast ? "Done ✓" : "Next →"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
       {/* ── Guide modal ──────────────────────────────────────────────────── */}
       {showGuide && (() => {
         const guide = STEP_GUIDES[step];
@@ -6368,7 +6577,7 @@ function AnnualFilingTool() {
                     </div>
                     {/* Guide button */}
                     <button
-                      onClick={() => setShowGuide(true)}
+                      onClick={() => { startTour(); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-lg transition-colors flex-shrink-0"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
