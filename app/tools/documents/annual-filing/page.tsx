@@ -225,17 +225,13 @@ function Toggle({
 }) {
   return (
     <div className="flex items-start gap-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className={`text-xs font-semibold transition-colors ${!value ? "text-slate-600" : "text-slate-400"}`}>No</span>
-        <button
-          type="button"
-          onClick={() => onChange(!value)}
-          className={`relative w-11 h-6 rounded-full transition-colors ${value ? "bg-emerald-500" : "bg-slate-300"}`}
-        >
-          <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-1"}`} />
-        </button>
-        <span className={`text-xs font-semibold transition-colors ${value ? "text-emerald-600" : "text-slate-400"}`}>Yes</span>
-      </div>
+      <button
+        type="button"
+        onClick={() => onChange(!value)}
+        className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 ${value ? "bg-emerald-500" : "bg-slate-300"}`}
+      >
+        <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${value ? "translate-x-6" : "translate-x-1"}`} />
+      </button>
       <div>
         <p className="text-sm font-semibold text-slate-700">{label}</p>
         {hint && <p className="text-xs text-slate-500 mt-0.5">{hint}</p>}
