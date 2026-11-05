@@ -160,6 +160,206 @@ const STEP_DESCRIPTIONS: Record<number, string> = {
   8: "Generate, preview and download all filing attachments",
 };
 
+const STEP_GUIDES: Record<number, { title: string; sections: { heading: string; points: string[] }[] }> = {
+  1: {
+    title: "Company & Financial Year",
+    sections: [
+      { heading: "CIN (Company Identification Number)", points: [
+        "21-character number — format: U74999MH2020PTC123456",
+        "MCA Master Data Sheet (MDS Excel) se milta hai",
+        "State of Incorporation aur ROC Name CIN se automatically fill ho jaata hai",
+      ]},
+      { heading: "Financial Year", points: [
+        "2025-26 select karo agar aap April 2025 – March 2026 ki filing kar rahe ho",
+        "FY select karne ke baad hi baki fields unlock hoti hain",
+      ]},
+      { heading: "Company Email & Contact No.", points: [
+        "Yeh letterhead aur MGT-7/7A CTC mein print hota hai — sahi bhar'o",
+        "Contact No. 10-digit mobile ya landline ho sakta hai",
+      ]},
+      { heading: "Company Type", points: [
+        "OPC / Small Company → Rule 8A (Abridged Board Report) + MGT-7A",
+        "Section 8 / FPC → Rule 8 (Full Board Report) + MGT-7",
+        "Yeh tool type ke hisab se sahi documents generate karta hai",
+      ]},
+      { heading: "MDS Excel Upload", points: [
+        "MCA se download karo: MCA Portal → Company → Master Data → Download Excel",
+        "Upload karne se Company Name, CIN, Directors sab auto-fill ho jaate hain",
+      ]},
+    ],
+  },
+  2: {
+    title: "Auditor Details",
+    sections: [
+      { heading: "Auditor Name", points: [
+        "Current year ke appointed statutory auditor ka naam bharo",
+        "Firm ho to firm naam, individual ho to full name",
+      ]},
+      { heading: "Membership No. & FRN", points: [
+        "Individual CA → Membership Number (6 digits, e.g. M123456)",
+        "Firm → Firm Registration Number (FRN, e.g. 123456W)",
+        "ICAI website se verify kar sakte ho",
+      ]},
+      { heading: "Auditor's Address", points: [
+        "Audit report mein print hoga — official registered address bharo",
+      ]},
+      { heading: "Appointment Details", points: [
+        "Date of appointment wo date hai jab AGM mein appoint kiya gaya",
+        "Tenure: kitne saal ke liye appoint kiya — typically 5 years (Sec. 139)",
+      ]},
+      { heading: "Signature Date", points: [
+        "Wo date jab auditor ne actual mein report sign ki — usually AGM se pehle",
+      ]},
+    ],
+  },
+  3: {
+    title: "Financial Figures",
+    sections: [
+      { heading: "Figures kahan se len?", points: [
+        "Audited Balance Sheet aur Profit & Loss statement se",
+        "CA dwara signed final accounts use karo — draft nahi",
+        "Figures lakhs mein bharo ya jaise aapke accounts hain — consistently",
+      ]},
+      { heading: "Revenue / Turnover", points: [
+        "P&L ka 'Revenue from Operations' bharo",
+        "CSR applicability, Internal Audit threshold, aur CARO ke liye use hota hai",
+      ]},
+      { heading: "Net Profit (PAT)", points: [
+        "P&L ka 'Profit after Tax' (PAT)",
+        "CSR obligation = average 3 year PAT ka 2% — tool khud calculate karta hai",
+      ]},
+      { heading: "Net Worth", points: [
+        "Balance Sheet: Share Capital + Reserves & Surplus",
+        "Internal Audit aur CARO applicability check ke liye use hota hai",
+      ]},
+      { heading: "Paid-up Capital", points: [
+        "Balance Sheet ka 'Share Capital' field — authorized nahi, paid-up bharo",
+      ]},
+    ],
+  },
+  4: {
+    title: "Board & Compliance",
+    sections: [
+      { heading: "Board Meetings", points: [
+        "FY mein kitni board meetings hui — number aur dates bharo",
+        "Minimum 4 meetings required hoti hain (Sec. 173) — gap 120 days se zyada nahi",
+      ]},
+      { heading: "AGM Date", points: [
+        "Annual General Meeting ki actual date — board report mein print hoti hai",
+        "Pehli AGM: incorporation se 9 months; baad mein 6 months tak (Sec. 96)",
+      ]},
+      { heading: "CSR (Section 135)", points: [
+        "CSR applicable hoti hai agar: Net Worth ≥ ₹500 Cr, Turnover ≥ ₹1000 Cr, ya Net Profit ≥ ₹5 Cr",
+        "Tool financial figures se khud check karta hai — aapko sirf activities bharnin hain",
+        "CSR amount = average 3 year PAT ka 2%",
+      ]},
+      { heading: "Deposits", points: [
+        "Company ne koi public deposit accept kiya? (Sec. 73-76)",
+        "Agar nahi kiya to 'No' select karo — board report mein compliance statement aayega",
+      ]},
+      { heading: "Loans / Section 186", points: [
+        "Company ne kisi ko loan diya, guarantee di, ya investment ki?",
+        "Agar haan, details bharo — board report mein disclosure mandatory hai",
+      ]},
+      { heading: "POSH / ICC", points: [
+        "10 ya zyada employees? ICC (Internal Complaints Committee) banana mandatory hai",
+        "ICC constituted hai ya nahi — toggle karo",
+        "FY mein complaints aayi? — count bharo (zero bhi enter kar sakte ho)",
+      ]},
+    ],
+  },
+  5: {
+    title: "Directors",
+    sections: [
+      { heading: "MDS Excel se auto-fill", points: [
+        "Step 1 mein MDS Excel upload kiya? Directors automatically aa jaate hain",
+        "Manual entry bhi kar sakte ho — Add Director button se",
+      ]},
+      { heading: "DIN (Director Identification Number)", points: [
+        "8-digit number — MCA portal pe registered hota hai",
+        "MCA → DIR-3 KYC check karo — expired DIN wale director nahi dikhne chahiye",
+      ]},
+      { heading: "Designation", points: [
+        "Managing Director, Whole-time Director, Independent Director, etc.",
+        "Board report mein exactly yahi print hoga",
+      ]},
+      { heading: "Signatory Directors", points: [
+        "Board report sign karne wale 2 directors mark karo",
+        "Ek Managing Director ya Whole-time Director hona chahiye (Sec. 134)",
+      ]},
+      { heading: "Changes in Directorship", points: [
+        "FY mein koi director join ya resign kiya? — woh details bharo",
+        "Board report mein Sec. 134(3)(q) ke under disclose hota hai",
+      ]},
+    ],
+  },
+  6: {
+    title: "Shareholders",
+    sections: [
+      { heading: "Shareholding Pattern", points: [
+        "Har shareholder ka naam, PAN, aur shares ki count bharo",
+        "MGT-7 / MGT-7A mein yeh data jaata hai",
+      ]},
+      { heading: "Folio Number", points: [
+        "Company ke share register mein har shareholder ka unique folio number",
+        "Agar maintain nahi kiya to running number de sakte ho (F-001, F-002...)",
+      ]},
+      { heading: "Shares Face Value", points: [
+        "Typically ₹10 per share — Memorandum of Association se confirm karo",
+      ]},
+      { heading: "Total Shares", points: [
+        "Total = Paid-up Capital ÷ Face Value",
+        "e.g. ₹1,00,000 paid-up ÷ ₹10 face value = 10,000 shares",
+      ]},
+    ],
+  },
+  7: {
+    title: "AOC-1 & AOC-2",
+    sections: [
+      { heading: "AOC-1 (Subsidiaries)", points: [
+        "Company ki koi subsidiary, associate, ya JV hai? Tabhi required hai",
+        "Nahi hai to yeh section skip ho jaata hai",
+        "Subsidiary ke audited accounts ke figures bharo",
+      ]},
+      { heading: "AOC-2 (Related Party Transactions)", points: [
+        "Sec. 188 ke under arm's length se bahar koi transaction?",
+        "Directors, relatives, associate companies ke saath transactions",
+        "Board approval liya tha? — resolution number aur date bharo",
+      ]},
+      { heading: "Kaise decide karein?", points: [
+        "CA se confirm karo ki koi RPT Sec. 188 ke scope mein aati hai ya nahi",
+        "Agar koi RPT nahi → AOC-2 mein 'Nil' automatically generate hota hai",
+      ]},
+    ],
+  },
+  8: {
+    title: "Generate All Documents",
+    sections: [
+      { heading: "Generate karne se pehle", points: [
+        "Sab steps complete hone chahiye (left sidebar mein ✓ green hona chahiye)",
+        "Ek baar generate karo — sab documents ek saath download honge",
+      ]},
+      { heading: "Kya-kya generate hoga?", points: [
+        "Board Report (Rule 8 ya Rule 8A — company type ke hisab se)",
+        "Auditor's Report (SA 700 / SA 705)",
+        "Notes on Accounts (Schedule III)",
+        "Director List, Shareholder List",
+        "AOC-1 / AOC-2 (applicable hone par)",
+      ]},
+      { heading: "Download kaise karein?", points: [
+        "'Download All as ZIP' → ek click mein sab files",
+        "Individual document bhi alag se download/print kar sakte ho",
+        "Print karo → CA ke letterhead pe attach karo → AOC-4 / MGT-7 ke saath file karo",
+      ]},
+      { heading: "Kuch galti ho gayi?", points: [
+        "Pehle wapas us step pe jao, correct karo, Save Draft karo",
+        "Phir Step 8 pe aao aur dobara Generate karo",
+        "Filing finalize karne se pehle saari details verify kar lo",
+      ]},
+    ],
+  },
+};
+
 /** Deduplicate directors by DIN (preferred) or lowercased name — keeps first occurrence */
 function deduplicateDirs(dirs: DirectorRecord[]): DirectorRecord[] {
   const seen = new Set<string>();
@@ -566,6 +766,7 @@ function AnnualFilingTool() {
   } | null>(null);
   const [resetting, setResetting]   = useState(false);
   const [isLocked, setIsLocked]     = useState(false);
+  const [showGuide, setShowGuide]   = useState(false);
   const [finalizedBy, setFinalizedBy]   = useState<string | null>(null);
   const [finalizedAt, setFinalizedAt]   = useState<string | null>(null);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
@@ -5939,6 +6140,57 @@ function AnnualFilingTool() {
   return (
     <div className="h-screen overflow-hidden bg-slate-50">
 
+      {/* ── Guide modal ──────────────────────────────────────────────────── */}
+      {showGuide && (() => {
+        const guide = STEP_GUIDES[step];
+        if (!guide) return null;
+        return (
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-start justify-end" onClick={() => setShowGuide(false)}>
+            <div
+              className="relative h-full w-full max-w-md bg-white shadow-2xl flex flex-col overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 bg-amber-50 border-b border-amber-200 flex-shrink-0">
+                <div>
+                  <div className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-0.5">Step {step} of 8 — Guide</div>
+                  <div className="text-[15px] font-bold text-slate-800">{guide.title}</div>
+                </div>
+                <button
+                  onClick={() => setShowGuide(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-amber-100 text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+                {guide.sections.map((sec, i) => (
+                  <div key={i}>
+                    <div className="text-[11px] font-bold text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <span className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center text-amber-800 font-bold text-[10px]">{i + 1}</span>
+                      {sec.heading}
+                    </div>
+                    <ul className="space-y-2">
+                      {sec.points.map((pt, j) => (
+                        <li key={j} className="flex items-start gap-2 text-[12.5px] text-slate-700 leading-relaxed">
+                          <span className="text-amber-400 mt-0.5 flex-shrink-0">▸</span>
+                          {pt}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              {/* Footer */}
+              <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex-shrink-0">
+                <p className="text-[11px] text-slate-400 text-center">Click anywhere outside to close</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Unlock modal ──────────────────────────────────────────────────── */}
       {showUnlockModal && (
         <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4">
@@ -6114,6 +6366,14 @@ function AnnualFilingTool() {
                       <h1 className="text-[15px] font-semibold text-slate-900 leading-tight">{s.label}</h1>
                       <p className="text-[11.5px] text-slate-500 mt-0.5">{STEP_DESCRIPTIONS[step]}</p>
                     </div>
+                    {/* Guide button */}
+                    <button
+                      onClick={() => setShowGuide(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-lg transition-colors flex-shrink-0"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Guide
+                    </button>
                     {session?.user && (
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <a
