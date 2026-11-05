@@ -94,9 +94,21 @@ export default function AdminOrganisationsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: addModal.userId, amount: Number(addAmt), description: addNote }),
     });
+    if (res.ok) {
+      // Send congratulations email (fire-and-forget — don't block UI on email result)
+      fetch("/api/admin/send-credit-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toEmail: addModal.csi_users.email,
+          toName: addModal.csi_users.name,
+          creditsAdded: Number(addAmt),
+        }),
+      }).catch(() => {/* ignore email errors silently */});
+    }
     setAddLoading(false);
     setAddModal(null);
-    setAddMsg({ text: res.ok ? `${addAmt} credits added successfully` : "Failed to add credits", ok: res.ok });
+    setAddMsg({ text: res.ok ? `${addAmt} credits added & email sent` : "Failed to add credits", ok: res.ok });
     setTimeout(() => setAddMsg(null), 3000);
     fetchOrgs(showHidden);
   }
@@ -290,6 +302,9 @@ export default function AdminOrganisationsPage() {
                     )}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">{org.csi_users.email}</div>
+                  {org.csi_users.phone && (
+                    <div className="text-xs text-gray-400">📞 {org.csi_users.phone}</div>
+                  )}
                 </div>
 
                 {/* Credits */}
