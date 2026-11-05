@@ -12,10 +12,28 @@ type Org = {
   id: string; userId: string; balance: number; lifetimeCredits: number;
   isFreeUnlimited: boolean; freeLimit: number | null; isHiddenFromAdmin: boolean; createdAt: string;
   totalDocsGenerated: number; annualFilingCount: number; clientCount: number;
-  csi_users: { id: string; name: string | null; email: string; createdAt: string; ai_enabled?: boolean | null; ai_model?: string | null; phone?: string | null; firmName?: string | null; isHiddenFromAdmin?: boolean };
+  csi_users: { id: string; name: string | null; email: string; createdAt: string; ai_enabled?: boolean | null; ai_model?: string | null; phone?: string | null; firmName?: string | null; isHiddenFromAdmin?: boolean; lastSeen?: string | null };
   csi_credit_txns: Txn[];
   csi_utr_requests: UtrReq[];
 };
+
+function isOnline(lastSeen?: string | null) {
+  if (!lastSeen) return false;
+  return Date.now() - new Date(lastSeen).getTime() < 2 * 60 * 1000; // 2 minutes
+}
+
+function OnlineDot({ lastSeen }: { lastSeen?: string | null }) {
+  if (!lastSeen) return null;
+  const online = isOnline(lastSeen);
+  const minsAgo = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000);
+  const label = online ? "Online now" : minsAgo < 60 ? `${minsAgo}m ago` : minsAgo < 1440 ? `${Math.floor(minsAgo/60)}h ago` : new Date(lastSeen).toLocaleDateString("en-IN");
+  return (
+    <span title={label} className="flex items-center gap-1">
+      <span className={`w-2 h-2 rounded-full ${online ? "bg-green-500 animate-pulse" : "bg-gray-300"}`} />
+      <span className={`text-[10px] font-medium ${online ? "text-green-600" : "text-gray-400"}`}>{label}</span>
+    </span>
+  );
+}
 
 const TOOL_LABELS: Record<string, string> = {
   annual_filing: "Annual Filing",
@@ -320,6 +338,9 @@ export default function AdminOrganisationsPage() {
                   {org.csi_users.phone && (
                     <div className="text-xs text-gray-400">📞 {org.csi_users.phone}</div>
                   )}
+                  <div className="mt-0.5">
+                    <OnlineDot lastSeen={org.csi_users.lastSeen} />
+                  </div>
                 </div>
 
                 {/* Credits */}
@@ -368,6 +389,7 @@ export default function AdminOrganisationsPage() {
                   {profileBadge && (
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${profileBadge.color}`}>{profileBadge.label}</span>
                   )}
+                  <OnlineDot lastSeen={profile.csi_users.lastSeen} />
                   <span className="text-[10px] text-gray-400">Joined: {new Date(profile.csi_users.createdAt).toLocaleDateString("en-IN")}</span>
                 </div>
               </div>

@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     where: { plan: { not: "admin" } },
     select: {
       id: true, name: true, email: true, createdAt: true, ai_enabled: true, ai_model: true, phone: true, firmName: true,
-      isHiddenFromAdmin: true,
+      isHiddenFromAdmin: true, lastSeen: true,
       csi_credit_accounts: {
         include: {
           csi_credit_txns: { orderBy: { createdAt: "desc" }, take: 20 },
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
       annualFilingCount: annualFilingMap[u.id] ?? 0,
       clientCount: clientCountMap[u.id]?.size ?? 0,
     };
-    const userInfo = { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt, ai_enabled: u.ai_enabled, ai_model: u.ai_model, phone: u.phone, firmName: u.firmName, isHiddenFromAdmin: u.isHiddenFromAdmin ?? false };
+    const userInfo = { id: u.id, name: u.name, email: u.email, createdAt: u.createdAt, ai_enabled: u.ai_enabled, ai_model: u.ai_model, phone: u.phone, firmName: u.firmName, isHiddenFromAdmin: u.isHiddenFromAdmin ?? false, lastSeen: u.lastSeen ?? null };
     if (acc) return {
       ...acc,
       ...stats,

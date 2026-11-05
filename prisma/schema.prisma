@@ -558,6 +558,7 @@ model csi_users {
   phone               String?
   firmName            String?
   isHiddenFromAdmin   Boolean              @default(false)
+  lastSeen            DateTime?            @db.Timestamptz(6)
   csi_companies       csi_companies[]
   csi_credit_accounts csi_credit_accounts?
   csi_documents       csi_documents[]

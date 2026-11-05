@@ -3,6 +3,7 @@ import "./globals.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 import FooterWrapper from "@/components/FooterWrapper";
 import EnquiryDrawer from "@/components/EnquiryDrawer";
+import OnlinePing from "@/components/OnlinePing";
 
 const BASE_URL = "https://compliancesearch.in";
 
@@ -300,6 +301,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <SessionProviderWrapper>
+          <OnlinePing />
           {children}
           <FooterWrapper />
           <EnquiryDrawer />
