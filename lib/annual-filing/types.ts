@@ -251,6 +251,8 @@ export interface AnnualFilingData {
   poshComplaintsReceived?: number;   // complaints received during year (default 0 = Nil)
   poshComplaintsDisposed?: number;   // complaints disposed during year (default 0 = Nil)
   poshComplaintsPending?: number;    // complaints pending at year end (default 0 = Nil)
+  iccConstituted?: boolean;          // whether ICC has been constituted under POSH Act Sec. 4
+  poshIccText?: string;              // editable POSH/ICC board report paragraph (user-generated)
   ibcPending?: boolean;              // any IBC proceedings pending (default false)
   otsPending?: boolean;              // any one-time settlement during year (default false)
 

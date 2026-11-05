@@ -4354,7 +4354,59 @@ function AnnualFilingTool() {
                         <div className="flex-1">
                           <p className="text-xs font-bold text-amber-800">10+ Employees — POSH Internal Complaints Committee (ICC) Mandatory</p>
                           <p className="text-xs text-amber-700 mt-0.5">Section 4(1), POSH Act 2013. Penalty: up to ₹50,000 + licence cancellation if ICC not constituted.</p>
-                          <p className="text-xs text-amber-700">ICC annual report details are required in Board Report (Sec. 22). Fill POSH complaint counts in the IBC/OTS/POSH section above.</p>
+                          <div className="mt-2">
+                            <Toggle
+                              label="Internal Complaints Committee (ICC) has been constituted under POSH Act"
+                              value={!!data.iccConstituted}
+                              onChange={v => patch({ iccConstituted: v })}
+                            />
+                            {data.iccConstituted && (
+                              <p className="text-xs text-emerald-700 mt-1 ml-1">✓ ICC constitution will be mentioned in Board Report (POSH section).</p>
+                            )}
+                            {!data.iccConstituted && (
+                              <p className="text-xs text-red-600 mt-1 ml-1">⚠ If ICC not constituted, it must be disclosed in Board Report. Constitution is mandatory.</p>
+                            )}
+                          </div>
+                          {/* POSH Board Report Text — Generate + Edit */}
+                          <div className="mt-3 border-t border-amber-200 pt-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-xs font-semibold text-amber-800">POSH Disclosure — Board Report Text</p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const fy = data.financialYear || "____-__";
+                                  const fyEnd = fy ? String(parseInt(fy.split("-")[0]) + 1) : "____";
+                                  const received = data.poshComplaintsReceived ?? 0;
+                                  const disposed = data.poshComplaintsDisposed ?? 0;
+                                  const pending  = data.poshComplaintsPending  ?? 0;
+                                  const total    = totalEmp;
+                                  let draft = "";
+                                  if (data.iccConstituted) {
+                                    draft = `The Company has constituted an Internal Complaints Committee (ICC) in terms of Section 4 of the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013 ("POSH Act"). `;
+                                    if (received === 0) {
+                                      draft += `During the Financial Year ${fy}, no complaint pertaining to sexual harassment at workplace was received by the ICC. The Company has complied with the provisions relating to constitution of ICC under the POSH Act.`;
+                                    } else {
+                                      draft += `During the Financial Year ${fy}, ${received} complaint(s) were received by the ICC, of which ${disposed} complaint(s) were disposed of. ${pending > 0 ? `${pending} complaint(s) remain pending at the year end.` : "All complaints have been duly disposed of."}`;
+                                    }
+                                  } else {
+                                    draft = `The Company has ${total} employees as on 31st March, ${fyEnd}. The Company is in the process of constituting an Internal Complaints Committee (ICC) as required under Section 4 of the POSH Act, 2013. During the Financial Year ${fy}, no complaint pertaining to sexual harassment at workplace was received.`;
+                                  }
+                                  patch({ poshIccText: draft });
+                                }}
+                                className="text-xs font-semibold text-violet-700 border border-violet-200 bg-violet-50 hover:bg-violet-100 px-3 py-1 rounded-lg transition-colors flex-shrink-0"
+                              >
+                                ✦ Generate Draft
+                              </button>
+                            </div>
+                            <textarea
+                              value={data.poshIccText ?? ""}
+                              onChange={e => patch({ poshIccText: e.target.value || undefined })}
+                              rows={4}
+                              placeholder="Click '✦ Generate Draft' to auto-generate POSH disclosure text — or type manually. This text will appear in the Board Report."
+                              className="w-full border border-amber-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white resize-y"
+                            />
+                            <p className="text-xs text-amber-600 mt-1">✦ Generate Draft creates a starting template — edit freely. Saved text appears in Board Report (POSH section).</p>
+                          </div>
                         </div>
                       </div>
                     </div>

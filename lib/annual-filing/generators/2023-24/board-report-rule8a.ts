@@ -541,6 +541,25 @@ ${data.otsPending
 <!-- ══════════════ 39. POSH [Sexual Harassment Act, 2013] ══════════════ -->
 <h2>39. Prevention of Sexual Harassment at Workplace (POSH)</h2>
 <p>The Company is committed to providing a safe and harassment-free workplace for every woman at work. The Company has put in place a policy for prevention of sexual harassment in compliance with the provisions of the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013 and the Rules made thereunder.</p>
+${(() => {
+  if (data.poshIccText) {
+    return `<p>${data.poshIccText}</p>`;
+  }
+  const totalEmp = (data.employeesMale || 0) + (data.employeesFemale || 0) + (data.employeesOther || 0);
+  const received = data.poshComplaintsReceived ?? 0;
+  const disposed = data.poshComplaintsDisposed ?? 0;
+  const pending  = data.poshComplaintsPending  ?? 0;
+  if (totalEmp >= 10) {
+    if (data.iccConstituted) {
+      if (received === 0) {
+        return `<p>The Company has constituted an Internal Complaints Committee (ICC) in terms of Section 4 of the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013 ("POSH Act"). During the Financial Year ${fy}, no complaint pertaining to sexual harassment at workplace was received by the ICC. The Company has complied with the provisions relating to constitution of ICC under the POSH Act.</p>`;
+      }
+      return `<p>The Company has constituted an Internal Complaints Committee (ICC) in terms of Section 4 of the POSH Act. During the Financial Year ${fy}, ${received} complaint(s) were received by the ICC, of which ${disposed} complaint(s) were disposed of. ${pending > 0 ? `${pending} complaint(s) remain pending at the year end.` : "All complaints have been duly disposed of."}</p>`;
+    }
+    return `<p>The Company has ${totalEmp} employees on its rolls. The Company is in the process of constituting an Internal Complaints Committee (ICC) as required under Section 4 of the POSH Act, 2013. During the Financial Year ${fy}, no complaint pertaining to sexual harassment at workplace was received.</p>`;
+  }
+  return `<p>During the Financial Year ${fy}, no complaint pertaining to sexual harassment at workplace was received. As the number of employees of the Company is below the threshold of 10 prescribed under Section 4(1) of the POSH Act, 2013, the Company is not required to constitute an Internal Complaints Committee.</p>`;
+})()}
 <p>The following is the summary of complaints received and disposed-off during the Financial Year ${fy}:</p>
 <table>
   <tr>
