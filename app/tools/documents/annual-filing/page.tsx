@@ -798,6 +798,7 @@ function AnnualFilingTool() {
   } | null>(null);
   const [resetting, setResetting]   = useState(false);
   const [isLocked, setIsLocked]     = useState(false);
+  const [dataChangedAfterGenerate, setDataChangedAfterGenerate] = useState(false);
   const [showGuide, setShowGuide]         = useState(false);
   const [tourStep, setTourStep]           = useState<number>(0); // 0 = not running
   const [tourRect, setTourRect]           = useState<DOMRect | null>(null);
@@ -932,21 +933,28 @@ function AnnualFilingTool() {
   }, [data.dateOfReport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Patch helper ──────────────────────────────────────────────────────
+  const generatedRef = useRef<Record<string, string>>({});
   const patch = useCallback((partial: Partial<AnnualFilingData>) => {
     setData(prev => ({
       ...prev,
       ...partial,
       ...(partial.directors ? { directors: deduplicateDirs(partial.directors) } : {}),
     }));
+    if (Object.keys(generatedRef.current).length > 0) setDataChangedAfterGenerate(true);
   }, []);
 
   const patchAud = useCallback((partial: Partial<AnnualFilingData["auditor"]>) => {
     setData(prev => ({ ...prev, auditor: { ...prev.auditor, ...partial } }));
+    if (Object.keys(generatedRef.current).length > 0) setDataChangedAfterGenerate(true);
   }, []);
 
   const patchFin = useCallback((partial: Partial<AnnualFilingData["financials"]>) => {
     setData(prev => ({ ...prev, financials: { ...prev.financials, ...partial } }));
+    if (Object.keys(generatedRef.current).length > 0) setDataChangedAfterGenerate(true);
   }, []);
+
+  // Keep generatedRef in sync so patch functions can check if documents exist
+  useEffect(() => { generatedRef.current = generated; }, [generated]);
 
   // ── Debounced auto-save — fires 1.5 s after the last data change ─────────
   // autoSaveFnRef always holds the latest version (no stale closure)
@@ -2010,6 +2018,7 @@ function AnnualFilingTool() {
       const cashFlowIncluded = data.companyType === "section8" || data.companyType === "fpc";
       const opts = { ...auditOpts, cashFlowIncluded };
       const docs = generateAllAttachments(data, opts);
+      setDataChangedAfterGenerate(false);
       setGenerated(docs as unknown as Record<string, string>);
 
       // Step 3: finalize (lock) the filing in DB
@@ -5989,6 +5998,16 @@ function AnnualFilingTool() {
         </SectionCard>
         </div>{/* /tour-generate */}
 
+        {Object.keys(generated).length > 0 && dataChangedAfterGenerate && (
+          <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-300 rounded-xl mb-1">
+            <span className="text-lg flex-shrink-0">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800">Data has been updated</p>
+              <p className="text-xs text-amber-700 mt-0.5">Your changes are not reflected in the documents below. Click <strong>Generate All</strong> again to update all documents, or use the <strong>↺</strong> button next to any document to regenerate it individually.</p>
+            </div>
+          </div>
+        )}
+
         {Object.keys(generated).length > 0 && (
           <SectionCard title="Generated Documents" color="blue">
             <div className="grid grid-cols-1 gap-3">
@@ -6024,7 +6043,7 @@ function AnnualFilingTool() {
                       const opts = { ...auditOpts, cashFlowIncluded };
                       const genData = sigEnabled[a.key] === true ? data : stripDocSignatures(data);
                       const docs = generateAllAttachments(genData, opts) as unknown as Record<string, string>;
-                      if (docs[a.key]) setGenerated(prev => ({ ...prev, [a.key]: docs[a.key] }));
+                      if (docs[a.key]) { setGenerated(prev => ({ ...prev, [a.key]: docs[a.key] })); setDataChangedAfterGenerate(false); }
                     }}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 text-xs font-semibold rounded-lg transition-all flex-shrink-0"
                     title="Regenerate this document"
