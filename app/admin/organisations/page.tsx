@@ -95,20 +95,35 @@ export default function AdminOrganisationsPage() {
       body: JSON.stringify({ userId: addModal.userId, amount: Number(addAmt), description: addNote }),
     });
     if (res.ok) {
-      // Send congratulations email (fire-and-forget — don't block UI on email result)
-      fetch("/api/admin/send-credit-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toEmail: addModal.csi_users.email,
-          toName: addModal.csi_users.name,
-          creditsAdded: Number(addAmt),
-        }),
-      }).catch(() => {/* ignore email errors silently */});
+      // Send congratulations email and report result
+      try {
+        const emailRes = await fetch("/api/admin/send-credit-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            toEmail: addModal.csi_users.email,
+            toName: addModal.csi_users.name,
+            creditsAdded: Number(addAmt),
+          }),
+        });
+        const emailData = await emailRes.json();
+        setAddLoading(false);
+        setAddModal(null);
+        if (emailRes.ok) {
+          setAddMsg({ text: `${addAmt} credits added & email sent ✓`, ok: true });
+        } else {
+          setAddMsg({ text: `${addAmt} credits added, but email failed: ${emailData.detail || emailData.error}`, ok: false });
+        }
+      } catch (e: any) {
+        setAddLoading(false);
+        setAddModal(null);
+        setAddMsg({ text: `${addAmt} credits added, email error: ${e?.message}`, ok: false });
+      }
+    } else {
+      setAddLoading(false);
+      setAddModal(null);
+      setAddMsg({ text: "Failed to add credits", ok: false });
     }
-    setAddLoading(false);
-    setAddModal(null);
-    setAddMsg({ text: res.ok ? `${addAmt} credits added & email sent` : "Failed to add credits", ok: res.ok });
     setTimeout(() => setAddMsg(null), 3000);
     fetchOrgs(showHidden);
   }

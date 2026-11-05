@@ -5,7 +5,7 @@ const nextConfig: NextConfig & {
 } = {
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
-  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "html-to-docx", "pdf-parse", "pdfjs-dist"],
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "html-to-docx", "pdf-parse", "pdfjs-dist", "nodemailer"],
   outputFileTracingIncludes: {
     "/api/generate-pdf": ["./node_modules/@sparticuz/chromium/**/*"],
   },
