@@ -1049,14 +1049,21 @@ function AnnualFilingTool() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
-  // ── Tour: auto-start every time user enters a step (manual mode only) ─
+  // ── Tour: auto-start once per day (or first time ever) when user opens annual filing ─
   useEffect(() => {
     if (autoMode) return; // auto-mode handles its own navigation
     const steps = TOUR_STEPS[step];
-    if (steps && steps.length > 0) {
-      const t = setTimeout(() => startTour(), 600);
-      return () => clearTimeout(t);
-    }
+    if (!steps || steps.length === 0) return;
+    // Only auto-start on Step 1 (page open), once per calendar day
+    if (step !== 1) return;
+    try {
+      const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+      const lastShown = localStorage.getItem("csi_af_tour_last");
+      if (lastShown === today) return; // already shown today
+      localStorage.setItem("csi_af_tour_last", today);
+    } catch { /* ignore if localStorage blocked */ }
+    const t = setTimeout(() => startTour(), 600);
+    return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -6739,7 +6746,7 @@ function AnnualFilingTool() {
                       className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-lg transition-colors flex-shrink-0"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      How to Fill
+                      Take a Tour Guide
                     </button>
                     {session?.user && (
                       <div className="flex items-center gap-2 flex-shrink-0">
