@@ -1,0 +1,102 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { getOrCreateTeam } from "@/lib/team";
+import { prisma } from "@/lib/prisma";
+import crypto from "crypto";
+
+// Ensure share links table exists
+async function ensureShareTable() {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS csi_share_links (
+      id          TEXT PRIMARY KEY,
+      "teamId"    TEXT NOT NULL,
+      "companyId" TEXT NOT NULL,
+      "companyName" TEXT NOT NULL,
+      token       TEXT NOT NULL UNIQUE,
+      label       TEXT,
+      "expiresAt" TIMESTAMPTZ,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS idx_share_links_token ON csi_share_links(token)`
+  );
+}
+
+// POST /api/company-files/share
+// Body: { companyId, companyName, label?, expiryDays? }
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const userId = (session.user as { id: string }).id;
+  const teamId = await getOrCreateTeam(userId);
+  await ensureShareTable();
+
+  const body = await req.json();
+  const { companyId, companyName, label, expiryDays = 30 } = body;
+
+  if (!companyId || !companyName) {
+    return NextResponse.json({ error: "Missing companyId or companyName" }, { status: 400 });
+  }
+
+  const id        = crypto.randomUUID();
+  const token     = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO csi_share_links (id, "teamId", "companyId", "companyName", token, label, "expiresAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    id, teamId, companyId, companyName, token, label ?? null, expiresAt
+  );
+
+  const baseUrl = process.env.NEXTAUTH_URL ?? "";
+  return NextResponse.json({ token, url: `${baseUrl}/share/${token}`, expiresAt });
+}
+
+// GET /api/company-files/share?companyId=xxx  — list existing share links
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const userId = (session.user as { id: string }).id;
+  const teamId = await getOrCreateTeam(userId);
+  await ensureShareTable();
+
+  const companyId = req.nextUrl.searchParams.get("companyId");
+  if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+
+  const links = await prisma.$queryRawUnsafe<Array<{
+    id: string; token: string; label: string | null;
+    expiresAt: Date | null; createdAt: Date;
+  }>>(
+    `SELECT id, token, label, "expiresAt", "createdAt" FROM csi_share_links
+     WHERE "teamId" = $1 AND "companyId" = $2
+     ORDER BY "createdAt" DESC`,
+    teamId, companyId
+  );
+
+  const baseUrl = process.env.NEXTAUTH_URL ?? "";
+  return NextResponse.json({
+    links: links.map(l => ({ ...l, url: `${baseUrl}/share/${l.token}` }))
+  });
+}
+
+// DELETE /api/company-files/share?id=xxx
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const userId = (session.user as { id: string }).id;
+  const teamId = await getOrCreateTeam(userId);
+
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM csi_share_links WHERE id = $1 AND "teamId" = $2`,
+    id, teamId
+  );
+  return NextResponse.json({ ok: true });
+}

@@ -98,6 +98,14 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Share link state
+  const [shareModal, setShareModal]       = useState(false);
+  const [shareLoading, setShareLoading]   = useState(false);
+  const [shareUrl, setShareUrl]           = useState("");
+  const [shareCopied, setShareCopied]     = useState(false);
+  const [shareExpiry, setShareExpiry]     = useState(30); // days
+  const [shareLinks, setShareLinks]       = useState<Array<{ id: string; url: string; label: string | null; expiresAt: string | null; createdAt: string }>>([]);
+
   const FY_OPTIONS = ["2026-27", "2025-26", "2024-25", "2023-24", "2022-23", "2021-22"];
 
   useEffect(() => {
@@ -230,6 +238,50 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   async function disconnectDrive() {
     await fetch("/api/drive/disconnect", { method: "POST" });
     setDriveStatus({ connected: false, email: null, folderId: null });
+  }
+
+  async function openShareModal() {
+    if (!selectedCompany) return;
+    setShareModal(true);
+    setShareUrl("");
+    setShareCopied(false);
+    // Load existing links
+    const res = await fetch(`/api/company-files/share?companyId=${selectedCompany.companyId}`);
+    if (res.ok) {
+      const d = await res.json();
+      setShareLinks(d.links ?? []);
+    }
+  }
+
+  async function createShareLink() {
+    if (!selectedCompany) return;
+    setShareLoading(true);
+    const res = await fetch("/api/company-files/share", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyId: selectedCompany.companyId,
+        companyName: selectedCompany.companyName,
+        expiryDays: shareExpiry,
+      }),
+    });
+    const d = await res.json();
+    setShareLoading(false);
+    if (d.url) {
+      setShareUrl(d.url);
+      openShareModal(); // refresh link list
+    }
+  }
+
+  async function copyShareUrl(url: string) {
+    await navigator.clipboard.writeText(url);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2500);
+  }
+
+  async function deleteShareLink(id: string) {
+    await fetch(`/api/company-files/share?id=${id}`, { method: "DELETE" });
+    setShareLinks(prev => prev.filter(l => l.id !== id));
   }
 
   // ── Drive not connected ──
@@ -399,6 +451,17 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                     <option key={fy} value={fy}>FY {fy}</option>
                   ))}
                 </select>
+
+                {/* Share button */}
+                {files.length > 0 && (
+                  <button
+                    onClick={openShareModal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-indigo-700 text-xs font-semibold transition-all shadow-sm"
+                  >
+                    <i className="ti ti-share text-sm" />
+                    Share
+                  </button>
+                )}
 
                 {/* Drive badge */}
                 {driveStatus?.connected && (
@@ -843,6 +906,130 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                 </div>
               )}
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Share Modal ── */}
+      {shareModal && selectedCompany && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
+                  <i className="ti ti-share text-white text-lg" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Share Documents</h3>
+                  <p className="text-[11px] text-indigo-200 mt-0.5">{selectedCompany.companyName}</p>
+                </div>
+              </div>
+              <button onClick={() => setShareModal(false)} className="text-white/60 hover:text-white">
+                <i className="ti ti-x text-lg" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Create new link */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Create Share Link</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="text-[11px] text-slate-400 mb-1 block">Link validity</label>
+                    <select
+                      value={shareExpiry}
+                      onChange={e => setShareExpiry(Number(e.target.value))}
+                      className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white text-slate-700"
+                    >
+                      <option value={7}>7 days</option>
+                      <option value={15}>15 days</option>
+                      <option value={30}>30 days</option>
+                      <option value={60}>60 days</option>
+                      <option value={90}>90 days</option>
+                    </select>
+                  </div>
+                  <div className="pt-5">
+                    <button
+                      onClick={createShareLink}
+                      disabled={shareLoading}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 shadow-md shadow-indigo-200 transition-all"
+                    >
+                      {shareLoading ? <i className="ti ti-loader-2 animate-spin" /> : <i className="ti ti-link" />}
+                      Generate Link
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Newly created link */}
+              {shareUrl && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
+                    <i className="ti ti-check text-emerald-500" /> Link Created!
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-white border border-emerald-200 rounded-lg px-3 py-2 text-slate-600 truncate font-mono">
+                      {shareUrl}
+                    </code>
+                    <button
+                      onClick={() => copyShareUrl(shareUrl)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-all flex-shrink-0"
+                    >
+                      <i className={`ti ${shareCopied ? "ti-check" : "ti-copy"}`} />
+                      {shareCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Existing links */}
+              {shareLinks.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Active Links</p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {shareLinks.map(link => {
+                      const expired = link.expiresAt && new Date(link.expiresAt) < new Date();
+                      return (
+                        <div key={link.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${expired ? "bg-slate-50 border-slate-200 opacity-60" : "bg-white border-slate-200"}`}>
+                          <i className={`ti ${expired ? "ti-link-off text-slate-400" : "ti-link text-indigo-500"} flex-shrink-0`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-slate-600 font-mono truncate">{link.url}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {expired ? "Expired" : `Expires ${new Date(link.expiresAt!).toLocaleDateString("en-IN")}`}
+                              {" · "}Created {new Date(link.createdAt).toLocaleDateString("en-IN")}
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            {!expired && (
+                              <button
+                                onClick={() => copyShareUrl(link.url)}
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                title="Copy link"
+                              >
+                                <i className="ti ti-copy text-sm" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => deleteShareLink(link.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                              title="Delete link"
+                            >
+                              <i className="ti ti-trash text-sm" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                <i className="ti ti-shield-check text-slate-300" />
+                Anyone with this link can view and download documents. Drive URL is never exposed.
+              </p>
             </div>
           </div>
         </div>
