@@ -1117,18 +1117,19 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                               {!expired && (
                                 <button
                                   onClick={() => copyShareUrl(link.url)}
-                                  className={`p-1.5 rounded-lg transition-all ${isCopied ? "text-emerald-600 bg-emerald-50" : "text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"}`}
-                                  title="Copy link"
+                                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${isCopied ? "text-emerald-600 bg-emerald-50 border border-emerald-200" : "text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100"}`}
                                 >
-                                  <i className={`ti ${isCopied ? "ti-check" : "ti-copy"} text-sm`} />
+                                  <i className={`ti ${isCopied ? "ti-check" : "ti-copy"} text-xs`} />
+                                  {isCopied ? "Copied" : "Copy"}
                                 </button>
                               )}
                               <button
                                 onClick={() => deleteShareLink(link.id)}
-                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                title="Delete link"
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 transition-all"
+                                title="Revoke this link — client will no longer be able to open it"
                               >
-                                <i className="ti ti-trash text-sm" />
+                                <i className="ti ti-ban text-xs" />
+                                Revoke
                               </button>
                             </div>
                           </div>

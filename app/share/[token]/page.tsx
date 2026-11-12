@@ -138,21 +138,35 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "Inter, -apple-system, sans-serif" }}>
       {/* Header */}
-      <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)", padding: "32px 24px 28px", color: "#fff" }}>
+      <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)", padding: "24px 24px 24px", color: "#fff" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-            <div style={{ width: 40, height: 40, background: "rgba(255,255,255,0.15)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏢</div>
-            <div>
-              <p style={{ margin: 0, fontSize: 12, color: "rgba(255,255,255,0.6)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Company Documents</p>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#fff" }}>{data?.companyName}</h1>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 40, height: 40, background: "rgba(255,255,255,0.15)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🏢</div>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.55)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Company Documents</p>
+                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#fff" }}>{data?.companyName}</h1>
+              </div>
             </div>
+            {/* Close tab button */}
+            <button
+              onClick={() => window.close()}
+              style={{
+                background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: 8, padding: "6px 12px", color: "rgba(255,255,255,0.75)",
+                fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                flexShrink: 0, fontFamily: "Inter, sans-serif",
+              }}
+            >
+              ✕ Close
+            </button>
           </div>
-          <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
-            <span style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "4px 14px", fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
+          <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+            <span style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "4px 14px", fontSize: 12, color: "rgba(255,255,255,0.85)" }}>
               📁 {totalFiles} document{totalFiles !== 1 ? "s" : ""}
             </span>
             {data?.expiresAt && (
-              <span style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "4px 14px", fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
+              <span style={{ background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "4px 14px", fontSize: 12, color: "rgba(255,255,255,0.85)" }}>
                 🕐 Valid till {formatDate(data.expiresAt)}
               </span>
             )}
