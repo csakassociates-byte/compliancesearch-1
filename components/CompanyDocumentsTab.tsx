@@ -102,9 +102,11 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [shareModal, setShareModal]       = useState(false);
   const [shareLoading, setShareLoading]   = useState(false);
   const [shareUrl, setShareUrl]           = useState("");
-  const [shareCopied, setShareCopied]     = useState(false);
-  const [shareExpiry, setShareExpiry]     = useState(30); // days
-  const [shareLinks, setShareLinks]       = useState<Array<{ id: string; url: string; label: string | null; expiresAt: string | null; createdAt: string }>>([]);
+  const [shareCopied, setShareCopied]     = useState<string>("");
+  const [shareExpiry, setShareExpiry]     = useState(30);
+  const [shareMode, setShareMode]         = useState<"all" | "selected">("all");
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [shareLinks, setShareLinks]       = useState<Array<{ id: string; url: string; label: string | null; shareMode: string; expiresAt: string | null; createdAt: string }>>([]);
 
   const FY_OPTIONS = ["2026-27", "2025-26", "2024-25", "2023-24", "2022-23", "2021-22"];
 
@@ -244,8 +246,9 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
     if (!selectedCompany) return;
     setShareModal(true);
     setShareUrl("");
-    setShareCopied(false);
-    // Load existing links
+    setShareCopied("");
+    setShareMode("all");
+    setSelectedFileIds(new Set());
     const res = await fetch(`/api/company-files/share?companyId=${selectedCompany.companyId}`);
     if (res.ok) {
       const d = await res.json();
@@ -255,6 +258,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
   async function createShareLink() {
     if (!selectedCompany) return;
+    if (shareMode === "selected" && selectedFileIds.size === 0) return;
     setShareLoading(true);
     const res = await fetch("/api/company-files/share", {
       method: "POST",
@@ -263,20 +267,32 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
         companyId: selectedCompany.companyId,
         companyName: selectedCompany.companyName,
         expiryDays: shareExpiry,
+        shareMode,
+        fileIds: shareMode === "selected" ? Array.from(selectedFileIds) : [],
       }),
     });
     const d = await res.json();
     setShareLoading(false);
     if (d.url) {
       setShareUrl(d.url);
-      openShareModal(); // refresh link list
+      // refresh link list
+      const r2 = await fetch(`/api/company-files/share?companyId=${selectedCompany.companyId}`);
+      if (r2.ok) setShareLinks((await r2.json()).links ?? []);
     }
   }
 
   async function copyShareUrl(url: string) {
     await navigator.clipboard.writeText(url);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2500);
+    setShareCopied(url);
+    setTimeout(() => setShareCopied(""), 2500);
+  }
+
+  function toggleFileSelect(id: string) {
+    setSelectedFileIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   }
 
   async function deleteShareLink(id: string) {
@@ -914,9 +930,9 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
       {/* ── Share Modal ── */}
       {shareModal && selectedCompany && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
                   <i className="ti ti-share text-white text-lg" />
@@ -931,13 +947,100 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
-              {/* Create new link */}
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Create Share Link</p>
-                <div className="flex items-center gap-3">
+            <div className="overflow-y-auto flex-1">
+              <div className="p-6 space-y-5">
+
+                {/* Mode selector */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">What to Share</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => { setShareMode("all"); setSelectedFileIds(new Set()); }}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-left ${
+                        shareMode === "all"
+                          ? "border-indigo-500 bg-indigo-50"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shareMode === "all" ? "bg-indigo-100" : "bg-slate-100"}`}>
+                        <i className={`ti ti-files text-xl ${shareMode === "all" ? "text-indigo-600" : "text-slate-400"}`} />
+                      </div>
+                      <div>
+                        <p className={`text-sm font-bold ${shareMode === "all" ? "text-indigo-700" : "text-slate-700"}`}>All Documents</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{files.length} documents</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setShareMode("selected")}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-left ${
+                        shareMode === "selected"
+                          ? "border-indigo-500 bg-indigo-50"
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shareMode === "selected" ? "bg-indigo-100" : "bg-slate-100"}`}>
+                        <i className={`ti ti-checklist text-xl ${shareMode === "selected" ? "text-indigo-600" : "text-slate-400"}`} />
+                      </div>
+                      <div>
+                        <p className={`text-sm font-bold ${shareMode === "selected" ? "text-indigo-700" : "text-slate-700"}`}>Select Documents</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Pick specific files</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* File picker — shown when "selected" mode */}
+                {shareMode === "selected" && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Files</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => setSelectedFileIds(new Set(files.map(f => f.id)))} className="text-[11px] text-indigo-600 hover:underline">Select all</button>
+                        <span className="text-slate-300">·</span>
+                        <button onClick={() => setSelectedFileIds(new Set())} className="text-[11px] text-slate-400 hover:underline">Clear</button>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 border border-slate-100 rounded-xl p-2 bg-slate-50">
+                      {files.map(f => {
+                        const isSelected = selectedFileIds.has(f.id);
+                        const icon = f.mimeType === "application/pdf" || f.fileName.endsWith(".pdf") ? "📄"
+                          : f.mimeType?.startsWith("image/") ? "🖼️" : "📎";
+                        return (
+                          <button
+                            key={f.id}
+                            onClick={() => toggleFileSelect(f.id)}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
+                              isSelected ? "bg-indigo-50 border border-indigo-200" : "bg-white border border-slate-200 hover:border-slate-300"
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                              isSelected ? "bg-indigo-600 border-indigo-600" : "border-slate-300"
+                            }`}>
+                              {isSelected && <i className="ti ti-check text-white text-[10px]" />}
+                            </div>
+                            <span className="text-base flex-shrink-0">{icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-slate-700 truncate">{f.fileName}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                {f.category} · {f.docType}{f.financialYear ? ` · FY ${f.financialYear}` : ""}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedFileIds.size > 0 && (
+                      <p className="text-[11px] text-indigo-600 font-medium mt-1.5 ml-1">
+                        {selectedFileIds.size} file{selectedFileIds.size > 1 ? "s" : ""} selected
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Expiry + Generate */}
+                <div className="flex items-end gap-3">
                   <div className="flex-1">
-                    <label className="text-[11px] text-slate-400 mb-1 block">Link validity</label>
+                    <label className="text-[11px] text-slate-400 mb-1 block font-medium">Link validity</label>
                     <select
                       value={shareExpiry}
                       onChange={e => setShareExpiry(Number(e.target.value))}
@@ -950,86 +1053,96 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                       <option value={90}>90 days</option>
                     </select>
                   </div>
-                  <div className="pt-5">
-                    <button
-                      onClick={createShareLink}
-                      disabled={shareLoading}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 shadow-md shadow-indigo-200 transition-all"
-                    >
-                      {shareLoading ? <i className="ti ti-loader-2 animate-spin" /> : <i className="ti ti-link" />}
-                      Generate Link
-                    </button>
-                  </div>
+                  <button
+                    onClick={createShareLink}
+                    disabled={shareLoading || (shareMode === "selected" && selectedFileIds.size === 0)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40 shadow-md shadow-indigo-200 transition-all"
+                  >
+                    {shareLoading ? <i className="ti ti-loader-2 animate-spin" /> : <i className="ti ti-link" />}
+                    Generate Link
+                  </button>
                 </div>
-              </div>
 
-              {/* Newly created link */}
-              {shareUrl && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
-                    <i className="ti ti-check text-emerald-500" /> Link Created!
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-xs bg-white border border-emerald-200 rounded-lg px-3 py-2 text-slate-600 truncate font-mono">
-                      {shareUrl}
-                    </code>
-                    <button
-                      onClick={() => copyShareUrl(shareUrl)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-all flex-shrink-0"
-                    >
-                      <i className={`ti ${shareCopied ? "ti-check" : "ti-copy"}`} />
-                      {shareCopied ? "Copied!" : "Copy"}
-                    </button>
+                {/* Newly created link */}
+                {shareUrl && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
+                      <i className="ti ti-check text-emerald-500" /> Link Ready — Send to client
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs bg-white border border-emerald-200 rounded-lg px-3 py-2 text-slate-600 truncate font-mono">
+                        {shareUrl}
+                      </code>
+                      <button
+                        onClick={() => copyShareUrl(shareUrl)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-all flex-shrink-0"
+                      >
+                        <i className={`ti ${shareCopied === shareUrl ? "ti-check" : "ti-copy"}`} />
+                        {shareCopied === shareUrl ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Existing links */}
-              {shareLinks.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Active Links</p>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {shareLinks.map(link => {
-                      const expired = link.expiresAt && new Date(link.expiresAt) < new Date();
-                      return (
-                        <div key={link.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${expired ? "bg-slate-50 border-slate-200 opacity-60" : "bg-white border-slate-200"}`}>
-                          <i className={`ti ${expired ? "ti-link-off text-slate-400" : "ti-link text-indigo-500"} flex-shrink-0`} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-slate-600 font-mono truncate">{link.url}</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              {expired ? "Expired" : `Expires ${new Date(link.expiresAt!).toLocaleDateString("en-IN")}`}
-                              {" · "}Created {new Date(link.createdAt).toLocaleDateString("en-IN")}
-                            </p>
-                          </div>
-                          <div className="flex gap-1.5 flex-shrink-0">
-                            {!expired && (
+                {/* Existing links */}
+                {shareLinks.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Previous Links</p>
+                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                      {shareLinks.map(link => {
+                        const expired = link.expiresAt && new Date(link.expiresAt) < new Date();
+                        const isCopied = shareCopied === link.url;
+                        return (
+                          <div key={link.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${expired ? "bg-slate-50 border-slate-200 opacity-60" : "bg-white border-slate-200"}`}>
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              link.shareMode === "selected" ? "bg-purple-50" : "bg-indigo-50"
+                            }`}>
+                              <i className={`ti text-sm ${
+                                expired ? "ti-link-off text-slate-400" :
+                                link.shareMode === "selected" ? "ti-checklist text-purple-500" : "ti-files text-indigo-500"
+                              }`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-slate-600 font-mono truncate">{link.url}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold mr-1 ${
+                                  link.shareMode === "selected" ? "bg-purple-50 text-purple-600" : "bg-indigo-50 text-indigo-600"
+                                }`}>
+                                  {link.shareMode === "selected" ? "Selected" : "All docs"}
+                                </span>
+                                {expired ? "Expired" : `Valid till ${new Date(link.expiresAt!).toLocaleDateString("en-IN")}`}
+                              </p>
+                            </div>
+                            <div className="flex gap-1.5 flex-shrink-0">
+                              {!expired && (
+                                <button
+                                  onClick={() => copyShareUrl(link.url)}
+                                  className={`p-1.5 rounded-lg transition-all ${isCopied ? "text-emerald-600 bg-emerald-50" : "text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"}`}
+                                  title="Copy link"
+                                >
+                                  <i className={`ti ${isCopied ? "ti-check" : "ti-copy"} text-sm`} />
+                                </button>
+                              )}
                               <button
-                                onClick={() => copyShareUrl(link.url)}
-                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                title="Copy link"
+                                onClick={() => deleteShareLink(link.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                title="Delete link"
                               >
-                                <i className="ti ti-copy text-sm" />
+                                <i className="ti ti-trash text-sm" />
                               </button>
-                            )}
-                            <button
-                              onClick={() => deleteShareLink(link.id)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                              title="Delete link"
-                            >
-                              <i className="ti ti-trash text-sm" />
-                            </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                <i className="ti ti-shield-check text-slate-300" />
-                Anyone with this link can view and download documents. Drive URL is never exposed.
-              </p>
+                <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                  <i className="ti ti-shield-check text-slate-300" />
+                  Anyone with this link can view and download. Drive URL is never exposed to the client.
+                </p>
+              </div>
             </div>
           </div>
         </div>

@@ -5,27 +5,35 @@ import { getOrCreateTeam } from "@/lib/team";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
-// Ensure share links table exists
 async function ensureShareTable() {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS csi_share_links (
-      id          TEXT PRIMARY KEY,
-      "teamId"    TEXT NOT NULL,
-      "companyId" TEXT NOT NULL,
+      id            TEXT PRIMARY KEY,
+      "teamId"      TEXT NOT NULL,
+      "companyId"   TEXT NOT NULL,
       "companyName" TEXT NOT NULL,
-      token       TEXT NOT NULL UNIQUE,
-      label       TEXT,
-      "expiresAt" TIMESTAMPTZ,
-      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      token         TEXT NOT NULL UNIQUE,
+      label         TEXT,
+      "fileIds"     TEXT[],
+      "shareMode"   TEXT NOT NULL DEFAULT 'all',
+      "expiresAt"   TIMESTAMPTZ,
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Add columns if table already exists without them
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE csi_share_links ADD COLUMN IF NOT EXISTS "fileIds" TEXT[]`
+  ).catch(() => {});
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE csi_share_links ADD COLUMN IF NOT EXISTS "shareMode" TEXT NOT NULL DEFAULT 'all'`
+  ).catch(() => {});
   await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS idx_share_links_token ON csi_share_links(token)`
   );
 }
 
 // POST /api/company-files/share
-// Body: { companyId, companyName, label?, expiryDays? }
+// Body: { companyId, companyName, label?, expiryDays?, fileIds?, shareMode? }
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,7 +43,7 @@ export async function POST(req: NextRequest) {
   await ensureShareTable();
 
   const body = await req.json();
-  const { companyId, companyName, label, expiryDays = 30 } = body;
+  const { companyId, companyName, label, expiryDays = 30, fileIds, shareMode = "all" } = body;
 
   if (!companyId || !companyName) {
     return NextResponse.json({ error: "Missing companyId or companyName" }, { status: 400 });
@@ -44,18 +52,21 @@ export async function POST(req: NextRequest) {
   const id        = crypto.randomUUID();
   const token     = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+  const fileIdsArr = fileIds && fileIds.length > 0 ? fileIds : null;
 
   await prisma.$executeRawUnsafe(
-    `INSERT INTO csi_share_links (id, "teamId", "companyId", "companyName", token, label, "expiresAt")
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    id, teamId, companyId, companyName, token, label ?? null, expiresAt
+    `INSERT INTO csi_share_links
+     (id, "teamId", "companyId", "companyName", token, label, "fileIds", "shareMode", "expiresAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    id, teamId, companyId, companyName, token, label ?? null,
+    fileIdsArr, shareMode, expiresAt
   );
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "";
-  return NextResponse.json({ token, url: `${baseUrl}/share/${token}`, expiresAt });
+  return NextResponse.json({ token, url: `${baseUrl}/share/${token}`, expiresAt, shareMode });
 }
 
-// GET /api/company-files/share?companyId=xxx  — list existing share links
+// GET /api/company-files/share?companyId=xxx
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -68,10 +79,11 @@ export async function GET(req: NextRequest) {
   if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
 
   const links = await prisma.$queryRawUnsafe<Array<{
-    id: string; token: string; label: string | null;
-    expiresAt: Date | null; createdAt: Date;
+    id: string; token: string; label: string | null; shareMode: string;
+    fileIds: string[] | null; expiresAt: Date | null; createdAt: Date;
   }>>(
-    `SELECT id, token, label, "expiresAt", "createdAt" FROM csi_share_links
+    `SELECT id, token, label, "shareMode", "fileIds", "expiresAt", "createdAt"
+     FROM csi_share_links
      WHERE "teamId" = $1 AND "companyId" = $2
      ORDER BY "createdAt" DESC`,
     teamId, companyId
