@@ -488,9 +488,9 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
                               {/* Action row */}
                               <div className="flex items-center gap-1.5 pt-2.5 border-t border-slate-100">
-                                {latest?.driveWebViewLink ? (
+                                {latest ? (
                                   <a
-                                    href={latest.driveWebViewLink}
+                                    href={`/api/company-files/view/${latest.id}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 font-semibold transition-colors"

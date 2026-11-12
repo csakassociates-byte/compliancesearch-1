@@ -151,6 +151,22 @@ export async function uploadFileToDrive(
   return uploadRes.json();
 }
 
+// Make file viewable by anyone with the link (no Drive login needed)
+export async function setFilePublic(accessToken: string, fileId: string): Promise<void> {
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ role: "reader", type: "anyone" }),
+  });
+}
+
+// Download file bytes from Drive (for proxy serving)
+export async function downloadFileFromDrive(accessToken: string, fileId: string): Promise<Response> {
+  return fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
 export async function deleteFileFromDrive(accessToken: string, fileId: string): Promise<void> {
   await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
     method: "DELETE",

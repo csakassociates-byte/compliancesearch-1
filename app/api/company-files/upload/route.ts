@@ -8,6 +8,7 @@ import {
   getValidAccessToken,
   getOrCreateDriveFolder,
   uploadFileToDrive,
+  setFilePublic,
 } from "@/lib/google-drive";
 import crypto from "crypto";
 
@@ -56,13 +57,16 @@ export async function POST(req: NextRequest) {
   const catFolderId     = await getOrCreateDriveFolder(accessToken, category, companyFolderId);
 
   const fileBuffer = Buffer.from(await file.arrayBuffer());
-  const driveFile  = await uploadFileToDrive(
+  const driveFile = await uploadFileToDrive(
     accessToken,
     fileBuffer,
     file.name,
     file.type || "application/octet-stream",
     catFolderId
   );
+
+  // Make file viewable by anyone with the link (no Drive login required)
+  await setFilePublic(accessToken, driveFile.id);
 
   const id = crypto.randomUUID();
   await prisma.$executeRawUnsafe(
