@@ -2,41 +2,59 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Anthropic from "@anthropic-ai/sdk";
+import pdfParse from "pdf-parse";
+
+export const runtime = "nodejs";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // POST /api/company-files/verify
-// Body: FormData { file, companyName, docType, docLabel }
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const formData  = await req.formData();
-  const file      = formData.get("file") as File | null;
-  const companyName = formData.get("companyName") as string;
-  const docLabel  = formData.get("docLabel") as string;
-
-  if (!file || !companyName || !docLabel) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    return NextResponse.json({ ok: true, status: "skipped", reason: "Could not parse request" });
   }
 
-  if (file.size > 10 * 1024 * 1024) {
+  const file        = formData.get("file") as File | null;
+  const companyName = formData.get("companyName") as string;
+  const docLabel    = formData.get("docLabel") as string;
+
+  if (!file || !companyName || !docLabel) {
+    return NextResponse.json({ ok: true, status: "skipped", reason: "Missing fields" });
+  }
+
+  if (file.size > 15 * 1024 * 1024) {
     return NextResponse.json({ ok: true, status: "skipped", reason: "File too large for AI check" });
   }
 
-  try {
-    const isPdf  = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    const isImage = file.type.startsWith("image/");
+  const isPdf  = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const isImage = file.type.startsWith("image/");
 
-    let result: { status: "verified" | "warning" | "mismatch"; reason: string; confidence: number };
+  if (!isPdf && !isImage) {
+    return NextResponse.json({ ok: true, status: "skipped", reason: "File type not supported for AI check" });
+  }
+
+  try {
+    let text = "";
 
     if (isPdf) {
-      // Extract text from PDF
       const buffer = Buffer.from(await file.arrayBuffer());
-      // Dynamic import to avoid SSR issues
-      const pdfParse = (await import("pdf-parse")).default;
-      const parsed   = await pdfParse(buffer, { max: 3 }); // first 3 pages only
-      const text     = parsed.text.slice(0, 6000); // limit tokens
+      try {
+        const parsed = await pdfParse(buffer, { max: 3 });
+        text = parsed.text.slice(0, 6000);
+      } catch (pdfErr) {
+        console.error("pdf-parse error:", pdfErr);
+        return NextResponse.json({ ok: true, status: "warning", reason: "Could not read PDF — please verify manually.", confidence: 0 });
+      }
+
+      if (!text || text.trim().length < 50) {
+        return NextResponse.json({ ok: true, status: "warning", reason: "PDF text is unreadable (possibly scanned image) — please verify manually.", confidence: 0 });
+      }
 
       const msg = await client.messages.create({
         model: "claude-haiku-5-5",
@@ -45,38 +63,35 @@ export async function POST(req: NextRequest) {
           role: "user",
           content: `You are a document verification assistant for an Indian CA/CS firm.
 
-Verify this document against the expected details:
+Verify this document against:
 - Expected document type: "${docLabel}"
 - Expected company name: "${companyName}"
 
-Extracted text from the document (first 3 pages):
+Document text (first 3 pages):
 ---
 ${text}
 ---
 
-Respond ONLY with a JSON object (no markdown):
-{
-  "status": "verified" | "warning" | "mismatch",
-  "reason": "one sentence explanation",
-  "confidence": 0-100
-}
+Respond ONLY with valid JSON (no markdown, no explanation):
+{"status":"verified","reason":"one sentence","confidence":95}
 
-Rules:
-- "verified" = document type matches AND company name found
-- "mismatch" = wrong document type OR different company name clearly visible
-- "warning" = uncertain, text unclear, or partial match
-- For company name: allow partial matches (e.g. "Protax" matches "Protax Protect Services Pvt Ltd")
-- If text is too short or unreadable, return "warning"`,
+status must be exactly one of: "verified", "warning", "mismatch"
+- verified = document type AND company name both match
+- mismatch = clearly wrong document type OR clearly different company
+- warning = uncertain or cannot clearly determine
+Allow partial company name matches (e.g. "Protax" matches "Protax Protect Services Pvt Ltd").`,
         }],
       });
 
       const raw = (msg.content[0] as { type: string; text: string }).text.trim();
-      result = JSON.parse(raw);
+      const result = JSON.parse(raw);
+      return NextResponse.json({ ok: true, ...result });
 
-    } else if (isImage) {
-      const arrayBuf = await file.arrayBuffer();
-      const base64   = Buffer.from(arrayBuf).toString("base64");
-      const mediaType = file.type as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    } else {
+      // Image
+      const arrayBuf  = await file.arrayBuffer();
+      const base64    = Buffer.from(arrayBuf).toString("base64");
+      const mediaType = (file.type || "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
       const msg = await client.messages.create({
         model: "claude-haiku-5-5",
@@ -84,48 +99,35 @@ Rules:
         messages: [{
           role: "user",
           content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: mediaType, data: base64 },
-            },
+            { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
             {
               type: "text",
-              text: `You are a document verification assistant for an Indian CA/CS firm.
-
-Verify this document image against:
+              text: `Verify this document image against:
 - Expected document type: "${docLabel}"
 - Expected company name: "${companyName}"
 
-Respond ONLY with a JSON object (no markdown):
-{
-  "status": "verified" | "warning" | "mismatch",
-  "reason": "one sentence explanation",
-  "confidence": 0-100
-}
+Respond ONLY with valid JSON (no markdown):
+{"status":"verified","reason":"one sentence","confidence":95}
 
-Rules:
-- "verified" = document type matches AND company name found
-- "mismatch" = wrong document type OR different company name clearly visible
-- "warning" = uncertain or cannot read clearly
-- Allow partial company name matches`,
+status: "verified" | "mismatch" | "warning"
+Allow partial company name matches.`,
             },
           ],
         }],
       });
 
       const raw = (msg.content[0] as { type: string; text: string }).text.trim();
-      result = JSON.parse(raw);
-
-    } else {
-      // Non-PDF/image — skip AI check
-      return NextResponse.json({ ok: true, status: "skipped", reason: "File type not supported for AI check" });
+      const result = JSON.parse(raw);
+      return NextResponse.json({ ok: true, ...result });
     }
 
-    return NextResponse.json({ ok: true, ...result });
-
   } catch (err) {
-    console.error("Verify error:", err);
-    // Don't block upload on AI error — just warn
-    return NextResponse.json({ ok: true, status: "warning", reason: "AI verification unavailable — please verify manually.", confidence: 0 });
+    console.error("Verify API error:", err);
+    return NextResponse.json({
+      ok: true,
+      status: "warning",
+      reason: "AI verification failed — please verify manually.",
+      confidence: 0,
+    });
   }
 }
