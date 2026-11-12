@@ -86,6 +86,15 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // AI Verification state
+  type VerifyStatus = "idle" | "verifying" | "verified" | "warning" | "mismatch" | "skipped";
+  const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>("idle");
+  const [verifyReason, setVerifyReason] = useState("");
+  const [verifyConfidence, setVerifyConfidence] = useState(0);
+  const [confirmStep, setConfirmStep] = useState(0); // 0=none, 1,2,3
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -123,6 +132,38 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
     return files.filter(f => f.category === category && f.docType === docType);
   }
 
+  async function runAiVerify(file: File) {
+    if (!uploadModal || !selectedCompany) return;
+    setVerifyStatus("verifying");
+    setVerifyReason("");
+    setConfirmStep(0);
+    setShowPreview(false);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("companyName", selectedCompany.companyName);
+      fd.append("docLabel", uploadModal.docLabel);
+      const res  = await fetch("/api/company-files/verify", { method: "POST", body: fd });
+      const data = await res.json();
+      setVerifyStatus(data.status ?? "warning");
+      setVerifyReason(data.reason ?? "");
+      setVerifyConfidence(data.confidence ?? 0);
+    } catch {
+      setVerifyStatus("warning");
+      setVerifyReason("AI check failed — please verify manually.");
+    }
+  }
+
+  function handleFileSelect(file: File) {
+    setUploadFile(file);
+    // Create blob URL for preview
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
+    setShowPreview(false);
+    setConfirmStep(0);
+    runAiVerify(file);
+  }
+
   async function handleUpload() {
     if (!uploadFile || !uploadModal || !selectedCompany) return;
     setUploading(true);
@@ -146,6 +187,10 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
       setUploadFile(null);
       setUploadExpiry("");
       setUploadNotes("");
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      setVerifyStatus("idle");
+      setConfirmStep(0);
       loadFiles(selectedCompany);
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : "Upload failed");
@@ -153,6 +198,25 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
       setUploading(false);
     }
   }
+
+  function closeUploadModal() {
+    setUploadModal(null);
+    setUploadFile(null);
+    setUploadExpiry("");
+    setUploadNotes("");
+    setUploadError("");
+    setVerifyStatus("idle");
+    setConfirmStep(0);
+    setShowPreview(false);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+  }
+
+  const needsConfirm = verifyStatus === "warning" || verifyStatus === "mismatch";
+  const canUpload = uploadFile && !uploading && (
+    verifyStatus === "verified" || verifyStatus === "skipped" ||
+    (needsConfirm && confirmStep >= 3)
+  );
 
   async function handleDelete() {
     if (!deleteId || !selectedCompany) return;
@@ -541,108 +605,244 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
       {/* ── Upload Modal ── */}
       {uploadModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-100">
-            <div className="flex items-center justify-between mb-5">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`bg-white rounded-2xl shadow-2xl border border-slate-100 transition-all duration-300 ${showPreview ? "w-full max-w-5xl" : "w-full max-w-md"}`}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <div>
                 <h3 className="text-sm font-bold text-slate-800">Upload Document</h3>
-                <p className="text-xs text-slate-400 mt-0.5">{uploadModal.docLabel}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{uploadModal.docLabel} — {selectedCompany?.companyName}</p>
               </div>
-              <button onClick={() => setUploadModal(null)} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+              <button onClick={closeUploadModal} className="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
                 <i className="ti ti-x" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              {/* Drop zone */}
-              <div
-                className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all ${
-                  uploadFile ? "border-emerald-300 bg-emerald-50" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50/30"
-                }`}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploadFile ? (
-                  <div>
-                    <i className="ti ti-file-check text-emerald-500 text-3xl block mb-2" />
-                    <p className="text-sm font-semibold text-slate-700">{uploadFile.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{formatBytes(uploadFile.size)} — click to change</p>
-                  </div>
-                ) : (
-                  <div>
-                    <i className="ti ti-cloud-upload text-slate-300 text-3xl block mb-2" />
-                    <p className="text-sm text-slate-500 font-medium">Click to select file</p>
-                    <p className="text-xs text-slate-400 mt-0.5">PDF, JPG, PNG, DOC, XLS — max 25 MB</p>
+            <div className={`flex ${showPreview ? "divide-x divide-slate-100" : ""}`}>
+
+              {/* ── Left: Form ── */}
+              <div className={`p-6 space-y-4 ${showPreview ? "w-96 flex-shrink-0 overflow-y-auto max-h-[80vh]" : "w-full"}`}>
+
+                {/* Drop zone */}
+                <div
+                  className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all ${
+                    uploadFile
+                      ? verifyStatus === "verified" ? "border-emerald-300 bg-emerald-50"
+                        : verifyStatus === "mismatch" ? "border-red-300 bg-red-50"
+                        : verifyStatus === "warning"  ? "border-amber-300 bg-amber-50"
+                        : "border-blue-200 bg-blue-50/30"
+                      : "border-slate-200 hover:border-blue-300 hover:bg-blue-50/30"
+                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploadFile ? (
+                    <div>
+                      <i className={`ti text-3xl block mb-2 ${
+                        verifyStatus === "verified" ? "ti-file-check text-emerald-500" :
+                        verifyStatus === "mismatch" ? "ti-file-x text-red-500" :
+                        verifyStatus === "warning"  ? "ti-file-alert text-amber-500" :
+                        "ti-file text-blue-400"
+                      }`} />
+                      <p className="text-sm font-semibold text-slate-700">{uploadFile.name}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{formatBytes(uploadFile.size)} — click to change</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <i className="ti ti-cloud-upload text-slate-300 text-3xl block mb-2" />
+                      <p className="text-sm text-slate-500 font-medium">Click to select file</p>
+                      <p className="text-xs text-slate-400 mt-0.5">PDF, JPG, PNG — max 25 MB</p>
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+                />
+
+                {/* AI Verification result */}
+                {verifyStatus === "verifying" && (
+                  <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
+                    <i className="ti ti-loader-2 animate-spin text-blue-500 text-lg flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700">AI is verifying your document…</p>
+                      <p className="text-[10px] text-blue-500 mt-0.5">Checking document type and company name</p>
+                    </div>
                   </div>
                 )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
-                onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
-              />
 
-              {uploadModal.hasFY && (
+                {verifyStatus === "verified" && (
+                  <div className="flex items-start gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <div className="w-7 h-7 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <i className="ti ti-check text-emerald-600 font-bold" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-emerald-700">Document Verified ✓</p>
+                      <p className="text-[11px] text-emerald-600 mt-0.5">{verifyReason}</p>
+                      <p className="text-[10px] text-emerald-500 mt-1">Confidence: {verifyConfidence}%</p>
+                    </div>
+                    {previewUrl && (
+                      <button onClick={() => setShowPreview(!showPreview)} className="text-[10px] text-emerald-600 hover:text-emerald-800 underline flex-shrink-0">
+                        {showPreview ? "Hide" : "Preview"}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {(verifyStatus === "warning" || verifyStatus === "mismatch") && (
+                  <div className={`px-4 py-3 border rounded-xl ${
+                    verifyStatus === "mismatch"
+                      ? "bg-red-50 border-red-200"
+                      : "bg-amber-50 border-amber-200"
+                  }`}>
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                        verifyStatus === "mismatch" ? "bg-red-100" : "bg-amber-100"
+                      }`}>
+                        <i className={`ti text-sm ${verifyStatus === "mismatch" ? "ti-alert-circle text-red-600" : "ti-alert-triangle text-amber-600"}`} />
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-xs font-bold ${verifyStatus === "mismatch" ? "text-red-700" : "text-amber-700"}`}>
+                          {verifyStatus === "mismatch" ? "Document Mismatch Detected" : "AI Could Not Verify"}
+                        </p>
+                        <p className={`text-[11px] mt-0.5 ${verifyStatus === "mismatch" ? "text-red-600" : "text-amber-600"}`}>
+                          {verifyReason}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Preview button */}
+                    {previewUrl && (
+                      <button
+                        onClick={() => setShowPreview(!showPreview)}
+                        className={`w-full py-2 rounded-xl text-xs font-semibold border transition-all mb-3 flex items-center justify-center gap-1.5 ${
+                          verifyStatus === "mismatch"
+                            ? "border-red-200 text-red-600 hover:bg-red-100"
+                            : "border-amber-200 text-amber-700 hover:bg-amber-100"
+                        }`}
+                      >
+                        <i className="ti ti-eye" />
+                        {showPreview ? "Hide Document" : "Open & Read Document Yourself →"}
+                      </button>
+                    )}
+
+                    {/* 3-step confirm */}
+                    <div className="space-y-2">
+                      {[
+                        { step: 1, text: "Are you sure this is the correct document?" },
+                        { step: 2, text: "Are you absolutely sure? This will be saved permanently." },
+                        { step: 3, text: "I have read the document and confirm it is correct." },
+                      ].map(({ step, text }) => (
+                        <button
+                          key={step}
+                          disabled={confirmStep < step - 1}
+                          onClick={() => setConfirmStep(s => Math.max(s, step))}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2 ${
+                            confirmStep >= step
+                              ? "bg-slate-700 text-white border-slate-700"
+                              : confirmStep >= step - 1
+                              ? verifyStatus === "mismatch"
+                                ? "border-red-300 text-red-700 hover:bg-red-100 cursor-pointer"
+                                : "border-amber-300 text-amber-700 hover:bg-amber-100 cursor-pointer"
+                              : "border-slate-200 text-slate-300 cursor-not-allowed"
+                          }`}
+                        >
+                          <span className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] border ${
+                            confirmStep >= step ? "bg-white text-slate-700 border-white" : "border-current"
+                          }`}>
+                            {confirmStep >= step ? <i className="ti ti-check text-[10px]" /> : step}
+                          </span>
+                          {text}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {uploadModal.hasFY && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 block mb-1.5">Financial Year</label>
+                    <select value={uploadFY} onChange={e => setUploadFY(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                      {FY_OPTIONS.map(fy => <option key={fy} value={fy}>{fy}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {uploadModal.hasExpiry && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 block mb-1.5">Expiry Date <span className="font-normal text-slate-400">(optional)</span></label>
+                    <input type="date" value={uploadExpiry} onChange={e => setUploadExpiry(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                )}
+
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Financial Year</label>
-                  <select
-                    value={uploadFY}
-                    onChange={e => setUploadFY(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Notes <span className="font-normal text-slate-400">(optional)</span></label>
+                  <input value={uploadNotes} onChange={e => setUploadNotes(e.target.value)}
+                    placeholder="e.g. Received from client on 10 Nov"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-300" />
+                </div>
+
+                {uploadError && (
+                  <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">
+                    <i className="ti ti-alert-circle" /> {uploadError}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button onClick={closeUploadModal}
+                    className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpload}
+                    disabled={!canUpload}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                      needsConfirm && confirmStep >= 3
+                        ? "bg-slate-800 text-white hover:bg-slate-900 shadow-md"
+                        : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-200"
+                    }`}
                   >
-                    {FY_OPTIONS.map(fy => <option key={fy} value={fy}>{fy}</option>)}
-                  </select>
+                    {uploading ? (
+                      <><i className="ti ti-loader-2 animate-spin" /> Uploading…</>
+                    ) : verifyStatus === "verifying" ? (
+                      <><i className="ti ti-loader-2 animate-spin" /> Verifying…</>
+                    ) : (
+                      <><i className="ti ti-brand-google-drive" /> Upload to Drive</>
+                    )}
+                  </button>
                 </div>
-              )}
-
-              {uploadModal.hasExpiry && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Expiry Date <span className="font-normal text-slate-400">(optional)</span></label>
-                  <input
-                    type="date"
-                    value={uploadExpiry}
-                    onChange={e => setUploadExpiry(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Notes <span className="font-normal text-slate-400">(optional)</span></label>
-                <input
-                  value={uploadNotes}
-                  onChange={e => setUploadNotes(e.target.value)}
-                  placeholder="e.g. Received from client on 10 Nov"
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-300"
-                />
               </div>
 
-              {uploadError && (
-                <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">
-                  <i className="ti ti-alert-circle" /> {uploadError}
+              {/* ── Right: Document Preview ── */}
+              {showPreview && previewUrl && (
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                      <i className="ti ti-eye text-slate-400" /> Document Preview
+                    </p>
+                    <p className="text-[10px] text-slate-400">Read carefully before confirming</p>
+                  </div>
+                  <div className="flex-1 p-3" style={{ minHeight: 500 }}>
+                    {uploadFile?.type.startsWith("image/") ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={previewUrl} alt="Document preview" className="w-full h-full object-contain rounded-xl" />
+                    ) : (
+                      <iframe
+                        src={previewUrl}
+                        className="w-full rounded-xl border border-slate-200"
+                        style={{ height: 560 }}
+                        title="Document preview"
+                      />
+                    )}
+                  </div>
                 </div>
               )}
 
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => setUploadModal(null)}
-                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpload}
-                  disabled={!uploadFile || uploading}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-blue-200 transition-all"
-                >
-                  {uploading ? (
-                    <><i className="ti ti-loader-2 animate-spin" /> Uploading…</>
-                  ) : (
-                    <><i className="ti ti-brand-google-drive" /> Upload to Drive</>
-                  )}
-                </button>
-              </div>
             </div>
           </div>
         </div>
