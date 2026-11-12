@@ -7,6 +7,14 @@ export const runtime = "nodejs";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function isPdfPasswordProtected(buffer: Buffer, isPdf: boolean): boolean {
+  if (!isPdf) return false;
+  // All encrypted PDFs must have an /Encrypt entry in their cross-reference dictionary (PDF spec)
+  const sample = buffer.slice(0, Math.min(buffer.length, 8192)).toString("latin1") +
+                 buffer.slice(Math.max(0, buffer.length - 4096)).toString("latin1");
+  return sample.includes("/Encrypt");
+}
+
 const PROMPT = (docLabel: string, companyName: string) =>
   `You are a document verification assistant for an Indian CA/CS firm.
 
@@ -52,7 +60,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const arrayBuf = await file.arrayBuffer();
-    const base64   = Buffer.from(arrayBuf).toString("base64");
+    const buffer   = Buffer.from(arrayBuf);
+
+    // Reject password-protected PDFs — /Encrypt entry is mandatory in any encrypted PDF
+    if (isPdfPasswordProtected(buffer, isPdf)) {
+      return NextResponse.json({
+        ok: false,
+        status: "mismatch",
+        reason: "This PDF is password-protected and cannot be verified or uploaded. Please upload an unlocked version.",
+        confidence: 0,
+      });
+    }
+
+    const base64   = buffer.toString("base64");
 
     // Build content block — Claude supports PDF natively as "document" type
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

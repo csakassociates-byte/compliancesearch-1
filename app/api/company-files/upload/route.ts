@@ -42,6 +42,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "File too large (max 25 MB)" }, { status: 400 });
   }
 
+  // Read buffer once — reused for password check and upload
+  const fileBuffer = Buffer.from(await file.arrayBuffer());
+
+  // Reject password-protected PDFs
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (isPdf) {
+    const sample = fileBuffer.slice(0, Math.min(fileBuffer.length, 8192)).toString("latin1") +
+                   fileBuffer.slice(Math.max(0, fileBuffer.length - 4096)).toString("latin1");
+    if (sample.includes("/Encrypt")) {
+      return NextResponse.json(
+        { error: "Password-protected PDFs cannot be uploaded. Please upload an unlocked version." },
+        { status: 400 }
+      );
+    }
+  }
+
   const accessToken = await getValidAccessToken(teamId);
   if (!accessToken) {
     return NextResponse.json({ error: "Google Drive not connected" }, { status: 400 });
@@ -55,8 +71,6 @@ export async function POST(req: NextRequest) {
 
   const companyFolderId = await getOrCreateDriveFolder(accessToken, companyName, rootFolderId);
   const catFolderId     = await getOrCreateDriveFolder(accessToken, category, companyFolderId);
-
-  const fileBuffer = Buffer.from(await file.arrayBuffer());
   const driveFile = await uploadFileToDrive(
     accessToken,
     fileBuffer,
