@@ -401,7 +401,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                       </div>
 
                       {/* Doc cards */}
-                      <div className="px-4 pb-4 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
+                      <div className="px-4 pb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
                         {cat.docs.map(doc => {
                           const uploaded = getFilesForDocType(cat.key, doc.type).filter(
                             f => !cat.hasFY || !f.financialYear || f.financialYear === selectedFY
@@ -410,82 +410,101 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                           const expiring = latest && isExpiringSoon(latest.expiryDate);
                           const expired  = latest && isExpired(latest.expiryDate);
 
+                          const cardState = expired ? "expired" : expiring ? "expiring" : latest ? "done" : "missing";
+                          const cardStyles = {
+                            done:     "border-emerald-200 bg-white shadow-sm shadow-emerald-100/60 hover:shadow-emerald-200/80",
+                            expiring: "border-amber-200 bg-white shadow-sm shadow-amber-100/60 hover:shadow-amber-200/80",
+                            expired:  "border-red-200 bg-white shadow-sm shadow-red-100/60 hover:shadow-red-200/80",
+                            missing:  "border-slate-200 bg-white hover:border-slate-300 hover:shadow-slate-100",
+                          }[cardState];
+
                           return (
                             <div
                               key={doc.type}
-                              className={`bg-white rounded-xl p-3 border transition-all group hover:shadow-md ${
-                                expired  ? "border-red-200 shadow-sm shadow-red-50"  :
-                                expiring ? "border-amber-200 shadow-sm shadow-amber-50" :
-                                latest   ? "border-emerald-200 shadow-sm shadow-emerald-50" :
-                                "border-slate-200 hover:border-slate-300"
-                              }`}
+                              className={`rounded-2xl border-[1.5px] p-4 transition-all duration-200 group hover:shadow-lg hover:-translate-y-0.5 ${cardStyles}`}
                             >
-                              {/* Doc name + status */}
-                              <div className="flex items-start justify-between gap-1 mb-2">
-                                <p className="text-[11px] font-semibold text-slate-700 leading-snug flex-1">{doc.label}</p>
-                                {latest ? (
-                                  expired ? (
-                                    <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold whitespace-nowrap flex-shrink-0">
-                                      <i className="ti ti-alert-circle text-[8px]" /> Expired
-                                    </span>
-                                  ) : expiring ? (
-                                    <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold whitespace-nowrap flex-shrink-0">
-                                      <i className="ti ti-clock text-[8px]" /> Expiring
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold whitespace-nowrap flex-shrink-0">
-                                      <i className="ti ti-check text-[8px]" /> Done
-                                    </span>
-                                  )
+                              {/* Top: icon + status badge */}
+                              <div className="flex items-start justify-between mb-3">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                  cardState === "done"     ? "bg-emerald-50 border border-emerald-100" :
+                                  cardState === "expiring" ? "bg-amber-50 border border-amber-100" :
+                                  cardState === "expired"  ? "bg-red-50 border border-red-100" :
+                                  "bg-slate-50 border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100"
+                                }`}>
+                                  <i className={`ti text-base ${
+                                    cardState === "done"     ? "ti-file-check text-emerald-500" :
+                                    cardState === "expiring" ? "ti-clock text-amber-500" :
+                                    cardState === "expired"  ? "ti-file-x text-red-500" :
+                                    "ti-file-plus text-slate-300 group-hover:text-blue-400"
+                                  }`} />
+                                </div>
+
+                                {cardState === "done" ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                                    <i className="ti ti-check text-[9px]" /> Done
+                                  </span>
+                                ) : cardState === "expiring" ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
+                                    <i className="ti ti-alert-triangle text-[9px]" /> Soon
+                                  </span>
+                                ) : cardState === "expired" ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 font-semibold">
+                                    <i className="ti ti-x text-[9px]" /> Expired
+                                  </span>
                                 ) : (
-                                  <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium whitespace-nowrap flex-shrink-0">
-                                    Missing
+                                  <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-400 border border-slate-200 font-medium">
+                                    Pending
                                   </span>
                                 )}
                               </div>
 
+                              {/* Doc name */}
+                              <p className="text-[12px] font-bold text-slate-700 leading-snug mb-1">{doc.label}</p>
+
                               {/* File info */}
                               {latest ? (
-                                <div className="mb-2">
-                                  <p className="text-[10px] text-slate-500 truncate" title={latest.fileName}>
-                                    <i className="ti ti-paperclip text-[9px] text-slate-300 mr-0.5" />
-                                    {latest.fileName}
+                                <div className="space-y-0.5 mb-3">
+                                  <p className="text-[10px] text-slate-400 truncate flex items-center gap-1" title={latest.fileName}>
+                                    <i className="ti ti-paperclip text-slate-300 flex-shrink-0" />
+                                    <span className="truncate">{latest.fileName}</span>
                                   </p>
-                                  {latest.fileSize && (
-                                    <p className="text-[10px] text-slate-400">{formatBytes(latest.fileSize)}</p>
-                                  )}
-                                  {latest.expiryDate && (
-                                    <p className={`text-[10px] mt-0.5 ${expired ? "text-red-500 font-medium" : expiring ? "text-amber-600 font-medium" : "text-slate-400"}`}>
-                                      <i className="ti ti-calendar text-[9px] mr-0.5" />
-                                      {new Date(latest.expiryDate).toLocaleDateString("en-IN")}
-                                    </p>
-                                  )}
+                                  <div className="flex items-center gap-2">
+                                    {latest.fileSize && (
+                                      <span className="text-[10px] text-slate-400">{formatBytes(latest.fileSize)}</span>
+                                    )}
+                                    {latest.expiryDate && (
+                                      <span className={`text-[10px] font-medium flex items-center gap-0.5 ${
+                                        expired ? "text-red-500" : expiring ? "text-amber-600" : "text-slate-400"
+                                      }`}>
+                                        <i className="ti ti-calendar text-[9px]" />
+                                        {new Date(latest.expiryDate).toLocaleDateString("en-IN")}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
-                                <div className="mb-2 h-8 flex items-center">
-                                  <p className="text-[10px] text-slate-300 italic">Not uploaded yet</p>
-                                </div>
+                                <p className="text-[10px] text-slate-300 italic mb-3">Not uploaded yet</p>
                               )}
 
-                              {/* Actions */}
-                              <div className="flex items-center gap-1 pt-1.5 border-t border-slate-100">
-                                {latest?.driveWebViewLink && (
+                              {/* Action row */}
+                              <div className="flex items-center gap-1.5 pt-2.5 border-t border-slate-100">
+                                {latest?.driveWebViewLink ? (
                                   <a
                                     href={latest.driveWebViewLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-0.5 text-[10px] text-blue-500 hover:text-blue-700 font-medium"
+                                    className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 font-semibold transition-colors"
                                   >
                                     <i className="ti ti-eye text-[11px]" /> View
                                   </a>
-                                )}
+                                ) : null}
                                 {latest && (
                                   <button
                                     onClick={() => setDeleteId(latest.id)}
-                                    className="inline-flex items-center gap-0.5 text-[10px] text-slate-300 hover:text-red-500 transition-colors"
+                                    className="inline-flex items-center text-[10px] text-slate-200 hover:text-red-400 transition-colors"
                                     title="Remove"
                                   >
-                                    <i className="ti ti-trash text-[11px]" />
+                                    <i className="ti ti-trash text-sm" />
                                   </button>
                                 )}
                                 <button
@@ -493,8 +512,10 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                                     setUploadModal({ category: cat.key, docType: doc.type, docLabel: doc.label, hasExpiry: !!doc.hasExpiry, hasFY: !!cat.hasFY });
                                     setUploadFile(null); setUploadExpiry(""); setUploadNotes(""); setUploadFY(selectedFY); setUploadError("");
                                   }}
-                                  className={`inline-flex items-center gap-0.5 text-[10px] font-medium transition-colors ml-auto ${
-                                    latest ? "text-slate-400 hover:text-blue-500" : "text-blue-500 hover:text-blue-700"
+                                  className={`ml-auto inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-all ${
+                                    latest
+                                      ? "text-slate-500 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 border border-slate-100"
+                                      : "text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100"
                                   }`}
                                 >
                                   <i className="ti ti-upload text-[11px]" />
@@ -503,7 +524,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                               </div>
 
                               {uploaded.length > 1 && (
-                                <p className="text-[9px] text-slate-400 mt-1 text-right">{uploaded.length} versions</p>
+                                <p className="text-[9px] text-slate-400 mt-1.5 text-right">{uploaded.length} versions</p>
                               )}
                             </div>
                           );
