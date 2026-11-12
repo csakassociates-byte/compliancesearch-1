@@ -929,8 +929,14 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
       {/* ── Share Modal ── */}
       {shareModal && selectedCompany && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setShareModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -942,8 +948,12 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   <p className="text-[11px] text-indigo-200 mt-0.5">{selectedCompany.companyName}</p>
                 </div>
               </div>
-              <button onClick={() => setShareModal(false)} className="text-white/60 hover:text-white">
-                <i className="ti ti-x text-lg" />
+              <button
+                onClick={() => setShareModal(false)}
+                className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-all"
+                title="Close"
+              >
+                <i className="ti ti-x text-white text-base" />
               </button>
             </div>
 
