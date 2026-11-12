@@ -47,13 +47,22 @@ function isExpiringSoon(dateStr: string | null): boolean {
   if (!dateStr) return false;
   const exp = new Date(dateStr);
   const diff = exp.getTime() - Date.now();
-  return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000; // within 90 days
+  return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000;
 }
 
 function isExpired(dateStr: string | null): boolean {
   if (!dateStr) return false;
   return new Date(dateStr).getTime() < Date.now();
 }
+
+const CAT_COLORS: Record<string, { bg: string; border: string; icon: string; badge: string; iconBg: string }> = {
+  INCORPORATION: { bg: "from-blue-50 to-indigo-50",    border: "border-blue-100",   icon: "text-blue-600",   badge: "bg-blue-100 text-blue-700",   iconBg: "bg-blue-100" },
+  CERTIFICATES:  { bg: "from-emerald-50 to-teal-50",   border: "border-emerald-100",icon: "text-emerald-600",badge: "bg-emerald-100 text-emerald-700",iconBg: "bg-emerald-100" },
+  ANNUAL_FILING: { bg: "from-violet-50 to-purple-50",  border: "border-violet-100", icon: "text-violet-600", badge: "bg-violet-100 text-violet-700", iconBg: "bg-violet-100" },
+  DIRECTORS:     { bg: "from-amber-50 to-orange-50",   border: "border-amber-100",  icon: "text-amber-600",  badge: "bg-amber-100 text-amber-700",   iconBg: "bg-amber-100" },
+  RESOLUTIONS:   { bg: "from-teal-50 to-cyan-50",      border: "border-teal-100",   icon: "text-teal-600",   badge: "bg-teal-100 text-teal-700",     iconBg: "bg-teal-100" },
+  TAX:           { bg: "from-rose-50 to-red-50",       border: "border-rose-100",   icon: "text-rose-600",   badge: "bg-rose-100 text-rose-700",     iconBg: "bg-rose-100" },
+};
 
 export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(
@@ -66,13 +75,8 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [search, setSearch] = useState("");
   const [selectedFY, setSelectedFY] = useState(defaultFY);
 
-  // Upload state
   const [uploadModal, setUploadModal] = useState<{
-    category: string;
-    docType: string;
-    docLabel: string;
-    hasExpiry: boolean;
-    hasFY: boolean;
+    category: string; docType: string; docLabel: string; hasExpiry: boolean; hasFY: boolean;
   } | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadExpiry, setUploadExpiry] = useState("");
@@ -82,13 +86,11 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Delete confirm
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const FY_OPTIONS = ["2026-27", "2025-26", "2024-25", "2023-24", "2022-23", "2021-22"];
 
-  // Load Drive status
   useEffect(() => {
     setDriveLoading(true);
     fetch("/api/drive/status")
@@ -98,7 +100,6 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
       .finally(() => setDriveLoading(false));
   }, []);
 
-  // Load files when company changes
   const loadFiles = useCallback((company: Company) => {
     setFilesLoading(true);
     fetch(`/api/company-files?companyId=${company.companyId}`)
@@ -118,12 +119,6 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
     c.cin.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Count uploaded files per company (approximation from selected)
-  function getDocCountLabel(company: Company): string {
-    if (company.companyId !== selectedCompany?.companyId) return "";
-    return `${files.length} file${files.length !== 1 ? "s" : ""}`;
-  }
-
   function getFilesForDocType(category: string, docType: string): CompanyFile[] {
     return files.filter(f => f.category === category && f.docType === docType);
   }
@@ -141,7 +136,6 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
     if (uploadModal.hasFY) fd.append("financialYear", uploadFY);
     if (uploadModal.hasExpiry && uploadExpiry) fd.append("expiryDate", uploadExpiry);
     if (uploadNotes) fd.append("notes", uploadNotes);
-
     try {
       const res = await fetch("/api/company-files/upload", { method: "POST", body: fd });
       if (!res.ok) {
@@ -174,99 +168,110 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
     setDriveStatus({ connected: false, email: null, folderId: null });
   }
 
-  // ── Drive not connected banner ──
+  // ── Drive not connected ──
   if (!driveLoading && !driveStatus?.connected) {
     return (
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-800">Company Documents</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Store and manage documents for each company — COI, MOA/AOA, annual filings, certificates and more.
-          </p>
-        </div>
-
-        {/* Connect card */}
+      <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 to-blue-50/30">
         <div className="flex-1 flex items-center justify-center p-8">
-          <div className="max-w-md text-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <i className="ti ti-brand-google-drive text-3xl text-blue-500" aria-hidden="true" />
+          <div className="max-w-sm text-center">
+            {/* Animated Drive icon */}
+            <div className="relative mx-auto mb-6 w-24 h-24">
+              <div className="absolute inset-0 bg-blue-100 rounded-3xl rotate-6 opacity-60" />
+              <div className="absolute inset-0 bg-blue-200 rounded-3xl -rotate-3 opacity-40" />
+              <div className="relative w-24 h-24 bg-white rounded-3xl shadow-lg flex items-center justify-center border border-blue-100">
+                <i className="ti ti-brand-google-drive text-5xl text-blue-500" />
+              </div>
             </div>
-            <h3 className="text-base font-semibold text-slate-800 mb-2">Connect Google Drive</h3>
-            <p className="text-sm text-slate-500 mb-6">
-              Documents are stored in your organisation's Google Drive — organised by company and category.
-              Connect once; all team members can view and upload.
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Connect Google Drive</h3>
+            <p className="text-sm text-slate-500 mb-8 leading-relaxed">
+              Store all client documents securely in your organisation's Google Drive — organised by company and category. Connect once; your team can access everything.
             </p>
             <a
               href="/api/drive/auth"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2.5 px-6 py-3 bg-blue-600 text-white text-sm font-semibold rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all hover:shadow-blue-300 hover:-translate-y-0.5"
             >
-              <i className="ti ti-brand-google" aria-hidden="true" />
+              <i className="ti ti-brand-google text-base" />
               Connect with Google
             </a>
-            <p className="text-xs text-slate-400 mt-4">
-              We request only <code>drive.file</code> scope — we can only see files we create.
+            <p className="text-xs text-slate-400 mt-5 flex items-center justify-center gap-1.5">
+              <i className="ti ti-lock text-slate-300" />
+              Only sees files created by this app — no access to existing Drive content
             </p>
-            {!process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ENABLED && (
-              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 text-left">
-                <strong>Setup required:</strong> Add <code>GOOGLE_DRIVE_CLIENT_ID</code> and{" "}
-                <code>GOOGLE_DRIVE_CLIENT_SECRET</code> to your <code>.env.local</code> file.
-                See setup guide in the project README.
-              </div>
-            )}
           </div>
         </div>
       </div>
     );
   }
 
+  const uploadedCount = files.length;
+  const expiringCount = files.filter(f => isExpiringSoon(f.expiryDate)).length;
+  const expiredCount  = files.filter(f => isExpired(f.expiryDate)).length;
+
   return (
     <div className="flex h-full overflow-hidden">
-      {/* ── Left sidebar ── */}
-      <div className="w-56 flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50/50">
-        {/* Search */}
-        <div className="p-3 border-b border-slate-100">
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
-            <i className="ti ti-search text-slate-400 text-sm" aria-hidden="true" />
+      {/* ── Left Sidebar ── */}
+      <div className="w-60 flex-shrink-0 border-r border-slate-100 flex flex-col bg-white">
+        {/* Sidebar header */}
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Companies</p>
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+            <i className="ti ti-search text-slate-300 text-sm" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search companies…"
-              className="flex-1 text-xs bg-transparent outline-none text-slate-700 placeholder-slate-400"
+              placeholder="Search by name or CIN…"
+              className="flex-1 text-xs bg-transparent outline-none text-slate-700 placeholder-slate-300"
             />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-slate-300 hover:text-slate-500">
+                <i className="ti ti-x text-xs" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Company list */}
-        <div className="flex-1 overflow-y-auto py-1">
+        <div className="flex-1 overflow-y-auto">
           {filteredCompanies.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-slate-400 text-center">No companies found</p>
+            <div className="px-4 py-8 text-center">
+              <i className="ti ti-building-off text-3xl text-slate-200 block mb-2" />
+              <p className="text-xs text-slate-400">No companies found</p>
+            </div>
           ) : (
-            filteredCompanies.map(company => {
+            filteredCompanies.map((company, idx) => {
               const initials = company.companyName
                 .split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase().slice(0, 2);
               const isSelected = company.companyId === selectedCompany?.companyId;
+              const colors = ["bg-blue-500","bg-violet-500","bg-emerald-500","bg-amber-500","bg-rose-500","bg-teal-500","bg-indigo-500","bg-orange-500"];
+              const color = colors[idx % colors.length];
               return (
                 <button
                   key={company.companyId}
                   onClick={() => setSelectedCompany(company)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
-                    isSelected ? "bg-blue-50 border-r-2 border-blue-500" : "hover:bg-slate-100"
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all border-l-[3px] ${
+                    isSelected
+                      ? "bg-blue-50 border-l-blue-500"
+                      : "border-l-transparent hover:bg-slate-50 hover:border-l-slate-200"
                   }`}
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-semibold flex-shrink-0 ${
-                    isSelected ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-600"
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 shadow-sm ${
+                    isSelected ? "bg-blue-500" : color
                   }`}>
                     {initials}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className={`text-xs font-medium truncate ${isSelected ? "text-blue-700" : "text-slate-700"}`}>
+                    <div className={`text-xs font-semibold truncate leading-tight ${isSelected ? "text-blue-700" : "text-slate-700"}`}>
                       {company.companyName}
                     </div>
-                    {isSelected && (
-                      <div className="text-[10px] text-blue-500 mt-0.5">{getDocCountLabel(company)}</div>
-                    )}
+                    <div className={`text-[10px] mt-0.5 truncate ${isSelected ? "text-blue-400" : "text-slate-400"}`}>
+                      {company.cin || company.entityType || ""}
+                    </div>
                   </div>
+                  {isSelected && files.length > 0 && (
+                    <span className="text-[10px] bg-blue-100 text-blue-600 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                      {files.length}
+                    </span>
+                  )}
                 </button>
               );
             })
@@ -274,161 +279,202 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
         </div>
       </div>
 
-      {/* ── Right panel ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* ── Right Panel ── */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
         {!selectedCompany ? (
-          <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-            Select a company to view documents
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-300">
+            <i className="ti ti-building text-6xl" />
+            <p className="text-sm font-medium">Select a company to view documents</p>
           </div>
         ) : (
           <>
             {/* Company header */}
-            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-800">{selectedCompany.companyName}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">{selectedCompany.cin}</p>
+            <div className="px-5 py-3.5 bg-white border-b border-slate-100 flex items-center justify-between flex-shrink-0 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-200">
+                  {selectedCompany.companyName.split(" ").slice(0,2).map(w=>w[0]).join("").toUpperCase().slice(0,2)}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 leading-tight">{selectedCompany.companyName}</h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{selectedCompany.cin}</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {/* FY selector for annual docs */}
+
+              <div className="flex items-center gap-2.5">
+                {/* Stats pills */}
+                {!filesLoading && (
+                  <div className="hidden md:flex items-center gap-1.5">
+                    {uploadedCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        {uploadedCount} uploaded
+                      </span>
+                    )}
+                    {expiringCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        {expiringCount} expiring
+                      </span>
+                    )}
+                    {expiredCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-100 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                        {expiredCount} expired
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* FY selector */}
                 <select
                   value={selectedFY}
                   onChange={e => setSelectedFY(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm font-medium"
                 >
                   {FY_OPTIONS.map(fy => (
                     <option key={fy} value={fy}>FY {fy}</option>
                   ))}
                 </select>
+
                 {/* Drive badge */}
                 {driveStatus?.connected && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                    <span className="text-[10px] text-emerald-700 font-medium truncate max-w-[140px]">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl shadow-sm">
+                    <i className="ti ti-brand-google-drive text-emerald-500 text-sm" />
+                    <span className="text-[10px] text-emerald-700 font-semibold truncate max-w-[120px]">
                       {driveStatus.email}
                     </span>
                     <button
                       onClick={disconnectDrive}
-                      className="text-[10px] text-emerald-500 hover:text-red-500 ml-0.5"
+                      className="text-emerald-400 hover:text-red-400 ml-0.5 transition-colors"
                       title="Disconnect Drive"
                     >
-                      <i className="ti ti-x" />
+                      <i className="ti ti-x text-[10px]" />
                     </button>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Summary strip */}
-            {!filesLoading && files.length > 0 && (
-              <div className="px-5 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-4 text-[11px] text-slate-500 flex-shrink-0">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  {files.length} uploaded
-                </span>
-                {files.filter(f => isExpiringSoon(f.expiryDate)).length > 0 && (
-                  <span className="flex items-center gap-1 text-amber-600">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    {files.filter(f => isExpiringSoon(f.expiryDate)).length} expiring soon
-                  </span>
-                )}
-                {files.filter(f => isExpired(f.expiryDate)).length > 0 && (
-                  <span className="flex items-center gap-1 text-red-600">
-                    <span className="w-2 h-2 rounded-full bg-red-500" />
-                    {files.filter(f => isExpired(f.expiryDate)).length} expired
-                  </span>
-                )}
-              </div>
-            )}
-
             {/* Categories */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {filesLoading ? (
-                <div className="text-sm text-slate-400 text-center pt-10">Loading…</div>
+                <div className="flex flex-col items-center justify-center pt-16 gap-3">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs text-slate-400">Loading documents…</p>
+                </div>
               ) : (
                 DOC_CATEGORIES.map(cat => {
-                  // For FY-based categories, show docs for selectedFY + all without FY
-                  const catDocs = cat.hasFY
-                    ? cat.docs
-                    : cat.docs;
+                  const colors = CAT_COLORS[cat.key] ?? CAT_COLORS.INCORPORATION;
+                  const catUploaded = cat.docs.reduce((acc, doc) => {
+                    return acc + getFilesForDocType(cat.key, doc.type).filter(
+                      f => !cat.hasFY || !f.financialYear || f.financialYear === selectedFY
+                    ).length;
+                  }, 0);
 
                   return (
-                    <div key={cat.key}>
-                      <div className="flex items-center gap-2 mb-2.5">
-                        <i className={`ti ${cat.icon} text-slate-400 text-sm`} aria-hidden="true" />
-                        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                          {cat.label}
-                          {cat.hasFY && <span className="ml-1.5 font-normal normal-case text-slate-400">— FY {selectedFY}</span>}
-                        </h4>
+                    <div key={cat.key} className={`rounded-2xl border ${colors.border} bg-gradient-to-br ${colors.bg} overflow-hidden`}>
+                      {/* Category header */}
+                      <div className="px-4 py-3 flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-xl ${colors.iconBg} flex items-center justify-center`}>
+                          <i className={`ti ${cat.icon} text-base ${colors.icon}`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">{cat.label}</h4>
+                            {cat.hasFY && (
+                              <span className="text-[10px] text-slate-400 font-medium bg-white/60 px-1.5 py-0.5 rounded-full">
+                                FY {selectedFY}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {catUploaded} of {cat.docs.length} documents uploaded
+                          </p>
+                        </div>
+                        {/* Progress bar */}
+                        <div className="w-16 h-1.5 bg-white/60 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${colors.icon.replace("text-","bg-")} transition-all`}
+                            style={{ width: `${cat.docs.length > 0 ? (catUploaded / cat.docs.length) * 100 : 0}%` }}
+                          />
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
-                        {catDocs.map(doc => {
+                      {/* Doc cards */}
+                      <div className="px-4 pb-4 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {cat.docs.map(doc => {
                           const uploaded = getFilesForDocType(cat.key, doc.type).filter(
                             f => !cat.hasFY || !f.financialYear || f.financialYear === selectedFY
                           );
-                          const latest = uploaded[0] ?? null;
+                          const latest   = uploaded[0] ?? null;
                           const expiring = latest && isExpiringSoon(latest.expiryDate);
                           const expired  = latest && isExpired(latest.expiryDate);
 
                           return (
                             <div
                               key={doc.type}
-                              className="border border-slate-200 rounded-xl p-3 bg-white hover:border-slate-300 transition-colors group"
+                              className={`bg-white rounded-xl p-3 border transition-all group hover:shadow-md ${
+                                expired  ? "border-red-200 shadow-sm shadow-red-50"  :
+                                expiring ? "border-amber-200 shadow-sm shadow-amber-50" :
+                                latest   ? "border-emerald-200 shadow-sm shadow-emerald-50" :
+                                "border-slate-200 hover:border-slate-300"
+                              }`}
                             >
-                              <div className="flex items-start justify-between gap-1">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-[11px] font-semibold text-slate-700 leading-tight">{doc.label}</p>
-                                  {latest ? (
-                                    <>
-                                      <p className="text-[10px] text-slate-400 mt-0.5 truncate" title={latest.fileName}>
-                                        {latest.fileName}
-                                      </p>
-                                      {latest.fileSize && (
-                                        <p className="text-[10px] text-slate-400">{formatBytes(latest.fileSize)}</p>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <p className="text-[10px] text-slate-400 mt-0.5">Not uploaded</p>
-                                  )}
-                                </div>
-
-                                {/* Status badge */}
+                              {/* Doc name + status */}
+                              <div className="flex items-start justify-between gap-1 mb-2">
+                                <p className="text-[11px] font-semibold text-slate-700 leading-snug flex-1">{doc.label}</p>
                                 {latest ? (
                                   expired ? (
-                                    <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 font-medium whitespace-nowrap flex-shrink-0">
-                                      Expired
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold whitespace-nowrap flex-shrink-0">
+                                      <i className="ti ti-alert-circle text-[8px]" /> Expired
                                     </span>
                                   ) : expiring ? (
-                                    <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium whitespace-nowrap flex-shrink-0">
-                                      Expiring
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold whitespace-nowrap flex-shrink-0">
+                                      <i className="ti ti-clock text-[8px]" /> Expiring
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium whitespace-nowrap flex-shrink-0">
-                                      ✓ Uploaded
+                                    <span className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold whitespace-nowrap flex-shrink-0">
+                                      <i className="ti ti-check text-[8px]" /> Done
                                     </span>
                                   )
                                 ) : (
-                                  <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200 font-medium whitespace-nowrap flex-shrink-0">
+                                  <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium whitespace-nowrap flex-shrink-0">
                                     Missing
                                   </span>
                                 )}
                               </div>
 
-                              {/* Expiry date */}
-                              {latest?.expiryDate && (
-                                <p className={`text-[10px] mt-1 ${expired ? "text-red-500" : expiring ? "text-amber-600" : "text-slate-400"}`}>
-                                  Expires: {new Date(latest.expiryDate).toLocaleDateString("en-IN")}
-                                </p>
+                              {/* File info */}
+                              {latest ? (
+                                <div className="mb-2">
+                                  <p className="text-[10px] text-slate-500 truncate" title={latest.fileName}>
+                                    <i className="ti ti-paperclip text-[9px] text-slate-300 mr-0.5" />
+                                    {latest.fileName}
+                                  </p>
+                                  {latest.fileSize && (
+                                    <p className="text-[10px] text-slate-400">{formatBytes(latest.fileSize)}</p>
+                                  )}
+                                  {latest.expiryDate && (
+                                    <p className={`text-[10px] mt-0.5 ${expired ? "text-red-500 font-medium" : expiring ? "text-amber-600 font-medium" : "text-slate-400"}`}>
+                                      <i className="ti ti-calendar text-[9px] mr-0.5" />
+                                      {new Date(latest.expiryDate).toLocaleDateString("en-IN")}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="mb-2 h-8 flex items-center">
+                                  <p className="text-[10px] text-slate-300 italic">Not uploaded yet</p>
+                                </div>
                               )}
 
-                              {/* Action buttons */}
-                              <div className="flex items-center gap-1 mt-2">
+                              {/* Actions */}
+                              <div className="flex items-center gap-1 pt-1.5 border-t border-slate-100">
                                 {latest?.driveWebViewLink && (
                                   <a
                                     href={latest.driveWebViewLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-0.5"
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-blue-500 hover:text-blue-700 font-medium"
                                   >
                                     <i className="ti ti-eye text-[11px]" /> View
                                   </a>
@@ -436,30 +482,19 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                                 {latest && (
                                   <button
                                     onClick={() => setDeleteId(latest.id)}
-                                    className="text-[10px] text-slate-400 hover:text-red-500 flex items-center gap-0.5 ml-auto"
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-slate-300 hover:text-red-500 transition-colors"
+                                    title="Remove"
                                   >
-                                    <i className="ti ti-trash text-[11px]" /> Remove
+                                    <i className="ti ti-trash text-[11px]" />
                                   </button>
                                 )}
                                 <button
                                   onClick={() => {
-                                    setUploadModal({
-                                      category: cat.key,
-                                      docType: doc.type,
-                                      docLabel: doc.label,
-                                      hasExpiry: !!doc.hasExpiry,
-                                      hasFY: !!cat.hasFY,
-                                    });
-                                    setUploadFile(null);
-                                    setUploadExpiry("");
-                                    setUploadNotes("");
-                                    setUploadFY(selectedFY);
-                                    setUploadError("");
+                                    setUploadModal({ category: cat.key, docType: doc.type, docLabel: doc.label, hasExpiry: !!doc.hasExpiry, hasFY: !!cat.hasFY });
+                                    setUploadFile(null); setUploadExpiry(""); setUploadNotes(""); setUploadFY(selectedFY); setUploadError("");
                                   }}
-                                  className={`text-[10px] flex items-center gap-0.5 ${
-                                    latest
-                                      ? "text-slate-400 hover:text-blue-600 ml-1"
-                                      : "text-blue-600 hover:text-blue-800 ml-auto"
+                                  className={`inline-flex items-center gap-0.5 text-[10px] font-medium transition-colors ml-auto ${
+                                    latest ? "text-slate-400 hover:text-blue-500" : "text-blue-500 hover:text-blue-700"
                                   }`}
                                 >
                                   <i className="ti ti-upload text-[11px]" />
@@ -467,9 +502,8 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                                 </button>
                               </div>
 
-                              {/* Multiple versions note */}
                               {uploaded.length > 1 && (
-                                <p className="text-[10px] text-slate-400 mt-1">{uploaded.length} versions</p>
+                                <p className="text-[9px] text-slate-400 mt-1 text-right">{uploaded.length} versions</p>
                               )}
                             </div>
                           );
@@ -486,103 +520,105 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
       {/* ── Upload Modal ── */}
       {uploadModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-slate-800">Upload — {uploadModal.docLabel}</h3>
-              <button onClick={() => setUploadModal(null)} className="text-slate-400 hover:text-slate-600">
-                <i className="ti ti-x text-lg" />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-100">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">Upload Document</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{uploadModal.docLabel}</p>
+              </div>
+              <button onClick={() => setUploadModal(null)} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                <i className="ti ti-x" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              {/* File picker */}
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">File (PDF, JPG, PNG, etc. — max 25 MB)</label>
-                <div
-                  className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {uploadFile ? (
-                    <div className="text-sm text-slate-700">
-                      <i className="ti ti-file-check text-emerald-500 text-2xl block mb-1" />
-                      <p className="font-medium">{uploadFile.name}</p>
-                      <p className="text-xs text-slate-400">{formatBytes(uploadFile.size)}</p>
-                    </div>
-                  ) : (
-                    <div className="text-slate-400">
-                      <i className="ti ti-upload text-2xl block mb-1" />
-                      <p className="text-xs">Click to select file</p>
-                    </div>
-                  )}
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
-                  onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
-                />
+            <div className="space-y-4">
+              {/* Drop zone */}
+              <div
+                className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all ${
+                  uploadFile ? "border-emerald-300 bg-emerald-50" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50/30"
+                }`}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploadFile ? (
+                  <div>
+                    <i className="ti ti-file-check text-emerald-500 text-3xl block mb-2" />
+                    <p className="text-sm font-semibold text-slate-700">{uploadFile.name}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{formatBytes(uploadFile.size)} — click to change</p>
+                  </div>
+                ) : (
+                  <div>
+                    <i className="ti ti-cloud-upload text-slate-300 text-3xl block mb-2" />
+                    <p className="text-sm text-slate-500 font-medium">Click to select file</p>
+                    <p className="text-xs text-slate-400 mt-0.5">PDF, JPG, PNG, DOC, XLS — max 25 MB</p>
+                  </div>
+                )}
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx,.xls"
+                onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
+              />
 
-              {/* FY selector */}
               {uploadModal.hasFY && (
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">Financial Year</label>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Financial Year</label>
                   <select
                     value={uploadFY}
                     onChange={e => setUploadFY(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   >
                     {FY_OPTIONS.map(fy => <option key={fy} value={fy}>{fy}</option>)}
                   </select>
                 </div>
               )}
 
-              {/* Expiry date */}
               {uploadModal.hasExpiry && (
                 <div>
-                  <label className="text-xs text-slate-500 block mb-1">Expiry Date (optional)</label>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Expiry Date <span className="font-normal text-slate-400">(optional)</span></label>
                   <input
                     type="date"
                     value={uploadExpiry}
                     onChange={e => setUploadExpiry(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               )}
 
-              {/* Notes */}
               <div>
-                <label className="text-xs text-slate-500 block mb-1">Notes (optional)</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Notes <span className="font-normal text-slate-400">(optional)</span></label>
                 <input
                   value={uploadNotes}
                   onChange={e => setUploadNotes(e.target.value)}
                   placeholder="e.g. Received from client on 10 Nov"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-300"
                 />
               </div>
 
               {uploadError && (
-                <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{uploadError}</p>
+                <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 px-3 py-2.5 rounded-xl border border-red-100">
+                  <i className="ti ti-alert-circle" /> {uploadError}
+                </div>
               )}
 
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => setUploadModal(null)}
-                  className="flex-1 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50"
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleUpload}
                   disabled={!uploadFile || uploading}
-                  className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-blue-200 transition-all"
                 >
                   {uploading ? (
                     <><i className="ti ti-loader-2 animate-spin" /> Uploading…</>
                   ) : (
-                    <><i className="ti ti-upload" /> Upload to Drive</>
+                    <><i className="ti ti-brand-google-drive" /> Upload to Drive</>
                   )}
                 </button>
               </div>
@@ -593,30 +629,30 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
       {/* ── Delete Confirm ── */}
       {deleteId && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-                <i className="ti ti-trash text-red-500 text-lg" />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-100">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-11 h-11 bg-red-50 rounded-2xl flex items-center justify-center border border-red-100">
+                <i className="ti ti-trash text-red-500 text-xl" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-slate-800">Remove document?</h3>
-                <p className="text-xs text-slate-500 mt-0.5">This will also delete the file from Google Drive.</p>
+                <h3 className="text-sm font-bold text-slate-800">Remove document?</h3>
+                <p className="text-xs text-slate-400 mt-0.5">This will also delete the file from Google Drive.</p>
               </div>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setDeleteId(null)}
-                className="flex-1 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50"
+                className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50 shadow-md shadow-red-100"
               >
-                {deleting ? "Removing…" : "Remove"}
+                {deleting ? "Removing…" : "Yes, Remove"}
               </button>
             </div>
           </div>

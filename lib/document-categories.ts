@@ -23,7 +23,8 @@ export const DOC_CATEGORIES: CategoryDefinition[] = [
     color: "blue",
     docs: [
       { type: "COI",        label: "Certificate of Incorporation", required: true },
-      { type: "MOA_AOA",   label: "MOA & AOA",                    required: true },
+      { type: "MOA",        label: "MOA (Memorandum of Association)", required: true },
+      { type: "AOA",        label: "AOA (Articles of Association)",  required: true },
       { type: "PAN",        label: "PAN Card",                     required: true },
       { type: "TAN",        label: "TAN Card" },
       { type: "SHOP_ACT",  label: "Shop & Establishment" },
