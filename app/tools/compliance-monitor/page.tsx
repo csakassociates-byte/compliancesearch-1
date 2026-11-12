@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { parseCompanyExcel } from "@/lib/company-excel-parser";
+import CompanyDocumentsTab from "@/components/CompanyDocumentsTab";
 
 interface ComplianceRow {
   companyId: string;
@@ -129,7 +130,16 @@ const infoPill = `${pb} bg-blue-50 text-blue-700 border-blue-100`;
 
 export default function ComplianceMonitorPage() {
   const { status } = useSession({ required: true });
-  const [mainTab, setMainTab] = useState<"companies" | "llp">("companies");
+  const [mainTab, setMainTab] = useState<"companies" | "llp" | "documents">("companies");
+  const [driveBanner, setDriveBanner] = useState<"connected" | "error" | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab") as "companies" | "llp" | "documents" | null;
+    if (tab) setMainTab(tab);
+    if (params.get("driveConnected")) setDriveBanner("connected");
+    else if (params.get("driveError")) setDriveBanner("error");
+  }, []);
   const [fy, setFy] = useState(getDefaultFY);
   const [rows, setRows] = useState<ComplianceRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1177,6 +1187,20 @@ export default function ComplianceMonitorPage() {
       <main className="min-h-screen bg-slate-50">
         <div className="max-w-[1400px] mx-auto px-4 py-8">
 
+          {/* Drive connection banner */}
+          {driveBanner === "connected" && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
+              <span className="text-sm text-emerald-800 font-medium">✓ Google Drive connected successfully. You can now upload documents.</span>
+              <button onClick={() => setDriveBanner(null)} className="text-emerald-500 hover:text-emerald-700 text-lg leading-none">×</button>
+            </div>
+          )}
+          {driveBanner === "error" && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl mb-4">
+              <span className="text-sm text-red-800 font-medium">⚠ Google Drive connection failed. Please try again.</span>
+              <button onClick={() => setDriveBanner(null)} className="text-red-500 hover:text-red-700 text-lg leading-none">×</button>
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
             <div>
@@ -1211,6 +1235,10 @@ export default function ComplianceMonitorPage() {
               <button onClick={() => setMainTab("llp")}
                 className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "llp" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
                 🤝 LLP ({llpRows.length})
+              </button>
+              <button onClick={() => setMainTab("documents")}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "documents" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                📁 Documents
               </button>
             </div>
 
@@ -1517,6 +1545,19 @@ export default function ComplianceMonitorPage() {
                   </div>
                 );
               })()}
+            </div>
+          )}
+
+          {/* ══ DOCUMENTS TAB ════════════════════════════════════════════════ */}
+          {mainTab === "documents" && (
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden" style={{ height: "calc(100vh - 260px)", minHeight: 480 }}>
+              <CompanyDocumentsTab
+                companies={[
+                  ...rows.map(r => ({ companyId: r.companyId, companyName: r.companyName, cin: r.cin, entityType: r.entityType })),
+                  ...llpRows.map(r => ({ companyId: r.companyId, companyName: r.companyName, cin: r.cin, entityType: "LLP" })),
+                ]}
+                defaultFY={fy}
+              />
             </div>
           )}
 
