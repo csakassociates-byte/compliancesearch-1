@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       const text     = parsed.text.slice(0, 6000); // limit tokens
 
       const msg = await client.messages.create({
-        model: "claude-haiku-4-5",
+        model: "claude-haiku-5-5",
         max_tokens: 300,
         messages: [{
           role: "user",
@@ -79,7 +79,7 @@ Rules:
       const mediaType = file.type as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
       const msg = await client.messages.create({
-        model: "claude-haiku-4-5",
+        model: "claude-haiku-5-5",
         max_tokens: 300,
         messages: [{
           role: "user",
