@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DOC_CATEGORIES } from "@/lib/document-categories";
 
 interface SharedFile {
   id: string;
@@ -74,13 +73,45 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
       .finally(() => setLoading(false));
   }, [token]);
 
-  const filesByCategory = DOC_CATEGORIES.map(cat => ({
-    ...cat,
-    docs: cat.docs.map(doc => ({
-      ...doc,
-      files: (data?.files ?? []).filter(f => f.category === cat.category && f.docType === doc.type),
-    })).filter(d => d.files.length > 0),
-  })).filter(c => c.docs.length > 0);
+  // Group files by category directly from data — avoids key mismatch
+  const filesByCategory = (() => {
+    const files = data?.files ?? [];
+    const catMap = new Map<string, { label: string; icon: string; docs: Map<string, { label: string; files: SharedFile[] }> }>();
+    const CAT_META: Record<string, { label: string; icon: string }> = {
+      INCORPORATION:  { label: "Incorporation",          icon: "🏛️" },
+      CERTIFICATES:   { label: "Certificates",           icon: "🏅" },
+      ANNUAL_FILING:  { label: "Annual Filings",         icon: "📅" },
+      DIRECTORS:      { label: "Director Documents",     icon: "👤" },
+      RESOLUTIONS:    { label: "Resolutions & Minutes",  icon: "⚖️" },
+      TAX:            { label: "Tax Filings",            icon: "🧾" },
+    };
+    const DOC_LABELS: Record<string, string> = {
+      COI:"Certificate of Incorporation",MOA:"MOA (Memorandum of Association)",AOA:"AOA (Articles of Association)",
+      PAN:"PAN Card",TAN:"TAN Card",SHOP_ACT:"Shop & Establishment",GST_CERT:"GST Certificate",
+      MSME_CERT:"MSME Certificate",IEC_CERT:"IEC Certificate",TRADE_LICENSE:"Trade License",
+      FSSAI:"FSSAI License",DRUG_LICENSE:"Drug License",AOC4:"AOC-4",MGT7:"MGT-7 / 7A",
+      BOARD_REPORT:"Board Report",AUDITOR_REPORT:"Auditor's Report",FINANCIAL_STATEMENTS:"Financial Statements",
+      DIR3_KYC:"DIR-3 KYC",DIR12:"DIR-12",DIN_LETTER:"DIN Allotment Letter",
+      BOARD_MINUTES:"Board Meeting Minutes",AGM_MINUTES:"AGM Minutes",EGM_MINUTES:"EGM Minutes",
+      SHAREHOLDER_AGREEMENT:"Shareholder Agreement",ITR:"Income Tax Return (ITR)",
+      TAX_AUDIT_3CD:"Tax Audit Report (3CD)",TDS_RETURNS:"TDS Returns",GST_ANNUAL:"GST Annual Return (GSTR-9)",
+    };
+    files.forEach(f => {
+      const catKey = f.category;
+      if (!catMap.has(catKey)) {
+        catMap.set(catKey, { label: CAT_META[catKey]?.label ?? catKey, icon: CAT_META[catKey]?.icon ?? "📁", docs: new Map() });
+      }
+      const cat = catMap.get(catKey)!;
+      const docKey = f.docType;
+      const docLabel = f.customLabel ?? DOC_LABELS[docKey] ?? docKey;
+      if (!cat.docs.has(docKey)) cat.docs.set(docKey, { label: docLabel, files: [] });
+      cat.docs.get(docKey)!.files.push(f);
+    });
+    return Array.from(catMap.entries()).map(([key, v]) => ({
+      key, label: v.label, icon: v.icon,
+      docs: Array.from(v.docs.entries()).map(([dk, dv]) => ({ key: dk, label: dv.label, files: dv.files })),
+    }));
+  })();
 
   const totalFiles = data?.files.length ?? 0;
 
@@ -138,12 +169,12 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
           </div>
         ) : (
           filesByCategory.map(cat => {
-            const colors = CATEGORY_COLORS[cat.category] ?? { bg: "#f8fafc", border: "#94a3b8", text: "#475569", icon: "📁" };
+            const colors = CATEGORY_COLORS[cat.key] ?? { bg: "#f8fafc", border: "#94a3b8", text: "#475569", icon: "📁" };
             return (
-              <div key={cat.category} style={{ marginBottom: 28 }}>
+              <div key={cat.key} style={{ marginBottom: 28 }}>
                 {/* Category header */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 18 }}>{colors.icon}</span>
+                  <span style={{ fontSize: 18 }}>{cat.icon}</span>
                   <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.06em" }}>{cat.label}</h2>
                   <div style={{ flex: 1, height: 1, background: "#e2e8f0", marginLeft: 8 }} />
                 </div>
@@ -151,7 +182,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
                 {/* Doc cards */}
                 <div style={{ display: "grid", gap: 10 }}>
                   {cat.docs.map(doc => (
-                    <div key={doc.type} style={{ background: "#fff", borderRadius: 12, border: `1px solid #e2e8f0`, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+                    <div key={doc.key} style={{ background: "#fff", borderRadius: 12, border: `1px solid #e2e8f0`, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
                       <div style={{ background: colors.bg, borderBottom: `2px solid ${colors.border}`, padding: "10px 16px" }}>
                         <span style={{ fontWeight: 600, fontSize: 14, color: colors.text }}>{doc.label}</span>
                       </div>
