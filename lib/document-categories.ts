@@ -95,6 +95,15 @@ export const DOC_CATEGORIES: CategoryDefinition[] = [
       { type: "GST_ANNUAL",      label: "GST Annual Return (GSTR-9)" },
     ],
   },
+  {
+    key: "OTHER",
+    label: "Other Documents",
+    icon: "ti-folder-plus",
+    color: "slate",
+    docs: [
+      { type: "OTHER", label: "Other Document" },
+    ],
+  },
 ];
 
 export function getCategoryByKey(key: string): CategoryDefinition | undefined {

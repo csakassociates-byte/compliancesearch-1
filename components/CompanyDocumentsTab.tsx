@@ -62,6 +62,7 @@ const CAT_COLORS: Record<string, { bg: string; border: string; icon: string; bad
   DIRECTORS:     { bg: "from-amber-50 to-orange-50",   border: "border-amber-100",  icon: "text-amber-600",  badge: "bg-amber-100 text-amber-700",   iconBg: "bg-amber-100" },
   RESOLUTIONS:   { bg: "from-teal-50 to-cyan-50",      border: "border-teal-100",   icon: "text-teal-600",   badge: "bg-teal-100 text-teal-700",     iconBg: "bg-teal-100" },
   TAX:           { bg: "from-rose-50 to-red-50",       border: "border-rose-100",   icon: "text-rose-600",   badge: "bg-rose-100 text-rose-700",     iconBg: "bg-rose-100" },
+  OTHER:         { bg: "from-slate-50 to-gray-50",    border: "border-slate-200",  icon: "text-slate-500",  badge: "bg-slate-100 text-slate-600",   iconBg: "bg-slate-100" },
 };
 
 export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
@@ -73,15 +74,16 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
   const [driveLoading, setDriveLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedFY, setSelectedFY] = useState(defaultFY);
+  const [selectedFY, setSelectedFY] = useState("ALL");
 
   const [uploadModal, setUploadModal] = useState<{
-    category: string; docType: string; docLabel: string; hasExpiry: boolean; hasFY: boolean;
+    category: string; docType: string; docLabel: string; hasExpiry: boolean; hasFY: boolean; isOther?: boolean;
   } | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadExpiry, setUploadExpiry] = useState("");
   const [uploadNotes, setUploadNotes] = useState("");
   const [uploadFY, setUploadFY] = useState(defaultFY);
+  const [uploadCustomLabel, setUploadCustomLabel] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -153,8 +155,12 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
       fd.append("file", file);
       fd.append("companyName", selectedCompany.companyName);
       fd.append("docLabel", uploadModal.docLabel);
+      if (uploadModal.isOther) fd.append("isOther", "true");
       const res  = await fetch("/api/company-files/verify", { method: "POST", body: fd });
       const data = await res.json();
+      if (uploadModal.isOther && data.suggestedTitle) {
+        setUploadCustomLabel(data.suggestedTitle);
+      }
       setVerifyStatus(data.status ?? "warning");
       setVerifyReason(data.reason ?? "");
       setVerifyConfidence(data.confidence ?? 0);
@@ -187,6 +193,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
     if (uploadModal.hasFY) fd.append("financialYear", uploadFY);
     if (uploadModal.hasExpiry && uploadExpiry) fd.append("expiryDate", uploadExpiry);
     if (uploadNotes) fd.append("notes", uploadNotes);
+    if (uploadModal.isOther && uploadCustomLabel.trim()) fd.append("customLabel", uploadCustomLabel.trim());
     try {
       const res = await fetch("/api/company-files/upload", { method: "POST", body: fd });
       if (!res.ok) {
@@ -197,6 +204,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
       setUploadFile(null);
       setUploadExpiry("");
       setUploadNotes("");
+      setUploadCustomLabel("");
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
       setVerifyStatus("idle");
@@ -214,6 +222,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
     setUploadFile(null);
     setUploadExpiry("");
     setUploadNotes("");
+    setUploadCustomLabel("");
     setUploadError("");
     setVerifyStatus("idle");
     setConfirmStep(0);
@@ -226,7 +235,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const canUpload = uploadFile && !uploading && (
     verifyStatus === "verified" || verifyStatus === "skipped" ||
     (needsConfirm && confirmStep >= 3)
-  );
+  ) && (!uploadModal?.isOther || uploadCustomLabel.trim().length > 0);
 
   async function handleDelete() {
     if (!deleteId || !selectedCompany) return;
@@ -463,6 +472,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   onChange={e => setSelectedFY(e.target.value)}
                   className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow-sm font-medium"
                 >
+                  <option value="ALL">All Years</option>
                   {FY_OPTIONS.map(fy => (
                     <option key={fy} value={fy}>FY {fy}</option>
                   ))}
@@ -506,11 +516,11 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   <p className="text-xs text-slate-400">Loading documents…</p>
                 </div>
               ) : (
-                DOC_CATEGORIES.map(cat => {
+                DOC_CATEGORIES.filter(cat => cat.key !== "OTHER").map(cat => {
                   const colors = CAT_COLORS[cat.key] ?? CAT_COLORS.INCORPORATION;
                   const catUploaded = cat.docs.reduce((acc, doc) => {
                     return acc + getFilesForDocType(cat.key, doc.type).filter(
-                      f => !cat.hasFY || !f.financialYear || f.financialYear === selectedFY
+                      f => !cat.hasFY || !f.financialYear || selectedFY === "ALL" || f.financialYear === selectedFY
                     ).length;
                   }, 0);
 
@@ -526,7 +536,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">{cat.label}</h4>
                             {cat.hasFY && (
                               <span className="text-[10px] text-slate-400 font-medium bg-white/60 px-1.5 py-0.5 rounded-full">
-                                FY {selectedFY}
+                                {selectedFY === "ALL" ? "All Years" : `FY ${selectedFY}`}
                               </span>
                             )}
                           </div>
@@ -547,7 +557,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                       <div className="px-4 pb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
                         {cat.docs.map(doc => {
                           const uploaded = getFilesForDocType(cat.key, doc.type).filter(
-                            f => !cat.hasFY || !f.financialYear || f.financialYear === selectedFY
+                            f => !cat.hasFY || !f.financialYear || selectedFY === "ALL" || f.financialYear === selectedFY
                           );
                           const latest   = uploaded[0] ?? null;
                           const expiring = latest && isExpiringSoon(latest.expiryDate);
@@ -677,6 +687,86 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   );
                 })
               )}
+
+              {/* ── Other Documents ── */}
+              {!filesLoading && (() => {
+                const otherFiles = files.filter(f => f.category === "OTHER");
+                return (
+                  <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-gray-50 overflow-hidden">
+                    <div className="px-4 py-3 flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
+                        <i className="ti ti-folder-plus text-base text-slate-500" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Other Documents</h4>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {otherFiles.length} document{otherFiles.length !== 1 ? "s" : ""} uploaded
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setUploadModal({ category: "OTHER", docType: "OTHER", docLabel: "Other Document", hasExpiry: false, hasFY: false, isOther: true });
+                          setUploadFile(null); setUploadExpiry(""); setUploadNotes("");
+                          setUploadFY(selectedFY); setUploadError(""); setUploadCustomLabel("");
+                          setVerifyStatus("idle"); setConfirmStep(0); setShowPreview(false);
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-600 transition-all shadow-sm"
+                      >
+                        <i className="ti ti-plus text-sm" /> Add Document
+                      </button>
+                    </div>
+
+                    {otherFiles.length === 0 ? (
+                      <div className="px-4 pb-5 text-center">
+                        <p className="text-[11px] text-slate-400 italic">No other documents yet — click "Add Document" to upload any file with a custom title.</p>
+                      </div>
+                    ) : (
+                      <div className="px-4 pb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+                        {otherFiles.map(f => {
+                          const expiring = isExpiringSoon(f.expiryDate);
+                          const expired  = isExpired(f.expiryDate);
+                          const cardState = expired ? "expired" : expiring ? "expiring" : "done";
+                          const cardStyles = {
+                            done:     "border-emerald-200 bg-white shadow-sm shadow-emerald-100/60 hover:shadow-emerald-200/80",
+                            expiring: "border-amber-200 bg-white shadow-sm shadow-amber-100/60 hover:shadow-amber-200/80",
+                            expired:  "border-red-200 bg-white shadow-sm shadow-red-100/60 hover:shadow-red-200/80",
+                          }[cardState];
+                          return (
+                            <div key={f.id} className={`rounded-2xl border-[1.5px] p-4 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${cardStyles}`}>
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0">
+                                  <i className="ti ti-file text-slate-400 text-base" />
+                                </div>
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                                  <i className="ti ti-check text-[9px]" /> Done
+                                </span>
+                              </div>
+                              <p className="text-[12px] font-bold text-slate-700 leading-snug mb-1 line-clamp-2">{f.customLabel || f.fileName}</p>
+                              <div className="space-y-0.5 mb-3">
+                                <p className="text-[10px] text-slate-400 truncate flex items-center gap-1" title={f.fileName}>
+                                  <i className="ti ti-paperclip text-slate-300 flex-shrink-0" />
+                                  <span className="truncate">{f.fileName}</span>
+                                </p>
+                                {f.fileSize && <span className="text-[10px] text-slate-400 block">{formatBytes(f.fileSize)}</span>}
+                              </div>
+                              <div className="flex items-center gap-1.5 pt-2.5 border-t border-slate-100">
+                                <a href={`/api/company-files/view/${f.id}`} target="_blank" rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 font-semibold transition-colors">
+                                  <i className="ti ti-eye text-[11px]" /> View
+                                </a>
+                                <button onClick={() => setDeleteId(f.id)}
+                                  className="inline-flex items-center text-[10px] text-slate-200 hover:text-red-400 transition-colors ml-auto" title="Remove">
+                                  <i className="ti ti-trash text-sm" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </>
         )}
@@ -859,6 +949,27 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   </div>
                 )}
 
+                {uploadModal.isOther && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                      Document Title
+                      {verifyStatus === "verified" && uploadCustomLabel && (
+                        <span className="font-normal text-emerald-600 ml-1.5">— AI suggested ✓</span>
+                      )}
+                      {verifyStatus === "verifying" && (
+                        <span className="font-normal text-blue-500 ml-1.5">— AI reading…</span>
+                      )}
+                    </label>
+                    <input
+                      value={uploadCustomLabel}
+                      onChange={e => setUploadCustomLabel(e.target.value)}
+                      placeholder="e.g. Board Resolution — Appointment of Auditor"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-300"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">This title will appear in the document list</p>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-xs font-semibold text-slate-600 block mb-1.5">Notes <span className="font-normal text-slate-400">(optional)</span></label>
                   <input value={uploadNotes} onChange={e => setUploadNotes(e.target.value)}
@@ -1032,7 +1143,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-slate-700 truncate">{f.fileName}</p>
                               <p className="text-[10px] text-slate-400 mt-0.5">
-                                {f.category} · {f.docType}{f.financialYear ? ` · FY ${f.financialYear}` : ""}
+                                {f.customLabel ?? f.docType}{f.financialYear ? ` · FY ${f.financialYear}` : ""}
                               </p>
                             </div>
                           </button>
