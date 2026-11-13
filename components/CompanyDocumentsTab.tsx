@@ -111,7 +111,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [shareLinks, setShareLinks]       = useState<Array<{ id: string; url: string; label: string | null; shareMode: string; expiresAt: string | null; createdAt: string }>>([]);
 
   const FY_OPTIONS = ["2026-27", "2025-26", "2024-25", "2023-24", "2022-23", "2021-22"];
-  const [viewMode, setViewMode] = useState<"standard" | "grouped">("standard");
+  const [viewMode, setViewMode] = useState<"standard" | "grouped">("grouped");
 
   const VIEW_GROUPS = [
     {
