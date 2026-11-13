@@ -977,8 +977,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                       </div>
                     </div>
                   );
-                })
-              )}
+                })}
 
               {/* ── Other Documents ── */}
               {!filesLoading && (() => {
