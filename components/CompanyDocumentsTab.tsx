@@ -111,6 +111,57 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
   const [shareLinks, setShareLinks]       = useState<Array<{ id: string; url: string; label: string | null; shareMode: string; expiresAt: string | null; createdAt: string }>>([]);
 
   const FY_OPTIONS = ["2026-27", "2025-26", "2024-25", "2023-24", "2022-23", "2021-22"];
+  const [viewMode, setViewMode] = useState<"standard" | "grouped">("standard");
+
+  const VIEW_GROUPS = [
+    {
+      key: "INC_CERTS",
+      label: "Incorporation & Certificates",
+      icon: "ti-certificate",
+      colorKey: "INCORPORATION",
+      categories: ["INCORPORATION", "CERTIFICATES"],
+      otherCategoryKey: "OTHER_INC_CERT",
+      hasFY: false,
+    },
+    {
+      key: "FINANCIALS",
+      label: "Financials & Audit",
+      icon: "ti-chart-bar",
+      colorKey: "ANNUAL_FILING",
+      categories: ["ANNUAL_FILING"],
+      otherCategoryKey: "OTHER_FINANCIALS",
+      hasFY: true,
+      subLabel: "MCA Forms, Financial Statements, Auditor Report",
+    },
+    {
+      key: "RESOLUTIONS",
+      label: "Resolutions & Minutes",
+      icon: "ti-notes",
+      colorKey: "RESOLUTIONS",
+      categories: ["RESOLUTIONS", "DIRECTORS"],
+      otherCategoryKey: "OTHER_RESOLUTIONS",
+      hasFY: true,
+    },
+    {
+      key: "TAX",
+      label: "Tax Filings",
+      icon: "ti-receipt-tax",
+      colorKey: "TAX",
+      categories: ["TAX"],
+      otherCategoryKey: "OTHER_TAX",
+      hasFY: true,
+    },
+    {
+      key: "OTHER_GROUP",
+      label: "Other Documents",
+      icon: "ti-folder-plus",
+      colorKey: "OTHER",
+      categories: [] as string[],
+      otherCategoryKey: "OTHER",
+      hasFY: false,
+      isOtherGroup: true,
+    },
+  ];
 
   useEffect(() => {
     setDriveLoading(true);
@@ -466,6 +517,34 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   </div>
                 )}
 
+                {/* View toggle */}
+                <div className="flex items-center bg-slate-100 rounded-xl p-0.5 shadow-inner">
+                  <button
+                    onClick={() => setViewMode("standard")}
+                    title="Standard View"
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      viewMode === "standard"
+                        ? "bg-white text-slate-700 shadow-sm"
+                        : "text-slate-400 hover:text-slate-600"
+                    }`}
+                  >
+                    <i className="ti ti-layout-grid text-sm" />
+                    <span className="hidden sm:inline">Standard</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode("grouped")}
+                    title="Grouped View"
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      viewMode === "grouped"
+                        ? "bg-white text-slate-700 shadow-sm"
+                        : "text-slate-400 hover:text-slate-600"
+                    }`}
+                  >
+                    <i className="ti ti-layout-list text-sm" />
+                    <span className="hidden sm:inline">Grouped</span>
+                  </button>
+                </div>
+
                 {/* FY selector */}
                 <select
                   value={selectedFY}
@@ -515,8 +594,221 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                   <p className="text-xs text-slate-400">Loading documents…</p>
                 </div>
+              ) : viewMode === "grouped" ? (
+                /* ── GROUPED VIEW ── */
+                VIEW_GROUPS.map(group => {
+                  const colors = (CAT_COLORS as Record<string, typeof CAT_COLORS.INCORPORATION>)[group.colorKey] ?? CAT_COLORS.INCORPORATION;
+
+                  // Collect all doc definitions from mapped categories
+                  const groupDocs = group.categories.flatMap(catKey => {
+                    const cat = DOC_CATEGORIES.find(c => c.key === catKey);
+                    return cat ? cat.docs.map(doc => ({ ...doc, catKey, catHasFY: !!cat.hasFY })) : [];
+                  });
+
+                  // Collect "other" files for this group
+                  const otherFiles = group.isOtherGroup
+                    ? files.filter(f => f.category === "OTHER")
+                    : files.filter(f => f.category === group.otherCategoryKey);
+
+                  const regularUploaded = groupDocs.filter(doc => {
+                    const uploaded = getFilesForDocType(doc.catKey, doc.type).filter(
+                      f => !doc.catHasFY || !f.financialYear || selectedFY === "ALL" || f.financialYear === selectedFY
+                    );
+                    return uploaded.length > 0;
+                  }).length;
+                  const totalDocs = groupDocs.length;
+
+                  return (
+                    <div key={group.key} className={`rounded-2xl border ${colors.border} bg-gradient-to-br ${colors.bg} overflow-hidden`}>
+                      {/* Group header */}
+                      <div className="px-4 py-3 flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-xl ${colors.iconBg} flex items-center justify-center`}>
+                          <i className={`ti ${group.icon} text-base ${colors.icon}`} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">{group.label}</h4>
+                            {group.hasFY && (
+                              <span className="text-[10px] text-slate-400 font-medium bg-white/60 px-1.5 py-0.5 rounded-full">
+                                {selectedFY === "ALL" ? "All Years" : `FY ${selectedFY}`}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {group.isOtherGroup
+                              ? `${otherFiles.length} document${otherFiles.length !== 1 ? "s" : ""}`
+                              : `${regularUploaded + otherFiles.length} of ${totalDocs} uploaded`}
+                          </p>
+                        </div>
+                        {/* Add Other button */}
+                        <button
+                          onClick={() => {
+                            setUploadModal({ category: group.otherCategoryKey, docType: "OTHER", docLabel: "Other Document", hasExpiry: false, hasFY: false, isOther: true });
+                            setUploadFile(null); setUploadExpiry(""); setUploadNotes("");
+                            setUploadFY(selectedFY === "ALL" ? FY_OPTIONS[0] : selectedFY);
+                            setUploadError(""); setUploadCustomLabel("");
+                            setVerifyStatus("idle"); setConfirmStep(0); setShowPreview(false);
+                          }}
+                          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-600 transition-all shadow-sm flex-shrink-0"
+                        >
+                          <i className="ti ti-plus text-sm" /> Add Other
+                        </button>
+                        {/* Progress bar */}
+                        {!group.isOtherGroup && (
+                          <div className="w-16 h-1.5 bg-white/60 rounded-full overflow-hidden flex-shrink-0">
+                            <div
+                              className={`h-full rounded-full ${colors.icon.replace("text-", "bg-")} transition-all`}
+                              style={{ width: `${totalDocs > 0 ? ((regularUploaded + otherFiles.length) / totalDocs) * 100 : 0}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Doc cards grid */}
+                      {(groupDocs.length > 0 || otherFiles.length > 0) && (
+                        <div className="px-4 pb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+                          {/* Regular docs */}
+                          {groupDocs.map(doc => {
+                            const uploaded = getFilesForDocType(doc.catKey, doc.type).filter(
+                              f => !doc.catHasFY || !f.financialYear || selectedFY === "ALL" || f.financialYear === selectedFY
+                            );
+                            const latest   = uploaded[0] ?? null;
+                            const expiring = latest && isExpiringSoon(latest.expiryDate);
+                            const expired  = latest && isExpired(latest.expiryDate);
+                            const cardState = expired ? "expired" : expiring ? "expiring" : latest ? "done" : "missing";
+                            const cardStyles = {
+                              done:    "border-emerald-200 bg-white shadow-sm shadow-emerald-100/60 hover:shadow-emerald-200/80",
+                              expiring:"border-amber-200 bg-white shadow-sm shadow-amber-100/60 hover:shadow-amber-200/80",
+                              expired: "border-red-200 bg-white shadow-sm shadow-red-100/60 hover:shadow-red-200/80",
+                              missing: "border-slate-200 bg-white hover:border-slate-300 hover:shadow-slate-100",
+                            }[cardState];
+                            return (
+                              <div key={`${doc.catKey}-${doc.type}`} className={`rounded-2xl border-[1.5px] p-4 transition-all duration-200 group hover:shadow-lg hover:-translate-y-0.5 ${cardStyles}`}>
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                    cardState === "done"     ? "bg-emerald-50 border border-emerald-100" :
+                                    cardState === "expiring" ? "bg-amber-50 border border-amber-100" :
+                                    cardState === "expired"  ? "bg-red-50 border border-red-100" :
+                                    "bg-slate-50 border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100"
+                                  }`}>
+                                    <i className={`ti text-base ${
+                                      cardState === "done"     ? "ti-file-check text-emerald-500" :
+                                      cardState === "expiring" ? "ti-clock text-amber-500" :
+                                      cardState === "expired"  ? "ti-file-x text-red-500" :
+                                      "ti-file-plus text-slate-300 group-hover:text-blue-400"
+                                    }`} />
+                                  </div>
+                                  {cardState === "done" ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold"><i className="ti ti-check text-[9px]" /> Done</span>
+                                  ) : cardState === "expiring" ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold"><i className="ti ti-alert-triangle text-[9px]" /> Soon</span>
+                                  ) : cardState === "expired" ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 font-semibold"><i className="ti ti-x text-[9px]" /> Expired</span>
+                                  ) : (
+                                    <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-400 border border-slate-200 font-medium">Pending</span>
+                                  )}
+                                </div>
+                                <p className="text-[12px] font-bold text-slate-700 leading-snug mb-1">{doc.label}</p>
+                                {latest ? (
+                                  <div className="space-y-0.5 mb-3">
+                                    <p className="text-[10px] text-slate-400 truncate flex items-center gap-1" title={latest.fileName}>
+                                      <i className="ti ti-paperclip text-slate-300 flex-shrink-0" /><span className="truncate">{latest.fileName}</span>
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      {latest.fileSize && <span className="text-[10px] text-slate-400">{formatBytes(latest.fileSize)}</span>}
+                                      {latest.financialYear && <span className="text-[10px] bg-slate-50 text-slate-500 px-1.5 rounded-full border border-slate-100">FY {latest.financialYear}</span>}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-[10px] text-slate-300 italic mb-3">Not uploaded yet</p>
+                                )}
+                                <div className="flex items-center gap-1.5 pt-2.5 border-t border-slate-100">
+                                  {latest && (
+                                    <a href={`/api/company-files/view/${latest.id}`} target="_blank" rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 font-semibold transition-colors">
+                                      <i className="ti ti-eye text-[11px]" /> View
+                                    </a>
+                                  )}
+                                  {latest && (
+                                    <button onClick={() => setDeleteId(latest.id)}
+                                      className="inline-flex items-center text-[10px] text-slate-200 hover:text-red-400 transition-colors" title="Remove">
+                                      <i className="ti ti-trash text-sm" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      setUploadModal({ category: doc.catKey, docType: doc.type, docLabel: doc.label, hasExpiry: !!doc.hasExpiry, hasFY: doc.catHasFY });
+                                      setUploadFile(null); setUploadExpiry(""); setUploadNotes("");
+                                      setUploadFY(selectedFY === "ALL" ? FY_OPTIONS[0] : selectedFY);
+                                      setUploadError(""); setVerifyStatus("idle"); setConfirmStep(0);
+                                    }}
+                                    className={`ml-auto inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-all ${
+                                      latest
+                                        ? "text-slate-500 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 border border-slate-100"
+                                        : "text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100"
+                                    }`}
+                                  >
+                                    <i className="ti ti-upload text-[11px]" />{latest ? "Replace" : "Upload"}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Other docs for this group */}
+                          {otherFiles.map(f => {
+                            const expiring = isExpiringSoon(f.expiryDate);
+                            const expired  = isExpired(f.expiryDate);
+                            const cardState = expired ? "expired" : expiring ? "expiring" : "done";
+                            const cardStyles = {
+                              done:    "border-emerald-200 bg-white shadow-sm shadow-emerald-100/60 hover:shadow-emerald-200/80",
+                              expiring:"border-amber-200 bg-white shadow-sm shadow-amber-100/60 hover:shadow-amber-200/80",
+                              expired: "border-red-200 bg-white shadow-sm shadow-red-100/60 hover:shadow-red-200/80",
+                            }[cardState];
+                            return (
+                              <div key={f.id} className={`rounded-2xl border-[1.5px] p-4 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${cardStyles}`}>
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0">
+                                    <i className="ti ti-file text-slate-400 text-base" />
+                                  </div>
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200 font-medium">Custom</span>
+                                </div>
+                                <p className="text-[12px] font-bold text-slate-700 leading-snug mb-1 line-clamp-2">{f.customLabel || f.fileName}</p>
+                                <div className="space-y-0.5 mb-3">
+                                  <p className="text-[10px] text-slate-400 truncate flex items-center gap-1" title={f.fileName}>
+                                    <i className="ti ti-paperclip text-slate-300 flex-shrink-0" /><span className="truncate">{f.fileName}</span>
+                                  </p>
+                                  {f.fileSize && <span className="text-[10px] text-slate-400 block">{formatBytes(f.fileSize)}</span>}
+                                </div>
+                                <div className="flex items-center gap-1.5 pt-2.5 border-t border-slate-100">
+                                  <a href={`/api/company-files/view/${f.id}`} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 font-semibold transition-colors">
+                                    <i className="ti ti-eye text-[11px]" /> View
+                                  </a>
+                                  <button onClick={() => setDeleteId(f.id)}
+                                    className="inline-flex items-center text-[10px] text-slate-200 hover:text-red-400 transition-colors ml-auto" title="Remove">
+                                    <i className="ti ti-trash text-sm" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Empty state for other group */}
+                          {group.isOtherGroup && otherFiles.length === 0 && (
+                            <div className="col-span-full py-4 text-center text-xs text-slate-400 italic">
+                              No other documents yet — click &quot;Add Other&quot; to upload any document with a custom title.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
-                DOC_CATEGORIES.filter(cat => cat.key !== "OTHER").map(cat => {
+                /* ── STANDARD VIEW ── */
+                <>
+                {DOC_CATEGORIES.filter(cat => cat.key !== "OTHER").map(cat => {
                   const colors = CAT_COLORS[cat.key] ?? CAT_COLORS.INCORPORATION;
                   const catUploaded = cat.docs.reduce((acc, doc) => {
                     return acc + getFilesForDocType(cat.key, doc.type).filter(
@@ -690,7 +982,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
               {/* ── Other Documents ── */}
               {!filesLoading && (() => {
-                const otherFiles = files.filter(f => f.category === "OTHER");
+                const otherFiles = files.filter(f => f.category === "OTHER" || f.category === "OTHER_INC_CERT" || f.category === "OTHER_FINANCIALS" || f.category === "OTHER_RESOLUTIONS" || f.category === "OTHER_TAX");
                 return (
                   <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-gray-50 overflow-hidden">
                     <div className="px-4 py-3 flex items-center gap-2.5">
@@ -767,6 +1059,8 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   </div>
                 );
               })()}
+                </>
+              )}
             </div>
           </>
         )}
