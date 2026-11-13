@@ -163,6 +163,15 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
     },
   ];
 
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  function toggleGroup(key: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
   useEffect(() => {
     setDriveLoading(true);
     fetch("/api/drive/status")
@@ -621,7 +630,10 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                   return (
                     <div key={group.key} className={`rounded-2xl border ${colors.border} bg-gradient-to-br ${colors.bg} overflow-hidden`}>
                       {/* Group header */}
-                      <div className="px-4 py-3 flex items-center gap-2.5">
+                      <div
+                        className="px-4 py-3 flex items-center gap-2.5 cursor-pointer select-none"
+                        onClick={() => toggleGroup(group.key)}
+                      >
                         <div className={`w-8 h-8 rounded-xl ${colors.iconBg} flex items-center justify-center`}>
                           <i className={`ti ${group.icon} text-base ${colors.icon}`} />
                         </div>
@@ -642,7 +654,8 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                         </div>
                         {/* Add Other button */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setUploadModal({ category: group.otherCategoryKey, docType: "OTHER", docLabel: "Other Document", hasExpiry: false, hasFY: false, isOther: true });
                             setUploadFile(null); setUploadExpiry(""); setUploadNotes("");
                             setUploadFY(selectedFY === "ALL" ? FY_OPTIONS[0] : selectedFY);
@@ -662,10 +675,12 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                             />
                           </div>
                         )}
+                        {/* Chevron */}
+                        <i className={`ti ti-chevron-down text-slate-400 text-base transition-transform duration-200 flex-shrink-0 ${expandedGroups.has(group.key) ? "rotate-180" : ""}`} />
                       </div>
 
                       {/* Doc cards grid */}
-                      {(groupDocs.length > 0 || otherFiles.length > 0) && (
+                      {expandedGroups.has(group.key) && (groupDocs.length > 0 || otherFiles.length > 0) && (
                         <div className="px-4 pb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
                           {/* Regular docs */}
                           {groupDocs.map(doc => {
