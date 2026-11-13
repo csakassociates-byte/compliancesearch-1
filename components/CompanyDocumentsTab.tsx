@@ -56,13 +56,16 @@ function isExpired(dateStr: string | null): boolean {
 }
 
 const CAT_COLORS: Record<string, { bg: string; border: string; icon: string; badge: string; iconBg: string }> = {
-  INCORPORATION: { bg: "from-blue-50 to-indigo-50",    border: "border-blue-100",   icon: "text-blue-600",   badge: "bg-blue-100 text-blue-700",   iconBg: "bg-blue-100" },
-  CERTIFICATES:  { bg: "from-emerald-50 to-teal-50",   border: "border-emerald-100",icon: "text-emerald-600",badge: "bg-emerald-100 text-emerald-700",iconBg: "bg-emerald-100" },
-  ANNUAL_FILING: { bg: "from-violet-50 to-purple-50",  border: "border-violet-100", icon: "text-violet-600", badge: "bg-violet-100 text-violet-700", iconBg: "bg-violet-100" },
-  DIRECTORS:     { bg: "from-amber-50 to-orange-50",   border: "border-amber-100",  icon: "text-amber-600",  badge: "bg-amber-100 text-amber-700",   iconBg: "bg-amber-100" },
-  RESOLUTIONS:   { bg: "from-teal-50 to-cyan-50",      border: "border-teal-100",   icon: "text-teal-600",   badge: "bg-teal-100 text-teal-700",     iconBg: "bg-teal-100" },
-  TAX:           { bg: "from-rose-50 to-red-50",       border: "border-rose-100",   icon: "text-rose-600",   badge: "bg-rose-100 text-rose-700",     iconBg: "bg-rose-100" },
-  OTHER:         { bg: "from-slate-50 to-gray-50",    border: "border-slate-200",  icon: "text-slate-500",  badge: "bg-slate-100 text-slate-600",   iconBg: "bg-slate-100" },
+  INCORPORATION: { bg: "from-blue-50 to-indigo-50",      border: "border-blue-100",    icon: "text-blue-600",    badge: "bg-blue-100 text-blue-700",    iconBg: "bg-blue-100" },
+  CERTIFICATES:  { bg: "from-emerald-50 to-teal-50",     border: "border-emerald-100", icon: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700", iconBg: "bg-emerald-100" },
+  ANNUAL_FILING: { bg: "from-violet-50 to-purple-50",    border: "border-violet-100",  icon: "text-violet-600",  badge: "bg-violet-100 text-violet-700",  iconBg: "bg-violet-100" },
+  DIRECTORS:     { bg: "from-amber-50 to-orange-50",     border: "border-amber-100",   icon: "text-amber-600",   badge: "bg-amber-100 text-amber-700",    iconBg: "bg-amber-100" },
+  RESOLUTIONS:   { bg: "from-teal-50 to-cyan-50",        border: "border-teal-100",    icon: "text-teal-600",    badge: "bg-teal-100 text-teal-700",      iconBg: "bg-teal-100" },
+  TAX:           { bg: "from-rose-50 to-red-50",         border: "border-rose-100",    icon: "text-rose-600",    badge: "bg-rose-100 text-rose-700",      iconBg: "bg-rose-100" },
+  LABOUR:        { bg: "from-indigo-50 to-blue-50",      border: "border-indigo-100",  icon: "text-indigo-600",  badge: "bg-indigo-100 text-indigo-700",  iconBg: "bg-indigo-100" },
+  BANKING:       { bg: "from-sky-50 to-cyan-50",         border: "border-sky-100",     icon: "text-sky-600",     badge: "bg-sky-100 text-sky-700",        iconBg: "bg-sky-100" },
+  IP_CONTRACTS:  { bg: "from-fuchsia-50 to-pink-50",     border: "border-fuchsia-100", icon: "text-fuchsia-600", badge: "bg-fuchsia-100 text-fuchsia-700", iconBg: "bg-fuchsia-100" },
+  OTHER:         { bg: "from-slate-50 to-gray-50",       border: "border-slate-200",   icon: "text-slate-500",   badge: "bg-slate-100 text-slate-600",    iconBg: "bg-slate-100" },
 };
 
 export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
@@ -115,13 +118,24 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
   const VIEW_GROUPS = [
     {
-      key: "INC_CERTS",
-      label: "Incorporation & Certificates",
+      key: "INCORPORATION",
+      label: "Incorporation & Identity",
       icon: "ti-certificate",
       colorKey: "INCORPORATION",
-      categories: ["INCORPORATION", "CERTIFICATES"],
-      otherCategoryKey: "OTHER_INC_CERT",
+      categories: ["INCORPORATION"],
+      otherCategoryKey: "OTHER_INC",
       hasFY: false,
+      subLabel: "COI, MOA, AOA, PAN, TAN, INC-20A",
+    },
+    {
+      key: "REGISTRATIONS",
+      label: "Registrations & Licenses",
+      icon: "ti-license",
+      colorKey: "CERTIFICATES",
+      categories: ["CERTIFICATES"],
+      otherCategoryKey: "OTHER_REG",
+      hasFY: false,
+      subLabel: "GST, MSME, ESIC, EPF, Trade License, FSSAI",
     },
     {
       key: "FINANCIALS",
@@ -131,16 +145,27 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
       categories: ["ANNUAL_FILING"],
       otherCategoryKey: "OTHER_FINANCIALS",
       hasFY: true,
-      subLabel: "MCA Forms, Financial Statements, Auditor Report",
+      subLabel: "AOC-4, MGT-7, Board Report, ADT-1, DPT-3",
     },
     {
       key: "RESOLUTIONS",
       label: "Resolutions & Minutes",
       icon: "ti-notes",
       colorKey: "RESOLUTIONS",
-      categories: ["RESOLUTIONS", "DIRECTORS"],
+      categories: ["RESOLUTIONS"],
       otherCategoryKey: "OTHER_RESOLUTIONS",
       hasFY: true,
+      subLabel: "Board Minutes, AGM/EGM, Notices, Attendance",
+    },
+    {
+      key: "DIRECTORS",
+      label: "Directors & Shareholders",
+      icon: "ti-users",
+      colorKey: "DIRECTORS",
+      categories: ["DIRECTORS"],
+      otherCategoryKey: "OTHER_DIRECTORS",
+      hasFY: false,
+      subLabel: "DIR-2/8, MBP-1, BEN, PAS-3, CHG docs",
     },
     {
       key: "TAX",
@@ -150,6 +175,37 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
       categories: ["TAX"],
       otherCategoryKey: "OTHER_TAX",
       hasFY: true,
+      subLabel: "ITR, GST Returns, TDS, 26AS, Advance Tax",
+    },
+    {
+      key: "LABOUR",
+      label: "Labour & HR Compliance",
+      icon: "ti-id-badge",
+      colorKey: "LABOUR",
+      categories: ["LABOUR"],
+      otherCategoryKey: "OTHER_LABOUR",
+      hasFY: true,
+      subLabel: "PF/ESIC Challans, PT, POSH, Gratuity",
+    },
+    {
+      key: "BANKING",
+      label: "Banking & Finance",
+      icon: "ti-bank",
+      colorKey: "BANKING",
+      categories: ["BANKING"],
+      otherCategoryKey: "OTHER_BANKING",
+      hasFY: false,
+      subLabel: "Loan Agreements, Charges, Bank Docs",
+    },
+    {
+      key: "IP_CONTRACTS",
+      label: "IP, Contracts & Property",
+      icon: "ti-file-code",
+      colorKey: "IP_CONTRACTS",
+      categories: ["IP_CONTRACTS"],
+      otherCategoryKey: "OTHER_IP",
+      hasFY: false,
+      subLabel: "Trademarks, Patents, Leases, Insurance",
     },
     {
       key: "OTHER_GROUP",
@@ -650,6 +706,9 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
                             {group.isOtherGroup
                               ? `${otherFiles.length} document${otherFiles.length !== 1 ? "s" : ""}`
                               : `${regularUploaded + otherFiles.length} of ${totalDocs} uploaded`}
+                            {(group as { subLabel?: string }).subLabel && (
+                              <span className="hidden sm:inline"> · {(group as { subLabel?: string }).subLabel}</span>
+                            )}
                           </p>
                         </div>
                         {/* Add Other button */}
@@ -996,7 +1055,7 @@ export default function CompanyDocumentsTab({ companies, defaultFY }: Props) {
 
               {/* ── Other Documents ── */}
               {!filesLoading && (() => {
-                const otherFiles = files.filter(f => f.category === "OTHER" || f.category === "OTHER_INC_CERT" || f.category === "OTHER_FINANCIALS" || f.category === "OTHER_RESOLUTIONS" || f.category === "OTHER_TAX");
+                const otherFiles = files.filter(f => f.category === "OTHER" || f.category === "OTHER_INC" || f.category === "OTHER_REG" || f.category === "OTHER_FINANCIALS" || f.category === "OTHER_RESOLUTIONS" || f.category === "OTHER_DIRECTORS" || f.category === "OTHER_TAX" || f.category === "OTHER_LABOUR" || f.category === "OTHER_BANKING" || f.category === "OTHER_IP");
                 return (
                   <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-gray-50 overflow-hidden">
                     <div className="px-4 py-3 flex items-center gap-2.5">
