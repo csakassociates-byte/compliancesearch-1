@@ -80,7 +80,6 @@ export async function POST(req: NextRequest) {
           "financialYear" = $5,
           "formDataJson" = $6,
           "companyId" = COALESCE("companyId", $7),
-          "userId" = $8,
           "updatedAt" = NOW()
          WHERE id = $1 AND "userId" = ANY($2::text[])`,
         body.id,
@@ -90,7 +89,6 @@ export async function POST(req: NextRequest) {
         body.financialYear,
         body.formDataJson,
         companyId,
-        ownerId,
       );
       return NextResponse.json({ success: true, id: body.id });
     }
@@ -259,7 +257,7 @@ export async function GET(req: NextRequest) {
     }>>(
       `SELECT id, "companyName", "financialYear", "updatedAt", "isFinalized", "finalizedAt"
        FROM csi_documents WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
-       ORDER BY "updatedAt" DESC LIMIT 50`,
+       ORDER BY "isFinalized" ASC, "updatedAt" DESC LIMIT 500`,
       memberIds
     );
     return NextResponse.json({ filings: rows });
