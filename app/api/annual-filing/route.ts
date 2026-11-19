@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
       const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
         `SELECT id FROM csi_documents
          WHERE "userId" = ANY($1::text[]) AND type = 'annual_filing'
+           AND "isFinalized" = false
            AND "financialYear" = $2
            AND (
              ($3 <> '' AND "formDataJson"::jsonb #>> '{data,cin}' = $3)
