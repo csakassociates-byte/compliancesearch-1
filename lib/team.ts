@@ -1,9 +1,33 @@
 import { prisma } from "./prisma";
 import crypto, { randomBytes } from "crypto";
 
+// ── Module-level caches ───────────────────────────────────────────────────────
+
+// Run DDL only once per server process — DDL on every request is the #1 perf killer
+let _tablesReady: Promise<void> | null = null;
+
+// Cache team context per userId for 60 seconds — avoids 3+ DB queries per API call
+const _teamCache = new Map<string, { value: { teamId: string; memberIds: string[]; isOwner: boolean; teamName: string | null; ownerId: string }; expiresAt: number }>();
+const TEAM_CACHE_TTL_MS = 60_000;
+
+function getCachedTeam(userId: string) {
+  const entry = _teamCache.get(userId);
+  if (entry && entry.expiresAt > Date.now()) return entry.value;
+  _teamCache.delete(userId);
+  return null;
+}
+function setCachedTeam(userId: string, value: { teamId: string; memberIds: string[]; isOwner: boolean; teamName: string | null; ownerId: string }) {
+  _teamCache.set(userId, { value, expiresAt: Date.now() + TEAM_CACHE_TTL_MS });
+}
+export function invalidateTeamCache(userId: string) {
+  _teamCache.delete(userId);
+}
+
 // ── Table setup ───────────────────────────────────────────────────────────────
 
 export async function ensureTeamTables() {
+  if (_tablesReady) return _tablesReady;
+  _tablesReady = (async () => {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS csi_teams (
       id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -65,6 +89,8 @@ export async function ensureTeamTables() {
   await prisma.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS idx_csi_team_invites_teamId ON csi_team_invites("teamId")`
   );
+  })();
+  return _tablesReady;
 }
 
 // ── Team creation ─────────────────────────────────────────────────────────────
@@ -104,6 +130,9 @@ export async function getTeamContext(userId: string): Promise<{
   teamName: string | null;
   ownerId: string;
 }> {
+  const cached = getCachedTeam(userId);
+  if (cached) return cached;
+
   await ensureTeamTables();
   const teamId = await getOrCreateTeam(userId);
 
@@ -119,13 +148,15 @@ export async function getTeamContext(userId: string): Promise<{
   ]);
 
   const team = teams[0];
-  return {
+  const result = {
     teamId,
     memberIds: members.map(m => m.userId),
     isOwner: team?.ownerId === userId,
     teamName: team?.name || null,
     ownerId: team?.ownerId || userId,
   };
+  setCachedTeam(userId, result);
+  return result;
 }
 
 export async function getTeamMemberIds(userId: string): Promise<string[]> {

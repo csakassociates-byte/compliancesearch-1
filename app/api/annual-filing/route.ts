@@ -5,8 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { getTeamMemberIds, getTeamContext } from "@/lib/team";
 import { syncCompany } from "@/lib/syncCompany";
 
-// Ensure csi_documents has all columns needed for annual filing
+// Run DDL only once per server process
+let _colsReady: Promise<void> | null = null;
 async function ensureColumns() {
+  if (_colsReady) return _colsReady;
+  _colsReady = (async () => {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS csi_documents (
       id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -29,6 +32,8 @@ async function ensureColumns() {
   await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "isFinalized" BOOLEAN NOT NULL DEFAULT false`);
   await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "finalizedBy" TEXT`);
   await prisma.$executeRawUnsafe(`ALTER TABLE csi_documents ADD COLUMN IF NOT EXISTS "finalizedAt" TIMESTAMPTZ`);
+  })();
+  return _colsReady;
 }
 
 // Save / update annual filing draft
